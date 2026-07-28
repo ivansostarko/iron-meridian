@@ -35,6 +35,7 @@ namespace IronMeridian.EditorTools
                 MakeScene(GameConfig.SceneSettings, "IronMeridian.UI.SettingsUI"),
                 MakeScene(GameConfig.SceneTesting, "IronMeridian.UI.TestingUI"),
                 MakeScene(GameConfig.SceneEastFrance, "IronMeridian.UI.EastFranceUI"),
+                MakeScene(GameConfig.SceneUnitsList, "IronMeridian.UI.UnitsListUI"),
                 MakeScene(GameConfig.SceneGame, "IronMeridian.Core.GameController", menuCamera: false),
             };
             EditorBuildSettings.scenes = scenes.ToArray();

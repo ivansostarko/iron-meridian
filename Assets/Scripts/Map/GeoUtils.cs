@@ -49,6 +49,53 @@ namespace IronMeridian.Map
             return (float)((math.degrees(math.atan2(y, x)) + 360.0) % 360.0);
         }
 
+        /// <summary>Destination point given a start, initial bearing (deg, 0 = north) and distance (km).</summary>
+        public static void Destination(double lat, double lon, double bearingDeg, double distanceKm,
+            out double destLat, out double destLon)
+        {
+            double delta = distanceKm / (EarthRadiusM / 1000.0);
+            double theta = math.radians(bearingDeg);
+            double p1 = math.radians(lat), l1 = math.radians(lon);
+
+            double p2 = math.asin(math.sin(p1) * math.cos(delta) + math.cos(p1) * math.sin(delta) * math.cos(theta));
+            double l2 = l1 + math.atan2(
+                math.sin(theta) * math.sin(delta) * math.cos(p1),
+                math.cos(delta) - math.sin(p1) * math.sin(p2));
+
+            destLat = math.degrees(p2);
+            destLon = math.degrees(l2);
+        }
+
+        /// <summary>
+        /// Projects a geodetic point into a local east/north plane in km,
+        /// centred on <paramref name="originLat"/>/<paramref name="originLon"/>.
+        ///
+        /// Tactical graphics (boundaries, bisectors, lateral ordering) are all
+        /// planar geometry. Doing that maths directly on lat/lon degrees skews
+        /// badly with latitude — a degree of longitude is ~111 km at the
+        /// equator but ~71 km at Lyon — so sectors would come out lopsided.
+        /// Over a battlefield-sized area this flat-earth approximation is
+        /// accurate to well under a metre.
+        /// </summary>
+        public static void ToLocalKm(double originLat, double originLon,
+            double lat, double lon, out double east, out double north)
+        {
+            double kmPerDegLat = EarthRadiusM / 1000.0 * math.PI / 180.0;
+            double kmPerDegLon = kmPerDegLat * math.cos(math.radians(originLat));
+            east = (lon - originLon) * kmPerDegLon;
+            north = (lat - originLat) * kmPerDegLat;
+        }
+
+        /// <summary>Inverse of <see cref="ToLocalKm"/>.</summary>
+        public static void FromLocalKm(double originLat, double originLon,
+            double east, double north, out double lat, out double lon)
+        {
+            double kmPerDegLat = EarthRadiusM / 1000.0 * math.PI / 180.0;
+            double kmPerDegLon = kmPerDegLat * math.cos(math.radians(originLat));
+            lat = originLat + north / kmPerDegLat;
+            lon = originLon + (math.abs(kmPerDegLon) < 1e-9 ? 0.0 : east / kmPerDegLon);
+        }
+
         /// <summary>
         /// Terrain height (meters, WGS84 ellipsoid) at lat/lon by raycasting the
         /// Cesium physics meshes. Falls back to <paramref name="fallback"/>.

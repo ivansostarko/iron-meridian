@@ -55,10 +55,46 @@ namespace IronMeridian.Data
         Mode3D
     }
 
+    /// <summary>Imagery draped on the terrain tileset.</summary>
+    public enum MapStyle
+    {
+        Satellite,  // Bing Maps Aerial (ion asset 2)
+        Terrain,    // bare shaded relief, no imagery overlay
+        Roads       // Bing Maps Road (ion asset 4)
+    }
+
+    /// <summary>
+    /// Tactical control measures, following APP-6A / FM 101-5-1 naming.
+    /// Older saves only contain Boundary and DefensiveLine; both are kept so
+    /// existing scenario files keep loading.
+    /// </summary>
     public enum LineKind
     {
-        Boundary,       // sector boundary separating the two teams
-        DefensiveLine   // fortified defensive line
+        Boundary,        // legacy: the auto front line between the two teams
+        DefensiveLine,   // legacy: hand-drawn fortified line
+
+        /// <summary>
+        /// Lateral boundary: the left/right limit of a formation's area of
+        /// operations. Runs rear-to-front, roughly perpendicular to the front,
+        /// and extends beyond the FLOT (FM 3-90 ch.8).
+        /// </summary>
+        LateralBoundary,
+
+        /// <summary>
+        /// Rear boundary: defines the rear of a formation's AO. Runs parallel
+        /// to the front; the area behind it belongs to the higher commander.
+        /// </summary>
+        RearBoundary,
+
+        /// <summary>
+        /// Forward Edge of the Battle Area — the foremost limit of the areas
+        /// where ground combat units are deployed, excluding screening forces.
+        /// This is the "defence line" connecting the forward defending units.
+        /// </summary>
+        Feba,
+
+        /// <summary>Named reference line for control and coordination.</summary>
+        PhaseLine
     }
 
     public static class EchelonInfo

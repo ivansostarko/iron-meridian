@@ -6,8 +6,9 @@ using IronMeridian.Core;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// Testing hub. Two cards:
-    ///   DEV             -> loads the main game screen (Lyon dev map)
+    /// Testing hub. Three cards:
+    ///   MAP EDITOR      -> loads the main game screen (Lyon dev map)
+    ///   UNITS LIST      -> scrollable catalogue of every unit definition
     ///   MAP EAST FRANCE -> placeholder page ("Under development")
     /// </summary>
     public class TestingUI : MonoBehaviour
@@ -29,12 +30,17 @@ namespace IronMeridian.UI
                 GameConfig.UiPanelLight, GameConfig.UiText, 24);
             UIFactory.Place((RectTransform)back.transform, new Vector2(1f, 1f), new Vector2(-80, -70), new Vector2(180, 60));
 
-            Card(canvas.transform, -330, "DEV",
+            Card(canvas.transform, -580, "MAP EDITOR",
                 "Main game screen.\nCesium 3D terrain over Lyon.\nDeploy units, draw lines, fight.",
                 new Color(0.13f, 0.24f, 0.38f),
                 () => SceneManager.LoadScene(GameConfig.SceneGame));
 
-            Card(canvas.transform, 330, "MAP EAST FRANCE",
+            Card(canvas.transform, 0, "UNITS LIST",
+                "Reference catalogue.\nEvery unit type with icons\nand full combat stats.",
+                new Color(0.20f, 0.22f, 0.14f),
+                () => SceneManager.LoadScene(GameConfig.SceneUnitsList));
+
+            Card(canvas.transform, 580, "MAP EAST FRANCE",
                 "Eastern France scenario map.\nOperational theatre from\nLyon to the Rhine.",
                 new Color(0.28f, 0.16f, 0.13f),
                 () => SceneManager.LoadScene(GameConfig.SceneEastFrance));

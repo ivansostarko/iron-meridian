@@ -2,129 +2,145 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using IronMeridian.Core;
-using IronMeridian.Data;
-using IronMeridian.Lines;
-using IronMeridian.Map;
 using IronMeridian.Units;
 
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// Top command bar of the game screen: navigation, 2D/3D switch, line
-    /// drawing tools, save/load and battle control.
+    /// Top command bar of the game screen: navigation and battle control.
+    /// Save/Load live in the pause menu (Esc/P) rather than here.
     /// </summary>
     public class GameHUD : MonoBehaviour
     {
-        MapManager _map;
-        CameraRig _rig;
-        LineDrawTool _drawTool;
-        LineManager _lines;
         CombatSystem _combat;
-        System.Action _saveAction, _loadAction;
+        GameClock _clock;
 
-        Button _viewBtn, _battleBtn, _boundaryBtn, _defLineBtn, _line3DBtn;
-        Text _status;
-        bool _lines3D = true;
+        Button _battleBtn, _pauseBtn;
+        Text _status, _modeLabel;
+        RectTransform _modeChip;
 
-        public void Build(Canvas canvas, MapManager map, CameraRig rig, LineDrawTool drawTool,
-            LineManager lines, CombatSystem combat, System.Action save, System.Action load)
+        RectTransform _clockPanel;
+        Text _clockDate, _clockTime, _clockSpeed;
+
+        static readonly Color EditorModeColor = new Color(0.30f, 0.36f, 0.46f);
+        static readonly Color GameModeColor = new Color(0.16f, 0.45f, 0.20f);
+
+        public void Build(Canvas canvas, CombatSystem combat, GameClock clock)
         {
-            _map = map; _rig = rig; _drawTool = drawTool; _lines = lines; _combat = combat;
-            _saveAction = save; _loadAction = load;
+            _combat = combat;
+            _clock = clock;
 
             var bar = UIFactory.CreatePanel(canvas.transform, "TopBar", GameConfig.UiPanel);
             bar.anchorMin = new Vector2(0, 1); bar.anchorMax = new Vector2(1, 1);
             bar.pivot = new Vector2(0.5f, 1);
-            bar.offsetMin = new Vector2(0, -70);
+            bar.offsetMin = new Vector2(0, -50);
             bar.offsetMax = Vector2.zero;
 
-            float x = 10;
-            Btn(bar, ref x, 130, "< MENU", () => SceneManager.LoadScene(GameConfig.SceneMainMenu));
+            float x = 8;
+            Btn(bar, ref x, 96, "< MENU", () => SceneManager.LoadScene(GameConfig.SceneMainMenu));
 
-            var title = UIFactory.CreateText(bar, "DEV — LYON", 24, GameConfig.UiAccent,
+            var title = UIFactory.CreateText(bar, "MAP EDITOR", 18, GameConfig.UiAccent,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(x + 10, 0), new Vector2(220, 50));
-            x += 240;
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(x + 8, 0), new Vector2(150, 38));
+            x += 162;
 
-            _viewBtn = Btn(bar, ref x, 110, "VIEW: 3D", ToggleView);
-            _boundaryBtn = Btn(bar, ref x, 190, "DRAW BOUNDARY", () => ToggleDraw(LineDrawTool.Mode.Boundary));
-            _defLineBtn = Btn(bar, ref x, 210, "DRAW DEFENSIVE LINE", () => ToggleDraw(LineDrawTool.Mode.DefensiveLine));
-            _line3DBtn = Btn(bar, ref x, 130, "LINES: 3D", ToggleLines3D);
-            Btn(bar, ref x, 110, "SAVE", () => _saveAction?.Invoke());
-            Btn(bar, ref x, 110, "LOAD", () => _loadAction?.Invoke());
+            // Mode chip: which set of rules the right-click/movement behaviour
+            // is currently following.
+            _modeChip = UIFactory.CreatePanel(bar, "ModeChip", EditorModeColor);
+            UIFactory.Place(_modeChip, new Vector2(0f, 0.5f), new Vector2(x, 0), new Vector2(132, 28));
+            _modeChip.pivot = new Vector2(0, 0.5f);
+
+            _modeLabel = UIFactory.CreateText(_modeChip, "EDITOR MODE", 13, GameConfig.UiText,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIFactory.Stretch(_modeLabel.rectTransform);
 
             _battleBtn = UIFactory.CreateButton(bar, "▶ START BATTLE", () => _combat.Toggle(),
-                new Color(0.16f, 0.45f, 0.2f), GameConfig.UiText, 22);
-            UIFactory.Place((RectTransform)_battleBtn.transform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(210, 50));
+                new Color(0.16f, 0.45f, 0.2f), GameConfig.UiText, 16);
+            UIFactory.Place((RectTransform)_battleBtn.transform, new Vector2(1f, 0.5f), new Vector2(-8, 0), new Vector2(160, 38));
 
-            _status = UIFactory.CreateText(canvas.transform, "", 20, GameConfig.UiAccent);
-            UIFactory.Place(_status.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -96), new Vector2(900, 34));
+            BuildClock(bar);
+
+            _status = UIFactory.CreateText(canvas.transform, "", 15, GameConfig.UiAccent);
+            UIFactory.Place(_status.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -68), new Vector2(900, 26));
 
             _combat.RunningChanged += OnBattleChanged;
-            _drawTool.ModeChanged += OnDrawModeChanged;
-            _map.ViewModeChanged += OnViewModeChanged;
 
             var help = UIFactory.CreateText(canvas.transform,
-                "LMB select unit / add line point   •   RMB move order / finish line   •   WASD pan   •   Wheel zoom   •   Q/E rotate   •   MMB orbit",
-                17, GameConfig.UiTextDim);
-            UIFactory.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 16), new Vector2(1400, 30));
+                "LMB select   •   RMB place / move   •   C face   •   Ctrl+C/V copy-paste   •   Ctrl+Z undo   •   WASD pan   •   Wheel zoom   •   Q/E rotate   •   Esc/P pause",
+                13, GameConfig.UiTextDim);
+            UIFactory.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 12), new Vector2(1400, 24));
+        }
+
+        /// <summary>
+        /// Operational clock, pinned to the right of the top bar just inside
+        /// the battle button. Game mode only — hidden while editing.
+        /// </summary>
+        void BuildClock(RectTransform bar)
+        {
+            _clockPanel = UIFactory.CreatePanel(bar, "GameClock", GameConfig.UiPanelLight);
+            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-176, 0), new Vector2(268, 40));
+
+            _clockDate = UIFactory.CreateText(_clockPanel, "", 12, GameConfig.UiTextDim, TextAnchor.LowerLeft);
+            UIFactory.Place(_clockDate.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 1), new Vector2(84, 17));
+
+            _clockTime = UIFactory.CreateText(_clockPanel, "", 18, GameConfig.UiText, TextAnchor.UpperLeft, FontStyle.Bold);
+            UIFactory.Place(_clockTime.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, -1), new Vector2(84, 21));
+
+            _clockSpeed = UIFactory.CreateText(_clockPanel, "", 12, GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIFactory.Place(_clockSpeed.rectTransform, new Vector2(0f, 0.5f), new Vector2(96, 0), new Vector2(56, 20));
+
+            ClockBtn(-8, "»", _clock.Faster, "Speed up");
+            _pauseBtn = ClockBtn(-40, "❚❚", _clock.TogglePause, "Pause / resume");
+            ClockBtn(-72, "«", _clock.Slower, "Slow down");
+
+            _clock.SpeedChanged += RefreshClockSpeed;
+            _clockPanel.gameObject.SetActive(false);
+        }
+
+        Button ClockBtn(float x, string glyph, UnityEngine.Events.UnityAction action, string tooltip)
+        {
+            var b = UIFactory.CreateButton(_clockPanel, glyph, action, GameConfig.UiPanel, GameConfig.UiText, 13);
+            b.name = "Clock_" + tooltip;
+            UIFactory.Place((RectTransform)b.transform, new Vector2(1f, 0.5f), new Vector2(x, 0), new Vector2(28, 28));
+            return b;
+        }
+
+        void RefreshClockSpeed()
+        {
+            if (_clockSpeed == null || _clock == null || _pauseBtn == null) return;
+            _clockSpeed.text = _clock.SpeedText;
+            _clockSpeed.color = _clock.Paused ? new Color(0.95f, 0.55f, 0.25f) : GameConfig.UiAccent;
+            _pauseBtn.GetComponentInChildren<Text>(true).text = _clock.Paused ? "▶" : "❚❚";
+        }
+
+        void Update()
+        {
+            if (_clock == null || !_clock.Running || _clockDate == null) return;
+            _clockDate.text = _clock.DateText;
+            _clockTime.text = _clock.TimeText;
         }
 
         Button Btn(RectTransform bar, ref float x, float w, string label,
             UnityEngine.Events.UnityAction action)
         {
-            var b = UIFactory.CreateButton(bar, label, action, GameConfig.UiPanelLight, null, 20);
-            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 0.5f), new Vector2(x, 0), new Vector2(w, 50));
+            var b = UIFactory.CreateButton(bar, label, action, GameConfig.UiPanelLight, null, 15);
+            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 0.5f), new Vector2(x, 0), new Vector2(w, 38));
             ((RectTransform)b.transform).pivot = new Vector2(0, 0.5f);
-            x += w + 8;
+            x += w + 6;
             return b;
-        }
-
-        void ToggleView()
-        {
-            _map.ToggleViewMode();
-            _rig.SetMode(_map.ViewMode);
-        }
-
-        void OnViewModeChanged(ViewMode mode)
-        {
-            _viewBtn.GetComponentInChildren<Text>().text =
-                mode == ViewMode.Mode3D ? "VIEW: 3D" : "VIEW: 2D";
-        }
-
-        void ToggleDraw(LineDrawTool.Mode mode)
-        {
-            if (_drawTool.Current == mode) _drawTool.CancelDrawing();
-            else _drawTool.StartDrawing(mode);
-        }
-
-        void OnDrawModeChanged(LineDrawTool.Mode mode)
-        {
-            _boundaryBtn.image.color = mode == LineDrawTool.Mode.Boundary
-                ? GameConfig.UiAccent : GameConfig.UiPanelLight;
-            _defLineBtn.image.color = mode == LineDrawTool.Mode.DefensiveLine
-                ? GameConfig.UiAccent : GameConfig.UiPanelLight;
-            _status.text = mode switch
-            {
-                LineDrawTool.Mode.Boundary => "Drawing BOUNDARY — LMB add point, RMB/Enter finish, Esc cancel",
-                LineDrawTool.Mode.DefensiveLine => "Drawing DEFENSIVE LINE — LMB add point, RMB/Enter finish, Esc cancel",
-                _ => ""
-            };
-        }
-
-        void ToggleLines3D()
-        {
-            _lines3D = !_lines3D;
-            _drawTool.Draw3D = _lines3D;
-            _lines.SetAll3D(_lines3D);
-            _line3DBtn.GetComponentInChildren<Text>().text = _lines3D ? "LINES: 3D" : "LINES: 2D";
         }
 
         void OnBattleChanged(bool running)
         {
-            _battleBtn.GetComponentInChildren<Text>().text = running ? "■ PAUSE BATTLE" : "▶ START BATTLE";
+            _battleBtn.GetComponentInChildren<Text>(true).text = running ? "■ PAUSE BATTLE" : "▶ START BATTLE";
             _battleBtn.image.color = running
-                ? new Color(0.55f, 0.32f, 0.12f) : new Color(0.16f, 0.45f, 0.2f);
+                ? new Color(0.55f, 0.32f, 0.12f) : GameModeColor;
+
+            _modeLabel.text = running ? "GAME MODE" : "EDITOR MODE";
+            _modeChip.GetComponent<Image>().color = running ? GameModeColor : EditorModeColor;
+
+            if (_clockPanel != null) _clockPanel.gameObject.SetActive(running);
+            if (running) RefreshClockSpeed();
         }
 
         public void Flash(string message) => _status.text = message;

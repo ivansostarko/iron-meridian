@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using IronMeridian.Data;
 
 namespace IronMeridian.Map
@@ -12,6 +13,9 @@ namespace IronMeridian.Map
     public class CameraRig : MonoBehaviour
     {
         public Camera Cam { get; private set; }
+
+        /// <summary>Return true to freeze the camera entirely (e.g. the pause menu is open).</summary>
+        public System.Func<bool> InputBlocked;
 
         float _distance = 14000f;
         float _yaw = 0f;
@@ -45,6 +49,7 @@ namespace IronMeridian.Map
         void Update()
         {
             if (Cam == null) return;
+            if (InputBlocked != null && InputBlocked()) return;
             float dt = Time.unscaledDeltaTime;
             float panSpeed = _distance * 0.9f * dt;
 
@@ -56,9 +61,14 @@ namespace IronMeridian.Map
             if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) _focus += right * panSpeed;
             if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) _focus -= right * panSpeed;
 
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (Mathf.Abs(scroll) > 0.0001f)
-                _distance = Mathf.Clamp(_distance * (1f - scroll * 1.6f), MinDistance, MaxDistance);
+            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+
+            if (!overUI)
+            {
+                float scroll = Input.GetAxis("Mouse ScrollWheel");
+                if (Mathf.Abs(scroll) > 0.0001f)
+                    _distance = Mathf.Clamp(_distance * (1f - scroll * 1.6f), MinDistance, MaxDistance);
+            }
             if (Input.GetKey(KeyCode.R)) _distance = Mathf.Clamp(_distance * (1f - dt), MinDistance, MaxDistance);
             if (Input.GetKey(KeyCode.F)) _distance = Mathf.Clamp(_distance * (1f + dt), MinDistance, MaxDistance);
 
@@ -66,7 +76,7 @@ namespace IronMeridian.Map
             {
                 if (Input.GetKey(KeyCode.Q)) _yaw -= 60f * dt;
                 if (Input.GetKey(KeyCode.E)) _yaw += 60f * dt;
-                if (Input.GetMouseButton(2))   // middle mouse orbit
+                if (!overUI && Input.GetMouseButton(2))   // middle mouse orbit
                 {
                     _yaw += Input.GetAxis("Mouse X") * 3f;
                     _pitch3D = Mathf.Clamp(_pitch3D - Input.GetAxis("Mouse Y") * 2f, 20f, 85f);

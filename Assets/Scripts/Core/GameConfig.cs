@@ -13,6 +13,7 @@ namespace IronMeridian.Core
         public const string SceneSettings = "Settings";
         public const string SceneTesting = "Testing";
         public const string SceneEastFrance = "EastFrance";
+        public const string SceneUnitsList = "UnitsList";
         public const string SceneGame = "Game";
 
         // Default dev map: Lyon, France
@@ -25,6 +26,9 @@ namespace IronMeridian.Core
         public static readonly Color NeutralGreen = new Color(0.45f, 0.85f, 0.45f);
         public static readonly Color UnknownYellow = new Color(0.95f, 0.90f, 0.30f);
         public static readonly Color BoundaryYellow = new Color(1.00f, 0.85f, 0.10f);
+        // Red marks how far the unit can see, light blue how far it can shoot.
+        public static readonly Color ViewRangeColor = new Color(0.95f, 0.30f, 0.20f);
+        public static readonly Color WeaponRangeColor = new Color(0.35f, 0.80f, 0.95f);
 
         // UI palette
         public static readonly Color UiBackground = new Color(0.07f, 0.09f, 0.12f);

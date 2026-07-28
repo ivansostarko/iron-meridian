@@ -22,6 +22,7 @@ namespace IronMeridian.Units
         CesiumGeoreference _geo;
         CesiumGlobeAnchor _anchor;
         Transform _billboard;
+        Transform _iconVisual;
         MeshRenderer _iconRenderer;
         Transform _ring;
         Transform _bar;
@@ -52,15 +53,23 @@ namespace IronMeridian.Units
             _baseScale = 260f + 60f * (int)state.EchelonEnum / (float)(int)Echelon.Army;
 
             // --- icon billboard ---
+            // _billboard faces the camera and carries the shared scale for the
+            // icon + strength bar + label. _iconVisual is a separate child so the
+            // icon alone can roll to show facing/heading without rotating the bar
+            // and text label sideways with it.
+            var billboardGo = new GameObject("Billboard");
+            billboardGo.transform.SetParent(transform, false);
+            _billboard = billboardGo.transform;
+            // Vertical offset (icon "stands" on the ground point) and scale
+            // are both set every frame in LateUpdate, proportional to zoom.
+
             var bb = GameObject.CreatePrimitive(PrimitiveType.Quad);
             bb.name = "Icon";
             Destroy(bb.GetComponent<MeshCollider>());
             var box = bb.AddComponent<BoxCollider>();
             box.size = new Vector3(1f, 1f, 0.2f);
-            bb.transform.SetParent(transform, false);
-            bb.transform.localScale = new Vector3(_baseScale, _baseScale * 0.75f, 1f);
-            bb.transform.localPosition = new Vector3(0, _baseScale * 0.55f, 0);
-            _billboard = bb.transform;
+            bb.transform.SetParent(_billboard, false);
+            _iconVisual = bb.transform;
 
             _iconRenderer = bb.GetComponent<MeshRenderer>();
             _iconRenderer.material = IconMaterial(state.TeamEnum == Team.User ? "Friendly" : "Enemy", def.id);
@@ -73,9 +82,8 @@ namespace IronMeridian.Units
             ring.transform.localRotation = Quaternion.Euler(90, 0, 0);
             ring.transform.localScale = Vector3.one * _baseScale * 1.6f;
             ring.transform.localPosition = new Vector3(0, 6f, 0);
-            var rm = new Material(Shader.Find("Sprites/Default"));
-            rm.mainTexture = ProceduralTextures.Ring(
-                state.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam);
+            var rm = RuntimeMaterials.UnlitTexture(ProceduralTextures.Ring(
+                state.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam));
             ring.GetComponent<MeshRenderer>().material = rm;
             _ring = ring.transform;
             _ring.gameObject.SetActive(false);
@@ -87,8 +95,7 @@ namespace IronMeridian.Units
             bar.transform.SetParent(_billboard, false);
             bar.transform.localPosition = new Vector3(0, 0.62f, -0.01f);
             bar.transform.localScale = new Vector3(0.9f, 0.07f, 1f);
-            var bm = new Material(Shader.Find("Unlit/Color"));
-            bm.color = Color.green;
+            var bm = RuntimeMaterials.UnlitColor(Color.green);
             bar.GetComponent<MeshRenderer>().material = bm;
             _bar = bar.transform;
 
@@ -120,23 +127,57 @@ namespace IronMeridian.Units
             _anchor.longitudeLatitudeHeight = new double3(State.longitude, State.latitude, h + 2.0);
         }
 
+        // Camera.main is a tagged-object lookup; with a full order of battle on
+        // the map that ran once per unit per frame. The rig's camera doesn't
+        // change during a scene, so resolve it once and share it.
+        static Camera _mainCam;
+        static Camera MainCamera()
+        {
+            if (_mainCam == null) _mainCam = Camera.main;
+            return _mainCam;
+        }
+
         void LateUpdate()
         {
-            var cam = Camera.main;
+            var cam = MainCamera();
             if (cam == null || _billboard == null) return;
+
+            // Keep icons a constant apparent size at any zoom. Use depth along
+            // the camera's forward axis rather than raw Euclidean distance —
+            // raw distance made icons shrink toward the screen edges in the
+            // near-top-down 2D view, since off-centre units are farther from
+            // the camera in a straight line even at the same zoom/altitude.
+            float depth = Mathf.Max(1f, Vector3.Dot(transform.position - cam.transform.position, cam.transform.forward));
+            float s = Mathf.Clamp(depth / 18f, 30f, 2600f) / 260f;
+            _billboard.localScale = new Vector3(_baseScale * s, _baseScale * 0.75f * s, 1f);
+
+            // Anchor the icon's base (not its centre) at the ground point. This
+            // offset must scale with `s` too — a fixed offset sized for one zoom
+            // level makes the icon visibly float above the terrain at any other
+            // zoom, worst when zoomed in close. Set before the LookRotation below
+            // so the facing calculation uses this frame's position, not last
+            // frame's (a stale read here made the billboard swim slightly on
+            // fast zoom changes).
+            _billboard.localPosition = new Vector3(0, _baseScale * 0.55f * s, 0);
 
             // Billboard towards camera
             _billboard.rotation = Quaternion.LookRotation(
                 _billboard.position - cam.transform.position, cam.transform.up);
 
-            // Keep icons readable at any zoom: scale with distance
-            float dist = Vector3.Distance(cam.transform.position, transform.position);
-            float s = Mathf.Clamp(dist / 18f, 30f, 2600f) / 260f;
-            _billboard.localScale = new Vector3(_baseScale * s, _baseScale * 0.75f * s, 1f);
+            // Icon rolls in-plane to show facing/heading; bar and label above stay upright.
+            _iconVisual.localRotation = Quaternion.Euler(0, 0, State.headingDeg);
 
             if (_selected && _ring != null)
             {
+                // CesiumGlobeAnchor rotates the unit root to correct for globe
+                // curvature as it moves (adjustOrientationForGlobeWhenMoving),
+                // so a plain local rotation/offset here would tilt and drift
+                // away from the unit once it's not exactly at the georeference
+                // origin. Set the ring's world transform directly each frame,
+                // the same way the billboard already bypasses that tilt.
                 float pulse = 1.45f + Mathf.Sin(Time.time * 4f) * 0.18f;
+                _ring.rotation = Quaternion.Euler(90, 0, 0);
+                _ring.position = transform.position + Vector3.up * 6f;
                 _ring.localScale = Vector3.one * _baseScale * s * pulse;
             }
 
@@ -145,6 +186,31 @@ namespace IronMeridian.Units
             _bar.localScale = new Vector3(0.9f * str, 0.07f, 1f);
             _bar.GetComponent<MeshRenderer>().material.color =
                 Color.Lerp(Color.red, Color.green, str);
+        }
+
+        /// <summary>Manually set the unit's facing (0..360, degrees from north); rotates the icon.</summary>
+        public void SetHeading(float deg) => State.headingDeg = ((deg % 360f) + 360f) % 360f;
+
+        /// <summary>
+        /// Drops the unit straight onto a new spot — the map-editor reposition.
+        /// No travel animation and no fuel cost: this is the designer moving a
+        /// counter, not the unit marching. Travel belongs to <see cref="UnitMover.MoveTo"/>.
+        /// </summary>
+        public void SetPosition(double lat, double lon)
+        {
+            Mover.Cancel();
+            State.latitude = lat;
+            State.longitude = lon;
+            SnapToTerrain();
+            State.status = UnitStatus.Idle.ToString();
+            UnitRegistry.NotifyMoved();
+        }
+
+        /// <summary>Deletes this unit from the map immediately (no confirmation — caller decides).</summary>
+        public void RemoveFromMap()
+        {
+            UnitRegistry.Unregister(this);
+            Destroy(gameObject);
         }
 
         public void SetSelected(bool sel)
@@ -194,12 +260,12 @@ namespace IronMeridian.Units
 
         static Material IconMaterial(string team, string unitId)
         {
-            // Sprites/Default: transparent, unlit, and exposes _Color for
-            // hover highlight and death fade.
-            var mat = new Material(Shader.Find("Sprites/Default"));
+            // Unlit + transparent, and exposes _Color for hover highlight and
+            // death fade.
             var tex = Resources.Load<Texture2D>($"Icons/{team}/{unitId}");
-            if (tex != null) mat.mainTexture = tex;
-            return mat;
+            if (tex == null)
+                Debug.LogWarning($"[UnitActor] Missing icon texture: Resources/Icons/{team}/{unitId}");
+            return RuntimeMaterials.UnlitTexture(tex);
         }
 
         /// <summary>Refresh saved state (e.g. before serialising the map).</summary>

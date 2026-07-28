@@ -4,6 +4,7 @@ using CesiumForUnity;
 using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Map;
+using IronMeridian.Units;
 
 namespace IronMeridian.Lines
 {
@@ -39,25 +40,71 @@ namespace IronMeridian.Lines
             _lr.numCornerVertices = 4;
             ApplyStyle();
             Rebuild();
+
+            // LineRenderer positions are absolute world-space, but Cesium
+            // periodically re-origins the georeference for floating-point
+            // precision as the camera roams — without this, drawn lines
+            // drift away from the terrain the moment that happens.
+            _geo.changed += Rebuild;
+        }
+
+        void OnDestroy()
+        {
+            if (_geo != null) _geo.changed -= Rebuild;
         }
 
         void ApplyStyle()
         {
-            var mat = new Material(Shader.Find("Unlit/Color"));
-            bool boundary = Data.kind == LineKind.Boundary.ToString();
-            if (boundary)
+            System.Enum.TryParse(Data.kind, out LineKind kind);
+
+            Color color;
+            float width;
+            switch (kind)
             {
-                mat.color = GameConfig.BoundaryYellow;
-                _lr.startWidth = _lr.endWidth = 55f;
+                case LineKind.LateralBoundary:
+                case LineKind.RearBoundary:
+                    // Boundaries belong to the formation whose AO they bound,
+                    // so they take the owning side's colour.
+                    color = SideColor(GameConfig.BoundaryYellow);
+                    width = 45f;
+                    break;
+
+                case LineKind.Feba:
+                    color = SideColor(GameConfig.BlueTeam);
+                    width = 80f;
+                    break;
+
+                case LineKind.PhaseLine:
+                    color = GameConfig.BoundaryYellow;
+                    width = 45f;
+                    break;
+
+                case LineKind.Boundary:
+                    color = GameConfig.BoundaryYellow;
+                    width = 55f;
+                    break;
+
+                default:                                   // DefensiveLine
+                    color = SideColor(GameConfig.BlueTeam);
+                    width = 85f;
+                    break;
             }
-            else
-            {
-                mat.color = Data.team == Team.Enemy.ToString()
-                    ? GameConfig.RedTeam : GameConfig.BlueTeam;
-                _lr.startWidth = _lr.endWidth = 85f;
-            }
+
+            // FM 101-5-1 / SS0529: actual control measures are solid, planned
+            // or on-order ones are broken.
+            var mat = Data.planned
+                ? RuntimeMaterials.UnlitTexture(ProceduralTextures.Dash(color, 64, 0.5f))
+                : RuntimeMaterials.UnlitColor(color);
+            if (Data.planned) mat.color = color;
+
+            _lr.startWidth = _lr.endWidth = width;
             _lr.material = mat;
         }
+
+        Color SideColor(Color fallback) =>
+            Data.team == Team.Enemy.ToString() ? GameConfig.RedTeam
+            : Data.team == Team.User.ToString() ? GameConfig.BlueTeam
+            : fallback;
 
         /// <summary>Recompute world positions from geodetic points.</summary>
         public void Rebuild()

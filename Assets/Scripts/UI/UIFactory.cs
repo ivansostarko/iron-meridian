@@ -243,6 +243,29 @@ namespace IronMeridian.UI
             return scroll;
         }
 
+        public static InputField CreateInputField(Transform parent, string placeholder, int fontSize = 20)
+        {
+            var rt = CreatePanel(parent, "InputField", GameConfig.UiPanelLight);
+            var input = rt.gameObject.AddComponent<InputField>();
+
+            var text = CreateText(rt, "", fontSize, GameConfig.UiText, TextAnchor.MiddleLeft);
+            Stretch(text.rectTransform);
+            text.rectTransform.offsetMin = new Vector2(10, 4);
+            text.rectTransform.offsetMax = new Vector2(-10, -4);
+            text.raycastTarget = false;
+
+            var placeholderText = CreateText(rt, placeholder, fontSize, GameConfig.UiTextDim, TextAnchor.MiddleLeft, FontStyle.Italic);
+            Stretch(placeholderText.rectTransform);
+            placeholderText.rectTransform.offsetMin = new Vector2(10, 4);
+            placeholderText.rectTransform.offsetMax = new Vector2(-10, -4);
+            placeholderText.raycastTarget = false;
+
+            input.textComponent = text;
+            input.placeholder = placeholderText;
+            input.lineType = InputField.LineType.SingleLine;
+            return input;
+        }
+
         public static Image CreateImage(Transform parent, Sprite sprite, string name = "Image")
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -253,12 +276,42 @@ namespace IronMeridian.UI
             return img;
         }
 
+        // Sprite.Create allocates a new object every call, and these are looked
+        // up repeatedly (the info panel refreshes ~twice a second, the palette
+        // rebuilds on every team switch). Cache by path so each icon is built
+        // once. Misses are cached too, so a missing icon warns once, not forever.
+        static readonly System.Collections.Generic.Dictionary<string, Sprite> _spriteCache =
+            new System.Collections.Generic.Dictionary<string, Sprite>();
+        static readonly System.Collections.Generic.HashSet<string> _missingIcons =
+            new System.Collections.Generic.HashSet<string>();
+
         public static Sprite LoadIconSprite(string team, string unitId)
         {
-            var tex = Resources.Load<Texture2D>($"Icons/{team}/{unitId}");
-            if (tex == null) return null;
-            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+            string path = $"Icons/{team}/{unitId}";
+
+            if (_spriteCache.TryGetValue(path, out var cached))
+            {
+                // `!= null` is Unity's destroyed-object check: a scene unload
+                // (or a domain-reload-disabled play session) can invalidate the
+                // sprite while the dictionary entry survives.
+                if (cached != null) return cached;
+                _spriteCache.Remove(path);
+            }
+            if (_missingIcons.Contains(path)) return null;
+
+            var tex = Resources.Load<Texture2D>(path);
+            if (tex == null)
+            {
+                Debug.LogWarning($"[UIFactory] Missing icon texture: Resources/{path}. " +
+                    "If the file exists on disk, try Assets > Reimport All (a stale Library cache can hide it).");
+                _missingIcons.Add(path);
+                return null;
+            }
+
+            var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
                 new Vector2(0.5f, 0.5f), 100f);
+            _spriteCache[path] = sprite;
+            return sprite;
         }
 
         public static void Stretch(RectTransform rt)
