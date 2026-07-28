@@ -19,7 +19,7 @@ Note: `Assets/StreamingAssets/cesium-token.txt` is copied into the build's `Stre
 
 ```powershell
 # from the repo root
-.\scripts\build-windows.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\6000.0.32f1\Editor\Unity.exe"
+.\scripts\build-windows.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\6000.0.80f1\Editor\Unity.exe"
 ```
 
 The script runs Unity in batch mode with `-buildWindows64Player` and writes to `Builds\Windows\IronMeridian.exe`. Check `Builds\build.log` on failure.

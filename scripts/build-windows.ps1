@@ -1,6 +1,6 @@
 # Iron Meridian — Windows batch build
 # Usage:
-#   .\scripts\build-windows.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\6000.0.32f1\Editor\Unity.exe"
+#   .\scripts\build-windows.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\6000.0.80f1\Editor\Unity.exe"
 param(
     [Parameter(Mandatory = $true)]
     [string]$UnityPath,
