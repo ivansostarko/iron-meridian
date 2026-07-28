@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/*)",
+      "Bash(python3 scripts/*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Read(**)",
+      "Edit(Assets/**)",
+      "Edit(docs/**)",
+      "Edit(scripts/**)"
+    ],
+    "deny": [
+      "Read(Assets/StreamingAssets/cesium-token.txt)",
+      "Edit(Assets/StreamingAssets/cesium-token.txt)"
+    ]
+  }
+}

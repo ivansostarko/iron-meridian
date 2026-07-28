@@ -1,0 +1,9 @@
+# Unity
+*.cs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.unity -text
+*.asset -text
+*.png binary
+*.jpg binary
+*.ttf binary
