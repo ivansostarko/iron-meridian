@@ -45,8 +45,14 @@ Assets/Scripts/
     LineManager.cs       line collection <-> save data
     LineDrawTool.cs      click-to-draw boundaries & defensive lines
     FrontlineSystem.cs   auto boundary from power-weighted unit positions
+  Vfx/                   fire / smoke / explosions — see docs/08-PARTICLE-SYSTEMS.md
+    VfxCatalog.cs        VfxId + per-effect prefab, scale, lifetime, priority
+    VfxSystem.cs         the only entry point: resolve, geo-anchor, scale, budget
+    VfxInstance.cs       handle for a live effect; screen-size culling
+    ProceduralVfx.cs     code-built fallbacks (no asset dependency)
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
+    VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs
 ```
 
 ## Flow
@@ -57,6 +63,7 @@ MainMenu ─▶ Testing ─▶ Game scene
                           ├─ MapManager.Build(Lyon)          Cesium globe
                           ├─ CameraRig.Init                  strategy camera
                           ├─ LineManager / LineDrawTool / FrontlineSystem
+                          ├─ VfxSystem                       fire/smoke (before units spawn)
                           ├─ CombatSystem / SelectionManager
                           ├─ UIFactory canvas ─ GameHUD / UnitPaletteUI / UnitInfoPanel
                           └─ SaveSystem.LoadMap("lyon_dev.json") ─▶ UnitActor.Spawn ×N

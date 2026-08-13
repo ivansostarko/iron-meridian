@@ -5,6 +5,7 @@ using IronMeridian.Map;
 using IronMeridian.Save;
 using IronMeridian.UI;
 using IronMeridian.Units;
+using IronMeridian.Vfx;
 
 namespace IronMeridian.Core
 {
@@ -27,6 +28,7 @@ namespace IronMeridian.Core
         FrontlineSystem _frontline;
         SectorSystem _sectors;
         CombatSystem _combat;
+        VfxSystem _vfx;
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
@@ -79,6 +81,11 @@ namespace IronMeridian.Core
 
             _sectors = gameObject.AddComponent<SectorSystem>();
             _sectors.Init(_lines, _map.Georeference);
+
+            // Effects must exist before any unit spawns — a unit restored below
+            // strength starts burning the moment it is built.
+            _vfx = gameObject.AddComponent<VfxSystem>();
+            _vfx.Init(_map.Georeference);
 
             _combat = gameObject.AddComponent<CombatSystem>();
 
@@ -387,6 +394,9 @@ namespace IronMeridian.Core
             foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
                 if (a != null) Destroy(a.gameObject);
             UnitRegistry.Clear();
+            // World-anchored wreck fires and smoke outlive their units by design,
+            // so they have to be cleared explicitly on a reload.
+            if (_vfx != null) _vfx.StopAll();
             // Undo closures captured actors that no longer exist.
             EditHistory.Clear();
             ApplySave(_save);

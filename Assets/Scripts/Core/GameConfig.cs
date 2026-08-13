@@ -42,5 +42,20 @@ namespace IronMeridian.Core
         public const float CombatTickSeconds = 1.0f;
         public const float FrontlineUpdateSeconds = 3.0f;
         public const float MoveSpeedMultiplier = 60f;   // game-time acceleration for movement
+
+        // Particle effects (see docs/08-PARTICLE-SYSTEMS.md)
+        /// <summary>Hard cap on live effects; a corps-scale battle would otherwise spawn hundreds.</summary>
+        public const int VfxMaxConcurrent = 48;
+        /// <summary>Fraction of screen height below which a looping effect stops emitting.</summary>
+        public const float VfxMinApparentSize = 0.005f;
+        /// <summary>Combat ticks every second — impact puffs are throttled well below that.</summary>
+        public const float VfxImpactCooldownSeconds = 1.8f;
+        /// <summary>Firing signatures are rarer still; they mark "this unit is shooting", not each shot.</summary>
+        public const float VfxWeaponFireCooldownSeconds = 2.6f;
+        /// <summary>Strength at or below which a unit visibly burns.</summary>
+        public const float VfxBurningStrength = 0.45f;
+        /// <summary>How long a wreck burns, from a small loss to a catastrophic one.</summary>
+        public const float VfxWreckMinSeconds = 14f;
+        public const float VfxWreckMaxSeconds = 32f;
     }
 }

@@ -4,6 +4,7 @@ using Unity.Mathematics;
 using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Map;
+using IronMeridian.Vfx;
 
 namespace IronMeridian.Units
 {
@@ -29,6 +30,11 @@ namespace IronMeridian.Units
         TextMesh _label;
         float _baseScale;
         bool _selected;
+
+        // --- battle damage effects (see docs/08-PARTICLE-SYSTEMS.md) ---
+        VfxInstance _burning;
+        float _nextImpactVfx;
+        float _nextWeaponVfx;
 
         public static UnitActor Spawn(CesiumGeoreference geo, UnitState state)
         {
@@ -114,6 +120,10 @@ namespace IronMeridian.Units
 
             Mover = gameObject.AddComponent<UnitMover>();
             Mover.Init(this, _geo, _anchor);
+
+            // A unit restored from a save at low strength is already burning —
+            // damage state is part of the map, not just something that happens live.
+            RefreshBurning();
         }
 
         string ShortName() =>
@@ -227,17 +237,78 @@ namespace IronMeridian.Units
 
         public float CurrentPower() => Def.PowerAt(State.EchelonEnum, State.strength);
 
+        /// <summary>
+        /// This formation's size on a 0..1 scale (team → army). Drives how big
+        /// its fire, smoke and death explosion read on the map: a burning squad
+        /// and a burning army should not look the same.
+        /// </summary>
+        public float FormationScale01 =>
+            (int)State.EchelonEnum / (float)(int)Echelon.Army;
+
         public void ApplyDamage(float dmg)
         {
             State.strength = Mathf.Max(0f, State.strength - dmg);
             State.morale = Mathf.Max(0f, State.morale - dmg * 40f);
+
+            // Rounds landing. Throttled hard: combat ticks once a second against
+            // every opponent in range, so an unthrottled puff per exchange would
+            // blanket the front line.
+            if (Time.time >= _nextImpactVfx)
+            {
+                _nextImpactVfx = Time.time + GameConfig.VfxImpactCooldownSeconds;
+                VfxSystem.Play(VfxId.ImpactBurst, State.latitude, State.longitude,
+                    Mathf.Lerp(0.7f, 1.4f, FormationScale01));
+            }
+
             if (State.strength <= 0.01f) Die();
             else if (State.strength < 0.3f) State.status = UnitStatus.Routed.ToString();
+
+            RefreshBurning();
+        }
+
+        /// <summary>
+        /// Muzzle/dust signature when this unit shoots. Called by
+        /// <see cref="CombatSystem"/>; throttled so it marks "this formation is
+        /// in action" rather than firing once per resolved exchange.
+        /// </summary>
+        public void NotifyFiring()
+        {
+            if (Time.time < _nextWeaponVfx) return;
+            _nextWeaponVfx = Time.time + GameConfig.VfxWeaponFireCooldownSeconds;
+            VfxSystem.Play(VfxId.WeaponFire, State.latitude, State.longitude,
+                Mathf.Lerp(0.8f, 1.5f, FormationScale01));
+        }
+
+        /// <summary>
+        /// A badly mauled formation burns. The fire is parented to the unit so
+        /// it travels with a withdrawing unit, and is cleared if the unit is
+        /// reinforced back above the threshold.
+        /// </summary>
+        void RefreshBurning()
+        {
+            bool shouldBurn = IsAlive && State.strength <= GameConfig.VfxBurningStrength;
+
+            if (shouldBurn && _burning == null)
+            {
+                _burning = VfxSystem.Attach(VfxCatalog.FireForScale(FormationScale01), transform);
+            }
+            else if (!shouldBurn && _burning != null)
+            {
+                _burning.Stop();
+                _burning = null;
+            }
         }
 
         void Die()
         {
             State.status = UnitStatus.Destroyed.ToString();
+
+            // Cut the attached fire immediately — the wreck effect below takes
+            // over, and it is world-anchored so it outlives this GameObject.
+            if (_burning != null) { _burning.Stop(true); _burning = null; }
+
+            VfxSystem.PlayWreck(State.latitude, State.longitude, FormationScale01);
+
             StartCoroutine(FadeOut());
         }
 

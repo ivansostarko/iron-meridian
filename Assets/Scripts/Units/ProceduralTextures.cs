@@ -171,6 +171,30 @@ namespace IronMeridian.Units
             return tex;
         }
 
+        /// <summary>
+        /// Soft-edged blob for particle billboards. <see cref="Disc"/>'s edge is
+        /// deliberately crisp for ground markers; fire and smoke need a wide
+        /// falloff or the particles read as a cluster of hard dots.
+        /// </summary>
+        public static Texture2D Puff(Color color, int size = 64, float softness = 2.2f)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            float c = size / 2f;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    // Normalised radius, 0 at centre and 1 at the inscribed edge.
+                    float r = Mathf.Clamp01(Vector2.Distance(new Vector2(x, y), new Vector2(c, c)) / c);
+                    float a = Mathf.Pow(1f - r, softness);
+                    px[y * size + x] = new Color(color.r, color.g, color.b, color.a * a);
+                }
+            tex.SetPixels(px);
+            tex.Apply();
+            tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
+        }
+
         public static Texture2D Disc(Color color, int size = 64)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);

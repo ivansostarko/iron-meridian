@@ -11,8 +11,9 @@
   "dependencies": {
     "com.cesium.unity": "1.24.0",
     "com.unity.ugui": "2.0.0",
-    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.accessibility": "1.0.0",
     "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
     "com.unity.modules.imgui": "1.0.0",
     "com.unity.modules.jsonserialize": "1.0.0",
     "com.unity.modules.particlesystem": "1.0.0",

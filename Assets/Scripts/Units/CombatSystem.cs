@@ -79,6 +79,11 @@ namespace IronMeridian.Units
 
             float dmg = 0.010f * (atkPower / defPower) * mod;
             dmg = Mathf.Clamp(dmg, 0.001f, 0.08f);
+
+            // Firing signature at the shooter, impact effects at the target
+            // (raised inside ApplyDamage). Both self-throttle — see
+            // docs/08-PARTICLE-SYSTEMS.md.
+            attacker.NotifyFiring();
             defender.ApplyDamage(dmg);
             defender.State.status = defender.IsAlive ? UnitStatus.Engaging.ToString()
                                                      : UnitStatus.Destroyed.ToString();

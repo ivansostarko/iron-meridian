@@ -17,6 +17,7 @@ description: Working on Iron Meridian's Unity C# code — runtime-built UI, scen
 - New game system: MonoBehaviour added and wired in `GameController.Start()`; communicate through events (`UnitRegistry.Changed`, `CombatSystem.RunningChanged`) rather than polling other systems.
 - World-anchored objects need `CesiumGlobeAnchor`; set `longitudeLatitudeHeight` (note the order: lon, lat, height). Convert with `GeoUtils`, never hand-rolled math.
 - Terrain interaction = physics raycasts (Cesium physics meshes are enabled). Guard against tiles not yet streamed (raycast miss ⇒ user-visible message, not exception).
+- Particle effects: never build a `ParticleSystem` in gameplay code. Add a `VfxId` + catalogue row in `Vfx/VfxCatalog.cs`, a fallback in `ProceduralVfx.cs`, and call `VfxSystem.Play`/`Attach`. Author fallbacks at ~1 world unit — `VfxSystem` scales to map metres. Throttle anything a combat tick can trigger. **Update `docs/08-PARTICLE-SYSTEMS.md` (§2 catalogue and §3 usage) in the same change** — it is the register of every effect and call site.
 
 ## Verifying
 

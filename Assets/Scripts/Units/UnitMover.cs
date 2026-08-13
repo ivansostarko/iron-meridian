@@ -4,6 +4,7 @@ using Unity.Mathematics;
 using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Map;
+using IronMeridian.Vfx;
 
 namespace IronMeridian.Units
 {
@@ -36,6 +37,12 @@ namespace IronMeridian.Units
         const float HeightEaseRate = 9f;
         /// <summary>Constant altitude used in the flat 2D map view.</summary>
         const float FlatMapHeight = 250f;
+        /// <summary>
+        /// Ground covered between dust puffs along a march. Distance-based, not
+        /// time-based, so the trail has consistent spacing on the map whatever
+        /// the formation's speed. See docs/08-PARTICLE-SYSTEMS.md.
+        /// </summary>
+        const double DustIntervalM = 500.0;
 
         double _fromLat, _fromLon, _toLat, _toLon;
         double _totalKm;
@@ -46,6 +53,7 @@ namespace IronMeridian.Units
         GameObject _marker;
         float _sampleTimer;
         double _targetHeight;
+        double _nextDustAtM;
 
         public bool IsMoving => _moving;
 
@@ -71,6 +79,7 @@ namespace IronMeridian.Units
             _pivoting = Mathf.Abs(Mathf.DeltaAngle(s.headingDeg, _courseBearing)) > PivotThresholdDeg;
             _sampleTimer = 0f;                 // sample the ground on the first frame
             _targetHeight = s.heightMeters;
+            _nextDustAtM = DustIntervalM;      // no puff on the start line itself
             s.status = UnitStatus.Moving.ToString();
 
             SpawnMarker(lat, lon);
@@ -147,6 +156,16 @@ namespace IronMeridian.Units
                 out double lat, out double lon);
             s.latitude = lat;
             s.longitude = lon;
+
+            // Dust kicked up by the column. Lowest priority in the catalogue, so
+            // a mass advance sheds its trail rather than crowding out combat
+            // effects when the concurrent budget is reached.
+            if (_travelledM >= _nextDustAtM)
+            {
+                _nextDustAtM = _travelledM + DustIntervalM;
+                VfxSystem.Play(VfxId.Dust, lat, lon,
+                    Mathf.Lerp(0.6f, 1.3f, _actor.FormationScale01));
+            }
 
             // Keep steering at whatever the bearing to the objective is now.
             float want = GeoUtils.BearingDeg(lat, lon, _toLat, _toLon);

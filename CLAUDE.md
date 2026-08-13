@@ -14,6 +14,7 @@ Unity 6 (6000.0 LTS) real-terrain operational wargame using **Cesium for Unity 1
 4. **Positions are geodetic.** Store lat/lon (WGS84) in state/saves; convert with `GeoUtils`. Don't persist Unity world coordinates.
 5. **Legacy input & built-in render pipeline.** Uses `UnityEngine.Input` and uGUI with legacy `Text` — do not introduce the new Input System or TextMeshPro without being asked.
 6. Keep namespaces `IronMeridian.*` matching folder layout.
+7. **Particle effects go through `VfxSystem`.** Never build a `ParticleSystem` in gameplay code; add a `VfxId` + catalogue row in `Assets/Scripts/Vfx/VfxCatalog.cs` and call `VfxSystem.Play`/`Attach`. Every authored effect needs a procedural fallback (asset packs must be removable). **`docs/08-PARTICLE-SYSTEMS.md` is the register of every effect and every call site — update it in the same change whenever you add, remove or repurpose a particle effect, or add a new place one is triggered.**
 
 ## Common tasks
 
@@ -24,6 +25,8 @@ Unity 6 (6000.0 LTS) real-terrain operational wargame using **Cesium for Unity 1
 | Add a scenario map | Copy `Assets/StreamingAssets/Maps/lyon_dev.json`, edit; see `docs/05-MAP-SAVES.md` |
 | Windows build | `scripts/build-windows.ps1` or `docs/06-WINDOWS-BUILD.md` |
 | New screen | Create `Assets/Scripts/UI/<Name>UI.cs` runtime builder + scene entry in `ProjectBootstrap` + `GameConfig` scene name |
+| Add a particle effect | `VfxId` + catalogue row in `VfxCatalog.cs` → fallback in `ProceduralVfx.cs` → call via `VfxSystem` → **update `docs/08-PARTICLE-SYSTEMS.md`** |
+| Install authored VFX prefabs | **Tools → Iron Meridian → Install VFX Prefabs** (copies them into `Assets/Resources/VFX/`) |
 
 ## Verification
 
@@ -31,4 +34,4 @@ There is no test suite yet. After code changes: open in Unity 6, ensure console 
 
 ## Key docs
 
-`docs/01-GETTING-STARTED.md` (setup) · `docs/02-CESIUM.md` (token!) · `docs/03-GAMEPLAY.md` · `docs/04-UNITS.md` · `docs/05-MAP-SAVES.md` · `docs/07-ARCHITECTURE.md` (script map — read this first).
+`docs/01-GETTING-STARTED.md` (setup) · `docs/02-CESIUM.md` (token!) · `docs/03-GAMEPLAY.md` · `docs/04-UNITS.md` · `docs/05-MAP-SAVES.md` · `docs/07-ARCHITECTURE.md` (script map — read this first) · `docs/08-PARTICLE-SYSTEMS.md` (fire/smoke/explosions — effect register).
