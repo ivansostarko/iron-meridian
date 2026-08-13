@@ -32,6 +32,7 @@ namespace IronMeridian.Core
         VfxSystem _vfx;
         WeatherSystem _weather;
         EffectPlacementTool _effects;
+        MapControlsUI _mapControls;
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
@@ -118,13 +119,20 @@ namespace IronMeridian.Core
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
-            _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen || _effects.IsArmed ||
+            _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
+                                            BoundaryOptionsDialog.IsOpen || _effects.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
             // --- UI ---
             var canvas = UIFactory.CreateCanvas("GameCanvas");
             _selection.Init(_map, _rig.Cam, canvas);
+
+            BuildStep("map controls", () =>
+            {
+                _mapControls = gameObject.AddComponent<MapControlsUI>();
+                _mapControls.Build(canvas, _map, _rig);
+            });
 
             _hud = gameObject.AddComponent<GameHUD>();
             _hud.Build(canvas, _combat, _clock);
@@ -144,7 +152,8 @@ namespace IronMeridian.Core
             BuildStep("unit palette", () =>
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
-                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects);
+                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
+                    _mapControls, _drawTool);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -248,16 +257,26 @@ namespace IronMeridian.Core
                 _pauseMenu.SaveRequested = SaveMap;
                 _pauseMenu.LoadRequested = LoadMap;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
-                _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen || _pauseMenu.IsOpen;
+                _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
+                                          BoundaryOptionsDialog.IsOpen || _pauseMenu.IsOpen;
             });
 
             // --- content ---
             BuildStep("map content", () =>
             {
                 ApplySave(_save);
-                _map.ViewModeChanged += mode => _rig.SetMode(mode);
+                _map.ViewModeChanged += mode =>
+                {
+                    _rig.SetMode(mode);
+                    // Control measures are drawn either clamped to terrain or on
+                    // a flat band. Re-clamping on the switch is what keeps the
+                    // two projections showing the same graphics rather than one
+                    // of them hiding lines inside the ground.
+                    _lines.SetAll3D(mode == ViewMode.Mode3D);
+                };
                 _map.SetViewMode(_save.viewMode == "Mode2D" ? ViewMode.Mode2D : ViewMode.Mode3D);
                 _map.SetMapStyle(System.Enum.TryParse(_save.mapStyle, out MapStyle style) ? style : MapStyle.Satellite);
+                _map.SetBuildingsVisible(_save.showBuildings);
             });
 
             // Everything is built; what remains is Cesium streaming tiles for
@@ -463,6 +482,7 @@ namespace IronMeridian.Core
             _save.lines = _lines.Serialize();
             _save.viewMode = _map.ViewMode.ToString();
             _save.mapStyle = _map.Style.ToString();
+            _save.showBuildings = _map.BuildingsVisible;
             _save.startDateTime = _clock.StartToSaveString();
             _save.skyPhase = _weather.ManualPhase.ToString();
             _save.weatherCondition = _weather.Condition.ToString();

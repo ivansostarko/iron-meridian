@@ -107,6 +107,31 @@ namespace IronMeridian.UI
                         Mathf.Max(Seg(u, v, 0.56f, 0.16f, 0.68f, 0.50f, 0.07f),
                                   Seg(u, v, 0.68f, 0.50f, 0.94f, 0.50f, 0.07f))))));
 
+        /// <summary>Zoom in.</summary>
+        public static Sprite Plus => Get(nameof(Plus), (u, v) =>
+            Mathf.Max(Rect(u, v, 0.16f, 0.44f, 0.84f, 0.56f),
+                      Rect(u, v, 0.44f, 0.16f, 0.56f, 0.84f)));
+
+        /// <summary>Zoom out.</summary>
+        public static Sprite Minus => Get(nameof(Minus), (u, v) =>
+            Rect(u, v, 0.16f, 0.44f, 0.84f, 0.56f));
+
+        /// <summary>Compass needle — the half pointing north is what gets tinted.</summary>
+        public static Sprite CompassNeedle => Get(nameof(CompassNeedle), (u, v) =>
+            InPoly(u, v, new[] { 0.50f, 0.92f, 0.36f, 0.44f, 0.50f, 0.50f, 0.64f, 0.44f }));
+
+        /// <summary>Compass dial: outer ring with cardinal ticks.</summary>
+        public static Sprite CompassRose => Get(nameof(CompassRose), (u, v) =>
+        {
+            float ring = RingAt(u, v, 0.5f, 0.5f, 0.44f, 0.045f);
+            // Four cardinal ticks, longer than the eight intercardinal ones.
+            float ticks = Mathf.Max(
+                Mathf.Max(Rect(u, v, 0.485f, 0.80f, 0.515f, 0.94f), Rect(u, v, 0.485f, 0.06f, 0.515f, 0.20f)),
+                Mathf.Max(Rect(u, v, 0.06f, 0.485f, 0.20f, 0.515f), Rect(u, v, 0.80f, 0.485f, 0.94f, 0.515f)));
+            float hub = RingAt(u, v, 0.5f, 0.5f, 0.06f, 0.04f);
+            return Mathf.Max(ring, Mathf.Max(ticks, hub));
+        });
+
         /// <summary>Fire effect.</summary>
         public static Sprite Flame => Get(nameof(Flame), (u, v) =>
         {

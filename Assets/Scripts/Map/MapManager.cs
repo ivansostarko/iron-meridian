@@ -28,6 +28,10 @@ namespace IronMeridian.Map
         public ViewMode ViewMode { get; private set; } = ViewMode.Mode3D;
         public MapStyle Style { get; private set; } = MapStyle.Satellite;
 
+        /// <summary>Whether the OSM Buildings tileset is showing. Independent of the 2D/3D view.</summary>
+        public bool BuildingsVisible { get; private set; } = true;
+
+        public event System.Action<bool> BuildingsVisibilityChanged;
         public event System.Action<ViewMode> ViewModeChanged;
         public event System.Action<MapStyle> StyleChanged;
         public event System.Action<string> LoadError;
@@ -42,6 +46,7 @@ namespace IronMeridian.Map
             Terrain != null ? Mathf.Clamp01(Terrain.ComputeLoadProgress() / 100f) : 0f;
 
         CesiumIonRasterOverlay _overlay;
+        CesiumUrlTemplateRasterOverlay _osmOverlay;
         string _token;
 
         public void Build(double lat, double lon)
@@ -93,32 +98,94 @@ namespace IronMeridian.Map
             return ts;
         }
 
+        /// <summary>
+        /// Switches between the top-down 2D view and the tilted 3D one.
+        ///
+        /// Nothing else changes with the mode: buildings, effects, weather and
+        /// unit labels all behave identically in both. The view is a camera
+        /// choice, not a different world — buildings are governed by
+        /// <see cref="SetBuildingsVisible"/> alone.
+        /// </summary>
         public void SetViewMode(ViewMode mode)
         {
             ViewMode = mode;
-            // In 2D (top-down) mode buildings only add noise and cost.
-            if (Buildings != null) Buildings.gameObject.SetActive(mode == ViewMode.Mode3D);
             ViewModeChanged?.Invoke(mode);
         }
 
         public void ToggleViewMode() =>
             SetViewMode(ViewMode == ViewMode.Mode3D ? ViewMode.Mode2D : ViewMode.Mode3D);
 
-        /// <summary>Switches the imagery draped on the terrain (Satellite/Roads), or removes it (Terrain).</summary>
+        /// <summary>Cesium ion asset id backing each ion-hosted style; 0 means "not an ion overlay".</summary>
+        static long IonAssetFor(MapStyle style) => style switch
+        {
+            MapStyle.Satellite => 2,          // Bing Maps Aerial
+            MapStyle.SatelliteLabels => 3,    // Bing Maps Aerial with Labels
+            MapStyle.Roads => 4,              // Bing Maps Road
+            MapStyle.Sentinel2 => 3954,       // Sentinel-2 cloudless
+            _ => 0
+        };
+
+        /// <summary>
+        /// Switches the imagery draped on the terrain.
+        ///
+        /// Three kinds of style, handled separately: **Terrain** removes imagery
+        /// entirely and shows bare shaded relief; **OpenStreetMap** comes from a
+        /// public tile server through a URL-template overlay; everything else is
+        /// a Cesium ion asset. Only one overlay is ever enabled — leaving both
+        /// on would stack two imagery layers on the same tileset.
+        /// </summary>
         public void SetMapStyle(MapStyle style)
         {
             Style = style;
+
             if (style == MapStyle.Terrain)
             {
                 _overlay.enabled = false;
+                if (_osmOverlay != null) _osmOverlay.enabled = false;
+            }
+            else if (style == MapStyle.OpenStreetMap)
+            {
+                _overlay.enabled = false;
+                EnsureOsmOverlay();
+                _osmOverlay.enabled = true;
             }
             else
             {
-                _overlay.ionAssetID = style == MapStyle.Satellite ? 2 : 4; // 4 = Bing Maps Road
+                if (_osmOverlay != null) _osmOverlay.enabled = false;
+                _overlay.ionAssetID = IonAssetFor(style);
                 _overlay.ionAccessToken = _token;
                 _overlay.enabled = true;
             }
+
             StyleChanged?.Invoke(style);
+        }
+
+        /// <summary>
+        /// Built on first use rather than at startup: most scenarios never pick
+        /// OSM, and an unused overlay component still costs tile requests.
+        /// </summary>
+        void EnsureOsmOverlay()
+        {
+            if (_osmOverlay != null) return;
+
+            _osmOverlay = Terrain.gameObject.AddComponent<CesiumUrlTemplateRasterOverlay>();
+            _osmOverlay.templateUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+            _osmOverlay.minimumLevel = 0;
+            // OSM's own tiles stop at z19; asking beyond that returns 404s.
+            _osmOverlay.maximumLevel = 19;
+            _osmOverlay.enabled = false;
+        }
+
+        /// <summary>
+        /// Shows or hides the OSM Buildings tileset. Independent of the 2D/3D
+        /// view: buildings used to vanish in 2D, which meant the two views were
+        /// not showing the same world. The player decides now.
+        /// </summary>
+        public void SetBuildingsVisible(bool visible)
+        {
+            BuildingsVisible = visible;
+            if (Buildings != null) Buildings.gameObject.SetActive(visible);
+            BuildingsVisibilityChanged?.Invoke(visible);
         }
 
         /// <summary>

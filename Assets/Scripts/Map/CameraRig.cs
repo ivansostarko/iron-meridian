@@ -94,5 +94,45 @@ namespace IronMeridian.Map
         }
 
         public void JumpTo(Vector3 focus) { _focus = focus; Apply(); }
+
+        // ------------------------------------------------- on-map map controls
+
+        /// <summary>Compass heading the view is facing, degrees clockwise from north.</summary>
+        public float Yaw => ((_yaw % 360f) + 360f) % 360f;
+
+        /// <summary>Camera distance as 0 (closest) .. 1 (furthest), for a zoom readout.</summary>
+        public float Zoom01 =>
+            Mathf.InverseLerp(Mathf.Log(MinDistance), Mathf.Log(MaxDistance), Mathf.Log(_distance));
+
+        /// <summary>Height above the focus point in metres — what the scale readout shows.</summary>
+        public float DistanceMeters => _distance;
+
+        /// <summary>
+        /// Steps the zoom by a multiplicative factor. Multiplicative rather than
+        /// additive so a click moves the same *proportion* at every altitude —
+        /// a fixed step is imperceptible at 100 km and jarring at 500 m.
+        /// </summary>
+        public void ZoomBy(float factor)
+        {
+            _distance = Mathf.Clamp(_distance * factor, MinDistance, MaxDistance);
+            Apply();
+        }
+
+        public void ZoomIn() => ZoomBy(0.7f);
+        public void ZoomOut() => ZoomBy(1f / 0.7f);
+
+        /// <summary>Snaps the view back to north-up, keeping the current position and tilt.</summary>
+        public void ResetNorth()
+        {
+            _yaw = 0f;
+            Apply();
+        }
+
+        /// <summary>Restores the default tilt (3D) without changing heading or position.</summary>
+        public void ResetTilt()
+        {
+            _pitch3D = 55f;
+            Apply();
+        }
     }
 }

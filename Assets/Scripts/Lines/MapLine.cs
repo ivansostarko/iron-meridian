@@ -90,6 +90,10 @@ namespace IronMeridian.Lines
                     break;
             }
 
+            // Scenario overrides win over the doctrinal defaults above.
+            if (TryParseHex(Data.colorHex, out Color custom)) color = custom;
+            if (Data.widthMeters > 0f) width = Data.widthMeters;
+
             // FM 101-5-1 / SS0529: actual control measures are solid, planned
             // or on-order ones are broken.
             var mat = Data.planned
@@ -99,6 +103,15 @@ namespace IronMeridian.Lines
 
             _lr.startWidth = _lr.endWidth = width;
             _lr.material = mat;
+        }
+
+        /// <summary>Parses "#RRGGBB" / "RRGGBB". Returns false for empty or malformed values.</summary>
+        static bool TryParseHex(string hex, out Color color)
+        {
+            color = default;
+            if (string.IsNullOrEmpty(hex)) return false;
+            if (!hex.StartsWith("#")) hex = "#" + hex;
+            return ColorUtility.TryParseHtmlString(hex, out color);
         }
 
         Color SideColor(Color fallback) =>

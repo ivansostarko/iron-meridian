@@ -8,7 +8,31 @@
 |---|---|---|
 | Cesium World Terrain | `1` | 3D terrain relief |
 | Bing Maps Aerial imagery | `2` | Satellite imagery draped on the terrain |
-| Cesium OSM Buildings | `96188` | 3D buildings (visible in 3D view mode only) |
+| Bing Maps Aerial with Labels | `3` | Satellite imagery with place names |
+| Bing Maps Road | `4` | Road cartography |
+| Sentinel-2 | `3954` | Cloudless 10 m satellite mosaic |
+| Cesium OSM Buildings | `96188` | 3D buildings — shown or hidden by the MAP panel toggle, independent of the 2D/3D view |
+
+## Tile styles
+
+Selected from the map editor's **MAP** panel. `MapManager.SetMapStyle` handles three kinds of style, and only ever leaves one overlay enabled — two would stack imagery on the same tileset:
+
+| Style | Source | Notes |
+|---|---|---|
+| `Satellite` | ion asset 2 | Default |
+| `SatelliteLabels` | ion asset 3 | Aerial with place names |
+| `Roads` | ion asset 4 | Road cartography |
+| `Sentinel2` | ion asset 3954 | Consistent global mosaic; lower resolution than Bing at city scale |
+| `OpenStreetMap` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` via `CesiumUrlTemplateRasterOverlay` | **No ion token needed.** Created on first use; capped at z19 because OSM serves nothing beyond it. Mind OSM's tile usage policy for anything public. |
+| `Terrain` | none | Overlay disabled — bare shaded relief |
+
+Saved per map as `mapStyle`.
+
+## 2D and 3D parity
+
+The view mode is a **camera choice, not a different world**. Buildings used to be hidden in 2D, which meant the two views did not show the same thing; they are now governed by the MAP panel's toggle alone (`showBuildings` in the save). Units, effects, weather and labels are unaffected by the mode.
+
+The one thing that does change is control-measure clamping: lines are drawn either following the terrain (3D) or on a flat band (2D). `GameController` re-clamps every line via `LineManager.SetAll3D` when the projection switches, so the same graphics are visible either way rather than one projection burying them in the ground.
 
 `MapManager.cs` creates a `CesiumGeoreference` centred on the map's lat/lon (Lyon by default: **45.7640 N, 4.8357 E**) plus the three tilesets above. Physics meshes are enabled so units and line points can be placed by raycasting the terrain.
 

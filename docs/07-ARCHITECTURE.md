@@ -32,6 +32,8 @@ Assets/Scripts/
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
+    BoundaryOptionsDialog.cs  control-measure type/side/colour before drawing
+    MapControlsUI.cs     on-map zoom cluster + compass rose
     UiTheme.cs           map-editor design tokens (colours, sizes)
     UiIcons.cs           HUD icon set, drawn procedurally
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal

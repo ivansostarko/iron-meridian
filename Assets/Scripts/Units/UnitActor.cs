@@ -31,6 +31,34 @@ namespace IronMeridian.Units
         float _baseScale;
         bool _selected;
 
+        // --- map label sizing ---
+        const string LabelScalePref = "im.unitLabelScale";
+        /// <summary>Multiplier applied to every unit's map label. 1 = the authored size.</summary>
+        public static float LabelScale { get; private set; } = PlayerPrefs.GetFloat(LabelScalePref, 1f);
+
+        /// <summary>
+        /// Resizes every unit label on the map and remembers the choice.
+        /// Applied to the live actors rather than only to newly spawned ones, so
+        /// the slider reads as a direct manipulation instead of a setting that
+        /// takes effect later.
+        /// </summary>
+        public static void SetLabelScale(float scale)
+        {
+            LabelScale = Mathf.Clamp(scale, 0.5f, 2.5f);
+            PlayerPrefs.SetFloat(LabelScalePref, LabelScale);
+            foreach (var actor in UnitRegistry.All)
+                if (actor != null) actor.ApplyLabelScale();
+        }
+
+        void ApplyLabelScale()
+        {
+            if (_label == null) return;
+            _label.transform.localScale = Vector3.one * (BaseLabelScale * LabelScale);
+        }
+
+        /// <summary>Authored label scale, before the player's multiplier.</summary>
+        const float BaseLabelScale = 0.02f;
+
         // --- battle damage effects (see docs/08-PARTICLE-SYSTEMS.md) ---
         VfxInstance _burning;
         float _nextImpactVfx;
@@ -109,7 +137,7 @@ namespace IronMeridian.Units
             var lbl = new GameObject("Label");
             lbl.transform.SetParent(_billboard, false);
             lbl.transform.localPosition = new Vector3(0, 0.85f, 0);
-            lbl.transform.localScale = Vector3.one * 0.02f;
+            lbl.transform.localScale = Vector3.one * (BaseLabelScale * LabelScale);
             _label = lbl.AddComponent<TextMesh>();
             _label.anchor = TextAnchor.LowerCenter;
             _label.alignment = TextAlignment.Center;

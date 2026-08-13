@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using CesiumForUnity;
 using IronMeridian.Core;
 using IronMeridian.Data;
+using IronMeridian.Lines;
 using IronMeridian.Map;
 using IronMeridian.Units;
 using IronMeridian.Vfx;
@@ -107,7 +108,13 @@ namespace IronMeridian.UI
         readonly List<(VfxId id, Image fill, Text label)> _effectButtons =
             new List<(VfxId, Image, Text)>();
 
+        // Map section.
+        RectTransform _buildingsLamp, _mapControlsLamp, _compassLamp;
+        Text _buildingsLabel, _mapControlsLabel, _compassLabel, _labelSizeValue;
+
         MapManager _map;
+        MapControlsUI _mapControls;
+        LineDrawTool _drawTool;
         GameClock _clock;
         WeatherSystem _weather;
         EffectPlacementTool _effects;
@@ -119,14 +126,19 @@ namespace IronMeridian.UI
         bool _lastDropValid;
         double _dropLat, _dropLon;
 
-        static readonly MapStyle[] Styles = { MapStyle.Satellite, MapStyle.Terrain, MapStyle.Roads };
+        static readonly MapStyle[] Styles =
+        {
+            MapStyle.Satellite, MapStyle.SatelliteLabels, MapStyle.Roads,
+            MapStyle.Sentinel2, MapStyle.OpenStreetMap, MapStyle.Terrain
+        };
         Dropdown _styleDropdown;
         // Cached rather than fetched via GetComponentInChildren: the MAP section
         // starts hidden, and that call skips inactive children.
         Text _viewBtnLabel;
 
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
-            GameClock clock, WeatherSystem weather, EffectPlacementTool effects)
+            GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
+            MapControlsUI mapControls, LineDrawTool drawTool)
         {
             _canvas = canvas;
             _map = map;
@@ -135,6 +147,8 @@ namespace IronMeridian.UI
             _clock = clock;
             _weather = weather;
             _effects = effects;
+            _mapControls = mapControls;
+            _drawTool = drawTool;
 
             var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
@@ -188,6 +202,7 @@ namespace IronMeridian.UI
 
             _map.ViewModeChanged += OnViewModeChanged;
             _map.StyleChanged += OnStyleChanged;
+            _map.BuildingsVisibilityChanged += _ => RefreshMapSection();
             UnitRegistry.Changed += OnUnitsChanged;
             // Loading a map sets the start after this panel is built, so the
             // label has to follow the clock rather than only read it once.
@@ -988,21 +1003,164 @@ namespace IronMeridian.UI
         {
             SectionLabel(content, "TILE STYLE", -8);
 
-            _styleDropdown = UIFactory.CreateDropdown(content,
-                new List<string> { "SATELLITE", "TERRAIN", "ROADS" },
+            _styleDropdown = UIFactory.CreateDropdown(content, StyleNames(),
                 System.Array.IndexOf(Styles, _map.Style), OnStyleSelected);
             StyleDropdown(_styleDropdown, -30);
 
-            SectionLabel(content, "PROJECTION", -78);
+            SectionLabel(content, "PROJECTION", -76);
 
             var frame = UIFactory.CreateBorderedPanel(content, "ViewToggle", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -100), new Vector2(InnerWidth, 34));
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -98), new Vector2(InnerWidth, 32));
 
             var viewBtn = UIFactory.CreateButton(frame,
                 _map.ViewMode == ViewMode.Mode3D ? "VIEW: 3D" : "VIEW: 2D",
                 ToggleView, new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
             UIFactory.Stretch((RectTransform)viewBtn.transform);
             _viewBtnLabel = viewBtn.GetComponentInChildren<Text>(true);
+
+            var parity = UIFactory.CreateText(content,
+                "2D and 3D show the same world — units, effects, weather, lines and buildings all behave identically.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(parity.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -134), new Vector2(InnerWidth, 32));
+
+            SectionLabel(content, "LAYERS", -172);
+
+            _buildingsLamp = ToggleRow(content, "3D BUILDINGS", -194,
+                () => { _map.SetBuildingsVisible(!_map.BuildingsVisible); }, out _buildingsLabel);
+
+            _mapControlsLamp = ToggleRow(content, "ON-MAP CONTROLS", -238,
+                () => { if (_mapControls != null) _mapControls.SetControlsVisible(!_mapControls.ControlsVisible); RefreshMapSection(); },
+                out _mapControlsLabel);
+
+            _compassLamp = ToggleRow(content, "COMPASS", -282,
+                () => { if (_mapControls != null) _mapControls.SetCompassVisible(!_mapControls.CompassVisible); RefreshMapSection(); },
+                out _compassLabel);
+
+            SectionLabel(content, "UNIT LABELS", -330);
+
+            _labelSizeValue = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.Accent,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_labelSizeValue.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-Pad, -330), new Vector2(80, 18));
+
+            var slider = UIFactory.CreateSlider(content, LabelScaleTo01(UnitActor.LabelScale), v =>
+            {
+                UnitActor.SetLabelScale(LabelScaleFrom01(v));
+                RefreshMapSection();
+            });
+            UIFactory.Place((RectTransform)slider.transform, new Vector2(0f, 1f),
+                new Vector2(Pad, -352), new Vector2(InnerWidth, 30));
+
+            SectionLabel(content, "CONTROL MEASURES", -394);
+
+            var boundaryFrame = UIFactory.CreateBorderedPanel(content, "BoundaryOptions", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(boundaryFrame, new Vector2(0f, 1f), new Vector2(Pad, -416), new Vector2(InnerWidth, 46));
+
+            var bBtn = UIFactory.CreateButton(boundaryFrame, "", OpenBoundaryOptions,
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)bBtn.transform);
+            var bCaption = bBtn.GetComponentInChildren<Text>(true);
+            if (bCaption != null) bCaption.gameObject.SetActive(false);
+
+            var bIcon = UIFactory.CreateImage(boundaryFrame, UiIcons.Square, "Glyph");
+            bIcon.color = UiTheme.Accent;
+            bIcon.raycastTarget = false;
+            UIFactory.Place((RectTransform)bIcon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(18, 18));
+
+            var bTitle = UIFactory.CreateText(boundaryFrame, "BOUNDARY OPTIONS", UiTheme.FontSmall, UiTheme.Text,
+                TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.Place(bTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, 1), new Vector2(200, 16));
+
+            var bSub = UIFactory.CreateText(boundaryFrame, "Type, side, colour, width, caption", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(bSub.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, -2), new Vector2(220, 16));
+
+            RefreshMapSection();
+        }
+
+        /// <summary>A lamp + label row that reads as an on/off switch.</summary>
+        RectTransform ToggleRow(RectTransform content, string label, float y,
+            UnityEngine.Events.UnityAction action, out Text stateLabel)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Toggle_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 38));
+
+            var btn = UIFactory.CreateButton(frame, "", action, new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var lamp = UIFactory.CreatePanel(frame, "Lamp", UiTheme.TextFaint);
+            UIFactory.Place(lamp, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(8, 8));
+            lamp.GetComponent<Image>().raycastTarget = false;
+
+            var title = UIFactory.CreateText(frame, label, UiTheme.FontSmall, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, 0), new Vector2(160, 16));
+
+            stateLabel = UIFactory.CreateText(frame, "", UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
+            UIFactory.Place(stateLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-12, 0), new Vector2(60, 16));
+
+            return lamp;
+        }
+
+        List<string> StyleNames()
+        {
+            var names = new List<string>(Styles.Length);
+            foreach (var style in Styles) names.Add(StyleLabel(style));
+            return names;
+        }
+
+        static string StyleLabel(MapStyle style) => style switch
+        {
+            MapStyle.Satellite => "SATELLITE",
+            MapStyle.SatelliteLabels => "SATELLITE + LABELS",
+            MapStyle.Roads => "ROADS",
+            MapStyle.Terrain => "TERRAIN (NO IMAGERY)",
+            MapStyle.Sentinel2 => "SENTINEL-2",
+            MapStyle.OpenStreetMap => "OPENSTREETMAP",
+            _ => style.ToString().ToUpperInvariant()
+        };
+
+        // The slider is linear 0..1 but the useful label range is 0.5x..2.5x,
+        // so map between them rather than exposing raw multipliers.
+        static float LabelScaleTo01(float scale) => Mathf.InverseLerp(0.5f, 2.5f, scale);
+        static float LabelScaleFrom01(float v) => Mathf.Lerp(0.5f, 2.5f, v);
+
+        void OpenBoundaryOptions()
+        {
+            if (_drawTool == null || _canvas == null) return;
+            // Latch the tool strip's boundary button so the armed state is
+            // visible in both places once drawing starts.
+            BoundaryOptionsDialog.Open(_canvas, _drawTool, () => SetActiveTool(2));
+        }
+
+        /// <summary>Repaints every toggle and readout from the systems that own the state.</summary>
+        void RefreshMapSection()
+        {
+            if (_buildingsLamp != null)
+            {
+                bool on = _map != null && _map.BuildingsVisible;
+                _buildingsLamp.GetComponent<Image>().color = on ? UiTheme.Success : UiTheme.TextFaint;
+                _buildingsLabel.text = on ? "SHOWN" : "HIDDEN";
+            }
+
+            if (_mapControlsLamp != null)
+            {
+                bool on = _mapControls != null && _mapControls.ControlsVisible;
+                _mapControlsLamp.GetComponent<Image>().color = on ? UiTheme.Success : UiTheme.TextFaint;
+                _mapControlsLabel.text = on ? "SHOWN" : "HIDDEN";
+            }
+
+            if (_compassLamp != null)
+            {
+                bool on = _mapControls != null && _mapControls.CompassVisible;
+                _compassLamp.GetComponent<Image>().color = on ? UiTheme.Success : UiTheme.TextFaint;
+                _compassLabel.text = on ? "SHOWN" : "HIDDEN";
+            }
+
+            if (_labelSizeValue != null)
+                _labelSizeValue.text = string.Format("{0:0.00}x", UnitActor.LabelScale);
         }
 
         void SectionLabel(RectTransform content, string label, float y)

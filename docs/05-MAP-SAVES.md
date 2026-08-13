@@ -19,6 +19,7 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
   "centerLongitude": 4.8357,
   "cameraHeightMeters": 14000,
   "viewMode": "Mode3D",               // Mode2D | Mode3D
+  "showBuildings": true,              // 3D buildings layer (independent of viewMode)
 
   "units": [
     {

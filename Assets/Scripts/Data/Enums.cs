@@ -58,9 +58,12 @@ namespace IronMeridian.Data
     /// <summary>Imagery draped on the terrain tileset.</summary>
     public enum MapStyle
     {
-        Satellite,  // Bing Maps Aerial (ion asset 2)
-        Terrain,    // bare shaded relief, no imagery overlay
-        Roads       // Bing Maps Road (ion asset 4)
+        Satellite,       // Bing Maps Aerial (ion asset 2)
+        Terrain,         // bare shaded relief, no imagery overlay
+        Roads,           // Bing Maps Road (ion asset 4)
+        SatelliteLabels, // Bing Maps Aerial with place labels (ion asset 3)
+        Sentinel2,       // Sentinel-2 cloudless mosaic (ion asset 3954)
+        OpenStreetMap    // OSM raster tiles, via a URL-template overlay
     }
 
     /// <summary>

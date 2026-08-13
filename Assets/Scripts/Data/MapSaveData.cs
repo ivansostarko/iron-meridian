@@ -107,6 +107,17 @@ namespace IronMeridian.Data
         public string rightLabel = "";
         /// <summary>Planned / on-order control measures are drawn broken, actual ones solid.</summary>
         public bool planned;
+
+        /// <summary>
+        /// Optional "#RRGGBB" override. Empty means the line takes the colour
+        /// its kind and owning side imply, which is the doctrinally correct
+        /// default — this exists for scenarios that need to distinguish more
+        /// formations than the standard palette has colours for.
+        /// </summary>
+        public string colorHex = "";
+
+        /// <summary>Optional width override in metres; 0 keeps the width implied by the kind.</summary>
+        public float widthMeters;
     }
 
     /// <summary>
@@ -124,7 +135,10 @@ namespace IronMeridian.Data
         public double centerLongitude;
         public double cameraHeightMeters = 12000;
         public string viewMode = "Mode3D"; // Mode2D | Mode3D
-        public string mapStyle = "Satellite"; // Satellite | Terrain | Roads
+        /// <summary>MapStyle name — see docs/02-CESIUM.md for the full list.</summary>
+        public string mapStyle = "Satellite";
+        /// <summary>3D buildings layer. Independent of viewMode; see docs/02-CESIUM.md.</summary>
+        public bool showBuildings = true;
 
         /// <summary>
         /// Scenario H-hour, round-tripped as "yyyy-MM-dd HH:mm" — a sortable,
