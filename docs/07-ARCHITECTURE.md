@@ -19,7 +19,10 @@ Assets/Scripts/
     UnitDefinition.cs    unit type stats + UnitDatabase (units.json loader)
     MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData
   Save/SaveSystem.cs     JSON load/save; user saves shadow shipped maps
-  Audio/AudioManager.cs  master volume (AudioListener) + procedural UI click
+  Audio/                 sound — see docs/10-AUDIO.md
+    AudioManager.cs      master volume (AudioListener) + procedural UI click
+    AudioCatalog.cs      music tracks: resource path, level, loop
+    MusicManager.cs      persistent background music; survives scene loads
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns…)
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal

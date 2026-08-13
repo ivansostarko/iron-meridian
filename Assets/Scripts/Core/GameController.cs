@@ -49,6 +49,7 @@ namespace IronMeridian.Core
         void Start()
         {
             IronMeridian.Audio.AudioManager.Apply();
+            IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             UnitRegistry.Clear();
 
             _save = SaveSystem.LoadMap(mapFileName) ?? new MapSaveData

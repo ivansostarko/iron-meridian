@@ -27,6 +27,7 @@ namespace IronMeridian.UI
         void Start()
         {
             AudioManager.Apply();
+            MusicManager.Play(MusicTrack.MenuTheme);
             var canvas = UIFactory.CreateCanvas("SettingsCanvas");
 
             var bg = UIFactory.CreatePanel(canvas.transform, "Background", GameConfig.UiBackground);
