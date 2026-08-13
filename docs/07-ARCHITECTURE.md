@@ -45,6 +45,9 @@ Assets/Scripts/
     LineManager.cs       line collection <-> save data
     LineDrawTool.cs      click-to-draw boundaries & defensive lines
     FrontlineSystem.cs   auto boundary from power-weighted unit positions
+  Models/                3D models — see docs/09-3D-MODELS.md
+    UnitModelLibrary.cs  unit definition -> model prefab + animation clips
+    ModelPreview.cs      renders a model into a uGUI panel (RenderTexture rig)
   Vfx/                   fire / smoke / explosions — see docs/08-PARTICLE-SYSTEMS.md
     VfxCatalog.cs        VfxId + per-effect prefab, scale, lifetime, priority
     VfxSystem.cs         the only entry point: resolve, geo-anchor, scale, budget
@@ -53,6 +56,7 @@ Assets/Scripts/
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs
+    ModelInstaller.cs    Tools > Iron Meridian > Install Unit Models
 ```
 
 ## Flow

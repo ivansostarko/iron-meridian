@@ -276,6 +276,17 @@ namespace IronMeridian.UI
             return img;
         }
 
+        /// <summary>
+        /// Raw texture quad — for content uGUI has no sprite for, such as a
+        /// camera's <see cref="RenderTexture"/> (see <c>ModelPreview</c>).
+        /// </summary>
+        public static RawImage CreateRawImage(Transform parent, string name = "RawImage")
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            return go.GetComponent<RawImage>();
+        }
+
         // Sprite.Create allocates a new object every call, and these are looked
         // up repeatedly (the info panel refreshes ~twice a second, the palette
         // rebuilds on every team switch). Cache by path so each icon is built
