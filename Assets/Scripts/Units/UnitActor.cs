@@ -28,8 +28,17 @@ namespace IronMeridian.Units
         Transform _ring;
         Transform _bar;
         TextMesh _label;
+        HeadingArrow _arrow;
         float _baseScale;
         bool _selected;
+
+        // --- terrain clamping ---
+        /// <summary>Seconds between ground samples while the terrain under the unit is still unknown.</summary>
+        const float GroundRetrySeconds = 0.4f;
+        /// <summary>Seconds between ground samples once the unit is sitting on real terrain.</summary>
+        const float GroundRefreshSeconds = 2.5f;
+        float _groundTimer;
+        bool _grounded;
 
         // --- map label sizing ---
         const string LabelScalePref = "im.unitLabelScale";
@@ -146,6 +155,10 @@ namespace IronMeridian.Units
             _label.color = state.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam;
             _label.text = $"{EchelonInfo.Indicator(state.EchelonEnum)}\n{ShortName()}";
 
+            // Facing arrow on the ground; shown only while the unit is selected.
+            _arrow = HeadingArrow.Create(_geo, this,
+                state.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam);
+
             Mover = gameObject.AddComponent<UnitMover>();
             Mover.Init(this, _geo, _anchor);
 
@@ -159,8 +172,39 @@ namespace IronMeridian.Units
 
         public void SnapToTerrain()
         {
-            double h = GeoUtils.SampleTerrainHeight(_geo, State.latitude, State.longitude,
-                State.heightMeters > 0 ? State.heightMeters : 250.0);
+            _grounded = GeoUtils.TrySampleTerrainHeight(_geo, State.latitude, State.longitude, out double h);
+            if (!_grounded) h = State.heightMeters > 0 ? State.heightMeters : 250.0;
+            State.heightMeters = h;
+            _groundTimer = _grounded ? GroundRefreshSeconds : GroundRetrySeconds;
+            _anchor.longitudeLatitudeHeight = new double3(State.longitude, State.latitude, h + 2.0);
+        }
+
+        /// <summary>
+        /// Keeps the icon standing on the terrain rather than at whatever height
+        /// it was placed at.
+        ///
+        /// Cesium streams tiles in, so the sample taken when a unit spawns
+        /// routinely misses: the map is loading, there is nothing to hit, and
+        /// the unit is left at the 250 m fallback — floating over a valley or
+        /// buried inside a ridge. Retrying until the ground is actually found,
+        /// then refreshing slowly, is what makes an icon visible at every zoom
+        /// in both 2D and 3D. A miss never overwrites a good height, so a unit
+        /// that has been grounded once cannot be lost again when tiles unload.
+        ///
+        /// Skipped while marching: <see cref="UnitMover"/> is already sampling
+        /// on a much tighter cadence and easing the unit along the contour.
+        /// </summary>
+        void ClampToGround()
+        {
+            if (Mover != null && Mover.IsMoving) return;
+
+            _groundTimer -= Time.deltaTime;
+            if (_groundTimer > 0f) return;
+            _groundTimer = _grounded ? GroundRefreshSeconds : GroundRetrySeconds;
+
+            if (!GeoUtils.TrySampleTerrainHeight(_geo, State.latitude, State.longitude, out double h)) return;
+
+            _grounded = true;
             State.heightMeters = h;
             _anchor.longitudeLatitudeHeight = new double3(State.longitude, State.latitude, h + 2.0);
         }
@@ -179,6 +223,8 @@ namespace IronMeridian.Units
         {
             var cam = MainCamera();
             if (cam == null || _billboard == null) return;
+
+            ClampToGround();
 
             // Keep icons a constant apparent size at any zoom. Use depth along
             // the camera's forward axis rather than raw Euclidean distance —
@@ -204,6 +250,10 @@ namespace IronMeridian.Units
 
             // Icon rolls in-plane to show facing/heading; bar and label above stay upright.
             _iconVisual.localRotation = Quaternion.Euler(0, 0, State.headingDeg);
+
+            // The facing arrow tracks the icon's on-screen size rather than
+            // computing its own, so it stays in proportion at every zoom.
+            if (_selected && _arrow != null) _arrow.UpdateArrow(_baseScale * s);
 
             if (_selected && _ring != null)
             {
@@ -251,10 +301,30 @@ namespace IronMeridian.Units
             Destroy(gameObject);
         }
 
+        void OnDestroy()
+        {
+            // The arrow is parented to the georeference (so globe curvature does
+            // not tilt it), which means it does not go away with this object.
+            if (_arrow != null) Destroy(_arrow.gameObject);
+        }
+
         public void SetSelected(bool sel)
         {
             _selected = sel;
             if (_ring != null) _ring.gameObject.SetActive(sel);
+            // Facing is shown for any selected unit — in the scenario editor as
+            // much as in battle, because knowing which way a counter points is
+            // what the editor is for.
+            if (_arrow != null) _arrow.SetVisible(sel);
+        }
+
+        /// <summary>
+        /// Marks the unit as being aimed with the facing tool (<c>C</c>), which
+        /// brightens its heading arrow while the player swings it around.
+        /// </summary>
+        public void SetAiming(bool aiming)
+        {
+            if (_arrow != null) _arrow.SetAiming(aiming);
         }
 
         public void SetHover(bool hover)

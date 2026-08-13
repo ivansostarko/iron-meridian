@@ -22,11 +22,15 @@ namespace IronMeridian.Lines
     /// </summary>
     public class MapLabel : MonoBehaviour
     {
+        /// <summary>Seconds between ground samples while the terrain here is still streaming.</summary>
+        const float RetrySeconds = 1.2f;
+
         CesiumGeoreference _geo;
         TextMesh _text;
         double _lat, _lon;
         Vector3 _world;
         bool _placed;
+        float _retryTimer;
 
         public static MapLabel Create(CesiumGeoreference geo, Transform parent, string id)
         {
@@ -49,6 +53,7 @@ namespace IronMeridian.Lines
             _text.color = color;
             _lat = lat; _lon = lon;
             _placed = false;
+            _retryTimer = 0f;
         }
 
         void LateUpdate()
@@ -58,11 +63,18 @@ namespace IronMeridian.Lines
 
             if (!_placed)
             {
-                // Terrain sampling is a physics raycast; the label does not
-                // move once placed, so do it once rather than every frame.
-                double h = GeoUtils.SampleTerrainHeight(_geo, _lat, _lon, 250) + 60.0;
-                _world = GeoUtils.GeoToUnity(_geo, _lat, _lon, h);
-                _placed = true;
+                // Terrain sampling is a physics raycast; the label does not move
+                // once placed, so do it once rather than every frame — but only
+                // once the ground is actually there. Cesium streams tiles in, so
+                // an early sample finds nothing and would otherwise strand the
+                // caption at the fallback height, floating or buried.
+                _retryTimer -= Time.unscaledDeltaTime;
+                if (_retryTimer <= 0f)
+                {
+                    _retryTimer = RetrySeconds;
+                    _placed = GeoUtils.TrySampleTerrainHeight(_geo, _lat, _lon, out double ground);
+                    _world = GeoUtils.GeoToUnity(_geo, _lat, _lon, (_placed ? ground : 250.0) + 60.0);
+                }
             }
 
             transform.position = _world;
@@ -72,6 +84,6 @@ namespace IronMeridian.Lines
         }
 
         /// <summary>Re-sample the ground on the next frame (after a georeference shift).</summary>
-        public void Invalidate() => _placed = false;
+        public void Invalidate() { _placed = false; _retryTimer = 0f; }
     }
 }

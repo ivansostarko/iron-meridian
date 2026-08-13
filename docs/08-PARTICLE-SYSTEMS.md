@@ -94,7 +94,7 @@ Throttling matters: combat ticks once a second against **every** opposing unit i
 
 | Case | Effect | Trigger | File |
 |---|---|---|---|
-| A formation on the march | `Dust` | One puff every 500 m of ground covered (distance-based, so trail spacing is speed-independent) | `UnitMover.Update` |
+| A formation on the march | `Dust` | One puff every 500 m of ground covered **along its planned route**, not along the straight line (distance-based, so puff spacing is speed-independent and survives the route's bends) | `UnitMover.Update` |
 
 ### Hand placement
 

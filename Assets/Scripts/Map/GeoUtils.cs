@@ -101,17 +101,46 @@ namespace IronMeridian.Map
         /// Cesium physics meshes. Falls back to <paramref name="fallback"/>.
         /// </summary>
         public static double SampleTerrainHeight(CesiumGeoreference geo, double lat, double lon,
-            double fallback = 250.0)
+            double fallback = 250.0) =>
+            TrySampleTerrainHeight(geo, lat, lon, out double h) ? h : fallback;
+
+        // Reused across calls: everything that clamps to the ground samples on a
+        // cadence (units, lines, trails, route planning), and Physics.RaycastAll
+        // would allocate a fresh array every one of those samples.
+        static readonly RaycastHit[] _terrainHits = new RaycastHit[24];
+
+        /// <summary>
+        /// Terrain height at lat/lon, reporting whether the ground was actually
+        /// found. Anything that clamps to the terrain needs the difference:
+        /// Cesium streams tiles in, so an early sample legitimately misses and
+        /// must be retried rather than baked in as the unit's height.
+        ///
+        /// Unit icons carry colliders (they are click targets), so a plain
+        /// raycast can come back with a nearby formation's billboard instead of
+        /// the ground. Those hits are skipped — otherwise units standing close
+        /// together shove each other into the sky.
+        /// </summary>
+        public static bool TrySampleTerrainHeight(CesiumGeoreference geo, double lat, double lon,
+            out double height)
         {
+            height = 0.0;
             Vector3 high = GeoToUnity(geo, lat, lon, 9000.0);
             Vector3 low = GeoToUnity(geo, lat, lon, -500.0);
             Vector3 dir = (low - high).normalized;
-            if (Physics.Raycast(high, dir, out RaycastHit hit, 20000f))
+
+            int count = Physics.RaycastNonAlloc(high, dir, _terrainHits, 20000f);
+            float nearest = float.MaxValue;
+            bool found = false;
+            for (int i = 0; i < count; i++)
             {
-                UnityToGeo(geo, hit.point, out _, out _, out double h);
-                return h;
+                var hit = _terrainHits[i];
+                if (hit.distance >= nearest) continue;
+                if (hit.collider.GetComponentInParent<IronMeridian.Units.UnitActor>() != null) continue;
+                nearest = hit.distance;
+                UnityToGeo(geo, hit.point, out _, out _, out height);
+                found = true;
             }
-            return fallback;
+            return found;
         }
     }
 }

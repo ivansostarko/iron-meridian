@@ -9,16 +9,37 @@ using IronMeridian.Units;
 namespace IronMeridian.Lines
 {
     /// <summary>
-    /// A rendered polyline on the globe: sector boundary or defensive line.
-    /// In 3D mode vertices are clamped to the terrain; in 2D mode the line is
-    /// drawn at a constant height for a clean flat-map look.
+    /// A rendered polyline on the globe: sector boundary, defensive line or
+    /// battle position.
+    ///
+    /// Vertices are clamped to the terrain in **both** view modes. A constant
+    /// height band looks tidy on a flat map right up until the ground rises
+    /// through it, at which point the line disappears inside a ridge; following
+    /// the terrain and standing off it by a fixed clearance is what keeps a
+    /// control measure readable everywhere. The 2D/3D flag now chooses how much
+    /// clearance rather than whether to clamp at all — 2D lifts further clear so
+    /// the graphics read as a drawn overlay from straight above.
+    ///
+    /// Because Cesium streams tiles, the first clamp routinely finds no ground.
+    /// The line keeps re-clamping until every vertex has real terrain under it,
+    /// then stops sampling.
     /// </summary>
     public class MapLine : MonoBehaviour
     {
         public MapLineData Data { get; private set; }
 
+        /// <summary>Metres above the terrain in the tilted 3D view.</summary>
+        const double Clearance3DM = 25.0;
+        /// <summary>Metres above the terrain in the top-down 2D view.</summary>
+        const double Clearance2DM = 140.0;
+        /// <summary>Seconds between re-clamps while some vertex still has no terrain under it.</summary>
+        const float ReclampSeconds = 1.5f;
+
         CesiumGeoreference _geo;
         LineRenderer _lr;
+        readonly List<MapLabel> _labels = new List<MapLabel>();
+        int _unresolved;
+        float _reclampTimer;
 
         public static MapLine Create(CesiumGeoreference geo, MapLineData data)
         {
@@ -84,6 +105,14 @@ namespace IronMeridian.Lines
                     width = 55f;
                     break;
 
+                case LineKind.BattlePosition:
+                    // The ground a formation defends from, not the line it holds:
+                    // thinner than the defence line it wraps, so the two read as
+                    // an area and its forward edge rather than as two lines.
+                    color = SideColor(GameConfig.BlueTeam);
+                    width = 32f;
+                    break;
+
                 default:                                   // DefensiveLine
                     color = SideColor(GameConfig.BlueTeam);
                     width = 85f;
@@ -123,15 +152,38 @@ namespace IronMeridian.Lines
         public void Rebuild()
         {
             var pts = Data.points;
+            double clearance = Data.is3D ? Clearance3DM : Clearance2DM;
+
+            _unresolved = 0;
             _lr.positionCount = pts.Count;
             for (int i = 0; i < pts.Count; i++)
             {
-                double h = Data.is3D
-                    ? GeoUtils.SampleTerrainHeight(_geo, pts[i].latitude, pts[i].longitude, 250) + 25.0
-                    : 450.0;   // flat 2D height band
-                pts[i].heightMeters = h;
-                _lr.SetPosition(i, GeoUtils.GeoToUnity(_geo, pts[i].latitude, pts[i].longitude, h));
+                if (GeoUtils.TrySampleTerrainHeight(_geo, pts[i].latitude, pts[i].longitude, out double ground))
+                {
+                    pts[i].heightMeters = ground + clearance;
+                }
+                else
+                {
+                    // Nothing under this vertex yet. Keep whatever height it had
+                    // (a saved value, or the fallback) so the line is still drawn,
+                    // and come back for it.
+                    if (pts[i].heightMeters <= 0.0) pts[i].heightMeters = 250.0 + clearance;
+                    _unresolved++;
+                }
+                _lr.SetPosition(i, GeoUtils.GeoToUnity(_geo, pts[i].latitude, pts[i].longitude,
+                    pts[i].heightMeters));
             }
+
+            _reclampTimer = ReclampSeconds;
+            RefreshLabels();
+        }
+
+        void Update()
+        {
+            if (_unresolved <= 0) return;
+            _reclampTimer -= Time.deltaTime;
+            if (_reclampTimer > 0f) return;
+            Rebuild();
         }
 
         public void SetPoints(List<GeoPoint> points)
@@ -144,6 +196,45 @@ namespace IronMeridian.Lines
         {
             Data.is3D = is3D;
             Rebuild();
+        }
+
+        /// <summary>
+        /// Draws the line's own caption on the map — "FEBA", "PL BLUE",
+        /// "DEFENCE LINE — 2 RIFLES". The <c>label</c> amplifier is part of the
+        /// save, so a line that says what it is keeps saying it after a reload,
+        /// which a caption owned by whichever system drew the line would not.
+        ///
+        /// Doctrine captions a long control measure at both ends, so anything
+        /// with enough vertices to have ends gets two; a short one gets a single
+        /// caption at its midpoint.
+        /// </summary>
+        void RefreshLabels()
+        {
+            var pts = Data.points;
+            bool wanted = !string.IsNullOrEmpty(Data.label) && pts.Count >= 2;
+            int want = !wanted ? 0 : (pts.Count >= 4 ? 2 : 1);
+
+            while (_labels.Count > want)
+            {
+                var last = _labels[_labels.Count - 1];
+                _labels.RemoveAt(_labels.Count - 1);
+                if (last != null) Destroy(last.gameObject);
+            }
+            while (_labels.Count < want)
+                _labels.Add(MapLabel.Create(_geo, transform, $"{Data.id}-{_labels.Count}"));
+
+            if (want == 0) return;
+
+            Color color = _lr.material != null ? _lr.material.color : Color.white;
+            if (want == 1)
+            {
+                var mid = pts[pts.Count / 2];
+                _labels[0].Set(Data.label, color, mid.latitude, mid.longitude);
+                return;
+            }
+            // One vertex in from each end: on the line, but clear of its caps.
+            _labels[0].Set(Data.label, color, pts[1].latitude, pts[1].longitude);
+            _labels[1].Set(Data.label, color, pts[pts.Count - 2].latitude, pts[pts.Count - 2].longitude);
         }
     }
 }

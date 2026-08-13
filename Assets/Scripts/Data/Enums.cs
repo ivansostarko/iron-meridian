@@ -97,7 +97,29 @@ namespace IronMeridian.Data
         Feba,
 
         /// <summary>Named reference line for control and coordination.</summary>
-        PhaseLine
+        PhaseLine,
+
+        /// <summary>
+        /// Battle position: the ground a formation defends from, oriented on
+        /// the enemy. Drawn as a closed area behind the defence line it belongs
+        /// to (FM 3-90 ch.8).
+        /// </summary>
+        BattlePosition
+    }
+
+    /// <summary>
+    /// Point graphics pinned to the map by a defensive task. Unlike lines these
+    /// mark a place rather than a limit, so they carry the owning unit and the
+    /// direction the task is oriented on.
+    /// </summary>
+    public enum MarkerKind
+    {
+        /// <summary>Retain the terrain and accept no withdrawal from it.</summary>
+        Hold,
+        /// <summary>Screen the protected force forward of it, fighting within supporting range.</summary>
+        Guard,
+        /// <summary>Centre of a prepared defence, where its line and battle position meet.</summary>
+        Defend
     }
 
     public static class EchelonInfo

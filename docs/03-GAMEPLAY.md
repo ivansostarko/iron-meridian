@@ -41,18 +41,86 @@ The left **ORDER OF BATTLE** palette lists all 37 unit types with their icons:
 
 | Input | Action |
 |---|---|
-| **Left-click** a unit icon | Select it — pulsing team-colour ring + full data panel on the right |
-| **Right-click** terrain | Move order for the selected unit — smooth eased movement, heading turn, and an expanding ring animation at the destination |
+| **Left-click** a unit icon | Select it — pulsing team-colour ring, **ground arrow showing its heading**, and full data panel on the right |
+| **Right-click** terrain | Reposition (scenario mode) or march order (battle mode) — see *Movement* below |
+| `C` | Aim the selection's facing: move the mouse to swing every selected unit onto a bearing. The heading arrows brighten and the status line reads the live bearing. LMB/Enter confirms, `Esc` cancels |
 | `Esc` | Deselect |
 
-Movement speed comes from the unit's `speedKmh` (accelerated by game time). Vehicles consume fuel per km.
+The **heading arrow** is drawn flat on the ground ahead of the icon in the unit's
+team colour, in both 2D and 3D and in both scenario and battle mode. It is the
+same graphic the `C` facing tool aims, so what you set is what you see.
+
+### Movement
+
+Scenario mode and battle mode move units differently, and the mode chip in the
+top bar says which set of rules is in force.
+
+| Mode | Right-click / Move order | Animation |
+|---|---|---|
+| **Scenario** | Places the counter instantly at the clicked point | None — an edit is not a march |
+| **Battle** | Orders a march along a planned route | Accelerate, corner, brake; trail behind |
+
+**Routing.** A march is not a straight line. `RoutePlanner` lays a corridor
+between start and objective, samples the terrain across it, and picks the
+cheapest way through — punishing gradient hard and refusing anything steeper
+than 25%, the way a road survey would. The result is a handful of legs
+(A → B → C) that keep to valleys and follow contours instead of driving over a
+ridge. There is **no road network to snap to** — OpenStreetMap is drawn as
+raster imagery, not vector ways — so the terrain itself is what the route is
+planned against. Identical in 2D and 3D: the view is a camera choice, the ground
+underneath is the same.
+
+The unit then drives that route like a vehicle column: it pivots onto its first
+course, accelerates to its `speedKmh` (game-time accelerated), *slows through the
+bends rather than stopping at them*, and brakes onto the objective. Fuel is
+charged against the route actually driven, so going around the high ground costs
+more than the straight-line distance would.
+
+**Trail.** While marching, the unit leaves a solid team-coloured trail over the
+ground it has covered and a faint dashed thread over the route still ahead. Both
+are clamped to the terrain. The trail fades out a few seconds after the unit
+arrives, and exists only in battle mode.
+
+Stopping the battle abandons any march in progress and leaves every unit standing
+where it actually is, handing the map back to the editor.
+
+### Defensive orders (battle mode)
+
+Select a unit while a battle is running and the order bar appears. **DEFENCE**
+opens a submenu of the three defensive tasks:
+
+| Task | What it does |
+|---|---|
+| **DEFEND** | Lays a bowed **defence line** across the threat axis, captioned `DEFENCE LINE — <unit>`, with a closed **battle position** enclosing the ground behind it. Subordinate units are distributed evenly along the frontage and marched to their slots facing the threat; the commander sits back inside the position. |
+| **HOLD** | Pins the unit on the ground it is standing on, stops any march, turns it onto the threat, and marks the position with a yellow `HOLD` marker. |
+| **GUARD** | Pushes the unit forward onto a guard position between the force it protects and the threat, and marks it with a green `GUARD` marker. |
+
+- **Threat axis** is the bearing to the centre of the opposing force. With no
+  enemy on the map yet, the unit's own facing stands in.
+- **Subordinates** are the unit's group if it has one (see the group panel),
+  otherwise the smaller friendly formations standing within 12 km.
+- **Frontage** scales with echelon and with how many subordinates have to fit on
+  the line (1.5–45 km).
+- Re-tasking a unit replaces its graphics; it never stacks two defences.
+- Everything produced is ordinary map data (`defence-*` lines and markers), so a
+  defence survives save/load — see [05-MAP-SAVES.md](05-MAP-SAVES.md).
+
+### Staying on the ground
+
+Unit icons, control-measure lines, movement trails and task markers all clamp
+themselves to the terrain in **both** 2D and 3D. Cesium streams tiles in, so the
+first ground sample after a spawn or a load routinely finds nothing there yet;
+each of these keeps retrying until real terrain is underneath, then refreshes
+slowly. A miss never overwrites a height that was already good, so nothing can be
+lost inside a ridge or left floating over a valley.
 
 ### Lines: boundaries & defensive lines
 
 - **DRAW BOUNDARY** — yellow sector boundary separating the two teams.
 - **DRAW DEFENSIVE LINE** — thick team-coloured fortification line.
 - Left-click adds points, **right-click / Enter finishes**, `Esc` cancels.
-- **LINES: 3D / 2D** — 3D lines drape over the terrain; 2D lines float at a constant height for a flat-map look.
+- **LINES: 3D / 2D** — lines follow the terrain in both modes; the flag chooses how far they stand off it (25 m in 3D, 140 m in 2D so the graphics read as an overlay from straight above).
+- A line's `label` amplifier is drawn on the map — at both ends for a long line, at the midpoint for a short one — so `FEBA`, `PL BLUE` and `DEFENCE LINE — …` say what they are and keep saying it after a reload.
 
 **Auto front line:** the boundary marked `autoGenerated` is recomputed every few seconds from unit positions — the power-weighted midpoint between the closest opposing units. When units advance, rout or die, the line moves. A stronger side visibly pushes the front toward the weaker one.
 

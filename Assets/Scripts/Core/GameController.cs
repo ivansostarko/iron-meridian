@@ -25,9 +25,11 @@ namespace IronMeridian.Core
         CameraRig _rig;
         SelectionManager _selection;
         LineManager _lines;
+        MarkerManager _markers;
         LineDrawTool _drawTool;
         FrontlineSystem _frontline;
         SectorSystem _sectors;
+        DefenceOrderSystem _defence;
         CombatSystem _combat;
         VfxSystem _vfx;
         WeatherSystem _weather;
@@ -86,6 +88,9 @@ namespace IronMeridian.Core
             _lines = gameObject.AddComponent<LineManager>();
             _lines.Init(_map.Georeference);
 
+            _markers = gameObject.AddComponent<MarkerManager>();
+            _markers.Init(_map.Georeference);
+
             _drawTool = gameObject.AddComponent<LineDrawTool>();
             _drawTool.Init(_map, _rig.Cam, _lines);
 
@@ -94,6 +99,11 @@ namespace IronMeridian.Core
 
             _sectors = gameObject.AddComponent<SectorSystem>();
             _sectors.Init(_lines, _map.Georeference);
+
+            // Defend / Hold / Guard. Its graphics are ordinary lines and
+            // markers, so they save and load with the rest of the map.
+            _defence = gameObject.AddComponent<DefenceOrderSystem>();
+            _defence.Init(_lines, _markers);
 
             // Effects must exist before any unit spawns — a unit restored below
             // strength starts burning the moment it is built.
@@ -139,6 +149,7 @@ namespace IronMeridian.Core
             _selection.Flash = _hud.Flash;
             _effects.Flash = _hud.Flash;
 
+            _defence.Flash = _hud.Flash;
             _map.LoadError += _hud.Flash;
             // A tileset failure means the terrain will never finish: drop the
             // overlay at once so the player sees the HUD's error rather than a
@@ -235,6 +246,9 @@ namespace IronMeridian.Core
                 _actionBar.Build(canvas);
                 _actionBar.Flash = _hud.Flash;
                 _actionBar.MoveRequested = () => _selection.ArmMoveOrder();
+                _actionBar.DefendRequested = () => _defence.Defend(_selection.Selected);
+                _actionBar.HoldRequested = () => _defence.Hold(_selection.Selected);
+                _actionBar.GuardRequested = () => _defence.Guard(_selection.Selected);
                 _selection.MoveOrderResolved = () => _actionBar.ClearMoveArmed();
                 // The order bar belongs to game mode; leaving battle puts the
                 // editor back in charge.
@@ -480,6 +494,7 @@ namespace IronMeridian.Core
             foreach (var a in UnitRegistry.All)
                 if (a != null && a.IsAlive) _save.units.Add(a.Snapshot());
             _save.lines = _lines.Serialize();
+            _save.markers = _markers.Serialize();
             _save.viewMode = _map.ViewMode.ToString();
             _save.mapStyle = _map.Style.ToString();
             _save.showBuildings = _map.BuildingsVisible;
@@ -515,6 +530,9 @@ namespace IronMeridian.Core
             foreach (var u in data.units)
                 UnitActor.Spawn(_map.Georeference, u);
             _lines.LoadFrom(data.lines);
+            // After the units: a task marker whose owning unit is not on the map
+            // is swept away, and during a load that is briefly all of them.
+            _markers.LoadFrom(data.markers);
         }
 
         void Update()

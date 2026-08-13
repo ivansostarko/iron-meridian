@@ -121,6 +121,33 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// A point graphic pinned to the map by a defensive task — a hold position,
+    /// a guard position, or the centre of a prepared defence.
+    ///
+    /// Kept separate from <see cref="MapLineData"/> rather than stored as a
+    /// one-vertex line: a marker states a place and a task, has no length, and
+    /// belongs to the unit that was given the order, which is what lets it be
+    /// cleared when that unit is re-tasked or destroyed.
+    /// </summary>
+    [Serializable]
+    public class MapMarkerData
+    {
+        public string id;
+        public string kind;             // MarkerKind name
+        public string team;             // owning side
+        /// <summary>instanceId of the unit holding this position, "" if none.</summary>
+        public string unitId = "";
+        /// <summary>Caption drawn under the marker, e.g. "HOLD".</summary>
+        public string label = "";
+
+        public double latitude;
+        public double longitude;
+        public double heightMeters;
+        /// <summary>Direction the task is oriented on (deg from north) — usually the threat.</summary>
+        public float headingDeg;
+    }
+
+    /// <summary>
     /// A complete scenario/map save. Serialized to JSON, one file per map, in
     /// persistentDataPath/Maps (user saves) or StreamingAssets/Maps (shipped defaults).
     /// </summary>
@@ -159,5 +186,7 @@ namespace IronMeridian.Data
 
         public List<UnitState> units = new List<UnitState>();
         public List<MapLineData> lines = new List<MapLineData>();
+        /// <summary>Hold / guard / defend positions — see docs/03-GAMEPLAY.md.</summary>
+        public List<MapMarkerData> markers = new List<MapMarkerData>();
     }
 }

@@ -56,9 +56,25 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
       "rightLabel": "2nd Armour",
       "planned": false                // true = drawn broken (planned/on-order)
     }
+  ],
+
+  "markers": [
+    {
+      "id": "defence-a1b2c3d4e5-hold",
+      "kind": "Hold",                 // Hold | Guard | Defend
+      "team": "User",
+      "unitId": "a1b2c3d4e5",         // instanceId of the unit holding it ("" = none)
+      "label": "HOLD\n1st Infantry",  // caption drawn under the marker
+      "latitude": 45.7760, "longitude": 4.8050, "heightMeters": 0,
+      "headingDeg": 92                // direction the task is oriented on (the threat)
+    }
   ]
 }
 ```
+
+`label` is drawn on the map by `MapLine` itself — at both ends of a long line, at
+the midpoint of a short one — so a caption is a property of the line rather than
+of whichever system happened to draw it, and survives a save/load.
 
 All amplifier fields were added after the original schema and default harmlessly
 on older saves — `JsonUtility` leaves missing fields at their initialiser values.
@@ -76,6 +92,23 @@ a set, so hand-drawn lines are never touched.
 | `RearBoundary` | Rear limit of the AO, parallel to the front. Ground behind it belongs to the higher commander. |
 | `Feba` | Forward Edge of the Battle Area — the line through the forward combat units, excluding screening forces. This is the "defence line". |
 | `PhaseLine` | Named reference line for control and coordination. |
+| `BattlePosition` | The ground a formation defends from, oriented on the enemy. Drawn as a closed area behind the defence line it belongs to. |
+
+### Defensive tasks
+
+`DefenceOrderSystem` (battle order bar → **DEFENCE**) writes into the same two
+arrays. Its ids are prefixed `defence-<unitInstanceId>-`, kept clear of the
+`sector-` set so the two are cleared and regenerated independently.
+
+| Order | Produces |
+|---|---|
+| Defend | `…-line` (`DefensiveLine`, captioned), `…-area` (`BattlePosition`), `…-defend` marker |
+| Hold | `…-hold` marker at the unit's position |
+| Guard | `…-guard` marker forward of the unit, on the threat axis |
+
+A marker belongs to the unit named in `unitId`: re-tasking that unit replaces its
+graphics rather than stacking new ones, and `MarkerManager` sweeps away markers
+whose unit has left the map. Markers are loaded **after** units for that reason.
 
 Positions are geodetic (WGS84), so saves are independent of the Unity scene origin and portable between map centres.
 

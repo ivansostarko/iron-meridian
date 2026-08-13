@@ -90,6 +90,29 @@ namespace IronMeridian.Units
             return tex;
         }
 
+        /// <summary>
+        /// Heading arrow drawn flat on the ground under a selected unit: a
+        /// tapering shaft with a broad head, pointing along +V so the quad can
+        /// simply be aimed down the unit's course.
+        ///
+        /// Deliberately not the same glyph as <see cref="MoveIcon"/> — that one
+        /// is a 30 px button icon, this is read at map scale against satellite
+        /// imagery, so it carries a dark outline and a wider head.
+        /// </summary>
+        public static Texture2D HeadingArrow(Color color, int size = 128) => Draw(color, size, (u, v) =>
+        {
+            // Shaft: narrows slightly toward the head so the arrow reads as
+            // pointing even when the head is clipped by a steep camera angle.
+            float shaftHalf = Mathf.Lerp(0.075f, 0.055f, Mathf.InverseLerp(0.06f, 0.55f, v));
+            float shaft = Inside(v > 0.06f && v < 0.56f && Mathf.Abs(u - 0.5f) < shaftHalf);
+
+            // Head: half-width falls to zero at the tip.
+            float t = Mathf.InverseLerp(0.98f, 0.52f, v);
+            float head = Inside(v >= 0.52f && v <= 0.98f && Mathf.Abs(u - 0.5f) < 0.24f * t);
+
+            return Mathf.Max(shaft, head);
+        });
+
         // ------------------------------------------------------- action icons
 
         /// <summary>Arrow pointing right — the Move order.</summary>

@@ -18,7 +18,7 @@ Assets/Scripts/
   Data/
     Enums.cs             Team, Affiliation, Echelon(+multipliers), UnitStatus, ViewMode
     UnitDefinition.cs    unit type stats + UnitDatabase (units.json loader)
-    MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData
+    MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData, MapMarkerData
   Save/SaveSystem.cs     JSON load/save; user saves shadow shipped maps
   Audio/                 sound — see docs/10-AUDIO.md
     AudioManager.cs      master volume (AudioListener) + procedural UI click
@@ -43,20 +43,27 @@ Assets/Scripts/
     GameHUD.cs           top bar: view toggle, line tools, save/load, battle
     UnitPaletteUI.cs     left OOB palette, drag & drop deployment
     UnitInfoPanel.cs     right panel: full unit data on click
+    UnitActionBarUI.cs   battle order bar: Move / Attack / Defence (+ task submenu)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
     CameraRig.cs         3D orbit & 2D top-down strategy camera
     GeoUtils.cs          lat/lon <-> Unity, distance/bearing, terrain sampling
+    RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)
   Units/
-    UnitActor.cs         icon billboard, ring, strength bar, damage/death
-    UnitMover.cs         eased geodetic movement + destination marker ping
+    UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
+    UnitMover.cs         routed march: legs, cornering, terrain clamp, trail
+    MoveTrail.cs         travelled trail + dashed planned route (battle mode only)
+    HeadingArrow.cs      ground facing arrow under a selected unit
     UnitRegistry.cs      runtime unit list + change events
-    SelectionManager.cs  LMB select, RMB move order, hover
+    SelectionManager.cs  LMB select, RMB move order, C facing, hover
     CombatSystem.cs      tick combat: power ratio, modifiers, consumption
-    ProceduralTextures.cs rings/discs generated at runtime
+    ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
-    MapLine.cs           LineRenderer polyline, 2D/3D clamping, styles
+    MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions
     LineManager.cs       line collection <-> save data
+    MarkerManager.cs     task marker collection <-> save data
+    TaskMarker.cs        hold/guard/defend point graphic on the ground
+    DefenceOrderSystem.cs Defend / Hold / Guard — lines, battle position, distribution
     LineDrawTool.cs      click-to-draw boundaries & defensive lines
     FrontlineSystem.cs   auto boundary from power-weighted unit positions
   Models/                3D models — see docs/09-3D-MODELS.md
@@ -85,12 +92,24 @@ MainMenu ─▶ Testing ─▶ Game scene
                           ├─ LoadingScreenUI.Show            overlay until terrain streams in
                           ├─ MapManager.Build(Lyon)          Cesium globe
                           ├─ CameraRig.Init                  strategy camera
-                          ├─ LineManager / LineDrawTool / FrontlineSystem
+                          ├─ LineManager / MarkerManager / LineDrawTool
+                          ├─ FrontlineSystem / SectorSystem / DefenceOrderSystem
                           ├─ VfxSystem                       fire/smoke (before units spawn)
                           ├─ CombatSystem / SelectionManager
                           ├─ UIFactory canvas ─ GameHUD / UnitPaletteUI / UnitInfoPanel
                           └─ SaveSystem.LoadMap("lyon_dev.json") ─▶ UnitActor.Spawn ×N
 ```
+
+## Ground clamping
+
+Everything drawn on the map — unit icons, lines, their captions, move trails and
+task markers — samples the terrain and stands off it by a fixed clearance, in
+**both** view modes. Cesium streams tiles, so the first sample after a spawn or a
+load routinely finds nothing; each of these retries on a cadence until real ground
+is underneath, then refreshes slowly or stops. `GeoUtils.TrySampleTerrainHeight`
+is the shared primitive: it reports whether the ground was found (so a miss never
+overwrites a good height) and skips unit colliders, which are click targets and
+would otherwise be sampled as terrain by a neighbour.
 
 ## Known simplifications (roadmap)
 
@@ -98,4 +117,8 @@ MainMenu ─▶ Testing ─▶ Game scene
 - Enemy AI holds position — only combat reacts.
 - Defensive lines are visual; they don't yet grant defence bonuses.
 - 2D mode is a top-down camera, not a separate cartographic renderer.
-- Movement is straight-line geodesic; no road/pathfinding network.
+- Routes are planned against terrain gradient, not a road network — there is no
+  vector road data on the map to snap to. The corridor search is forward-only, so
+  a route can steer around an obstacle but not double back around one; a fully
+  blocked corridor falls back to the direct line.
+- Attack orders are still a mockup; only Move and the three defensive tasks are wired.

@@ -22,11 +22,27 @@ namespace IronMeridian.Units
         public bool Running { get; private set; }
         public event System.Action<bool> RunningChanged;
 
+        /// <summary>
+        /// Whether a battle is running, readable without a reference to the
+        /// system. Movement is a game-mode behaviour and units are spawned
+        /// without knowing which controller owns them, so <see cref="UnitMover"/>
+        /// asks here — the same reason <see cref="MapManager.Active"/> exists.
+        /// </summary>
+        public static bool BattleRunning { get; private set; }
+
         float _tickTimer;
+
+        void Awake() => BattleRunning = false;      // a reloaded scene starts in the editor
+
+        void OnDestroy()
+        {
+            if (Running) BattleRunning = false;
+        }
 
         public void SetRunning(bool run)
         {
             Running = run;
+            BattleRunning = run;
             RunningChanged?.Invoke(run);
         }
 

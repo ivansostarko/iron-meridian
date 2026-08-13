@@ -165,7 +165,10 @@ namespace IronMeridian.Units
             _rotating = true;
             _headingsBeforeRotate.Clear();
             foreach (var u in _selection)
+            {
                 _headingsBeforeRotate.Add(u != null ? u.State.headingDeg : 0f);
+                if (u != null) u.SetAiming(true);
+            }
 
             Flash?.Invoke(_selection.Count > 1
                 ? $"Facing {_selection.Count} units — move the mouse to aim, LMB/Enter confirms, Esc cancels."
@@ -179,6 +182,7 @@ namespace IronMeridian.Units
                 Input.GetMouseButtonDown(0))
             {
                 _rotating = false;
+                EndAiming();
                 RecordHeadingUndo();
                 Flash?.Invoke("Facing set.");
                 return;
@@ -197,6 +201,19 @@ namespace IronMeridian.Units
                 // so a line of units fans out to cover it.
                 u.SetHeading(GeoUtils.BearingDeg(u.State.latitude, u.State.longitude, lat, lon));
             }
+
+            // Live bearing readout, taken from the primary unit. The heading
+            // arrows on the map show the direction; this states the number, so
+            // an axis can be set precisely instead of by eye.
+            var lead = Selected;
+            if (lead != null)
+                Flash?.Invoke($"Facing {lead.State.headingDeg:000}° — LMB/Enter confirms, Esc cancels.");
+        }
+
+        /// <summary>Drops the aiming highlight from every unit that was being turned.</summary>
+        void EndAiming()
+        {
+            foreach (var u in _selection) if (u != null) u.SetAiming(false);
         }
 
         /// <summary>
@@ -249,6 +266,7 @@ namespace IronMeridian.Units
         void CancelRotation()
         {
             _rotating = false;
+            EndAiming();
             for (int i = 0; i < _selection.Count && i < _headingsBeforeRotate.Count; i++)
                 if (_selection[i] != null) _selection[i].SetHeading(_headingsBeforeRotate[i]);
             Flash?.Invoke("Facing cancelled.");
