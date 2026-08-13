@@ -77,7 +77,7 @@ Assets/Scripts/
     LineDrawTool.cs      click-to-draw boundaries & defensive lines
     FrontlineSystem.cs   auto boundary from power-weighted unit positions
   Models/                3D models — see docs/09-3D-MODELS.md
-    UnitModelLibrary.cs  unit definition -> model prefab + animation clips
+    UnitModelLibrary.cs  unit definition -> model prefab, source candidates, clips
     ModelPreview.cs      renders a model into a uGUI panel (RenderTexture rig)
   Weather/               sky, fog, precipitation — see docs/14-WEATHER.md
     WeatherCatalog.cs    sky phases + conditions; the day/night rule

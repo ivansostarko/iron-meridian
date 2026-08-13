@@ -52,9 +52,11 @@ namespace IronMeridian.Core
         /// <summary>True while the loading overlay is still covering the map.</summary>
         bool Loading => _loading != null;
 
-        RangeRing _viewRing, _weaponRing;
+        RangeRing _losRing, _weaponRing;
         UnitActor _rangeRingUnit;
         double _rangeRingLat, _rangeRingLon;
+        /// <summary>Line-of-sight ring on selection. On by default; toggled from the GENERAL panel.</summary>
+        bool _showLineOfSight = true;
 
         readonly System.Collections.Generic.List<UnitState> _clipboard =
             new System.Collections.Generic.List<UnitState>();
@@ -204,6 +206,7 @@ namespace IronMeridian.Core
                     _sectors.AutoUpdate = on;
                     if (on) GenerateSectors();
                 };
+                _palette.LineOfSightChanged = SetLineOfSightVisible;
                 _palette.FogOfWarChanged = on =>
                 {
                     _fog.SetEnabled(on);
@@ -267,8 +270,12 @@ namespace IronMeridian.Core
 
             BuildStep("range rings", () =>
             {
-                _viewRing = RangeRing.Create(_map.Georeference, _map.Georeference.transform,
-                    GameConfig.ViewRangeColor, 12f, "Max view");
+                // How far this formation can see. Captioned in metres on the ring
+                // itself: a line of sight is a distance you are judging against
+                // the ground, and "4 500 m" is the number that is being judged —
+                // kilometres to one decimal reads as an approximation.
+                _losRing = RangeRing.Create(_map.Georeference, _map.Georeference.transform,
+                    GameConfig.ViewRangeColor, 12f, "LINE OF SIGHT");
                 _weaponRing = RangeRing.Create(_map.Georeference, _map.Georeference.transform,
                     GameConfig.WeaponRangeColor, 12f, "Max weapon range");
             });
@@ -593,10 +600,12 @@ namespace IronMeridian.Core
             _effects.Cancel();
             _selection.Select(null);
 
-            // Editor settings.
+            // Editor settings, and the panel lamps that report them.
             _fog.SetEnabled(false);
+            _showLineOfSight = true;
             _sectors.AutoUpdate = false;
             _sectors.ClearAll();
+            if (_palette != null) _palette.SyncGeneralToggles(false, false, true);
             UnitActor.SetLabelScale(1f);
             _clock.SetSpeed(GameClock.NormalSpeed);
             _mapControls.SetControlsVisible(true);
@@ -673,11 +682,11 @@ namespace IronMeridian.Core
 
             // Keep the range rings glued to a moving selected unit without
             // re-sampling terrain every frame when it's standing still.
-            if (_rangeRingUnit != null && _viewRing != null && _weaponRing != null)
+            if (_rangeRingUnit != null && _losRing != null && _weaponRing != null)
             {
                 if (!_rangeRingUnit.IsAlive)
                 {
-                    _viewRing.Hide(); _weaponRing.Hide(); _rangeRingUnit = null;
+                    _losRing.Hide(); _weaponRing.Hide(); _rangeRingUnit = null;
                 }
                 else if (_rangeRingUnit.State.latitude != _rangeRingLat ||
                          _rangeRingUnit.State.longitude != _rangeRingLon)
@@ -690,10 +699,10 @@ namespace IronMeridian.Core
         // ------------------------------------------------------- range rings
         void UpdateRangeRings(System.Collections.Generic.IReadOnlyList<UnitActor> sel)
         {
-            if (_viewRing == null || _weaponRing == null) return;
+            if (_losRing == null || _weaponRing == null) return;
             if (sel.Count != 1 || sel[0] == null || !sel[0].IsAlive)
             {
-                _viewRing.Hide();
+                _losRing.Hide();
                 _weaponRing.Hide();
                 _rangeRingUnit = null;
                 return;
@@ -704,12 +713,32 @@ namespace IronMeridian.Core
 
         void ShowRangeRingsForCurrentUnit()
         {
-            if (_viewRing == null || _weaponRing == null) return;
+            if (_losRing == null || _weaponRing == null) return;
             var u = _rangeRingUnit;
-            _viewRing.Show(u.State.latitude, u.State.longitude, u.Def.viewRangeKm);
+
+            if (_showLineOfSight)
+            {
+                float km = u.Def.viewRangeKm;
+                _losRing.Show(u.State.latitude, u.State.longitude, km,
+                    $"LINE OF SIGHT  {km * 1000f:n0} m");
+            }
+            else _losRing.Hide();
+
             _weaponRing.Show(u.State.latitude, u.State.longitude, u.Def.weaponRangeKm);
             _rangeRingLat = u.State.latitude;
             _rangeRingLon = u.State.longitude;
+        }
+
+        /// <summary>GENERAL → LINE OF SIGHT. Repaints the current selection immediately.</summary>
+        void SetLineOfSightVisible(bool on)
+        {
+            _showLineOfSight = on;
+            if (_rangeRingUnit != null && _rangeRingUnit.IsAlive) ShowRangeRingsForCurrentUnit();
+            else if (_losRing != null) _losRing.Hide();
+
+            _hud.Flash(on
+                ? "Line of sight shown on the selected unit, with its range in metres."
+                : "Line of sight hidden.");
         }
     }
 }

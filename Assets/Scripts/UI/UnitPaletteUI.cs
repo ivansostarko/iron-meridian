@@ -52,6 +52,8 @@ namespace IronMeridian.UI
         public System.Action<bool> AutoSectorsChanged;
         /// <summary>Fog of war armed/disarmed — see docs/16-FOG-OF-WAR.md.</summary>
         public System.Action<bool> FogOfWarChanged;
+        /// <summary>Line-of-sight ring on the selected unit shown/hidden.</summary>
+        public System.Action<bool> LineOfSightChanged;
 
         // Tool strip.
         public System.Action SelectToolRequested;
@@ -133,9 +135,11 @@ namespace IronMeridian.UI
         UnitDefinition _dragging;
         Button _autoSectorBtn;
         bool _autoSectors;
-        RectTransform _fogLamp;
-        Text _fogLabel;
+        RectTransform _fogLamp, _losLamp;
+        Text _fogLabel, _losLabel;
         bool _fog;
+        /// <summary>Mirrors GameController's default — the ring is on until it is turned off.</summary>
+        bool _lineOfSight = true;
 
         readonly List<(Section section, string title, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
             new List<(Section, string, Image, Image, Text, RectTransform)>();
@@ -480,31 +484,61 @@ namespace IronMeridian.UI
             // --- intelligence ---
             SectionLabel(content, "INTELLIGENCE", -216);
 
-            _fogLamp = ToggleRow(content, "FOG OF WAR", -238, () =>
+            _losLamp = ToggleRow(content, "LINE OF SIGHT", -238, () =>
+            {
+                _lineOfSight = !_lineOfSight;
+                LineOfSightChanged?.Invoke(_lineOfSight);
+                RefreshGeneralSection();
+            }, out _losLabel);
+
+            _fogLamp = ToggleRow(content, "FOG OF WAR", -282, () =>
             {
                 _fog = !_fog;
                 FogOfWarChanged?.Invoke(_fog);
                 RefreshGeneralSection();
             }, out _fogLabel);
 
-            var fogHint = UIFactory.CreateText(content,
-                "Enemy formations are drawn only where something of yours can see them. " +
-                "Lose sight of one and the map keeps the contact: last known position, the time it was " +
-                "seen, and a ring that grows to cover where it could have got to since.\n\n" +
-                "Battle mode only — the editor shows both sides so you can lay them out. " +
-                "Use the RECON orders to see past your own units' eyes.",
+            var intelHint = UIFactory.CreateText(content,
+                "LINE OF SIGHT draws how far the selected formation can see, with the distance in metres " +
+                "on the ring. Shown in both scenario and battle mode.\n\n" +
+                "FOG OF WAR draws enemy formations only where something of yours can see them. Lose sight " +
+                "of one and the map keeps the contact: last known position, the time it was seen, and a " +
+                "ring that grows to cover where it could have got to since. Battle mode only — the editor " +
+                "shows both sides so you can lay them out. Use the RECON orders to see past your own " +
+                "units' eyes.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(fogHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -282), new Vector2(InnerWidth, 130));
+            UIFactory.Place(intelHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -326), new Vector2(InnerWidth, 170));
 
+            RefreshGeneralSection();
+        }
+
+        /// <summary>
+        /// Forces the GENERAL toggles back to given values without firing their
+        /// events. RESET puts the systems back to their defaults directly, and
+        /// the lamps here would otherwise keep reporting the state from before it.
+        /// </summary>
+        public void SyncGeneralToggles(bool autoSectors, bool fogOfWar, bool lineOfSight)
+        {
+            _autoSectors = autoSectors;
+            _fog = fogOfWar;
+            _lineOfSight = lineOfSight;
+            RefreshAutoSectorLabel();
             RefreshGeneralSection();
         }
 
         /// <summary>Repaints the GENERAL section's toggles from the state their systems own.</summary>
         void RefreshGeneralSection()
         {
-            if (_fogLamp == null) return;
-            _fogLamp.GetComponent<Image>().color = _fog ? UiTheme.Success : UiTheme.TextFaint;
-            _fogLabel.text = _fog ? "ON" : "OFF";
+            if (_losLamp != null)
+            {
+                _losLamp.GetComponent<Image>().color = _lineOfSight ? UiTheme.Success : UiTheme.TextFaint;
+                _losLabel.text = _lineOfSight ? "SHOWN" : "HIDDEN";
+            }
+            if (_fogLamp != null)
+            {
+                _fogLamp.GetComponent<Image>().color = _fog ? UiTheme.Success : UiTheme.TextFaint;
+                _fogLabel.text = _fog ? "ON" : "OFF";
+            }
         }
 
         Button GeneralButton(RectTransform content, string label, float y, UnityEngine.Events.UnityAction action)

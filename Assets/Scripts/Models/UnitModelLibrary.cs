@@ -16,8 +16,28 @@ namespace IronMeridian.Models
         /// <summary>Human name of the source asset, for the docs and for log messages.</summary>
         public string sourceAsset;
 
-        /// <summary>Legacy clip played when the model is just standing there.</summary>
+        /// <summary>
+        /// File names the installer will accept for the source mesh, without
+        /// extension, in order of preference.
+        ///
+        /// A list rather than one name because asset packs rename their meshes
+        /// between versions and none of these are ours. The installer takes the
+        /// first that exists and names the rest in its log when it finds none,
+        /// so adapting to a pack's actual naming is a one-line edit here rather
+        /// than a hunt through the installer.
+        /// </summary>
+        public string[] sourceCandidates = System.Array.Empty<string>();
+
+        /// <summary>Legacy clip played when the model is just standing there; null for static props.</summary>
         public string idleClip = ModelClips.CombatIdle;
+
+        /// <summary>
+        /// False for vehicles and props, which ship as static meshes. The
+        /// installer skips the Legacy-rig conversion for them — forcing a rig
+        /// type onto a mesh with no skeleton achieves nothing and reimports the
+        /// whole pack for no reason.
+        /// </summary>
+        public bool animated = true;
 
         /// <summary>Multiplier applied after automatic bounds framing — nudge only if a model sits oddly.</summary>
         public float framing = 1f;
@@ -34,14 +54,25 @@ namespace IronMeridian.Models
     /// <summary>
     /// Resolves a unit definition to the 3D model that represents it.
     ///
-    /// Only one model is imported so far (the Low Poly Soldiers demo rifleman),
-    /// so every ground unit currently shares it and drones have none. As real
-    /// models arrive, add them to <see cref="Models"/> and override per unit id
-    /// in <see cref="Overrides"/> — call sites do not change.
+    /// The rifleman stands in for any ground formation that has nothing more
+    /// specific; the entries below override that for the unit types whose own
+    /// equipment has been imported. Drones deliberately get nothing rather than
+    /// a misleading infantryman.
+    ///
+    /// A model listed here whose pack is **not imported** resolves normally and
+    /// the preview says which prefab is missing and how to build it — rather
+    /// than quietly showing a soldier where a Leopard should be. The pack each
+    /// entry needs is named in <c>sourceAsset</c> and in docs/09-3D-MODELS.md.
     /// </summary>
     public static class UnitModelLibrary
     {
         public const string SoldierRifleman = "soldier_rifleman";
+        public const string AirDefenceRadar = "air_defence_radar";
+        public const string FieldArtillery = "field_artillery";
+        public const string SurfaceToAirMissile = "sam_launcher";
+        public const string MilitaryTruck = "military_truck";
+        public const string MainBattleTank = "main_battle_tank";
+        public const string ScoutCar = "scout_car";
 
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
         {
@@ -49,13 +80,110 @@ namespace IronMeridian.Models
             {
                 resourcePath = "Models/Soldier_Rifleman",
                 sourceAsset = "Low Poly Soldiers Demo — Soldier_demo.FBX",
+                sourceCandidates = new[] { "Soldier_demo" },
                 idleClip = ModelClips.CombatIdle,
-                framing = 1f
+                animated = true
+            },
+
+            [AirDefenceRadar] = new UnitModelDef
+            {
+                resourcePath = "Models/AirDefenceRadar",
+                sourceAsset = "Anti-Air Defense Radar",
+                sourceCandidates = new[]
+                {
+                    "Anti_Air_Defense_Radar", "AntiAirDefenseRadar", "AntiAirRadar", "Radar"
+                },
+                idleClip = null,
+                animated = false
+            },
+
+            [FieldArtillery] = new UnitModelDef
+            {
+                resourcePath = "Models/FieldArtillery",
+                sourceAsset = "Military Prop Pack: Defense",
+                sourceCandidates = new[]
+                {
+                    "Howitzer", "Artillery", "Field_Gun", "Cannon", "AntiTankGun"
+                },
+                idleClip = null,
+                animated = false
+            },
+
+            [SurfaceToAirMissile] = new UnitModelDef
+            {
+                resourcePath = "Models/SamLauncher",
+                sourceAsset = "Homing Missile",
+                sourceCandidates = new[]
+                {
+                    "HomingMissile", "Homing_Missile", "Missile", "Rocket"
+                },
+                idleClip = null,
+                animated = false,
+                // A missile is long and thin; the bounds fit would otherwise put
+                // the camera close enough to crop the fins.
+                framing = 1.25f
+            },
+
+            [MilitaryTruck] = new UnitModelDef
+            {
+                resourcePath = "Models/MilitaryTruck",
+                sourceAsset = "ZIL-130 Military Truck",
+                sourceCandidates = new[]
+                {
+                    "ZIL-130", "ZIL130", "Zil_130", "ZIL_130", "Zil130"
+                },
+                idleClip = null,
+                animated = false
+            },
+
+            [MainBattleTank] = new UnitModelDef
+            {
+                resourcePath = "Models/Leopard2",
+                sourceAsset = "Tank Leopard 2",
+                sourceCandidates = new[]
+                {
+                    "Leopard2", "Leopard_2", "Leopard2A6", "Leopard2A4", "Leopard"
+                },
+                idleClip = null,
+                animated = false
+            },
+
+            [ScoutCar] = new UnitModelDef
+            {
+                resourcePath = "Models/ScoutCar",
+                sourceAsset = "M3A1 Scout Car",
+                sourceCandidates = new[]
+                {
+                    "M3A1", "M3A1_Scout_Car", "M3A1ScoutCar", "ScoutCar"
+                },
+                idleClip = null,
+                animated = false
             }
         };
 
-        /// <summary>Per-unit-id model assignments. Anything not listed falls back to <see cref="DefaultFor"/>.</summary>
-        static readonly Dictionary<string, string> Overrides = new Dictionary<string, string>();
+        /// <summary>
+        /// Per-unit-id model assignments. Anything not listed falls back to
+        /// <see cref="DefaultFor"/>. One model can serve several unit types —
+        /// a truck is a truck whether it is carrying supplies or people.
+        /// </summary>
+        static readonly Dictionary<string, string> Overrides = new Dictionary<string, string>
+        {
+            ["ad_radar"] = AirDefenceRadar,
+            ["air_defence"] = AirDefenceRadar,
+
+            ["artillery"] = FieldArtillery,
+            ["rocket_artillery"] = FieldArtillery,
+
+            ["sam"] = SurfaceToAirMissile,
+
+            ["transport"] = MilitaryTruck,
+            ["logistics"] = MilitaryTruck,
+            ["supply"] = MilitaryTruck,
+
+            ["armour"] = MainBattleTank,
+
+            ["recon"] = ScoutCar
+        };
 
         public static UnitModelDef Get(string modelId) =>
             modelId != null && Models.TryGetValue(modelId, out var def) ? def : null;
@@ -69,14 +197,17 @@ namespace IronMeridian.Models
         }
 
         /// <summary>
-        /// Fallback assignment while the model library is thin: a soldier stands
-        /// in for any ground formation. Drones get nothing rather than a
-        /// misleading infantryman.
+        /// Fallback assignment for the unit types with no equipment of their own
+        /// imported yet: a soldier stands in for any ground formation. Drones get
+        /// nothing rather than a misleading infantryman.
         /// </summary>
         static string DefaultFor(UnitDefinition unit) =>
             unit.Category == UnitCategory.Drone ? null : SoldierRifleman;
 
         /// <summary>Every model in the library — used by the installer and the docs check.</summary>
         public static IEnumerable<UnitModelDef> All => Models.Values;
+
+        /// <summary>Model id → definition, for the installer's log messages.</summary>
+        public static IEnumerable<KeyValuePair<string, UnitModelDef>> Entries => Models;
     }
 }

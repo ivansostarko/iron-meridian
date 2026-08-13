@@ -172,6 +172,11 @@ namespace IronMeridian.Models
 
         void PlayIdle(UnitModelDef def)
         {
+            // Vehicles and props are static meshes and are meant to be — the
+            // turntable is their animation. Warning about a missing clip they
+            // never had would be noise on every selection.
+            if (string.IsNullOrEmpty(def.idleClip)) return;
+
             var anim = _model.GetComponentInChildren<Animation>();
             if (anim == null || anim.GetClip(def.idleClip) == null)
             {

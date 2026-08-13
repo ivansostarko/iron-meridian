@@ -10,15 +10,47 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 
 | Model id | Prefab (Resources) | Source asset | Animations | Used for |
 |---|---|---|---|---|
-| `soldier_rifleman` | `Models/Soldier_Rifleman` | [Low Poly Soldiers Demo](https://assetstore.unity.com/packages/3d/characters/low-poly-soldiers-demo-73611) — `Soldier_demo.FBX` | `combat_idle`, `combat_run`, `combat_shoot` | Stand-in for **all Core Ground unit types** in the Units List preview |
+| `soldier_rifleman` | `Models/Soldier_Rifleman` | [Low Poly Soldiers Demo](https://assetstore.unity.com/packages/3d/characters/low-poly-soldiers-demo-73611) — `Soldier_demo.FBX` | `combat_idle`, `combat_run`, `combat_shoot` | Fallback for every Core Ground type with no equipment of its own |
+| `air_defence_radar` | `Models/AirDefenceRadar` | [Anti-Air Defense Radar](https://assetstore.unity.com/packages/3d/environments/anti-air-defense-radar-100032) | static | `ad_radar`, `air_defence` |
+| `field_artillery` | `Models/FieldArtillery` | [Military Prop Pack: Defense](https://assetstore.unity.com/packages/3d/props/weapons/military-prop-pack-defense-321415) | static | `artillery`, `rocket_artillery` |
+| `sam_launcher` | `Models/SamLauncher` | [Homing Missile](https://assetstore.unity.com/packages/tools/behavior-ai/homing-missile-307255) | static | `sam` |
+| `military_truck` | `Models/MilitaryTruck` | [ZIL-130 Military Truck](https://assetstore.unity.com/packages/3d/vehicles/land/zil-130-military-truck-208991) | static | `transport`, `logistics`, `supply` |
+| `main_battle_tank` | `Models/Leopard2` | [Tank Leopard 2](https://assetstore.unity.com/packages/3d/vehicles/land/tank-leopard2-264329) | static | `armour` |
+| `scout_car` | `Models/ScoutCar` | [M3A1 Scout Car](https://assetstore.unity.com/packages/3d/vehicles/land/m3a1-scout-car-53149) | static | `recon` |
 
 **Not yet modelled:** every `Drone` category unit. `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message rather than a misleading infantryman.
 
+**Static vs animated.** Only the rifleman has a rig. The vehicles and props are static meshes, which is what they should be — the preview's turntable is their motion. `idleClip` is `null` and `animated` is `false` for them, so the installer skips the Legacy-rig conversion (forcing a rig type onto a mesh with no skeleton reimports the pack for nothing) and `ModelPreview` does not warn about a clip that was never meant to exist.
+
 ### Source assets
 
-| Asset | Location | Contents |
+| Asset | Expected location | Status |
 |---|---|---|
-| Low Poly Soldiers Demo | `Assets/LowPolySoldiers_demo/` | `models/Soldier_demo.FBX` (Biped rig, `Bip001` root), `animation/demo_combat_{idle,run,shoot}.FBX`, two materials + TGA textures |
+| Low Poly Soldiers Demo | `Assets/LowPolySoldiers_demo/` | **Imported.** `models/Soldier_demo.FBX` (Biped rig, `Bip001` root), `animation/demo_combat_{idle,run,shoot}.FBX`, two materials + TGA textures |
+| Anti-Air Defense Radar | anywhere under `Assets/` | *Not in the project yet* |
+| Military Prop Pack: Defense | anywhere under `Assets/` | *Not in the project yet* |
+| Homing Missile | anywhere under `Assets/` | *Not in the project yet* |
+| ZIL-130 Military Truck | anywhere under `Assets/` | *Not in the project yet* |
+| Tank Leopard 2 | anywhere under `Assets/` | *Not in the project yet* |
+| M3A1 Scout Car | anywhere under `Assets/` | *Not in the project yet* |
+
+The six packs above are **registered but not present** — the entries, the unit
+assignments and the installer support are all in place, and each will build its
+prefab the moment its pack is in the project. Until then, selecting one of those
+unit types shows *"Model 'Models/Leopard2' is not installed. Run Tools > Iron
+Meridian > Install Unit Models."* rather than a soldier standing in for a tank,
+because a silent wrong model is worse than an explicit missing one.
+
+### Finding the source mesh
+
+The installer does not know a pack's internal file names, and packs rename their
+meshes between versions. Each entry therefore carries **`sourceCandidates`**: a
+list of file names (no extension) tried in order.
+
+If a pack is imported and the installer still reports it missing, its mesh is
+named something not on the list. The warning names every candidate it tried —
+add the real file name to that entry in `UnitModelLibrary.cs` and re-run. That is
+the only edit needed; nothing else in the pipeline cares what the file is called.
 
 ---
 

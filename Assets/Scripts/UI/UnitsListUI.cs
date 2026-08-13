@@ -16,35 +16,82 @@ namespace IronMeridian.UI
     public class UnitsListUI : MonoBehaviour
     {
         // ------------------------------------------------------------ layout
-        const float TableX = 60f, TableW = 1185f, TableY = -256f, TableH = 780f;
-        const float PanelW = 595f, PanelH = 866f, PanelY = -170f;
+        //
+        // Everything here is anchor-driven rather than laid out in absolute
+        // pixels. The canvas scaler matches width and height equally, so the
+        // reference width is only 1920 at exactly 16:9 — at any other aspect it
+        // shrinks, and a table pinned at a fixed 1185 px ran under a detail
+        // panel pinned to the right edge. Stretching the table between the two
+        // insets, and giving its columns proportional widths, means the whole
+        // row is visible at every window shape.
+        /// <summary>Inset from the left edge to the table, and from the right edge to the detail panel.</summary>
+        const float ScreenMargin = 60f;
+        /// <summary>Gap between the table and the detail panel.</summary>
+        const float ColumnGap = 24f;
+        /// <summary>Detail panel width. The one fixed dimension — its stat rows need a stable column split.</summary>
+        const float PanelW = 560f;
+        /// <summary>Top of the table and of the detail panel, measured from the top of the screen.</summary>
+        const float TableY = -256f, PanelY = -170f;
+        /// <summary>Bottom margin under both, so neither runs off a short window.</summary>
+        const float BottomMargin = 44f;
         const float RowPad = 8f;      // CreateScrollView's content padding
 
         enum SortKey { Name, Category, Attack, Defence, Armour, Range, Speed, Manpower }
         enum TeamView { Both, Friendly, Enemy }
         enum CategoryView { All, Ground, Drone }
 
-        readonly struct Column
+        /// <summary>
+        /// A table column, sized as a **share of the table width** rather than in
+        /// pixels. <see cref="Start"/> and <see cref="End"/> are the normalised
+        /// bounds every header cell and row cell anchors to, so the table reflows
+        /// with the window and no column can be cut off the right-hand edge.
+        /// </summary>
+        // Not a readonly struct: Start/End are computed once at startup, and an
+        // array element is addressable so they can be written in place.
+        struct Column
         {
             public readonly string Label;
-            public readonly float X, W;
+            public readonly float Weight;
             public readonly SortKey? Sort;
-            public Column(string label, float x, float w, SortKey? sort = null)
-            { Label = label; X = x; W = w; Sort = sort; }
+            public float Start, End;      // filled in by NormaliseColumns
+
+            public Column(string label, float weight, SortKey? sort = null)
+            { Label = label; Weight = weight; Sort = sort; Start = 0f; End = 0f; }
         }
 
         static readonly Column[] Columns =
         {
-            new Column("ICON",     0,    108),
-            new Column("NAME",     108,  340, SortKey.Name),
-            new Column("CATEGORY", 448,  130, SortKey.Category),
-            new Column("ATK",      578,  78,  SortKey.Attack),
-            new Column("DEF",      656,  78,  SortKey.Defence),
-            new Column("ARM",      734,  78,  SortKey.Armour),
-            new Column("RANGE",    812,  100, SortKey.Range),
-            new Column("SPEED",    912,  110, SortKey.Speed),
-            new Column("MANPOWER", 1022, 120, SortKey.Manpower),
+            // ICON carries two 44 px icons side by side, so it needs the widest
+            // share that is not text.
+            new Column("ICON",     1.20f),
+            new Column("NAME",     3.10f, SortKey.Name),
+            new Column("CATEGORY", 1.25f, SortKey.Category),
+            new Column("ATK",      0.70f, SortKey.Attack),
+            new Column("DEF",      0.70f, SortKey.Defence),
+            new Column("ARM",      0.70f, SortKey.Armour),
+            new Column("RANGE",    1.00f, SortKey.Range),
+            new Column("SPEED",    1.10f, SortKey.Speed),
+            new Column("MANPOWER", 1.15f, SortKey.Manpower),
         };
+
+        /// <summary>
+        /// Turns the weights into cumulative 0..1 bounds. Run once at startup so
+        /// every cell can anchor straight to them.
+        /// </summary>
+        static void NormaliseColumns()
+        {
+            float total = 0f;
+            foreach (var c in Columns) total += c.Weight;
+            if (total <= 0f) return;
+
+            float cursor = 0f;
+            for (int i = 0; i < Columns.Length; i++)
+            {
+                Columns[i].Start = cursor / total;
+                cursor += Columns[i].Weight;
+                Columns[i].End = cursor / total;
+            }
+        }
 
         // ------------------------------------------------------------- state
         SortKey _sortKey = SortKey.Name;
@@ -68,6 +115,7 @@ namespace IronMeridian.UI
 
         void Start()
         {
+            NormaliseColumns();
             IronMeridian.Audio.AudioManager.Apply();
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             var canvas = UIFactory.CreateCanvas("UnitsListCanvas");
@@ -106,7 +154,7 @@ namespace IronMeridian.UI
         void BuildToolbar(Transform parent)
         {
             var bar = UIFactory.CreateGroup(parent, "Toolbar");
-            UIFactory.Place(bar, new Vector2(0f, 1f), new Vector2(TableX, -170), new Vector2(TableW, 52));
+            StretchToTableWidth(bar, -170f, 52f);
 
             _searchField = UIFactory.CreateInputField(bar, "Search name, id or ammo...", 18);
             UIFactory.Place((RectTransform)_searchField.transform, new Vector2(0f, 1f),
@@ -140,7 +188,7 @@ namespace IronMeridian.UI
                 "Both teams field the same catalogue — the affiliation filter switches which icon set is shown. " +
                 "Click a column heading to sort; click a row for its 3D model.",
                 15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(TableX, -228), new Vector2(TableW, 22));
+            StretchToTableWidth(hint.rectTransform, -228f, 22f);
         }
 
         /// <summary>
@@ -185,17 +233,35 @@ namespace IronMeridian.UI
         void BuildTable(Transform parent)
         {
             var table = UIFactory.CreateGroup(parent, "Table");
-            UIFactory.Place(table, new Vector2(0f, 1f), new Vector2(TableX, TableY), new Vector2(TableW, TableH));
+            // Full height between the header block and the bottom margin, so the
+            // list grows with the window instead of stopping at a fixed 780 px.
+            table.anchorMin = new Vector2(0, 0); table.anchorMax = new Vector2(1, 1);
+            table.pivot = new Vector2(0.5f, 1f);
+            table.offsetMin = new Vector2(ScreenMargin, BottomMargin);
+            table.offsetMax = new Vector2(-(ScreenMargin + PanelW + ColumnGap), TableY);
 
             _header = UIFactory.CreatePanel(table, "Header", GameConfig.UiPanel);
             _header.anchorMin = new Vector2(0, 1); _header.anchorMax = new Vector2(1, 1);
             _header.pivot = new Vector2(0.5f, 1);
             _header.offsetMin = new Vector2(0, -42); _header.offsetMax = Vector2.zero;
 
-            var scroll = UIFactory.CreateScrollView(table, out _rowsContent);
+            var scroll = UIFactory.CreateScrollView(table, out _rowsContent, withScrollbar: true);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
             srt.offsetMin = Vector2.zero; srt.offsetMax = new Vector2(0, -46);
+        }
+
+        /// <summary>
+        /// Spans a rect across the table's column of the screen: from the left
+        /// margin to where the detail panel begins. Used by the toolbar and the
+        /// hint line so they track the table rather than drifting over the panel.
+        /// </summary>
+        static void StretchToTableWidth(RectTransform rt, float top, float height)
+        {
+            rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(1, 1);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(ScreenMargin, top - height);
+            rt.offsetMax = new Vector2(-(ScreenMargin + PanelW + ColumnGap), top);
         }
 
         /// <summary>
@@ -227,8 +293,8 @@ namespace IronMeridian.UI
                 {
                     var t = UIFactory.CreateText(_header, label, 15, GameConfig.UiAccent,
                         TextAnchor.MiddleLeft, FontStyle.Bold);
-                    UIFactory.Place(t.rectTransform, new Vector2(0f, 0.5f),
-                        new Vector2(col.X + RowPad + 4, 0), new Vector2(col.W - 8, 34));
+                    SpanColumn(t.rectTransform, col, RowPad + 4f, 34f);
+                    UIFactory.Fit(t, 10);
                     continue;
                 }
 
@@ -236,13 +302,13 @@ namespace IronMeridian.UI
                 var btn = UIFactory.CreateButton(_header, label, () => ToggleSort(key),
                     new Color(1f, 1f, 1f, active ? 0.08f : 0.02f),
                     active ? GameConfig.UiAccent : GameConfig.UiText, 15);
-                UIFactory.Place((RectTransform)btn.transform, new Vector2(0f, 0.5f),
-                    new Vector2(col.X + RowPad, 0), new Vector2(col.W - 4, 34));
+                SpanColumn((RectTransform)btn.transform, col, RowPad, 34f);
 
                 var txt = btn.GetComponentInChildren<Text>();
                 txt.alignment = TextAnchor.MiddleLeft;
                 txt.fontStyle = active ? FontStyle.Bold : FontStyle.Normal;
                 txt.rectTransform.offsetMin = new Vector2(4, 0);
+                UIFactory.Fit(txt, 10);
             }
         }
 
@@ -347,9 +413,11 @@ namespace IronMeridian.UI
             _rowImages[def.id] = row.GetComponent<Image>();
 
             // Icon column: one icon per affiliation shown, side by side when both.
-            float iconX = Columns[0].X + 6;
-            if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", def.id, iconX); iconX += 50; }
-            if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", def.id, iconX);
+            // Anchored inside the column rather than at an absolute x, so they
+            // stay in their cell when the table reflows.
+            float iconX = 6f;
+            if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", def.id, iconX, Columns[0]); iconX += 50f; }
+            if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", def.id, iconX, Columns[0]);
 
             Cell(row, def.name, Columns[1], 17, GameConfig.UiText);
             Cell(row, def.Category == UnitCategory.Drone ? "Drone" : "Core Ground",
@@ -375,21 +443,49 @@ namespace IronMeridian.UI
             };
         }
 
-        void PlaceIcon(Transform parent, string folder, string unitId, float x)
+        /// <summary>
+        /// A unit icon at <paramref name="x"/> pixels from the left of its
+        /// container. <paramref name="col"/> anchors it inside a table column;
+        /// pass null (the detail panel) to anchor to the container itself.
+        /// </summary>
+        void PlaceIcon(Transform parent, string folder, string unitId, float x, Column? col = null)
         {
             var sprite = UIFactory.LoadIconSprite(folder, unitId);
             if (sprite == null) return;
             var img = UIFactory.CreateImage(parent, sprite, folder + "Icon");
-            UIFactory.Place((RectTransform)img.transform, new Vector2(0f, 0.5f),
-                new Vector2(x, 0), new Vector2(44, 44));
+            var rt = (RectTransform)img.transform;
+
+            float left = col.HasValue ? col.Value.Start : 0f;
+            rt.anchorMin = rt.anchorMax = new Vector2(left, 0.5f);
+            rt.pivot = new Vector2(0f, 0.5f);
+            rt.anchoredPosition = new Vector2(x, 0f);
+            rt.sizeDelta = new Vector2(44, 44);
+
             img.raycastTarget = false;    // clicks belong to the row
         }
 
         void Cell(Transform parent, string text, Column col, int fontSize, Color? color = null)
         {
             var t = UIFactory.CreateText(parent, text, fontSize, color, TextAnchor.MiddleLeft);
-            UIFactory.Place(t.rectTransform, new Vector2(0f, 0.5f),
-                new Vector2(col.X + 4, 0), new Vector2(col.W - 8, 40));
+            SpanColumn(t.rectTransform, col, 4f, 40f);
+            // Long names shrink to fit their column instead of running into the
+            // next one. Legacy Text has no ellipsis, so best-fit is the closest
+            // thing to a responsive cell.
+            UIFactory.Fit(t, 11);
+        }
+
+        /// <summary>
+        /// Anchors a rect to a column's share of the table width, vertically
+        /// centred in its row. Horizontal anchors do the work, so the cell tracks
+        /// the table at any window size without anything recomputing pixels.
+        /// </summary>
+        static void SpanColumn(RectTransform rt, Column col, float inset, float height)
+        {
+            rt.anchorMin = new Vector2(col.Start, 0.5f);
+            rt.anchorMax = new Vector2(col.End, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(inset, -height * 0.5f);
+            rt.offsetMax = new Vector2(-4f, height * 0.5f);
         }
 
         // ----------------------------------------------------- detail panel
@@ -397,7 +493,13 @@ namespace IronMeridian.UI
         void BuildDetailPanel(Transform parent)
         {
             var panel = UIFactory.CreatePanel(parent, "DetailPanel", GameConfig.UiPanel);
-            UIFactory.Place(panel, new Vector2(1f, 1f), new Vector2(-60, PanelY), new Vector2(PanelW, PanelH));
+            // Pinned to the right edge and stretched to the bottom margin, so the
+            // stat list gets whatever height the window has rather than a fixed
+            // 866 px that ran off the bottom of anything shorter than 1080.
+            panel.anchorMin = new Vector2(1, 0); panel.anchorMax = new Vector2(1, 1);
+            panel.pivot = new Vector2(1f, 1f);
+            panel.offsetMin = new Vector2(-(ScreenMargin + PanelW), BottomMargin);
+            panel.offsetMax = new Vector2(-ScreenMargin, PanelY);
 
             _detailName = UIFactory.CreateText(panel, "", 26, GameConfig.UiAccent,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -418,9 +520,12 @@ namespace IronMeridian.UI
                 GameConfig.UiTextDim, TextAnchor.MiddleRight);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(20, -438), new Vector2(PanelW - 40, 18));
 
-            var scroll = UIFactory.CreateScrollView(panel, out _detailStats);
-            UIFactory.Place((RectTransform)scroll.transform, new Vector2(0f, 1f),
-                new Vector2(16, -462), new Vector2(PanelW - 32, PanelH - 478));
+            var scroll = UIFactory.CreateScrollView(panel, out _detailStats, withScrollbar: true);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
+            srt.pivot = new Vector2(0.5f, 0.5f);
+            srt.offsetMin = new Vector2(16, 16);
+            srt.offsetMax = new Vector2(-16, -462);
         }
 
         void Select(UnitDefinition def)
@@ -453,8 +558,8 @@ namespace IronMeridian.UI
             ClearChildren(_detailIcons);
             if (def != null)
             {
-                PlaceIcon(_detailIcons, "Friendly", def.id, 0);
-                PlaceIcon(_detailIcons, "Enemy", def.id, 52);
+                PlaceIcon(_detailIcons, "Friendly", def.id, 0f);
+                PlaceIcon(_detailIcons, "Enemy", def.id, 52f);
             }
 
             if (_preview != null) _preview.Show(def);
@@ -471,6 +576,10 @@ namespace IronMeridian.UI
             {
                 var d = UIFactory.CreateText(_detailStats, def.description, 15,
                     GameConfig.UiTextDim, TextAnchor.UpperLeft);
+                // Height from the text rather than a fixed 54 px, which cut the
+                // longer descriptions off mid-sentence.
+                d.gameObject.AddComponent<ContentSizeFitter>().verticalFit =
+                    ContentSizeFitter.FitMode.PreferredSize;
                 ((RectTransform)d.transform).sizeDelta = new Vector2(0, 54);
             }
 
@@ -517,18 +626,28 @@ namespace IronMeridian.UI
             ((RectTransform)t.transform).sizeDelta = new Vector2(0, 30);
         }
 
+        /// <summary>
+        /// One label/value row. The two rects meet at <see cref="StatSplit"/>
+        /// rather than overlapping, and both shrink to fit — the longest values
+        /// here are asset names and ammunition designations, which used to run
+        /// straight off the panel.
+        /// </summary>
+        const float StatSplit = 0.46f;
+
         void Stat(string label, string value)
         {
             var row = UIFactory.CreateGroup(_detailStats, "Stat_" + label);
-            row.sizeDelta = new Vector2(0, 24);
+            row.sizeDelta = new Vector2(0, 26);
 
             var l = UIFactory.CreateText(row, label, 15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            l.rectTransform.anchorMin = new Vector2(0, 0); l.rectTransform.anchorMax = new Vector2(0.55f, 1);
-            l.rectTransform.offsetMin = Vector2.zero; l.rectTransform.offsetMax = Vector2.zero;
+            l.rectTransform.anchorMin = new Vector2(0, 0); l.rectTransform.anchorMax = new Vector2(StatSplit, 1);
+            l.rectTransform.offsetMin = Vector2.zero; l.rectTransform.offsetMax = new Vector2(-6, 0);
+            UIFactory.Fit(l, 11);
 
             var v = UIFactory.CreateText(row, value, 15, GameConfig.UiText, TextAnchor.MiddleRight);
-            v.rectTransform.anchorMin = new Vector2(0.55f, 0); v.rectTransform.anchorMax = new Vector2(1, 1);
+            v.rectTransform.anchorMin = new Vector2(StatSplit, 0); v.rectTransform.anchorMax = new Vector2(1, 1);
             v.rectTransform.offsetMin = Vector2.zero; v.rectTransform.offsetMax = new Vector2(-4, 0);
+            UIFactory.Fit(v, 11);
         }
 
         void Update()

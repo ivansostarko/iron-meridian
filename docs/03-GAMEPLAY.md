@@ -38,7 +38,7 @@ The editor's left chrome is in two pieces:
 
 | Nav row | What the panel shows |
 |---|---|
-| **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — and **fog of war** |
+| **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight** and **fog of war** |
 | **UNITS** | Team, echelon, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
@@ -164,6 +164,13 @@ to fight. Full table: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
 - Re-tasking a unit replaces its graphics; it never stacks two defences.
 - Everything produced is ordinary map data (`defence-*` lines and markers), so a
   defence survives save/load — see [05-MAP-SAVES.md](05-MAP-SAVES.md).
+
+### Line of sight
+
+Selecting a unit draws a ring at its view range with the distance **in metres**
+on the ring — in scenario mode as well as battle. **Left rail → GENERAL → LINE OF
+SIGHT** toggles it; on by default. The weapon-range ring is separate and always
+shown.
 
 ### Fog of war
 

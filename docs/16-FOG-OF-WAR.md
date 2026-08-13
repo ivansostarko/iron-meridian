@@ -3,8 +3,25 @@
 Limited intelligence: the player sees the enemy only where something of theirs is
 actually looking, and the reconnaissance tasks that extend that reach.
 
-> Off by default, and armed from the map editor's **GENERAL** panel. Keep this
-> file in step with `FogOfWarSystem.cs` and `ReconTaskCatalog.cs`.
+> Fog is off by default; the line-of-sight ring is on. Both live in the map
+> editor's **GENERAL → INTELLIGENCE** block. Keep this file in step with
+> `FogOfWarSystem.cs` and `ReconTaskCatalog.cs`.
+
+---
+
+## 0. Line of sight
+
+Separate from the fog and useful without it: selecting a unit — **in scenario
+mode as well as battle** — draws a ring at its `viewRangeKm`, captioned on the
+ring itself with the distance **in metres** (`LINE OF SIGHT  4 500 m`). Metres
+rather than kilometres because a line of sight is a distance you judge against
+the ground, and "4.5 km" reads as an approximation of the number you are judging.
+
+**Left rail → GENERAL → LINE OF SIGHT** toggles it; on by default. The weapon
+range ring is independent and always shown for the selected unit.
+
+This is the same range the fog's detection sweep uses, so with fog on the ring is
+literally the edge of what that formation can reveal.
 
 ---
 
@@ -115,7 +132,8 @@ than the fog itself, and is deliberately not in this one.
 | `Assets/Scripts/Units/AxisArrow.cs` | The objective arrow (shared with attack orders) |
 | `Assets/Scripts/Units/UnitActor.cs` | `HiddenByFog`, `SetHiddenByFog` |
 | `Assets/Scripts/Units/RangeRing.cs` | The contact ring, with its caption override |
-| `Assets/Scripts/UI/UnitPaletteUI.cs` | **GENERAL → INTELLIGENCE** toggle |
+| `Assets/Scripts/UI/UnitPaletteUI.cs` | **GENERAL → INTELLIGENCE** toggles (line of sight, fog) |
+| `Assets/Scripts/Core/GameController.cs` | `SetLineOfSightVisible`, ring captions |
 | `Assets/Scripts/UI/UnitActionBarUI.cs` | The RECON button and its submenu |
 
 ## Cost
