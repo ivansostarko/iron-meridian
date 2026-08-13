@@ -147,17 +147,40 @@ namespace IronMeridian.Map
             {
                 _overlay.enabled = false;
                 EnsureOsmOverlay();
-                _osmOverlay.enabled = true;
+                Reattach(_osmOverlay);
             }
             else
             {
                 if (_osmOverlay != null) _osmOverlay.enabled = false;
                 _overlay.ionAssetID = IonAssetFor(style);
                 _overlay.ionAccessToken = _token;
-                _overlay.enabled = true;
+                Reattach(_overlay);
             }
 
             StyleChanged?.Invoke(style);
+        }
+
+        /// <summary>
+        /// Applies overlay property changes to the live tileset.
+        ///
+        /// This is what made the style switch look broken. A
+        /// <see cref="CesiumRasterOverlay"/> hands its settings to the native
+        /// tileset when it is *added* to it, and nothing re-reads them
+        /// afterwards — so writing a new <c>ionAssetID</c> onto an overlay that
+        /// is already enabled changes a C# field and nothing else, and the map
+        /// carries on drawing the previous imagery. Enabling a disabled overlay
+        /// does attach it (and so does pick the new id up), which is why the
+        /// first switch away from a style appeared to work and every switch
+        /// between two ion styles did not.
+        ///
+        /// <c>Refresh()</c> is Cesium's own remove-then-re-add; the enable path
+        /// covers the case where the overlay was off and attaching it is enough.
+        /// </summary>
+        static void Reattach(CesiumRasterOverlay overlay)
+        {
+            if (overlay == null) return;
+            if (!overlay.enabled) overlay.enabled = true;
+            else overlay.Refresh();
         }
 
         /// <summary>
@@ -219,11 +242,18 @@ namespace IronMeridian.Map
 
         void OnOverlayLoadFailure(CesiumRasterOverlayLoadFailureDetails details)
         {
-            if (details.overlay != _overlay) return;
+            // The OSM overlay is reported too. It used to be skipped, so picking
+            // a style whose tiles the server refused looked identical to picking
+            // one that simply did not switch.
+            bool ours = details.overlay == _overlay || (_osmOverlay != null && details.overlay == _osmOverlay);
+            if (!ours) return;
+
             string styleName = Style.ToString();
-            string msg = $"[Cesium] {styleName} imagery failed to load ({details.httpStatusCode}): {details.message}";
-            Debug.LogError(msg);
-            LoadError?.Invoke($"{styleName} imagery failed to load — check your Cesium ion token/asset access (HTTP {details.httpStatusCode}).");
+            Debug.LogError($"[Cesium] {styleName} imagery failed to load ({details.httpStatusCode}): {details.message}");
+
+            LoadError?.Invoke(details.overlay == _overlay
+                ? $"{styleName} imagery failed (HTTP {details.httpStatusCode}) — your Cesium ion account may not have that asset. Try SATELLITE or TERRAIN."
+                : $"{styleName} tiles failed (HTTP {details.httpStatusCode}) — the public OSM tile server refuses some clients. Try another style.");
         }
 
         void OnDestroy()

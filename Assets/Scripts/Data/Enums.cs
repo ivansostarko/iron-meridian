@@ -128,6 +128,25 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// Reconnaissance and security tasks (FM 3-98). Every one of them exists to
+    /// answer a question about the enemy, which with fog of war on is the only
+    /// way to see anything beyond a unit's own eyes.
+    /// </summary>
+    public enum ReconTask
+    {
+        /// <summary>Move to a place and find out what is in it.</summary>
+        ReconArea,
+        /// <summary>Find out what is along a route, scanning the whole way there.</summary>
+        ReconRoute,
+        /// <summary>Sit still and watch. The furthest-seeing task, and the only static one.</summary>
+        Observe,
+        /// <summary>Fly a sensor out and back. Fast, wide, and it does not last.</summary>
+        UavRecon,
+        /// <summary>Patrol forward expecting to fight for the information.</summary>
+        CombatPatrol
+    }
+
+    /// <summary>
     /// Point graphics pinned to the map by a defensive task. Unlike lines these
     /// mark a place rather than a limit, so they carry the owning unit and the
     /// direction the task is oriented on.

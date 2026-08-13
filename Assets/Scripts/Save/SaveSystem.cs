@@ -33,10 +33,22 @@ namespace IronMeridian.Save
         {
             string user = Path.Combine(UserMapsDir, mapFileName);
             string shipped = Path.Combine(DefaultMapsDir, mapFileName);
-            string path = File.Exists(user) ? user : shipped;
+            return Read(File.Exists(user) ? user : shipped, mapFileName);
+        }
+
+        /// <summary>
+        /// Loads the **shipped** scenario, ignoring any user save that shadows
+        /// it. This is what the editor's RESET restores to: a reset that put you
+        /// back to your own last save would not be a reset.
+        /// </summary>
+        public static MapSaveData LoadShippedMap(string mapFileName) =>
+            Read(Path.Combine(DefaultMapsDir, mapFileName), mapFileName);
+
+        static MapSaveData Read(string path, string mapFileName)
+        {
             if (!File.Exists(path))
             {
-                Debug.LogError($"[Save] Map not found: {mapFileName}");
+                Debug.LogError($"[Save] Map not found: {mapFileName} (looked in {path})");
                 return null;
             }
             var data = JsonUtility.FromJson<MapSaveData>(File.ReadAllText(path));

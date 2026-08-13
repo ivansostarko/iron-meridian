@@ -135,6 +135,28 @@ namespace IronMeridian.Units
             return Mathf.Max(Mathf.Max(a, b), guard);
         });
 
+        /// <summary>
+        /// Binoculars — the Recon order. Two barrels under a bridge, which is
+        /// the one optical glyph that still reads at 30 px; a magnifier would
+        /// have collided with the palette's search field.
+        /// </summary>
+        public static Texture2D ReconIcon(Color color, int size = 64) => Draw(color, size, (u, v) =>
+        {
+            float left = Inside(Circle(u, v, 0.30f, 0.36f, 0.20f));
+            float right = Inside(Circle(u, v, 0.70f, 0.36f, 0.20f));
+            float bridge = Inside(Mathf.Abs(v - 0.40f) < 0.055f && Mathf.Abs(u - 0.5f) < 0.16f);
+            // Eyecups: short stubs rising off each barrel.
+            float cups = Inside(v > 0.56f && v < 0.76f &&
+                                (Mathf.Abs(u - 0.30f) < 0.10f || Mathf.Abs(u - 0.70f) < 0.10f));
+            return Mathf.Max(Mathf.Max(left, right), Mathf.Max(bridge, cups));
+        });
+
+        static bool Circle(float u, float v, float cx, float cy, float r)
+        {
+            float dx = u - cx, dy = v - cy;
+            return dx * dx + dy * dy < r * r;
+        }
+
         /// <summary>Shield — the Defence order.</summary>
         public static Texture2D ShieldIcon(Color color, int size = 64) => Draw(color, size, (u, v) =>
         {

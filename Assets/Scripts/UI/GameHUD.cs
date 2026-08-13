@@ -16,6 +16,9 @@ namespace IronMeridian.UI
     /// </summary>
     public class GameHUD : MonoBehaviour
     {
+        /// <summary>Raised by the RESET button; the controller owns what "reset" means.</summary>
+        public System.Action ResetRequested;
+
         CombatSystem _combat;
         GameClock _clock;
 
@@ -104,16 +107,26 @@ namespace IronMeridian.UI
 
         void BuildRightControls(RectTransform bar)
         {
-            var settings = UIFactory.CreateBorderedPanel(bar, "SettingsButton", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(settings, new Vector2(1f, 0.5f), new Vector2(-18, 0), new Vector2(40, 40));
-            settings.pivot = new Vector2(1f, 0.5f);
-            var settingsBtn = UIFactory.CreateIconButton(settings, UiIcons.Gear,
-                () => SceneManager.LoadScene(GameConfig.SceneSettings), new Color(0, 0, 0, 0), UiTheme.TextDim, 10f);
-            UIFactory.Stretch((RectTransform)settingsBtn.transform);
+            // RESET replaces the settings shortcut that used to sit here. Video
+            // and audio options belong to the main menu, and a one-click hop out
+            // of the editor to a different scene was a trap next to the battle
+            // control; putting the scenario reset in that slot gives the editor
+            // the one destructive action it was missing.
+            var reset = UIFactory.CreateBorderedPanel(bar, "ResetButton", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(reset, new Vector2(1f, 0.5f), new Vector2(-18, 0), new Vector2(96, 40));
+            reset.pivot = new Vector2(1f, 0.5f);
+
+            var resetBtn = UIFactory.CreateButton(reset, "RESET", () => ResetRequested?.Invoke(),
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)resetBtn.transform);
+            UiTooltip.Attach(resetBtn.gameObject,
+                "Reset the editor — reload the scenario and put every setting back to its default",
+                UiTooltip.Side.Below);
 
             _battleBtn = UIFactory.CreateButton(bar, "", () => _combat.Toggle(), UiTheme.Success, UiTheme.Text, 1);
             var brt = (RectTransform)_battleBtn.transform;
-            UIFactory.Place(brt, new Vector2(1f, 0.5f), new Vector2(-70, 0), new Vector2(196, 40));
+            // Right-to-left along the bar: RESET (96) · gap · BATTLE (196) · gap · CLOCK (320).
+            UIFactory.Place(brt, new Vector2(1f, 0.5f), new Vector2(-126, 0), new Vector2(196, 40));
             brt.pivot = new Vector2(1f, 0.5f);
             _battleFill = _battleBtn.GetComponent<Image>();
 
@@ -144,7 +157,7 @@ namespace IronMeridian.UI
         void BuildClock(RectTransform bar)
         {
             _clockPanel = UIFactory.CreateBorderedPanel(bar, "GameClock", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-278, 0), new Vector2(320, 40));
+            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-334, 0), new Vector2(320, 40));
             _clockPanel.pivot = new Vector2(1f, 0.5f);
 
             _clockTime = UIFactory.CreateText(_clockPanel, "--:--", 19, UiTheme.Text,

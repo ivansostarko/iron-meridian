@@ -6,23 +6,29 @@ using IronMeridian.Map;
 namespace IronMeridian.Units
 {
     /// <summary>
-    /// The axis of an attack drawn on the map: a dashed shaft running from the
-    /// attacker to its target with an arrowhead planted on the target, marching
-    /// toward what is about to be hit.
+    /// The axis of a pending order drawn on the map: a dashed shaft running from
+    /// the unit to what it has been pointed at, with an arrowhead planted on the
+    /// far end, dashes marching toward it.
     ///
-    /// It is the confirmation that an order was understood — you clicked a
-    /// target and the map answers with the line the attack will run along — and
-    /// it is only wanted while the attack is *pending*. Once the unit reaches
-    /// its firing position (or an ambush springs) the arrow fades out and the
-    /// muzzle flashes, impacts and fires carry the story instead. A permanent
-    /// arrow per engagement would bury the front line in graphics.
+    /// It is the confirmation that an order was understood — you clicked
+    /// something and the map answers with the line the order will run along —
+    /// and it is only wanted while that order is *pending*. An attack retires it
+    /// when the unit reaches its firing position; a recon task retires it on
+    /// arrival. A permanent arrow per order would bury the front line in
+    /// graphics.
     ///
-    /// Both ends move, so the trace is resampled on a cadence rather than every
+    /// The far end is either **another unit** (an attack target, which moves) or
+    /// a **fixed point** (a recon objective, which does not). Both are supported
+    /// here rather than by faking a unit at the objective: a stand-in
+    /// <see cref="UnitActor"/> would land in the registry and be swept up by
+    /// combat, selection and fog.
+    ///
+    /// The ends move, so the trace is resampled on a cadence rather than every
     /// frame — each vertex is a terrain raycast, and this is drawn for every
-    /// live attack order at once. Between resamples the endpoints slide along
-    /// at their last sampled height so the arrow stays glued to both units.
+    /// live order at once. Between resamples the endpoints slide along at their
+    /// last sampled height so the arrow stays glued to both ends.
     /// </summary>
-    public class AttackArrow : MonoBehaviour
+    public class AxisArrow : MonoBehaviour
     {
         /// <summary>Vertices along the shaft. Enough to follow a valley, few enough to resample often.</summary>
         const int Segments = 14;
@@ -40,6 +46,9 @@ namespace IronMeridian.Units
 
         CesiumGeoreference _geo;
         UnitActor _from, _to;
+        /// <summary>Far end when it is a place rather than a formation.</summary>
+        double _toLat, _toLon;
+        bool _toIsPoint;
         Color _color;
 
         LineRenderer _shaft;
@@ -51,15 +60,35 @@ namespace IronMeridian.Units
         float _resampleTimer;
         float _fadeT = -1f;                // < 0 while the order is still pending
 
-        public static AttackArrow Create(CesiumGeoreference geo, UnitActor from, UnitActor to, Color color)
+        /// <summary>Axis from a unit to another unit — an attack target, which moves.</summary>
+        public static AxisArrow Create(CesiumGeoreference geo, UnitActor from, UnitActor to, Color color)
         {
-            var go = new GameObject($"AttackArrow_{from.State.instanceId}");
+            var arrow = Build(geo, from, color);
+            arrow._to = to;
+            arrow.Begin(geo);
+            return arrow;
+        }
+
+        /// <summary>Axis from a unit to a point on the ground — a recon objective, which does not.</summary>
+        public static AxisArrow CreateToPoint(CesiumGeoreference geo, UnitActor from,
+            double lat, double lon, Color color)
+        {
+            var arrow = Build(geo, from, color);
+            arrow._toIsPoint = true;
+            arrow._toLat = lat;
+            arrow._toLon = lon;
+            arrow.Begin(geo);
+            return arrow;
+        }
+
+        static AxisArrow Build(CesiumGeoreference geo, UnitActor from, Color color)
+        {
+            var go = new GameObject($"Axis_{from.State.instanceId}");
             go.transform.SetParent(geo.transform, false);
 
-            var arrow = go.AddComponent<AttackArrow>();
+            var arrow = go.AddComponent<AxisArrow>();
             arrow._geo = geo;
             arrow._from = from;
-            arrow._to = to;
             arrow._color = color;
 
             arrow._shaftMat = RuntimeMaterials.UnlitTexture(ProceduralTextures.Dash(color, 64, 0.5f));
@@ -81,10 +110,22 @@ namespace IronMeridian.Units
             arrow._head = headGo.transform;
             arrow._headMat = RuntimeMaterials.UnlitTexture(ProceduralTextures.HeadingArrow(color));
             headGo.GetComponent<MeshRenderer>().material = arrow._headMat;
-
-            arrow.Resample();
-            geo.changed += arrow.Resample;
             return arrow;
+        }
+
+        /// <summary>First trace, once both ends are known.</summary>
+        void Begin(CesiumGeoreference geo)
+        {
+            Resample();
+            geo.changed += Resample;
+        }
+
+        /// <summary>Where the arrow points: a fixed objective, or wherever the target unit is now.</summary>
+        void FarEnd(out double lat, out double lon)
+        {
+            if (_toIsPoint || _to == null) { lat = _toLat; lon = _toLon; return; }
+            lat = _to.State.latitude;
+            lon = _to.State.longitude;
         }
 
         /// <summary>Begins the fade-out. The arrow destroys itself when it finishes.</summary>
@@ -95,10 +136,10 @@ namespace IronMeridian.Units
 
         void LateUpdate()
         {
-            // Either end going away ends the arrow — there is no axis of attack
-            // without an attacker and a target. The geometry it already has is
+            // Either end going away ends the arrow — there is no axis without a
+            // unit and something to point at. The geometry it already has is
             // left alone and simply fades.
-            bool live = _from != null && _to != null;
+            bool live = _from != null && (_toIsPoint || _to != null);
             if (!live) Finish();
 
             if (_fadeT >= 0f)
@@ -134,12 +175,12 @@ namespace IronMeridian.Units
         void Resample()
         {
             _resampleTimer = ResampleSeconds;
-            if (_from == null || _to == null || _geo == null) return;
+            if (_geo == null || _from == null || !(_toIsPoint || _to != null)) return;
 
             var a = _from.State;
-            var b = _to.State;
-            double totalKm = GeoUtils.DistanceKm(a.latitude, a.longitude, b.latitude, b.longitude);
-            float bearing = GeoUtils.BearingDeg(a.latitude, a.longitude, b.latitude, b.longitude);
+            FarEnd(out double bLat, out double bLon);
+            double totalKm = GeoUtils.DistanceKm(a.latitude, a.longitude, bLat, bLon);
+            float bearing = GeoUtils.BearingDeg(a.latitude, a.longitude, bLat, bLon);
 
             for (int i = 0; i < Segments; i++)
             {
@@ -160,11 +201,11 @@ namespace IronMeridian.Units
         /// </summary>
         void TrackEnds()
         {
-            if (_from == null || _to == null) return;
+            if (_from == null || !(_toIsPoint || _to != null)) return;
 
+            FarEnd(out double bLat, out double bLon);
             _points[0] = GeoUtils.GeoToUnity(_geo, _from.State.latitude, _from.State.longitude, _heights[0]);
-            _points[Segments - 1] = GeoUtils.GeoToUnity(_geo, _to.State.latitude, _to.State.longitude,
-                _heights[Segments - 1]);
+            _points[Segments - 1] = GeoUtils.GeoToUnity(_geo, bLat, bLon, _heights[Segments - 1]);
             _shaft.SetPosition(0, _points[0]);
             _shaft.SetPosition(Segments - 1, _points[Segments - 1]);
         }
@@ -182,7 +223,8 @@ namespace IronMeridian.Units
             Vector3 tip = _points[Segments - 1];
             Vector3 back = _points[Segments - 2];
 
-            Vector3 up = (GeoUtils.GeoToUnity(_geo, _to.State.latitude, _to.State.longitude,
+            FarEnd(out double bLat, out double bLon);
+            Vector3 up = (GeoUtils.GeoToUnity(_geo, bLat, bLon,
                 _heights[Segments - 1] + 1000.0) - tip).normalized;
             if (up.sqrMagnitude < 1e-6f) up = Vector3.up;
 

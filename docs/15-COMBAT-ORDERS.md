@@ -11,13 +11,17 @@ does not fight.
 
 ```
 ORDERS — 1ST INFANTRY BATTALION
-┌──────────┬──────────┬──────────┐
-│   MOVE   │  ATTACK  │ DEFENCE  │
-└──────────┴──────────┴──────────┘
-                │           │
-        offensive task   defensive task
-        submenu (×5)     submenu (×3)
+┌──────────┬──────────┬──────────┬──────────┐
+│   MOVE   │  ATTACK  │  RECON   │ DEFENCE  │
+└──────────┴──────────┴──────────┴──────────┘
+                │          │          │
+        offensive task  recon task  defensive task
+        submenu (×5)    (×5)        (×3)
 ```
+
+Recon sits beside Defence rather than under Attack because it is not an attack:
+with fog of war on it is the only way to find out what is out there. Its five
+tasks are documented in [16-FOG-OF-WAR.md §2](16-FOG-OF-WAR.md).
 
 ---
 
@@ -141,7 +145,8 @@ authored pack usually falls back.
 | `Assets/Scripts/Data/Enums.cs` | `AttackTask`, `MarkerKind` |
 | `Assets/Scripts/Units/AttackTaskCatalog.cs` | The five tasks in numbers — the table in §2 |
 | `Assets/Scripts/Units/AttackOrderSystem.cs` | Order lifecycle: approach, wait, engage |
-| `Assets/Scripts/Units/AttackArrow.cs` | The axis-of-attack arrow on the map |
+| `Assets/Scripts/Units/AxisArrow.cs` | The axis arrow on the map — to a target unit (attack) or a ground point (recon) |
+| `Assets/Scripts/Units/ReconTaskCatalog.cs`, `ReconOrderSystem.cs` | The recon tasks — see [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md) |
 | `Assets/Scripts/Units/CombatSystem.cs` | Tick loop, `ResolveAttack`, order precedence |
 | `Assets/Scripts/Lines/DefenceOrderSystem.cs` | Defend / Hold / Guard |
 | `Assets/Scripts/UI/UnitActionBarUI.cs` | The order bar and both submenus |

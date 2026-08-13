@@ -17,7 +17,8 @@ namespace IronMeridian.Core
         const double GameSecondsPerRealSecond = 60.0;
 
         static readonly float[] Speeds = { 0f, 1f, 2f, 4f, 8f };
-        const int NormalSpeed = 1;
+        /// <summary>Index of x1 — where a fresh scenario starts and where RESET puts it back.</summary>
+        public const int NormalSpeed = 1;
 
         /// <summary>The clock the scenario starts on. Editable from the map editor's Date &amp; Time section.</summary>
         public static readonly System.DateTime DefaultStart = new System.DateTime(1990, 1, 1, 14, 0, 0);
@@ -74,7 +75,7 @@ namespace IronMeridian.Core
         public void TogglePause() =>
             SetSpeed(Paused ? Mathf.Max(1, _speedBeforePause) : 0);
 
-        void SetSpeed(int index)
+        public void SetSpeed(int index)
         {
             if (index == SpeedIndex) return;
             if (SpeedIndex > 0) _speedBeforePause = SpeedIndex;

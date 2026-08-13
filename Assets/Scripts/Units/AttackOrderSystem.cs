@@ -68,7 +68,7 @@ namespace IronMeridian.Units
             public UnitActor attacker, target;
             public AttackTaskDef def;
             public Phase phase;
-            public AttackArrow arrow;
+            public AxisArrow arrow;
             public VfxInstance openingVfx;
             public bool openingSpent;
             public float engageRangeKm;
@@ -142,7 +142,7 @@ namespace IronMeridian.Units
                 engageRangeKm = Mathf.Max(0.05f, attacker.Def.weaponRangeKm * def.engageRangeFraction)
             };
 
-            order.arrow = AttackArrow.Create(_geo, attacker, target, def.arrowTint);
+            order.arrow = AxisArrow.Create(_geo, attacker, target, def.arrowTint);
             _orders.Add(order);
 
             double km = Separation(order);

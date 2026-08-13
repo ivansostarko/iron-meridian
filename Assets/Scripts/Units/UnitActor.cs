@@ -308,14 +308,42 @@ namespace IronMeridian.Units
             if (_arrow != null) Destroy(_arrow.gameObject);
         }
 
+        /// <summary>
+        /// True while fog of war is keeping this formation off the map. The unit
+        /// is still there and still fighting — only its graphics are gone, which
+        /// is the whole point: the player has lost sight of it, not the game.
+        /// See <see cref="FogOfWarSystem"/>.
+        /// </summary>
+        public bool HiddenByFog { get; private set; }
+
+        /// <summary>
+        /// Shows or hides everything this unit draws. Deactivating the billboard
+        /// takes the icon's collider with it, so a hidden formation cannot be
+        /// clicked or hovered either — being invisible but still selectable
+        /// would leak exactly the position the fog is meant to withhold.
+        /// </summary>
+        public void SetHiddenByFog(bool hidden)
+        {
+            if (HiddenByFog == hidden) return;
+            HiddenByFog = hidden;
+
+            if (_billboard != null) _billboard.gameObject.SetActive(!hidden);
+            if (_ring != null) _ring.gameObject.SetActive(!hidden && _selected);
+            if (_arrow != null) _arrow.SetVisible(!hidden && _selected);
+
+            // A burning formation would otherwise give itself away through the
+            // fire attached to it.
+            RefreshBurning();
+        }
+
         public void SetSelected(bool sel)
         {
             _selected = sel;
-            if (_ring != null) _ring.gameObject.SetActive(sel);
+            if (_ring != null) _ring.gameObject.SetActive(sel && !HiddenByFog);
             // Facing is shown for any selected unit — in the scenario editor as
             // much as in battle, because knowing which way a counter points is
             // what the editor is for.
-            if (_arrow != null) _arrow.SetVisible(sel);
+            if (_arrow != null) _arrow.SetVisible(sel && !HiddenByFog);
         }
 
         /// <summary>
@@ -403,7 +431,7 @@ namespace IronMeridian.Units
         /// </summary>
         void RefreshBurning()
         {
-            bool shouldBurn = IsAlive && State.strength <= GameConfig.VfxBurningStrength;
+            bool shouldBurn = IsAlive && !HiddenByFog && State.strength <= GameConfig.VfxBurningStrength;
 
             if (shouldBurn && _burning == null)
             {

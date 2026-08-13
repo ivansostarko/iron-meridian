@@ -213,13 +213,28 @@ namespace IronMeridian.UI
             }
         }
 
-        public static ScrollRect CreateScrollView(Transform parent, out RectTransform content)
+        /// <summary>Width of the vertical scrollbar <see cref="CreateScrollView"/> can add.</summary>
+        public const float ScrollbarWidth = 10f;
+
+        /// <summary>
+        /// Vertical scroll view. Pass <paramref name="withScrollbar"/> for a
+        /// visible bar down the right edge.
+        ///
+        /// Worth having wherever the content can carry its own drag handlers:
+        /// a card that starts a drag-to-deploy swallows the drag, so the list it
+        /// sits in cannot be dragged to scroll, and the wheel becomes the only
+        /// way to move it — which is invisible to anyone who does not try it.
+        /// The bar is both the affordance and the fallback.
+        /// </summary>
+        public static ScrollRect CreateScrollView(Transform parent, out RectTransform content,
+            bool withScrollbar = false)
         {
             var root = CreatePanel(parent, "ScrollView", new Color(0, 0, 0, 0.25f));
             var scroll = root.gameObject.AddComponent<ScrollRect>();
 
             var viewport = CreatePanel(root, "Viewport", new Color(0, 0, 0, 0.01f));
             Stretch(viewport);
+            if (withScrollbar) viewport.offsetMax = new Vector2(-ScrollbarWidth, 0);
             viewport.gameObject.AddComponent<Mask>().showMaskGraphic = false;
 
             content = CreateGroup(viewport, "Content");
@@ -240,7 +255,38 @@ namespace IronMeridian.UI
             scroll.viewport = viewport;
             scroll.horizontal = false;
             scroll.scrollSensitivity = 30;
+            if (withScrollbar) scroll.verticalScrollbar = CreateVerticalScrollbar(root);
             return scroll;
+        }
+
+        /// <summary>Thin vertical scrollbar pinned to the right edge of a scroll view.</summary>
+        static Scrollbar CreateVerticalScrollbar(RectTransform root)
+        {
+            var track = CreatePanel(root, "Scrollbar", new Color(1f, 1f, 1f, 0.05f));
+            track.anchorMin = new Vector2(1, 0);
+            track.anchorMax = new Vector2(1, 1);
+            track.pivot = new Vector2(1, 0.5f);
+            track.sizeDelta = new Vector2(ScrollbarWidth, 0);
+            track.anchoredPosition = Vector2.zero;
+
+            var bar = track.gameObject.AddComponent<Scrollbar>();
+            bar.direction = Scrollbar.Direction.BottomToTop;
+
+            var slidingArea = CreateGroup(track, "SlidingArea");
+            Stretch(slidingArea);
+            slidingArea.offsetMin = new Vector2(2, 2);
+            slidingArea.offsetMax = new Vector2(-2, -2);
+
+            var handle = CreatePanel(slidingArea, "Handle", UiTheme.BorderStrong);
+            handle.sizeDelta = Vector2.zero;
+
+            bar.handleRect = handle;
+            bar.targetGraphic = handle.GetComponent<Image>();
+
+            var colors = bar.colors;
+            colors.highlightedColor = new Color(1.4f, 1.4f, 1.4f, 1f);
+            bar.colors = colors;
+            return bar;
         }
 
         public static InputField CreateInputField(Transform parent, string placeholder, int fontSize = 20)

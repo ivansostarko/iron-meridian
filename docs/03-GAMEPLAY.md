@@ -27,7 +27,7 @@ The map opens over **Lyon, France** on real Cesium 3D terrain with the default s
 ### Teams & affiliations
 
 - **User Team = Blue** (APP-6 blue rectangles), **Enemy Team = Red** (red diamonds).
-- Affiliations: **Friendly, Hostile, Neutral, Unknown** — selectable in the palette; stored per unit and shown in the info panel.
+- Affiliations: **Friendly, Hostile, Neutral, Unknown** — stored per unit and shown in the info panel. New units take theirs from the team tab they were dragged from; there is no separate picker.
 
 ### The left rail and the section panel
 
@@ -38,8 +38,8 @@ The editor's left chrome is in two pieces:
 
 | Nav row | What the panel shows |
 |---|---|
-| **GENERAL** | Tactical graphics — generate / clear sectors, auto-update |
-| **UNITS** | Team, affiliation, echelon, search, and the AVAILABLE / DEPLOYED lists |
+| **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — and **fog of war** |
+| **UNITS** | Team, echelon, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
 | **MAP** | Tile style, 2D/3D, layers, unit-label size, boundary options |
@@ -51,9 +51,13 @@ Click a row to open it; click the **same** row again, or the **✕** in the pane
 
 Open **UNITS** in the left rail — the panel lists all 37 unit types with their icons:
 
-1. Pick the team tab (**FRIENDLY** / **ENEMY**).
-2. Choose **Affiliation** and **Echelon** (Team … Army). Echelon scales manpower and combat power.
+1. Pick the team tab (**FRIENDLY** / **ENEMY**). Affiliation follows from it — friendly units are Friendly, enemy units Hostile — so there is no separate picker to contradict the tab.
+2. Choose the **Echelon** (Team ... Army). Echelon scales manpower and combat power.
 3. **Drag** a unit card onto the terrain — it deploys where you drop it.
+
+The cards carry drag handlers, which means dragging one *deploys* rather than
+scrolls the list. Use the wheel or the scrollbar on the right of the list to
+reach the units past the fold.
 
 ### Commanding units (mouse)
 
@@ -105,8 +109,8 @@ where it actually is, handing the map back to the editor.
 ### Orders (battle mode)
 
 Select a unit while a battle is running and the bottom **order bar** appears:
-**MOVE**, **ATTACK**, **DEFENCE**. Attack and Defence each open a submenu of
-tasks. Full reference: [15-COMBAT-ORDERS.md](15-COMBAT-ORDERS.md).
+**MOVE**, **ATTACK**, **RECON**, **DEFENCE**. The last three each open a submenu
+of tasks. Full reference: [15-COMBAT-ORDERS.md](15-COMBAT-ORDERS.md).
 
 #### Attack — five offensive tasks
 
@@ -132,6 +136,15 @@ A unit acting on an order fires only at what it was told to; unordered units kee
 engaging anything in reach automatically. Orders are cleared when the battle
 stops and are not saved.
 
+#### Recon — five reconnaissance tasks
+
+Pick a task, then **click a point on the ground** (not a unit — recon exists to
+look at ground you cannot see). Each task grants a detection footprint the fog of
+war reads: **RECON AREA** searches the objective, **RECON ROUTE** scans the whole
+way there, **OBSERVE** holds position and sees furthest, **UAV RECON** flies a
+sensor out and back, **COMBAT PATROL** shuttles between start and objective ready
+to fight. Full table: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
+
 #### Defence — three defensive tasks
 
 **DEFENCE** opens a submenu of the three defensive tasks:
@@ -151,6 +164,33 @@ stops and are not saved.
 - Re-tasking a unit replaces its graphics; it never stacks two defences.
 - Everything produced is ordinary map data (`defence-*` lines and markers), so a
   defence survives save/load — see [05-MAP-SAVES.md](05-MAP-SAVES.md).
+
+### Fog of war
+
+**Left rail → GENERAL → FOG OF WAR.** With it on, enemy formations are drawn only
+where a friendly unit's view range or a recon sensor reaches them. Lose sight of
+one and the map keeps the **contact**: a ring on the last known position,
+captioned with the scenario time of the sighting and growing to cover where that
+formation could have got to since.
+
+Battle mode only — the editor shows both sides so you can lay them out. Details
+and known leaks: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
+
+### On-map controls
+
+- **Bottom-left cluster** — zoom, face north, 2D/3D, frame the order of battle, and an altitude readout. Every button has a hover caption naming it and its keyboard equivalent.
+- **Bottom-right compass** — the rose turns so its N tick sits where north actually is; the fixed index at the top of the bezel reads against it, and that bearing is printed underneath. Click it to face north. It steps aside when the unit info panel opens.
+- Both are opt-in from **MAP → LAYERS**.
+
+### RESET
+
+**RESET** in the top bar reloads the shipped scenario and puts every editor
+setting back to its default — view mode, tile style, buildings, label size, fog
+of war, on-map controls, clock speed. It asks first: units you have deployed,
+lines you have drawn, defensive positions and orders in progress are all
+discarded, and `Ctrl+Z` tracks individual edits rather than wholesale ones, so
+there is no way back. It reloads the **shipped** map, not your last save — a
+reset that restores your own save would not be a reset.
 
 ### Staying on the ground
 

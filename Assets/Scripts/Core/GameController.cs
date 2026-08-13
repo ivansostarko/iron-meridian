@@ -32,6 +32,8 @@ namespace IronMeridian.Core
         DefenceOrderSystem _defence;
         CombatSystem _combat;
         AttackOrderSystem _attacks;
+        ReconOrderSystem _recon;
+        FogOfWarSystem _fog;
         VfxSystem _vfx;
         WeatherSystem _weather;
         EffectPlacementTool _effects;
@@ -44,6 +46,7 @@ namespace IronMeridian.Core
         UnitActionBarUI _actionBar;
         PauseMenuUI _pauseMenu;
         LoadingScreenUI _loading;
+        UnityEngine.Canvas _canvas;
         MapSaveData _save;
 
         /// <summary>True while the loading overlay is still covering the map.</summary>
@@ -122,6 +125,15 @@ namespace IronMeridian.Core
             _clock = gameObject.AddComponent<GameClock>();
             _combat.RunningChanged += _clock.SetRunning;
 
+            // Limited intelligence, and the recon tasks that are the only way to
+            // see past a unit's own eyes once it is on. Fog needs the clock —
+            // a contact is stamped with the scenario time it was made.
+            _fog = gameObject.AddComponent<FogOfWarSystem>();
+            _fog.Init(_map.Georeference, _clock);
+
+            _recon = gameObject.AddComponent<ReconOrderSystem>();
+            _recon.Init(_combat, _fog, _map.Georeference);
+
             // Sky, fog and precipitation. Ambience is battle-mode only, so the
             // system needs to know when a battle starts.
             _weather = gameObject.AddComponent<WeatherSystem>();
@@ -136,12 +148,14 @@ namespace IronMeridian.Core
 
             _selection = gameObject.AddComponent<SelectionManager>();
             _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
-                                            BoundaryOptionsDialog.IsOpen || _effects.IsArmed ||
+                                            BoundaryOptionsDialog.IsOpen || ConfirmDialog.IsOpen ||
+                                            _effects.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
             // --- UI ---
             var canvas = UIFactory.CreateCanvas("GameCanvas");
+            _canvas = canvas;
             _selection.Init(_map, _rig.Cam, canvas);
 
             BuildStep("map controls", () =>
@@ -157,6 +171,11 @@ namespace IronMeridian.Core
 
             _defence.Flash = _hud.Flash;
             _attacks.Flash = _hud.Flash;
+            _recon.Flash = _hud.Flash;
+            _hud.ResetRequested = ConfirmReset;
+            // A formation the fog has just taken off the map cannot stay
+            // selected — the info panel would keep reporting it.
+            _fog.UnitHidden = u => { if (_selection.Selected == u) _selection.Select(null); };
             _map.LoadError += _hud.Flash;
             // A tileset failure means the terrain will never finish: drop the
             // overlay at once so the player sees the HUD's error rather than a
@@ -184,6 +203,13 @@ namespace IronMeridian.Core
                 {
                     _sectors.AutoUpdate = on;
                     if (on) GenerateSectors();
+                };
+                _palette.FogOfWarChanged = on =>
+                {
+                    _fog.SetEnabled(on);
+                    _hud.Flash(on
+                        ? "Fog of war armed — enemy formations show only where you can see them, in battle."
+                        : "Fog of war off — the whole order of battle is visible.");
                 };
 
                 // Bottom tool strip.
@@ -264,6 +290,13 @@ namespace IronMeridian.Core
                 _selection.AttackTargetPicked = (target, task) =>
                     _attacks.Order(_selection.Selected, target, task);
                 _selection.AttackOrderResolved = () => _actionBar.ClearAttackArmed();
+
+                // Recon: same shape, but the map click is a point on the ground
+                // rather than an enemy formation.
+                _actionBar.ReconRequested = task => _selection.ArmReconOrder(task);
+                _selection.ReconPointPicked = (lat, lon, task) =>
+                    _recon.Order(_selection.Selected, lat, lon, task);
+                _selection.ReconOrderResolved = () => _actionBar.ClearReconArmed();
                 // The order bar belongs to game mode; leaving battle puts the
                 // editor back in charge.
                 _combat.RunningChanged += _ => RefreshActionBar();
@@ -271,8 +304,14 @@ namespace IronMeridian.Core
 
             _selection.SelectionChanged = sel =>
             {
-                if (_infoPanel != null) _infoPanel.Show(sel.Count == 1 ? sel[0] : null);
+                bool infoPanelOpen = sel.Count == 1 && sel[0] != null;
+                if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
                 if (_groupPanel != null) _groupPanel.SetSelection(sel);
+                // The compass lives in the bottom-right corner and steps aside
+                // for the info panel rather than being parked inboard of a panel
+                // that is usually not there.
+                if (_mapControls != null)
+                    _mapControls.SetRightInset(infoPanelOpen ? UiTheme.RightPanelWidth : 0f);
                 UpdateRangeRings(sel);
                 RefreshActionBar();
             };
@@ -286,7 +325,8 @@ namespace IronMeridian.Core
                 _pauseMenu.LoadRequested = LoadMap;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
                 _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
-                                          BoundaryOptionsDialog.IsOpen || _pauseMenu.IsOpen;
+                                          BoundaryOptionsDialog.IsOpen || ConfirmDialog.IsOpen ||
+                                          _pauseMenu.IsOpen;
             });
 
             // --- content ---
@@ -518,6 +558,74 @@ namespace IronMeridian.Core
             _save.autoDayNight = _weather.AutoDayNight;
             string path = SaveSystem.SaveMap(_save, mapFileName);
             _hud.Flash($"Saved -> {path}");
+        }
+
+        // ------------------------------------------------------- reset
+
+        /// <summary>
+        /// RESET in the top bar. Asks first: this throws away every unit, line,
+        /// marker and order the player has placed, and Ctrl+Z tracks individual
+        /// edits rather than wholesale operations, so there is no way back.
+        /// </summary>
+        void ConfirmReset()
+        {
+            ConfirmDialog.Open(_canvas, "RESET MAP EDITOR",
+                "Reloads the scenario from disk and puts every editor setting back to its default.\n\n" +
+                "Units you have deployed, lines you have drawn, defensive positions and any orders in " +
+                "progress are discarded. This cannot be undone.",
+                "RESET EVERYTHING", ResetEditor);
+        }
+
+        /// <summary>
+        /// Back to the state the editor opens in: the scenario as it is on disk,
+        /// and every setting the player can change from the panels at its
+        /// default. Deliberately reloads the *shipped* map rather than the last
+        /// save, because "reset" that restores your own last save is not a reset.
+        /// </summary>
+        void ResetEditor()
+        {
+            // Stop the world first: a running battle, orders in flight and a
+            // half-finished line would all otherwise act on units being deleted.
+            _combat.SetRunning(false);
+            _attacks.CancelAll();
+            _recon.CancelAll();
+            _drawTool.CancelDrawing();
+            _effects.Cancel();
+            _selection.Select(null);
+
+            // Editor settings.
+            _fog.SetEnabled(false);
+            _sectors.AutoUpdate = false;
+            _sectors.ClearAll();
+            UnitActor.SetLabelScale(1f);
+            _clock.SetSpeed(GameClock.NormalSpeed);
+            _mapControls.SetControlsVisible(true);
+            _mapControls.SetCompassVisible(false);
+
+            var shipped = SaveSystem.LoadShippedMap(mapFileName);
+            if (shipped == null)
+            {
+                _hud.Flash("Reset failed — the shipped scenario could not be read.");
+                return;
+            }
+
+            _save = shipped;
+            foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
+                if (a != null) Destroy(a.gameObject);
+            UnitRegistry.Clear();
+            if (_vfx != null) _vfx.StopAll();
+            EditHistory.Clear();
+
+            ApplySave(_save);
+            _map.SetViewMode(_save.viewMode == "Mode2D" ? ViewMode.Mode2D : ViewMode.Mode3D);
+            _map.SetMapStyle(System.Enum.TryParse(_save.mapStyle, out MapStyle style) ? style : MapStyle.Satellite);
+            _map.SetBuildingsVisible(_save.showBuildings);
+            _rig.ResetNorth();
+            _rig.ResetTilt();
+            _rig.JumpTo(GeoUtils.GeoToUnity(_map.Georeference,
+                _save.centerLatitude, _save.centerLongitude, 300));
+
+            _hud.Flash($"Editor reset — '{_save.mapName}' reloaded from the shipped scenario.");
         }
 
         void LoadMap()

@@ -36,6 +36,7 @@ Unity 6 (6000.0 LTS) real-terrain operational wargame using **Cesium for Unity 1
 | Add a screen background | Image under `Assets/Resources/Backgrounds/` → row in `BackgroundCatalog.cs` → `UIFactory.CreateScreenBackground` → **update `docs/11-GAME-MENU.md`** |
 | Add a loader | `LoadingScreenUI.Show(...)` + `Track(progress, isComplete)` → block the screen's input guards → **update `docs/12-LOADERS.md`** |
 | Add an offensive task | `AttackTask` value in `Enums.cs` → row in `AttackTaskCatalog.cs` → **update `docs/15-COMBAT-ORDERS.md`** (the submenu and the order loop are both driven by the catalogue) |
+| Add a recon task | `ReconTask` value in `Enums.cs` → row in `ReconTaskCatalog.cs` → **update `docs/16-FOG-OF-WAR.md`** |
 
 ## Verification
 
@@ -43,4 +44,4 @@ There is no test suite yet. After code changes: open in Unity 6, ensure console 
 
 ## Key docs
 
-`docs/01-GETTING-STARTED.md` (setup) · `docs/02-CESIUM.md` (token!) · `docs/03-GAMEPLAY.md` · `docs/04-UNITS.md` · `docs/05-MAP-SAVES.md` · `docs/07-ARCHITECTURE.md` (script map — read this first) · `docs/08-PARTICLE-SYSTEMS.md` (fire/smoke/explosions — effect register) · `docs/09-3D-MODELS.md` (model register) · `docs/10-AUDIO.md` (audio register) · `docs/11-GAME-MENU.md` (background image register) · `docs/12-LOADERS.md` (loader register) · `docs/13-DATE-AND-TIME.md` (operational clock) · `docs/14-WEATHER.md` (sky + weather) · `docs/15-COMBAT-ORDERS.md` (attack + defence task register).
+`docs/01-GETTING-STARTED.md` (setup) · `docs/02-CESIUM.md` (token!) · `docs/03-GAMEPLAY.md` · `docs/04-UNITS.md` · `docs/05-MAP-SAVES.md` · `docs/07-ARCHITECTURE.md` (script map — read this first) · `docs/08-PARTICLE-SYSTEMS.md` (fire/smoke/explosions — effect register) · `docs/09-3D-MODELS.md` (model register) · `docs/10-AUDIO.md` (audio register) · `docs/11-GAME-MENU.md` (background image register) · `docs/12-LOADERS.md` (loader register) · `docs/13-DATE-AND-TIME.md` (operational clock) · `docs/14-WEATHER.md` (sky + weather) · `docs/15-COMBAT-ORDERS.md` (attack + defence task register) · `docs/16-FOG-OF-WAR.md` (limited intelligence + recon tasks).

@@ -85,6 +85,53 @@ namespace IronMeridian.Units
             AttackOrderResolved?.Invoke();
         }
 
+        // ------------------------------------------------------- recon targeting
+
+        ReconTask? _reconArmed;
+
+        /// <summary>Raised with the chosen ground point once an armed recon task is placed.</summary>
+        public System.Action<double, double, ReconTask> ReconPointPicked;
+        /// <summary>Raised when an armed recon task is placed or cancelled.</summary>
+        public System.Action ReconOrderResolved;
+
+        /// <summary>
+        /// Arms a reconnaissance task: the next click on the map is the
+        /// objective. Unlike an attack this wants a *point*, not a unit — the
+        /// whole purpose is to look at ground you cannot currently see, which by
+        /// definition has nothing clickable on it.
+        /// </summary>
+        public void ArmReconOrder(ReconTask task)
+        {
+            if (_selection.Count == 0) return;
+            _reconArmed = task;
+        }
+
+        void ResolveReconOrder(string message)
+        {
+            _reconArmed = null;
+            if (message != null) Flash?.Invoke(message);
+            ReconOrderResolved?.Invoke();
+        }
+
+        void HandleReconPoint(ReconTask task)
+        {
+            var unit = Selected;
+            if (unit == null || !unit.IsAlive)
+            {
+                ResolveReconOrder("Nothing selected to send.");
+                return;
+            }
+            if (!_map.RaycastGround(_cam, Input.mousePosition, out Vector3 world))
+            {
+                Flash?.Invoke("Terrain not loaded there yet — try again in a moment.");
+                return;      // stay armed: the tiles may be a second away
+            }
+
+            GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out _);
+            ReconPointPicked?.Invoke(lat, lon, task);
+            ResolveReconOrder(null);
+        }
+
         /// <summary>
         /// Turns a click into a target. Held in one place because every failure
         /// here needs a reason on screen — an armed order that silently does
@@ -158,6 +205,18 @@ namespace IronMeridian.Units
                 if (Input.GetMouseButtonDown(1)) { ResolveAttackOrder("Attack order cancelled."); return; }
                 if (!blocked && Input.GetMouseButtonDown(0)) HandleAttackTarget(_attackArmed.Value);
                 UpdateHover(blocked);
+                return;
+            }
+
+            // An armed recon task turns the next click into an objective on the
+            // ground. Also kept armed through a miss — terrain that has not
+            // streamed in yet is a reason to try again, not to lose the order.
+            if (_reconArmed.HasValue)
+            {
+                if (BattleRunning != null && !BattleRunning()) { ResolveReconOrder(null); return; }
+                if (Input.GetKeyDown(KeyCode.Escape)) { ResolveReconOrder("Recon task cancelled."); return; }
+                if (Input.GetMouseButtonDown(1)) { ResolveReconOrder("Recon task cancelled."); return; }
+                if (!blocked && Input.GetMouseButtonDown(0)) HandleReconPoint(_reconArmed.Value);
                 return;
             }
             // Bare C only — Ctrl+C is copy, and would otherwise drop straight
@@ -466,10 +525,11 @@ namespace IronMeridian.Units
 
         void ApplySelection(List<UnitActor> newSelection)
         {
-            // An armed attack belongs to the unit that was selected when it was
+            // An armed order belongs to the unit that was selected when it was
             // armed. Changing the selection from a panel while a target is being
-            // picked would otherwise fire the order from a different formation.
+            // picked would otherwise issue the order from a different formation.
             if (_attackArmed.HasValue) ResolveAttackOrder(null);
+            if (_reconArmed.HasValue) ResolveReconOrder(null);
 
             foreach (var u in _selection) if (u != null && !newSelection.Contains(u)) u.SetSelected(false);
             foreach (var u in newSelection) if (u != null) u.SetSelected(true);

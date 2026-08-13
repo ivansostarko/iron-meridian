@@ -81,8 +81,13 @@ namespace IronMeridian.Units
             _caption.text = "";
         }
 
-        /// <summary>Show (or reposition) the ring around a geodetic point at the given radius.</summary>
-        public void Show(double lat, double lon, float radiusKm)
+        /// <summary>
+        /// Show (or reposition) the ring around a geodetic point at the given
+        /// radius. <paramref name="caption"/> overrides the default
+        /// "&lt;title&gt; 4.5 km" readout — fog-of-war contacts need to state a
+        /// time and a designation, not just a distance.
+        /// </summary>
+        public void Show(double lat, double lon, float radiusKm, string caption = null)
         {
             if (radiusKm <= 0f) { Hide(); return; }
             bool wasHidden = !_visible;
@@ -90,7 +95,7 @@ namespace IronMeridian.Units
             _visible = true;
             if (wasHidden) _revealT = 0f;      // replay the sweep for a new selection
 
-            _caption.text = $"{_title} {radiusKm:0.#} km";
+            _caption.text = caption ?? $"{_title} {radiusKm:0.#} km";
             gameObject.SetActive(true);
             Rebuild();
         }

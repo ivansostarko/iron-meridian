@@ -8,16 +8,22 @@ namespace IronMeridian.UI
 {
     /// <summary>
     /// Bottom order bar shown while a battle is running and a unit is selected:
-    /// Move, Attack, Defence.
+    /// Move, Attack, Recon, Defence.
     ///
     /// Move arms a pending order and the next click on the map becomes the
-    /// destination. Attack and Defence each open a submenu of tasks, because
-    /// neither is one order: closing to destroy, assaulting an objective,
+    /// destination. The other three each open a submenu of tasks, because none
+    /// of them is one order: closing to destroy, assaulting an objective,
     /// pinning a formation, lying in wait and striking back are five different
-    /// jobs, and so are preparing a position, retaining ground and screening
-    /// forward. The submenus are built from
-    /// <see cref="AttackTaskCatalog"/> and a matching list so the captions and
-    /// the behaviour cannot drift apart.
+    /// jobs; so are searching an area, clearing a route, watching, flying a
+    /// sensor and patrolling for a fight; and so are preparing a position,
+    /// retaining ground and screening forward. The attack and recon menus are
+    /// built from <see cref="AttackTaskCatalog"/> and
+    /// <see cref="ReconTaskCatalog"/> so their captions and their behaviour
+    /// cannot drift apart.
+    ///
+    /// Recon sits beside Defence rather than under Attack because it is not an
+    /// attack: with fog of war on it is the only way to find out what is out
+    /// there, which makes it a peer of the other two rather than a mode of one.
     ///
     /// Only one submenu is open at a time, and any of them closes when the
     /// selection changes — a menu that silently re-targeted whichever unit
@@ -28,23 +34,29 @@ namespace IronMeridian.UI
         public System.Action MoveRequested;
         /// <summary>Raised with the offensive task the player picked; the map click comes next.</summary>
         public System.Action<AttackTask> AttackRequested;
+        /// <summary>Raised with the reconnaissance task the player picked; the map click comes next.</summary>
+        public System.Action<ReconTask> ReconRequested;
         public System.Action DefendRequested;
         public System.Action HoldRequested;
         public System.Action GuardRequested;
         public System.Action<string> Flash;
 
         RectTransform _panel;
-        RectTransform _attackMenu, _defenceMenu;
+        RectTransform _attackMenu, _reconMenu, _defenceMenu;
         Text _title;
-        Button _moveBtn, _attackBtn, _defenceBtn;
+        Button _moveBtn, _attackBtn, _reconBtn, _defenceBtn;
         bool _moveArmed;
         bool _attackArmed;
+        bool _reconArmed;
 
         static readonly Color Idle = new Color(0.18f, 0.22f, 0.29f);
         static readonly Color Armed = new Color(0.85f, 0.65f, 0.13f);
 
         /// <summary>Order-button geometry; the submenus line themselves up from the same numbers.</summary>
-        const float ButtonWidth = 130f, ButtonHeight = 62f, ButtonGap = 10f;
+        const float ButtonWidth = 122f, ButtonHeight = 62f, ButtonGap = 10f;
+        /// <summary>How many order buttons the bar carries. The bar's width follows from it.</summary>
+        const int ButtonCount = 4;
+        const float BarWidth = ButtonWidth * ButtonCount + ButtonGap * (ButtonCount + 1);
         /// <summary>Submenu metrics. Wider than a button so five task captions fit.</summary>
         const float MenuWidth = ButtonWidth + 46f;
         const float MenuRowHeight = 34f, MenuRowGap = 4f, MenuHeaderHeight = 22f, MenuPad = 6f;
@@ -66,27 +78,32 @@ namespace IronMeridian.UI
             _panel.anchorMin = new Vector2(0.5f, 0f);
             _panel.anchorMax = new Vector2(0.5f, 0f);
             _panel.pivot = new Vector2(0.5f, 0f);
-            _panel.sizeDelta = new Vector2(430, 104);
+            _panel.sizeDelta = new Vector2(BarWidth, 104);
             _panel.anchoredPosition = new Vector2(0, 44);   // clear of the help line
 
             _title = UIFactory.CreateText(_panel, "", 13, UiTheme.Accent,
                 TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Place(_title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -6), new Vector2(400, 20));
+            UIFactory.Place(_title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -6),
+                new Vector2(BarWidth - 30f, 20));
 
             _moveBtn = ActionButton("MOVE", 0, ProceduralTextures.MoveIcon(UiTheme.Text), OnMove);
             _attackBtn = ActionButton("ATTACK", 1, ProceduralTextures.AttackIcon(UiTheme.Text),
                 () => ToggleMenu(_attackMenu));
-            _defenceBtn = ActionButton("DEFENCE", 2, ProceduralTextures.ShieldIcon(UiTheme.Text),
+            _reconBtn = ActionButton("RECON", 2, ProceduralTextures.ReconIcon(UiTheme.Text),
+                () => ToggleMenu(_reconMenu));
+            _defenceBtn = ActionButton("DEFENCE", 3, ProceduralTextures.ShieldIcon(UiTheme.Text),
                 () => ToggleMenu(_defenceMenu));
 
             BuildAttackMenu();
+            BuildReconMenu();
             BuildDefenceMenu();
             Hide();
         }
 
         /// <summary>Centre-relative x of order button <paramref name="index"/>.</summary>
         static float ButtonX(int index) =>
-            -(ButtonWidth * 3f + ButtonGap * 2f) / 2f + ButtonWidth / 2f + index * (ButtonWidth + ButtonGap);
+            -(ButtonWidth * ButtonCount + ButtonGap * (ButtonCount - 1)) / 2f
+            + ButtonWidth / 2f + index * (ButtonWidth + ButtonGap);
 
         Button ActionButton(string label, int index, Texture2D icon, UnityEngine.Events.UnityAction onClick)
         {
@@ -132,6 +149,18 @@ namespace IronMeridian.UI
             _attackMenu = BuildTaskMenu("AttackMenu", "OFFENSIVE TASK", 1, rows);
         }
 
+        /// <summary>The five reconnaissance tasks, read straight off their catalogue.</summary>
+        void BuildReconMenu()
+        {
+            var rows = new List<TaskRow>();
+            foreach (var def in ReconTaskCatalog.All)
+            {
+                var task = def.task;      // captured per row, not per loop variable
+                rows.Add(new TaskRow(def.name, def.detail, () => Choose(() => OnRecon(task))));
+            }
+            _reconMenu = BuildTaskMenu("ReconMenu", "RECONNAISSANCE", 2, rows);
+        }
+
         void BuildDefenceMenu()
         {
             var rows = new List<TaskRow>
@@ -140,7 +169,7 @@ namespace IronMeridian.UI
                 new TaskRow("HOLD",   "Retain this ground", () => Choose(HoldRequested)),
                 new TaskRow("GUARD",  "Screen forward",     () => Choose(GuardRequested))
             };
-            _defenceMenu = BuildTaskMenu("DefenceMenu", "DEFENSIVE TASK", 2, rows);
+            _defenceMenu = BuildTaskMenu("DefenceMenu", "DEFENSIVE TASK", 3, rows);
         }
 
         /// <summary>
@@ -209,6 +238,7 @@ namespace IronMeridian.UI
         void CloseMenus()
         {
             SetMenu(_attackMenu, false);
+            SetMenu(_reconMenu, false);
             SetMenu(_defenceMenu, false);
         }
 
@@ -217,13 +247,16 @@ namespace IronMeridian.UI
             if (menu == null) return;
             menu.gameObject.SetActive(open);
             var btn = MenuButton(menu);
-            // The attack button also latches while a target is being picked, so
-            // closing its menu must not clear that.
-            if (btn != null && !(btn == _attackBtn && _attackArmed))
-                btn.image.color = open ? Armed : Idle;
+            if (btn == null) return;
+            // Attack and Recon also latch while their map click is pending, so
+            // closing the menu must not clear that.
+            bool pending = (btn == _attackBtn && _attackArmed) || (btn == _reconBtn && _reconArmed);
+            if (!pending) btn.image.color = open ? Armed : Idle;
         }
 
-        Button MenuButton(RectTransform menu) => menu == _attackMenu ? _attackBtn : _defenceBtn;
+        Button MenuButton(RectTransform menu) =>
+            menu == _attackMenu ? _attackBtn :
+            menu == _reconMenu ? _reconBtn : _defenceBtn;
 
         void Choose(System.Action order)
         {
@@ -237,6 +270,7 @@ namespace IronMeridian.UI
         {
             CloseMenus();
             ClearAttackArmed();
+            ClearReconArmed();
             _moveArmed = true;
             _moveBtn.image.color = Armed;
             MoveRequested?.Invoke();
@@ -246,12 +280,33 @@ namespace IronMeridian.UI
         void OnAttack(AttackTask task)
         {
             ClearMoveArmed();
+            ClearReconArmed();
             _attackArmed = true;
             if (_attackBtn != null) _attackBtn.image.color = Armed;
             AttackRequested?.Invoke(task);
 
             var def = AttackTaskCatalog.Get(task);
             Flash?.Invoke($"{def.name} — click the enemy formation to target (Esc or RMB cancels).");
+        }
+
+        void OnRecon(ReconTask task)
+        {
+            ClearMoveArmed();
+            ClearAttackArmed();
+            _reconArmed = true;
+            if (_reconBtn != null) _reconBtn.image.color = Armed;
+            ReconRequested?.Invoke(task);
+
+            var def = ReconTaskCatalog.Get(task);
+            Flash?.Invoke($"{def.name} — click the ground to send the recon (Esc or RMB cancels).");
+        }
+
+        /// <summary>Called once the pending recon objective has been picked or cancelled.</summary>
+        public void ClearReconArmed()
+        {
+            if (!_reconArmed) return;
+            _reconArmed = false;
+            if (_reconBtn != null) _reconBtn.image.color = Idle;
         }
 
         /// <summary>Called once the pending move has been placed or cancelled.</summary>
@@ -286,6 +341,7 @@ namespace IronMeridian.UI
         {
             ClearMoveArmed();
             ClearAttackArmed();
+            ClearReconArmed();
             CloseMenus();
             if (_panel != null) _panel.gameObject.SetActive(false);
         }

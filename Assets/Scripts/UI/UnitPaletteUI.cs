@@ -50,6 +50,8 @@ namespace IronMeridian.UI
         public System.Action GenerateSectorsRequested;
         public System.Action ClearSectorsRequested;
         public System.Action<bool> AutoSectorsChanged;
+        /// <summary>Fog of war armed/disarmed — see docs/16-FOG-OF-WAR.md.</summary>
+        public System.Action<bool> FogOfWarChanged;
 
         // Tool strip.
         public System.Action SelectToolRequested;
@@ -89,8 +91,22 @@ namespace IronMeridian.UI
         const float PanelWidth = UiTheme.SectionPanelWidth;
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = PanelWidth - Pad * 2f;
-        /// <summary>Text width inside a list card: card width less the icon column and right padding.</summary>
-        const float CardTextWidth = InnerWidth - 58f;
+
+        // --- unit list card metrics ---
+        /// <summary>Icon column width. Was 36 px, at which an APP-6 frame was a smudge.</summary>
+        const float CardIconSize = 44f;
+        /// <summary>Where a card's text column starts: icon inset + icon + gutter.</summary>
+        const float CardTextX = 8f + CardIconSize + 6f;
+        /// <summary>
+        /// Text width inside a list card. The card is the content width less the
+        /// layout padding, and the content is the viewport less the scrollbar,
+        /// so all three come off the panel width here.
+        /// </summary>
+        const float CardTextWidth = InnerWidth - CardTextX - UIFactory.ScrollbarWidth - 8f;
+        const float AvailableCardHeight = 58f;
+        const float DeployedCardHeight = 66f;
+        /// <summary>Y of the list's tab row, measured from the section's top edge.</summary>
+        const float ListTop = -130f;
         /// <summary>Emblem block plus the six nav rows, measured from the rail's top.</summary>
         const float HeaderHeight = 266f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
@@ -117,6 +133,9 @@ namespace IronMeridian.UI
         UnitDefinition _dragging;
         Button _autoSectorBtn;
         bool _autoSectors;
+        RectTransform _fogLamp;
+        Text _fogLabel;
+        bool _fog;
 
         readonly List<(Section section, string title, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
             new List<(Section, string, Image, Image, Text, RectTransform)>();
@@ -457,6 +476,35 @@ namespace IronMeridian.UI
                 "Boundaries run rear-to-front between adjacent formations; the FEBA follows the forward units.",
                 UiTheme.FontSmall, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -156), new Vector2(InnerWidth, 56));
+
+            // --- intelligence ---
+            SectionLabel(content, "INTELLIGENCE", -216);
+
+            _fogLamp = ToggleRow(content, "FOG OF WAR", -238, () =>
+            {
+                _fog = !_fog;
+                FogOfWarChanged?.Invoke(_fog);
+                RefreshGeneralSection();
+            }, out _fogLabel);
+
+            var fogHint = UIFactory.CreateText(content,
+                "Enemy formations are drawn only where something of yours can see them. " +
+                "Lose sight of one and the map keeps the contact: last known position, the time it was " +
+                "seen, and a ring that grows to cover where it could have got to since.\n\n" +
+                "Battle mode only — the editor shows both sides so you can lay them out. " +
+                "Use the RECON orders to see past your own units' eyes.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(fogHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -282), new Vector2(InnerWidth, 130));
+
+            RefreshGeneralSection();
+        }
+
+        /// <summary>Repaints the GENERAL section's toggles from the state their systems own.</summary>
+        void RefreshGeneralSection()
+        {
+            if (_fogLamp == null) return;
+            _fogLamp.GetComponent<Image>().color = _fog ? UiTheme.Success : UiTheme.TextFaint;
+            _fogLabel.text = _fog ? "ON" : "OFF";
         }
 
         Button GeneralButton(RectTransform content, string label, float y, UnityEngine.Events.UnityAction action)
@@ -487,20 +535,20 @@ namespace IronMeridian.UI
             _blueTab = SideButton(content, "FRIENDLY", Pad, half, () => SetTeam(Team.User), out _blueFill);
             _redTab = SideButton(content, "ENEMY", Pad + half + 6f, half, () => SetTeam(Team.Enemy), out _redFill);
 
-            // --- affiliation + echelon ---
-            var affDd = UIFactory.CreateDropdown(content,
-                new List<string> { "Friendly", "Hostile", "Neutral", "Unknown" }, 0,
-                i => _affiliation = (Affiliation)i);
-            StyleDropdown(affDd, -50);
-
+            // --- echelon ---
+            // There is no affiliation picker any more. It offered four values of
+            // which only two were ever right — the side tabs above already say
+            // whose the unit is, and SetTeam derives Friendly/Hostile from that —
+            // so it was a control whose only real use was to contradict the tab
+            // beside it. The 40 px it took goes to the list, which needed it.
             var echNames = new List<string>(System.Enum.GetNames(typeof(Echelon)));
             var echDd = UIFactory.CreateDropdown(content, echNames, (int)Echelon.Battalion,
                 i => _echelon = (Echelon)i);
-            StyleDropdown(echDd, -90);
+            StyleDropdown(echDd, -50);
 
             // --- search ---
             var searchFrame = UIFactory.CreateBorderedPanel(content, "SearchFrame", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(searchFrame, new Vector2(0f, 1f), new Vector2(Pad, -130), new Vector2(InnerWidth, 34));
+            UIFactory.Place(searchFrame, new Vector2(0f, 1f), new Vector2(Pad, -90), new Vector2(InnerWidth, 34));
 
             var glass = UIFactory.CreateImage(searchFrame, UiIcons.Search, "SearchGlyph");
             glass.color = UiTheme.TextFaint;
@@ -519,19 +567,23 @@ namespace IronMeridian.UI
             _deployedTabBtn = ListModeButton(content, "DEPLOYED", Pad + 86f, () => SetListMode(ListMode.Deployed));
 
             var badge = UIFactory.CreatePanel(content, "CountBadge", UiTheme.AccentWash);
-            UIFactory.Place(badge, new Vector2(0f, 1f), new Vector2(PanelWidth - Pad - 34, -172), new Vector2(34, 18));
+            UIFactory.Place(badge, new Vector2(0f, 1f), new Vector2(PanelWidth - Pad - 34, ListTop + 2f), new Vector2(34, 18));
             badge.GetComponent<Image>().raycastTarget = false;
             _listCount = UIFactory.CreateText(badge, "0", UiTheme.FontLabel, UiTheme.Accent,
                 TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Stretch(_listCount.rectTransform);
 
             // --- the list itself ---
-            var scroll = UIFactory.CreateScrollView(content, out _listContent);
+            // With a scrollbar: the AVAILABLE cards carry drag-to-deploy
+            // handlers, which swallow the drag before the ScrollRect sees it, so
+            // the list cannot be dragged to scroll and the wheel was the only
+            // way to reach the units past the fold.
+            var scroll = UIFactory.CreateScrollView(content, out _listContent, withScrollbar: true);
             scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
             srt.offsetMin = new Vector2(0, 2);
-            srt.offsetMax = new Vector2(0, -196);
+            srt.offsetMax = new Vector2(0, ListTop - 26f);
 
             var layout = _listContent.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 4;
@@ -565,7 +617,7 @@ namespace IronMeridian.UI
         {
             var b = UIFactory.CreateButton(content, label, action, new Color(0, 0, 0, 0),
                 UiTheme.TextDim, UiTheme.FontLabel);
-            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f), new Vector2(x, -170), new Vector2(82, 22));
+            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f), new Vector2(x, ListTop), new Vector2(82, 22));
             return b;
         }
 
@@ -638,6 +690,10 @@ namespace IronMeridian.UI
             foreach (var actor in UnitRegistry.All)
             {
                 if (actor == null || !actor.IsAlive) continue;
+                // A formation the fog has taken off the map must not still be
+                // listed here with its call sign and readiness — the list would
+                // hand back exactly what the fog is withholding.
+                if (actor.HiddenByFog) continue;
                 index++;
                 if (!Matches(actor.Def.name, actor.Def.id, actor.State.customName)) continue;
                 CreateDeployedCard(actor, index);
@@ -669,13 +725,13 @@ namespace IronMeridian.UI
         void CreateAvailableCard(UnitDefinition def, string folder)
         {
             var card = UIFactory.CreateBorderedPanel(_listContent, "Card_" + def.id, UiTheme.Surface, UiTheme.Border);
-            card.sizeDelta = new Vector2(0, 50);
+            card.sizeDelta = new Vector2(0, AvailableCardHeight);
 
             var sprite = CardIcon(card, folder, def.id);
 
             UIFactory.CreateStackedLabels(card, def.name,
                 $"ATK {def.attack:0}  ·  DEF {def.defence:0}  ·  {def.speedKmh:0} km/h",
-                50f, CardTextWidth, topInset: 8f, titleSize: UiTheme.FontBody);
+                CardTextX, CardTextWidth, topInset: 12f, titleSize: UiTheme.FontBody);
 
             var trigger = card.gameObject.AddComponent<EventTrigger>();
             AddEvent(trigger, EventTriggerType.BeginDrag, e => BeginDrag(def, sprite));
@@ -689,7 +745,7 @@ namespace IronMeridian.UI
             var s = actor.State;
             var card = UIFactory.CreateBorderedPanel(_listContent, "Deployed_" + s.instanceId,
                 UiTheme.Surface, UiTheme.Border);
-            card.sizeDelta = new Vector2(0, 58);
+            card.sizeDelta = new Vector2(0, DeployedCardHeight);
 
             var btn = card.gameObject.AddComponent<Button>();
             btn.targetGraphic = card.GetComponent<Image>();
@@ -717,12 +773,12 @@ namespace IronMeridian.UI
 
             var title = UIFactory.CreateText(card, callSign, UiTheme.FontBody, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(title.rectTransform, 50f, 5f, cardW, 17f);
+            UIFactory.PlaceTopLeft(title.rectTransform, CardTextX, 8f, cardW, 17f);
             UIFactory.Fit(title);
 
             var subtitle = UIFactory.CreateText(card, actor.Def.name, UiTheme.FontLabel,
                 UiTheme.TextDim, TextAnchor.MiddleLeft);
-            UIFactory.PlaceTopLeft(subtitle.rectTransform, 50f, 22f, cardW, 15f);
+            UIFactory.PlaceTopLeft(subtitle.rectTransform, CardTextX, 25f, cardW, 15f);
             UIFactory.Fit(subtitle);
 
             // Third line is the design's metadata row. Real readiness data
@@ -730,7 +786,7 @@ namespace IronMeridian.UI
             var meta = UIFactory.CreateText(card,
                 $"{s.echelon}  ·  STR {s.strength * 100f:0}%  ·  {s.status}",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleLeft);
-            UIFactory.PlaceTopLeft(meta.rectTransform, 50f, 38f, cardW, 15f);
+            UIFactory.PlaceTopLeft(meta.rectTransform, CardTextX, 41f, cardW, 15f);
             UIFactory.Fit(meta);
 
             var kebab = UIFactory.CreateIconButton(card, UiIcons.Kebab,
@@ -746,13 +802,15 @@ namespace IronMeridian.UI
             {
                 var icon = UIFactory.CreateImage(card, sprite, "Icon");
                 icon.raycastTarget = false;
-                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(36, 36));
+                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(8, 0),
+                    new Vector2(CardIconSize, CardIconSize));
                 return sprite;
             }
 
             // Keep the layout intact and visibly flag the gap.
             var fallback = UIFactory.CreatePanel(card, "IconFallback", UiTheme.Panel);
-            UIFactory.Place(fallback, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(36, 36));
+            UIFactory.Place(fallback, new Vector2(0f, 0.5f), new Vector2(8, 0),
+                new Vector2(CardIconSize, CardIconSize));
             var mark = UIFactory.CreateText(fallback, "?", 16, UiTheme.TextFaint, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Stretch(mark.rectTransform);
             return null;

@@ -16,7 +16,7 @@ Assets/Scripts/
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
   Data/
-    Enums.cs             Team, Affiliation, Echelon(+multipliers), UnitStatus, ViewMode
+    Enums.cs             Team, Echelon(+multipliers), UnitStatus, ViewMode, AttackTask, ReconTask
     UnitDefinition.cs    unit type stats + UnitDatabase (units.json loader)
     MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData, MapMarkerData
   Save/SaveSystem.cs     JSON load/save; user saves shadow shipped maps
@@ -33,19 +33,21 @@ Assets/Scripts/
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
     BoundaryOptionsDialog.cs  control-measure type/side/colour before drawing
-    MapControlsUI.cs     on-map zoom cluster + compass rose
+    MapControlsUI.cs     on-map zoom cluster (bottom-left) + compass (bottom-right)
     UiTheme.cs           map-editor design tokens (colours, sizes)
                          LeftPanelWidth = the always-present rail; other on-map
                          chrome measures from it, never from the section panel
     UiIcons.cs           HUD icon set, drawn procedurally
+    UiTooltip.cs         hover captions for icon-only controls
+    ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         Dev + Map East France cards
     EastFranceUI.cs      "Under development" placeholder
-    GameHUD.cs           top bar: view toggle, line tools, save/load, battle
+    GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle
     UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel
     UnitInfoPanel.cs     right panel: full unit data on click
-    UnitActionBarUI.cs   battle order bar: Move / Attack / Defence (+ task submenus)
+    UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence (+ submenus)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
     CameraRig.cs         3D orbit & 2D top-down strategy camera
@@ -61,7 +63,10 @@ Assets/Scripts/
     CombatSystem.cs      tick combat: power ratio, modifiers, consumption
     AttackTaskCatalog.cs the five offensive tasks in numbers — docs/15-COMBAT-ORDERS.md
     AttackOrderSystem.cs order lifecycle: approach → engage; ordered attacks beat the auto sweep
-    AttackArrow.cs       axis-of-attack arrow, drawn while an attack is pending
+    AxisArrow.cs         axis arrow: unit -> target unit (attack) or ground point (recon)
+    ReconTaskCatalog.cs  the five recon tasks in numbers - docs/16-FOG-OF-WAR.md
+    ReconOrderSystem.cs  recon lifecycle + the sensors the fog reads
+    FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
     MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions
@@ -100,7 +105,8 @@ MainMenu ─▶ Testing ─▶ Game scene
                           ├─ LineManager / MarkerManager / LineDrawTool
                           ├─ FrontlineSystem / SectorSystem / DefenceOrderSystem
                           ├─ VfxSystem                       fire/smoke (before units spawn)
-                          ├─ CombatSystem / SelectionManager
+                          ├─ CombatSystem / AttackOrderSystem / FogOfWarSystem / ReconOrderSystem
+                          ├─ SelectionManager
                           ├─ UIFactory canvas ─ GameHUD / UnitPaletteUI / UnitInfoPanel
                           └─ SaveSystem.LoadMap("lyon_dev.json") ─▶ UnitActor.Spawn ×N
 ```
@@ -130,3 +136,5 @@ would otherwise be sampled as terrain by a neighbour.
   the player's to give, and Red only fights back through the automatic exchange.
 - Suppression costs a target morale and organisation but does not yet reduce its
   outgoing fire; that needs the damage model to read organisation.
+- Fog of war hides enemy *units*; graphics derived from the truth (auto front
+  line, red sectors) still leak their positions. See docs/16-FOG-OF-WAR.md §3.
