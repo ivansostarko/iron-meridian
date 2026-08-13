@@ -22,6 +22,9 @@ namespace IronMeridian.Map
         public CesiumGeoreference Georeference { get; private set; }
         public Cesium3DTileset Terrain { get; private set; }
         public Cesium3DTileset Buildings { get; private set; }
+        /// <summary>The scene's key light. WeatherSystem drives it for time of day.</summary>
+        public Light Sun { get; private set; }
+
         public ViewMode ViewMode { get; private set; } = ViewMode.Mode3D;
         public MapStyle Style { get; private set; } = MapStyle.Satellite;
 
@@ -65,13 +68,16 @@ namespace IronMeridian.Map
             // Cesium OSM Buildings (ion asset 96188) — visible in 3D mode only
             Buildings = CreateTileset("CesiumOSMBuildings", 96188, _token);
 
-            // Sun light if the scene has none
-            if (FindFirstObjectByType<Light>() == null)
+            // Sun light if the scene has none. Kept as a property because
+            // WeatherSystem drives its angle, colour and intensity to set the
+            // time of day — see docs/14-WEATHER.md.
+            Sun = FindFirstObjectByType<Light>();
+            if (Sun == null)
             {
-                var sun = new GameObject("Sun").AddComponent<Light>();
-                sun.type = LightType.Directional;
-                sun.intensity = 1.35f;
-                sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+                Sun = new GameObject("Sun").AddComponent<Light>();
+                Sun.type = LightType.Directional;
+                Sun.intensity = 1.35f;
+                Sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
             }
         }
 

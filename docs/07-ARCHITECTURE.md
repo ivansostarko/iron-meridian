@@ -24,6 +24,7 @@ Assets/Scripts/
     AudioManager.cs      master volume (AudioListener) + procedural UI click
     AudioCatalog.cs      music tracks: resource path, level, loop
     MusicManager.cs      persistent background music; survives scene loads
+    AmbienceManager.cs   weather bed, layered under the music
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
@@ -57,6 +58,9 @@ Assets/Scripts/
   Models/                3D models — see docs/09-3D-MODELS.md
     UnitModelLibrary.cs  unit definition -> model prefab + animation clips
     ModelPreview.cs      renders a model into a uGUI panel (RenderTexture rig)
+  Weather/               sky, fog, precipitation — see docs/14-WEATHER.md
+    WeatherCatalog.cs    sky phases + conditions; the day/night rule
+    WeatherSystem.cs     applies lighting, fog, precipitation, ambience
   Vfx/                   fire / smoke / explosions — see docs/08-PARTICLE-SYSTEMS.md
     VfxCatalog.cs        VfxId + per-effect prefab, scale, lifetime, priority
     VfxSystem.cs         the only entry point: resolve, geo-anchor, scale, budget

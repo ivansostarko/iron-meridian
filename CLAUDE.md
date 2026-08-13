@@ -42,4 +42,4 @@ There is no test suite yet. After code changes: open in Unity 6, ensure console 
 
 ## Key docs
 
-`docs/01-GETTING-STARTED.md` (setup) · `docs/02-CESIUM.md` (token!) · `docs/03-GAMEPLAY.md` · `docs/04-UNITS.md` · `docs/05-MAP-SAVES.md` · `docs/07-ARCHITECTURE.md` (script map — read this first) · `docs/08-PARTICLE-SYSTEMS.md` (fire/smoke/explosions — effect register) · `docs/09-3D-MODELS.md` (model register) · `docs/10-AUDIO.md` (audio register) · `docs/11-GAME-MENU.md` (background image register) · `docs/12-LOADERS.md` (loader register) · `docs/13-DATE-AND-TIME.md` (operational clock).
+`docs/01-GETTING-STARTED.md` (setup) · `docs/02-CESIUM.md` (token!) · `docs/03-GAMEPLAY.md` · `docs/04-UNITS.md` · `docs/05-MAP-SAVES.md` · `docs/07-ARCHITECTURE.md` (script map — read this first) · `docs/08-PARTICLE-SYSTEMS.md` (fire/smoke/explosions — effect register) · `docs/09-3D-MODELS.md` (model register) · `docs/10-AUDIO.md` (audio register) · `docs/11-GAME-MENU.md` (background image register) · `docs/12-LOADERS.md` (loader register) · `docs/13-DATE-AND-TIME.md` (operational clock) · `docs/14-WEATHER.md` (sky + weather).

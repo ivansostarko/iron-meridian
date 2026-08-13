@@ -7,6 +7,7 @@ using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Map;
 using IronMeridian.Units;
+using IronMeridian.Weather;
 
 namespace IronMeridian.UI
 {
@@ -41,7 +42,7 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Map, DateTime }
+        enum Section { General, Units, Weather, Map, DateTime }
         enum ListMode { Available, Deployed }
 
         /// <summary>
@@ -63,8 +64,8 @@ namespace IronMeridian.UI
         const float PanelWidth = UiTheme.LeftPanelWidth;
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = PanelWidth - Pad * 2f;
-        /// <summary>Title block plus the four nav rows.</summary>
-        const float HeaderHeight = 194f;
+        /// <summary>Title block plus the five nav rows.</summary>
+        const float HeaderHeight = 230f;
         const float ToolStripHeight = 56f;
 
         Team _team = Team.User;
@@ -93,8 +94,17 @@ namespace IronMeridian.UI
 
         Text _startValueLabel;
 
+        // Weather section.
+        readonly List<(SkyPhase phase, Button button)> _skyButtons = new List<(SkyPhase, Button)>();
+        readonly List<(WeatherCondition condition, Image fill, Text label)> _conditionFrames =
+            new List<(WeatherCondition, Image, Text)>();
+        Button _autoDayNightBtn;
+        RectTransform _autoDayNightLamp;
+        Text _autoDayNightLabel;
+
         MapManager _map;
         GameClock _clock;
+        WeatherSystem _weather;
         CameraRig _rig;
         Camera _worldCam;
         GameObject _groundMarker;
@@ -109,13 +119,15 @@ namespace IronMeridian.UI
         // starts hidden, and that call skips inactive children.
         Text _viewBtnLabel;
 
-        public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig, GameClock clock)
+        public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
+            GameClock clock, WeatherSystem weather)
         {
             _canvas = canvas;
             _map = map;
             _worldCam = worldCam;
             _rig = rig;
             _clock = clock;
+            _weather = weather;
 
             var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
@@ -139,11 +151,13 @@ namespace IronMeridian.UI
 
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
+            _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
+            BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
 
@@ -169,6 +183,8 @@ namespace IronMeridian.UI
             // Loading a map sets the start after this panel is built, so the
             // label has to follow the clock rather than only read it once.
             if (_clock != null) _clock.StartChanged += RefreshStartLabel;
+            // The system owns weather state; the panel only reflects it.
+            if (_weather != null) _weather.Changed += RefreshWeather;
         }
 
         static RectTransform MakeSectionContent(RectTransform body, string name)
@@ -193,8 +209,9 @@ namespace IronMeridian.UI
 
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -116);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -152);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -116);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -152);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -188);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -645,6 +662,146 @@ namespace IronMeridian.UI
         /// <summary>Called by the controller when the draw tool exits on its own.</summary>
         public void ResetToolToSelect() => SetActiveTool(0);
 
+        // ----------------------------------------------------- weather section
+
+        /// <summary>
+        /// Two independent axes, because they genuinely are: SKY is the time of
+        /// day, CONDITIONS is what is falling out of it. Folding them into one
+        /// list would make a night storm unexpressible — and would leave the
+        /// automatic day/night toggle fighting whatever weather was picked.
+        /// </summary>
+        void BuildWeatherSection(RectTransform content)
+        {
+            SectionLabel(content, "SKY", -8);
+
+            var skies = WeatherCatalog.AllSkies;
+            float skyW = (InnerWidth - 8f) / 3f;
+            for (int i = 0; i < skies.Count; i++)
+            {
+                var sky = skies[i];
+                var b = UIFactory.CreateButton(content, sky.name, () => ApplyPhase(sky.phase),
+                    UiTheme.Surface, UiTheme.Text, UiTheme.FontLabel);
+                UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f),
+                    new Vector2(Pad + i * (skyW + 4f), -28), new Vector2(skyW, 30));
+                _skyButtons.Add((sky.phase, b));
+            }
+
+            // --- automatic day/night ---
+            var autoFrame = UIFactory.CreateBorderedPanel(content, "AutoDayNight", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(autoFrame, new Vector2(0f, 1f), new Vector2(Pad, -66), new Vector2(InnerWidth, 46));
+
+            _autoDayNightBtn = UIFactory.CreateButton(autoFrame, "", ToggleAutoDayNight,
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)_autoDayNightBtn.transform);
+            var autoCaption = _autoDayNightBtn.GetComponentInChildren<Text>(true);
+            if (autoCaption != null) autoCaption.gameObject.SetActive(false);
+
+            _autoDayNightLamp = UIFactory.CreatePanel(autoFrame, "Lamp", UiTheme.TextFaint);
+            UIFactory.Place(_autoDayNightLamp, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(8, 8));
+            _autoDayNightLamp.GetComponent<Image>().raycastTarget = false;
+
+            var autoTitle = UIFactory.CreateText(autoFrame, "AUTO DAY / NIGHT", UiTheme.FontSmall,
+                UiTheme.Text, TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.Place(autoTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, 1), new Vector2(200, 16));
+
+            _autoDayNightLabel = UIFactory.CreateText(autoFrame, "", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(_autoDayNightLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, -2), new Vector2(220, 16));
+
+            // --- conditions ---
+            SectionLabel(content, "CONDITIONS", -124);
+
+            var conditions = WeatherCatalog.AllConditions;
+            for (int i = 0; i < conditions.Count; i++)
+            {
+                var def = conditions[i];
+                float y = -146f - i * 44f;
+
+                var frame = UIFactory.CreateBorderedPanel(content, "Weather_" + def.name,
+                    UiTheme.Surface, UiTheme.Border);
+                UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 40));
+
+                var b = UIFactory.CreateButton(frame, "", () => ApplyCondition(def.condition),
+                    new Color(0, 0, 0, 0), UiTheme.Text, 1);
+                UIFactory.Stretch((RectTransform)b.transform);
+                var caption = b.GetComponentInChildren<Text>(true);
+                if (caption != null) caption.gameObject.SetActive(false);
+
+                var name = UIFactory.CreateText(frame, def.name, UiTheme.FontSmall, UiTheme.Text,
+                    TextAnchor.LowerLeft, FontStyle.Bold);
+                UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, 1), new Vector2(190, 15));
+
+                var detail = UIFactory.CreateText(frame, def.detail, UiTheme.FontLabel,
+                    UiTheme.TextFaint, TextAnchor.UpperLeft);
+                UIFactory.Place(detail.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -2), new Vector2(230, 15));
+
+                // A speaker pip marks the conditions that bring an audio bed.
+                if (def.ambience != IronMeridian.Audio.AmbienceTrack.None)
+                {
+                    var pip = UIFactory.CreateText(frame, "♪", UiTheme.FontSmall, UiTheme.Accent,
+                        TextAnchor.MiddleRight);
+                    UIFactory.Place(pip.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(16, 16));
+                }
+
+                _conditionFrames.Add((def.condition, frame.Find("Fill").GetComponent<Image>(), name));
+            }
+
+            var hint = UIFactory.CreateText(content,
+                "Sky and fog preview here in the editor. Weather audio plays in battle mode only.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -420), new Vector2(InnerWidth, 40));
+
+            RefreshWeather();
+        }
+
+        void ApplyPhase(SkyPhase phase)
+        {
+            if (_weather == null) return;
+            _weather.SetPhase(phase);
+        }
+
+        void ApplyCondition(WeatherCondition condition)
+        {
+            if (_weather == null) return;
+            _weather.SetCondition(condition);
+        }
+
+        void ToggleAutoDayNight()
+        {
+            if (_weather == null) return;
+            _weather.SetAutoDayNight(!_weather.AutoDayNight);
+        }
+
+        /// <summary>Repaints the whole section from the system's state — it is the source of truth.</summary>
+        void RefreshWeather()
+        {
+            if (_weather == null) return;
+
+            foreach (var (phase, btn) in _skyButtons)
+            {
+                bool on = !_weather.AutoDayNight && phase == _weather.Phase;
+                btn.GetComponent<Image>().color = on ? UiTheme.Accent : UiTheme.Surface;
+                var t = btn.GetComponentInChildren<Text>(true);
+                if (t != null) t.color = on ? Color.white : UiTheme.TextDim;
+            }
+
+            foreach (var (condition, fill, label) in _conditionFrames)
+            {
+                bool on = condition == _weather.Condition;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+
+            if (_autoDayNightLamp != null)
+                _autoDayNightLamp.GetComponent<Image>().color =
+                    _weather.AutoDayNight ? UiTheme.Success : UiTheme.TextFaint;
+
+            if (_autoDayNightLabel != null)
+                _autoDayNightLabel.text = _weather.AutoDayNight
+                    ? $"ON — clock drives the sky (now {_weather.Phase})"
+                    : "OFF — sky is set by hand above";
+        }
+
         // -------------------------------------------------- date & time section
 
         /// <summary>
@@ -917,6 +1074,7 @@ namespace IronMeridian.UI
             // callbacks fire into a destroyed component on scene reload.
             UnitRegistry.Changed -= OnUnitsChanged;
             if (_clock != null) _clock.StartChanged -= RefreshStartLabel;
+            if (_weather != null) _weather.Changed -= RefreshWeather;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

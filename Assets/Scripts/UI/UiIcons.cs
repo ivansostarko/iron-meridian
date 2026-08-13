@@ -107,6 +107,13 @@ namespace IronMeridian.UI
                         Mathf.Max(Seg(u, v, 0.56f, 0.16f, 0.68f, 0.50f, 0.07f),
                                   Seg(u, v, 0.68f, 0.50f, 0.94f, 0.50f, 0.07f))))));
 
+        /// <summary>Weather conditions section.</summary>
+        public static Sprite Cloud => Get(nameof(Cloud), (u, v) =>
+            Mathf.Max(DiscAt(u, v, 0.34f, 0.48f, 0.20f),
+                Mathf.Max(DiscAt(u, v, 0.56f, 0.56f, 0.26f),
+                    Mathf.Max(DiscAt(u, v, 0.74f, 0.46f, 0.18f),
+                              Rect(u, v, 0.34f, 0.28f, 0.74f, 0.50f)))));
+
         /// <summary>Date &amp; time section.</summary>
         public static Sprite Clock => Get(nameof(Clock), (u, v) =>
             Mathf.Max(RingAt(u, v, 0.5f, 0.5f, 0.38f, 0.08f),

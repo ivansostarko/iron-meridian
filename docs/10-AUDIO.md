@@ -10,18 +10,31 @@ The register of every sound in Iron Meridian — its file, where it plays, and w
 
 ```
 Assets/Scripts/Audio/
-  AudioManager.cs    master volume (AudioListener) + procedural UI click
-  AudioCatalog.cs    the register in code: track → resource path, level, loop
-  MusicManager.cs    persistent music player; survives scene loads
+  AudioManager.cs     master volume (AudioListener) + procedural UI click
+  AudioCatalog.cs     the register in code: track → resource path, level, loop
+  MusicManager.cs     persistent music channel; survives scene loads
+  AmbienceManager.cs  persistent weather channel; plays under the music
 ```
 
-Three rules govern all audio:
+### Channels
+
+Two independent looping channels, each its own `DontDestroyOnLoad` singleton with its own `AudioSource`, so weather layers **under** the music instead of replacing it:
+
+| Channel | Manager | Carries | Fade |
+|---|---|---|---|
+| Music | `MusicManager` | The menu theme, on every screen | 1.5 s |
+| Ambience | `AmbienceManager` | Weather beds (rain, storm, snow) | 1.0 s |
+
+Mixing both onto one source would make simultaneous playback impossible — a storm has to be audible *with* the music, not instead of it.
+
+Four rules govern all audio:
 
 | Rule | Reason |
 |---|---|
 | **Audio files live under `Assets/Resources/`.** | The project builds every scene and prefab from code, so there is no serialised field anywhere to hold an `AudioClip` reference. `Resources.Load` is the only runtime lookup path — the same constraint that governs icons, VFX prefabs and 3D models. |
-| **Music goes through `MusicManager`; never create a per-scene `AudioSource` for it.** | The manager is a `DontDestroyOnLoad` singleton. Every screen requests its track on load, and requesting the track already playing is a no-op — so the bed continues seamlessly across navigation instead of restarting on each screen. |
+| **Music goes through `MusicManager`, weather through `AmbienceManager`; never create a per-scene `AudioSource` for either.** | Both are `DontDestroyOnLoad` singletons. Every screen requests its track on load, and requesting the track already playing is a no-op — so the bed continues seamlessly across navigation instead of restarting on each screen. |
 | **Levels live in `AudioCatalog`, not at the call site.** | One place to balance the mix. |
+| **Ambience is driven by state, never by an event.** | `WeatherSystem` calls `AmbienceManager.Play(...)` whenever weather or battle state changes; the no-op-if-already-playing contract makes that safe to call repeatedly. |
 
 ### Volume chain
 
@@ -30,7 +43,7 @@ clip → AudioSource.volume (per-track level from AudioCatalog)
      → AudioListener.volume (master volume, Settings → Audio, persisted in PlayerPrefs "im.masterVolume")
 ```
 
-There is currently **one** volume slider (master). Separate music/SFX buses would need a new `AudioManager` pref plus a Settings row — not implemented.
+There is currently **one** volume slider (master). Separate music/ambience/SFX buses would need a new `AudioManager` pref plus Settings rows — not implemented, though the channel split above is the groundwork for it.
 
 ### Playback behaviour
 
@@ -52,6 +65,18 @@ There is currently **one** volume slider (master). Separate music/SFX buses woul
 Track id in code: `MusicTrack.MenuTheme`.
 
 > The folder is named `main-menu` because that is where the track was first used; it is now the game-wide bed. Renaming it means updating `AudioCatalog.MenuTheme.resourcePath`.
+
+### 2.1a Weather ambience
+
+Looping environmental beds on the ambience channel. Selected in the map editor's **WEATHER CONDITIONS** section, and played **in battle mode only** — a rain loop droning while counters are being laid out is noise, not atmosphere. See `docs/14-WEATHER.md`.
+
+| Asset | Path | Resource path | Plays when | Level | Description |
+|---|---|---|---|---|---|
+| Rain | `Assets/Resources/Audio/weather/rain-background.mp3` | `Audio/weather/rain-background` | Condition = **Rain**, battle running | 0.40 | Steady rainfall bed. |
+| Storm | `Assets/Resources/Audio/weather/storm-background.mp3` | `Audio/weather/storm-background` | Condition = **Storm**, battle running | 0.50 | Wind and thunder bed; the loudest weather. |
+| Snow | `Assets/Resources/Audio/weather/snow-background.mp3` | `Audio/weather/snow-background` | Condition = **Snow**, battle running | 0.30 | Muffled wind bed. Quietest by design — real snowfall is near-silent, and a loud loop reads as static. |
+
+Track ids in code: `AmbienceTrack.Rain` / `.Storm` / `.Snow`. The Clear, Overcast and Fog conditions carry no bed (`AmbienceTrack.None`), which stops the channel.
 
 ### 2.2 UI sound effects
 
@@ -79,14 +104,15 @@ Wiring these means positional 3D audio at map scale — rolloff distances measur
 
 ## 3. Screen coverage
 
-| Screen | Scene | Music | UI SFX | Gameplay SFX |
-|---|---|---|---|---|
-| Main Menu | `MainMenu` | Menu theme | Click | — |
-| Settings | `Settings` | Menu theme | Click | — |
-| Testing | `Testing` | Menu theme | Click | — |
-| Units List | `UnitsList` | Menu theme | Click | — |
-| East France | `EastFrance` | Menu theme | Click | — |
-| Map editor / game | `Game` | Menu theme | Click | — |
+| Screen | Scene | Music | Ambience | UI SFX | Gameplay SFX |
+|---|---|---|---|---|---|
+| Main Menu | `MainMenu` | Menu theme | — | Click | — |
+| Settings | `Settings` | Menu theme | — | Click | — |
+| Testing | `Testing` | Menu theme | — | Click | — |
+| Units List | `UnitsList` | Menu theme | — | Click | — |
+| East France | `EastFrance` | Menu theme | — | Click | — |
+| Map editor (editing) | `Game` | Menu theme | — | Click | — |
+| Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Click | — |
 
 Each screen starts music in its bootstrap, next to `AudioManager.Apply()`:
 
@@ -130,11 +156,11 @@ Force To Mono is appropriate for positional gameplay SFX, not for the music bed.
 
 1. **This document is the register of every sound in the game.** Adding, replacing or removing an audio asset, or playing one somewhere new, is not done until §2 and §3 here are updated in the same commit — with the file path, the screens it plays on, and a description.
 2. Audio assets live under `Assets/Resources/`; nothing else is loadable at runtime.
-3. Music goes through `MusicManager`. No per-scene `AudioSource` for background music — it would restart the track on every navigation.
+3. Music goes through `MusicManager` and weather through `AmbienceManager`. No per-scene `AudioSource` for either — it would restart the track on every navigation, and would stop the two layering.
 4. Levels and loop flags live in `AudioCatalog`. No magic volume numbers at call sites.
 5. Audio must degrade silently: a missing clip warns once and the game keeps running.
 6. Record the source and licence of every imported audio asset, including ones not yet used (§2.4).
 
 ## Related
 
-`docs/07-ARCHITECTURE.md` (script map) · `docs/08-PARTICLE-SYSTEMS.md` (effects register) · `docs/09-3D-MODELS.md` (model register)
+`docs/07-ARCHITECTURE.md` (script map) · `docs/08-PARTICLE-SYSTEMS.md` (effects register) · `docs/09-3D-MODELS.md` (model register) · `docs/14-WEATHER.md` (what drives the ambience channel)

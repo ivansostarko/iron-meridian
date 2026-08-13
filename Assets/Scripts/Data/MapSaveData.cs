@@ -134,6 +134,15 @@ namespace IronMeridian.Data
         /// </summary>
         public string startDateTime = "1990-01-01 14:00";
 
+        // Weather — see docs/14-WEATHER.md. Sky and condition are separate axes,
+        // so a night storm round-trips correctly.
+        /// <summary>SkyPhase name: Day | Sunset | Night. Ignored when autoDayNight is true.</summary>
+        public string skyPhase = "Day";
+        /// <summary>WeatherCondition name: Clear | Overcast | Fog | Rain | Storm | Snow.</summary>
+        public string weatherCondition = "Clear";
+        /// <summary>When true the scenario clock drives the sky and skyPhase is ignored.</summary>
+        public bool autoDayNight;
+
         public List<UnitState> units = new List<UnitState>();
         public List<MapLineData> lines = new List<MapLineData>();
     }

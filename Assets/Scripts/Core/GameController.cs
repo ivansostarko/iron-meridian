@@ -6,6 +6,7 @@ using IronMeridian.Save;
 using IronMeridian.UI;
 using IronMeridian.Units;
 using IronMeridian.Vfx;
+using IronMeridian.Weather;
 
 namespace IronMeridian.Core
 {
@@ -29,6 +30,7 @@ namespace IronMeridian.Core
         SectorSystem _sectors;
         CombatSystem _combat;
         VfxSystem _vfx;
+        WeatherSystem _weather;
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
@@ -102,6 +104,12 @@ namespace IronMeridian.Core
             _clock = gameObject.AddComponent<GameClock>();
             _combat.RunningChanged += _clock.SetRunning;
 
+            // Sky, fog and precipitation. Ambience is battle-mode only, so the
+            // system needs to know when a battle starts.
+            _weather = gameObject.AddComponent<WeatherSystem>();
+            _weather.Init(_map.Sun, _rig.Cam, _clock);
+            _combat.RunningChanged += _weather.SetBattleRunning;
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
@@ -129,7 +137,7 @@ namespace IronMeridian.Core
             BuildStep("unit palette", () =>
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
-                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock);
+                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -449,6 +457,9 @@ namespace IronMeridian.Core
             _save.viewMode = _map.ViewMode.ToString();
             _save.mapStyle = _map.Style.ToString();
             _save.startDateTime = _clock.StartToSaveString();
+            _save.skyPhase = _weather.ManualPhase.ToString();
+            _save.weatherCondition = _weather.Condition.ToString();
+            _save.autoDayNight = _weather.AutoDayNight;
             string path = SaveSystem.SaveMap(_save, mapFileName);
             _hud.Flash($"Saved -> {path}");
         }
@@ -473,6 +484,7 @@ namespace IronMeridian.Core
         void ApplySave(MapSaveData data)
         {
             _clock.SetStartFromSaveString(data.startDateTime);
+            _weather.LoadFrom(data.skyPhase, data.weatherCondition, data.autoDayNight);
             foreach (var u in data.units)
                 UnitActor.Spawn(_map.Georeference, u);
             _lines.LoadFrom(data.lines);
