@@ -41,6 +41,12 @@ namespace IronMeridian.UI
         /// <summary>Scrim used on data-dense screens, where legibility beats atmosphere.</summary>
         public const float DenseScreenScrim = 0.86f;
 
+        /// <summary>
+        /// Scrim for loading screens. Lighter than a working screen: there is
+        /// little text to read and the artwork is the point while waiting.
+        /// </summary>
+        public const float LoaderScrim = 0.48f;
+
         static readonly BackgroundDef[] Defs =
         {
             new BackgroundDef

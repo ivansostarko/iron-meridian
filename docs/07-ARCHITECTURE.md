@@ -26,6 +26,7 @@ Assets/Scripts/
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
+    LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         Dev + Map East France cards
@@ -68,6 +69,7 @@ Assets/Scripts/
 ```
 MainMenu ─▶ Testing ─▶ Game scene
                         GameController.Start()
+                          ├─ LoadingScreenUI.Show            overlay until terrain streams in
                           ├─ MapManager.Build(Lyon)          Cesium globe
                           ├─ CameraRig.Init                  strategy camera
                           ├─ LineManager / LineDrawTool / FrontlineSystem

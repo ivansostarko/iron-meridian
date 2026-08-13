@@ -36,7 +36,11 @@ namespace IronMeridian.Core
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
         PauseMenuUI _pauseMenu;
+        LoadingScreenUI _loading;
         MapSaveData _save;
+
+        /// <summary>True while the loading overlay is still covering the map.</summary>
+        bool Loading => _loading != null;
 
         RangeRing _viewRing, _weaponRing;
         UnitActor _rangeRingUnit;
@@ -51,6 +55,10 @@ namespace IronMeridian.Core
             IronMeridian.Audio.AudioManager.Apply();
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             UnitRegistry.Clear();
+
+            // Up first, on its own high-sorting canvas, so it covers the map and
+            // the HUD built below while Cesium streams the terrain in.
+            _loading = LoadingScreenUI.Show(GameConfig.GameName, "Preparing the operational map");
 
             _save = SaveSystem.LoadMap(mapFileName) ?? new MapSaveData
             {
@@ -97,7 +105,7 @@ namespace IronMeridian.Core
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
-            _selection.InputBlocked = () => _drawTool.Current != LineDrawTool.Mode.None;
+            _selection.InputBlocked = () => Loading || _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
             // --- UI ---
@@ -106,8 +114,13 @@ namespace IronMeridian.Core
 
             _hud = gameObject.AddComponent<GameHUD>();
             _hud.Build(canvas, _combat, _clock);
-            _map.LoadError += _hud.Flash;
             _selection.Flash = _hud.Flash;
+
+            _map.LoadError += _hud.Flash;
+            // A tileset failure means the terrain will never finish: drop the
+            // overlay at once so the player sees the HUD's error rather than a
+            // bar that sits there until the timeout.
+            _map.LoadError += _ => { if (_loading != null) _loading.Dismiss("Map failed to load."); };
 
             // Each panel is built in isolation: the whole UI is constructed at
             // runtime, so an exception in one builder used to abort the rest of
@@ -199,7 +212,7 @@ namespace IronMeridian.Core
                 _pauseMenu.SaveRequested = SaveMap;
                 _pauseMenu.LoadRequested = LoadMap;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
-                _rig.InputBlocked = () => _pauseMenu.IsOpen;
+                _rig.InputBlocked = () => Loading || _pauseMenu.IsOpen;
             });
 
             // --- content ---
@@ -210,6 +223,16 @@ namespace IronMeridian.Core
                 _map.SetViewMode(_save.viewMode == "Mode2D" ? ViewMode.Mode2D : ViewMode.Mode3D);
                 _map.SetMapStyle(System.Enum.TryParse(_save.mapStyle, out MapStyle style) ? style : MapStyle.Satellite);
             });
+
+            // Everything is built; what remains is Cesium streaming tiles for
+            // the opening view. Hand the overlay that as its progress source.
+            if (_loading != null)
+            {
+                _loading.SetStatus($"Streaming terrain — {_save.mapName}");
+                _loading.Track(
+                    () => _map.TerrainLoadProgress01,
+                    () => _map.TerrainLoadProgress01 >= 0.999f);
+            }
         }
 
         /// <summary>

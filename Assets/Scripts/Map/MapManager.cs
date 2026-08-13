@@ -29,6 +29,15 @@ namespace IronMeridian.Map
         public event System.Action<MapStyle> StyleChanged;
         public event System.Action<string> LoadError;
 
+        /// <summary>
+        /// 0..1 estimate of how much of the terrain is loaded **for the current
+        /// view** — what the loading screen reports. Note it can fall back
+        /// toward 0 when the camera moves and new tiles are needed, which is why
+        /// the loader only ever moves its bar forward.
+        /// </summary>
+        public float TerrainLoadProgress01 =>
+            Terrain != null ? Mathf.Clamp01(Terrain.ComputeLoadProgress() / 100f) : 0f;
+
         CesiumIonRasterOverlay _overlay;
         string _token;
 
