@@ -30,8 +30,7 @@ namespace IronMeridian.UI
             MusicManager.Play(MusicTrack.MenuTheme);
             var canvas = UIFactory.CreateCanvas("SettingsCanvas");
 
-            var bg = UIFactory.CreatePanel(canvas.transform, "Background", GameConfig.UiBackground);
-            UIFactory.Stretch(bg);
+            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Default);
 
             var title = UIFactory.CreateText(canvas.transform, "SETTINGS", 56,
                 GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);

@@ -72,8 +72,9 @@ namespace IronMeridian.UI
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             var canvas = UIFactory.CreateCanvas("UnitsListCanvas");
 
-            var bg = UIFactory.CreatePanel(canvas.transform, "Background", GameConfig.UiBackground);
-            UIFactory.Stretch(bg);
+            // Dense data table over artwork: lean on the scrim so every row stays legible.
+            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Default,
+                BackgroundCatalog.DenseScreenScrim);
 
             BuildHeaderBar(canvas.transform);
             BuildToolbar(canvas.transform);

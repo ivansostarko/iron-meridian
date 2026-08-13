@@ -24,7 +24,8 @@ Assets/Scripts/
     AudioCatalog.cs      music tracks: resource path, level, loop
     MusicManager.cs      persistent background music; survives scene loads
   UI/
-    UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns…)
+    UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
+    BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         Dev + Map East France cards

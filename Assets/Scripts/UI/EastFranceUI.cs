@@ -13,8 +13,7 @@ namespace IronMeridian.UI
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             var canvas = UIFactory.CreateCanvas("EastFranceCanvas");
 
-            var bg = UIFactory.CreatePanel(canvas.transform, "Background", GameConfig.UiBackground);
-            UIFactory.Stretch(bg);
+            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Default);
 
             var title = UIFactory.CreateText(canvas.transform, "MAP — EAST FRANCE", 48,
                 GameConfig.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);

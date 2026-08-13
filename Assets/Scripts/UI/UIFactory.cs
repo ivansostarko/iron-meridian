@@ -277,6 +277,55 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
+        /// Full-screen artwork behind a screen's UI, with a readability scrim.
+        /// Create it first so it sits at the back — uGUI draws in hierarchy
+        /// order. Returns the root, which always fills the parent even when the
+        /// image is missing, so no screen can end up transparent.
+        /// </summary>
+        public static RectTransform CreateScreenBackground(Transform parent, BackgroundId id,
+            float? scrimAlpha = null)
+        {
+            // Opaque base first: it shows through if the image fails to load and
+            // covers any gap while Resources.Load runs.
+            var root = CreatePanel(parent, "Background", GameConfig.UiBackground);
+            Stretch(root);
+            root.GetComponent<Image>().raycastTarget = false;
+
+            var def = BackgroundCatalog.Get(id);
+            if (def == null) return root;
+
+            var sprite = LoadSprite(def.resourcePath);
+            if (sprite == null) return root;   // LoadSprite has already warned
+
+            var img = CreateImage(root, sprite, "Artwork");
+            var rt = (RectTransform)img.transform;
+            // Centre anchors, not stretch: the fitter below drives the size.
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            img.raycastTarget = false;
+            // The fitter guarantees the rect's aspect matches the sprite's, so
+            // Image's own letterboxing would only fight it.
+            img.preserveAspect = false;
+
+            // Cover the screen at any window aspect without distorting the art:
+            // envelope the parent and let the overflow fall outside the canvas.
+            // A Mask would cost an extra draw call for no visible difference.
+            var fitter = img.gameObject.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            fitter.aspectRatio = sprite.rect.height > 0f
+                ? sprite.rect.width / sprite.rect.height
+                : 1.777f;
+
+            var scrimColour = GameConfig.UiBackground;
+            scrimColour.a = Mathf.Clamp01(scrimAlpha ?? def.scrimAlpha);
+            var scrim = CreatePanel(root, "Scrim", scrimColour);
+            Stretch(scrim);
+            scrim.GetComponent<Image>().raycastTarget = false;
+
+            return root;
+        }
+
+        /// <summary>
         /// Raw texture quad — for content uGUI has no sprite for, such as a
         /// camera's <see cref="RenderTexture"/> (see <c>ModelPreview</c>).
         /// </summary>
@@ -296,10 +345,15 @@ namespace IronMeridian.UI
         static readonly System.Collections.Generic.HashSet<string> _missingIcons =
             new System.Collections.Generic.HashSet<string>();
 
-        public static Sprite LoadIconSprite(string team, string unitId)
-        {
-            string path = $"Icons/{team}/{unitId}";
+        public static Sprite LoadIconSprite(string team, string unitId) =>
+            LoadSprite($"Icons/{team}/{unitId}");
 
+        /// <summary>
+        /// Loads any texture under Resources as a sprite, cached by path.
+        /// Returns null (having warned once) when the path does not resolve.
+        /// </summary>
+        public static Sprite LoadSprite(string path)
+        {
             if (_spriteCache.TryGetValue(path, out var cached))
             {
                 // `!= null` is Unity's destroyed-object check: a scene unload
@@ -313,7 +367,7 @@ namespace IronMeridian.UI
             var tex = Resources.Load<Texture2D>(path);
             if (tex == null)
             {
-                Debug.LogWarning($"[UIFactory] Missing icon texture: Resources/{path}. " +
+                Debug.LogWarning($"[UIFactory] Missing texture: Resources/{path}. " +
                     "If the file exists on disk, try Assets > Reimport All (a stale Library cache can hide it).");
                 _missingIcons.Add(path);
                 return null;
