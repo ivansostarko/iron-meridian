@@ -143,6 +143,26 @@ namespace IronMeridian.Core
                     _sectors.AutoUpdate = on;
                     if (on) GenerateSectors();
                 };
+
+                // Bottom tool strip.
+                _palette.SelectToolRequested = () => _drawTool.CancelDrawing();
+                _palette.BoundaryToolRequested = () => _drawTool.StartDrawing(LineDrawTool.Mode.Boundary);
+                _palette.DefensiveLineToolRequested = () => _drawTool.StartDrawing(LineDrawTool.Mode.DefensiveLine);
+                // The draw tool also exits on its own (Esc, or finishing a line);
+                // keep the strip's latched button honest when it does.
+                _drawTool.ModeChanged += mode =>
+                {
+                    if (mode == LineDrawTool.Mode.None) _palette.ResetToolToSelect();
+                };
+
+                // DEPLOYED list.
+                _palette.SelectUnitRequested = u => _selection.Select(u);
+                _palette.RemoveUnitRequested = u =>
+                {
+                    RecordRemoval(u);
+                    _selection.Select(null);
+                    u.RemoveFromMap();
+                };
             });
 
             BuildStep("unit info panel", () =>
@@ -155,6 +175,7 @@ namespace IronMeridian.Core
                     _selection.Select(null);
                     u.RemoveFromMap();
                 };
+                _infoPanel.CycleRequested = CycleSelection;
             });
 
             BuildStep("group panel", () =>
@@ -288,6 +309,27 @@ namespace IronMeridian.Core
             DeployEffect.Play(_map.Georeference, lat, lon,
                 team == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam);
             _hud.Flash($"Deployed {echelon} {def.name} ({team})");
+        }
+
+        /// <summary>
+        /// Steps the selection to the previous/next living unit on the same
+        /// side — the info panel's ◄ ► footer. Wraps, so holding either arrow
+        /// walks the whole order of battle.
+        /// </summary>
+        void CycleSelection(int step)
+        {
+            var current = _selection.Selected;
+            if (current == null) return;
+
+            var side = new System.Collections.Generic.List<UnitActor>();
+            foreach (var u in UnitRegistry.OfTeam(current.State.TeamEnum))
+                if (u != null && u.IsAlive) side.Add(u);
+
+            int index = side.IndexOf(current);
+            if (side.Count == 0 || index < 0) return;
+
+            int next = ((index + step) % side.Count + side.Count) % side.Count;
+            _selection.Select(side[next]);
         }
 
         void GenerateSectors()

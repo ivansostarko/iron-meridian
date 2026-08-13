@@ -276,6 +276,84 @@ namespace IronMeridian.UI
             return img;
         }
 
+        // ---------------------------------------------------------- console widgets
+        // The map editor's chrome (see UiTheme) is built from hairline-bordered
+        // surfaces. uGUI has no border property, so a "bordered panel" is an
+        // outer Image in the border colour with an inset fill Image on top.
+        // Children added afterwards draw above the fill, so callers treat the
+        // returned RectTransform as an ordinary container.
+
+        public static RectTransform CreateBorderedPanel(Transform parent, string name,
+            Color fill, Color border, float thickness = 1f)
+        {
+            var outer = CreatePanel(parent, name, border);
+
+            var inner = CreatePanel(outer, "Fill", fill);
+            Stretch(inner);
+            inner.offsetMin = new Vector2(thickness, thickness);
+            inner.offsetMax = new Vector2(-thickness, -thickness);
+            inner.GetComponent<Image>().raycastTarget = false;
+
+            return outer;
+        }
+
+        /// <summary>A one-pixel rule. Cheaper and crisper than a bordered panel for a divider.</summary>
+        public static RectTransform CreateDivider(Transform parent, Color color, float thickness = 1f)
+        {
+            var rt = CreatePanel(parent, "Divider", color);
+            rt.GetComponent<Image>().raycastTarget = false;
+            rt.sizeDelta = new Vector2(0, thickness);
+            return rt;
+        }
+
+        /// <summary>Square button carrying one <see cref="UiIcons"/> glyph.</summary>
+        public static Button CreateIconButton(Transform parent, Sprite icon, UnityAction onClick,
+            Color? background = null, Color? tint = null, float iconInset = 8f)
+        {
+            var rt = CreatePanel(parent, "IconButton", background ?? new Color(0, 0, 0, 0));
+            var btn = rt.gameObject.AddComponent<Button>();
+            btn.targetGraphic = rt.GetComponent<Image>();
+
+            var colors = btn.colors;
+            colors.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
+            colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+            btn.colors = colors;
+
+            var img = CreateImage(rt, icon, "Glyph");
+            img.color = tint ?? UiTheme.TextDim;
+            img.raycastTarget = false;
+            var irt = (RectTransform)img.transform;
+            Stretch(irt);
+            irt.offsetMin = new Vector2(iconInset, iconInset);
+            irt.offsetMax = new Vector2(-iconInset, -iconInset);
+
+            btn.onClick.AddListener(() => IronMeridian.Audio.AudioManager.PlayClick(rt.gameObject));
+            btn.onClick.AddListener(onClick);
+            return btn;
+        }
+
+        /// <summary>
+        /// Small-caps section header — letter-spaced, accent-coloured, with an
+        /// optional count badge on the right, as in the map editor panels.
+        /// </summary>
+        public static Text CreateSectionHeader(Transform parent, string label, Color? color = null)
+        {
+            var t = CreateText(parent, UiTheme.Spaced(label), UiTheme.FontLabel,
+                color ?? UiTheme.Accent, TextAnchor.MiddleLeft, FontStyle.Bold);
+            return t;
+        }
+
+        /// <summary>Rounded-looking count chip used beside section headers.</summary>
+        public static Text CreateBadge(Transform parent, string value, Color? fill = null, Color? textColor = null)
+        {
+            var rt = CreatePanel(parent, "Badge", fill ?? UiTheme.AccentWash);
+            rt.GetComponent<Image>().raycastTarget = false;
+            var t = CreateText(rt, value, UiTheme.FontLabel, textColor ?? UiTheme.Accent,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            Stretch(t.rectTransform);
+            return t;
+        }
+
         /// <summary>
         /// Full-screen artwork behind a screen's UI, with a readability scrim.
         /// Create it first so it sits at the back — uGUI draws in hierarchy

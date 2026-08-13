@@ -11,13 +11,15 @@ using IronMeridian.Units;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// Left-side "Order of Battle" panel, organised as three accordion tabs:
-    /// General (reserved for future use), Units (team/affiliation/echelon
-    /// pickers and the draggable unit list) and Map (tile style + 2D/3D).
-    /// Pick team (Friendly/Enemy), affiliation and echelon, then DRAG a unit
-    /// card onto the terrain to deploy it. A live ground marker tracks the
-    /// actual 3D drop point during the drag, so what you see is exactly where
-    /// the unit lands — not just a floating 2D ghost.
+    /// Left "Order of Battle" panel: a vertical section nav (General, Units,
+    /// Map), the section's controls, and a tool strip along the bottom.
+    ///
+    /// The Units section carries the editor's core loop — pick team,
+    /// affiliation and echelon, then DRAG a card onto the terrain. A live
+    /// ground marker tracks the real 3D drop point during the drag, so what you
+    /// see is exactly where the unit lands. Its list has two modes: AVAILABLE
+    /// (the draggable catalogue) and DEPLOYED (what is actually on the map,
+    /// click to select).
     /// </summary>
     public class UnitPaletteUI : MonoBehaviour
     {
@@ -30,18 +32,49 @@ namespace IronMeridian.UI
         public System.Action ClearSectorsRequested;
         public System.Action<bool> AutoSectorsChanged;
 
-        Button _autoSectorBtn;
-        bool _autoSectors;
+        // Tool strip.
+        public System.Action SelectToolRequested;
+        public System.Action BoundaryToolRequested;
+        public System.Action DefensiveLineToolRequested;
+
+        // Deployed list.
+        public System.Action<UnitActor> SelectUnitRequested;
+        public System.Action<UnitActor> RemoveUnitRequested;
+
+        enum Section { General, Units, Map }
+        enum ListMode { Available, Deployed }
+
+        // ------------------------------------------------------------ layout
+        const float PanelWidth = UiTheme.LeftPanelWidth;
+        const float Pad = UiTheme.PanelPadding;
+        const float InnerWidth = PanelWidth - Pad * 2f;
+        /// <summary>Title block plus the three nav rows.</summary>
+        const float HeaderHeight = 158f;
+        const float ToolStripHeight = 56f;
 
         Team _team = Team.User;
         Affiliation _affiliation = Affiliation.Friendly;
         Echelon _echelon = Echelon.Battalion;
+        Section _section = Section.Units;
+        ListMode _listMode = ListMode.Available;
+        string _search = "";
 
         RectTransform _listContent;
         Button _blueTab, _redTab;
+        Image _blueFill, _redFill;
+        Text _listCount;
+        Button _availableTabBtn, _deployedTabBtn;
         Image _dragGhost;
         Canvas _canvas;
         UnitDefinition _dragging;
+        Button _autoSectorBtn;
+        bool _autoSectors;
+
+        readonly List<(Section section, RectTransform row, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
+            new List<(Section, RectTransform, Image, Image, Text, RectTransform)>();
+        readonly Dictionary<Section, RectTransform> _sectionContent = new Dictionary<Section, RectTransform>();
+        readonly List<(Image fill, Image glyph)> _tools = new List<(Image, Image)>();
+        int _activeTool;
 
         MapManager _map;
         CameraRig _rig;
@@ -54,25 +87,9 @@ namespace IronMeridian.UI
 
         static readonly MapStyle[] Styles = { MapStyle.Satellite, MapStyle.Terrain, MapStyle.Roads };
         Dropdown _styleDropdown;
-        // Cached rather than fetched via GetComponentInChildren: the MAP
-        // section starts collapsed, and that call skips inactive children —
-        // it returned null and threw on the first ViewModeChanged event.
+        // Cached rather than fetched via GetComponentInChildren: the MAP section
+        // starts hidden, and that call skips inactive children.
         Text _viewBtnLabel;
-
-        const float HeaderHeight = 32f;
-        const float Gap = 4f;
-
-        class AccordionSection
-        {
-            public RectTransform header;
-            public RectTransform content;
-            public Text arrow;
-            public bool expanded;
-            public float contentHeight;   // 0 => flexible, fills leftover space
-        }
-
-        RectTransform _accordionRoot;
-        readonly List<AccordionSection> _sections = new List<AccordionSection>();
 
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig)
         {
@@ -80,32 +97,37 @@ namespace IronMeridian.UI
             _map = map;
             _worldCam = worldCam;
             _rig = rig;
-            var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", GameConfig.UiPanel);
+
+            var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
             panel.pivot = new Vector2(0, 0.5f);
             panel.offsetMin = new Vector2(0, 0);
-            panel.offsetMax = new Vector2(270, -50);
+            panel.offsetMax = new Vector2(PanelWidth, -UiTheme.TopBarHeight);
 
-            var title = UIFactory.CreateText(panel, "ORDER OF BATTLE", 18,
-                GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -20), new Vector2(260, 30));
+            // Hairline down the panel's right edge, separating it from the map.
+            var edge = UIFactory.CreatePanel(panel, "Edge", UiTheme.Border);
+            edge.anchorMin = new Vector2(1, 0); edge.anchorMax = new Vector2(1, 1);
+            edge.pivot = new Vector2(1, 0.5f);
+            edge.sizeDelta = new Vector2(1, 0);
+            edge.GetComponent<Image>().raycastTarget = false;
 
-            _accordionRoot = UIFactory.CreateGroup(panel, "Accordion");
-            _accordionRoot.anchorMin = new Vector2(0, 0);
-            _accordionRoot.anchorMax = new Vector2(1, 1);
-            _accordionRoot.offsetMin = new Vector2(6, 6);
-            _accordionRoot.offsetMax = new Vector2(-6, -40);
+            BuildHeader(panel);
 
-            // contentHeight 0 marks the section that soaks up the leftover
-            // space; the others keep their fixed height.
-            var generalContent = AddSection("GENERAL", false, 186);
-            var unitsContent = AddSection("UNITS", true, 0);
-            var mapContent = AddSection("MAP", false, 110);
+            var body = UIFactory.CreateGroup(panel, "Body");
+            body.anchorMin = new Vector2(0, 0); body.anchorMax = new Vector2(1, 1);
+            body.offsetMin = new Vector2(0, ToolStripHeight);
+            body.offsetMax = new Vector2(0, -HeaderHeight);
 
-            BuildGeneralTab(generalContent);
-            BuildUnitsTab(unitsContent);
-            BuildMapTab(mapContent);
-            Relayout();
+            _sectionContent[Section.General] = MakeSectionContent(body, "General");
+            _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
+            _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
+
+            BuildGeneralSection(_sectionContent[Section.General]);
+            BuildUnitsSection(_sectionContent[Section.Units]);
+            BuildMapSection(_sectionContent[Section.Map]);
+
+            BuildToolStrip(panel);
+            SetSection(Section.Units);
 
             // Drag ghost (top-most)
             var ghostGo = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
@@ -117,152 +139,119 @@ namespace IronMeridian.UI
             ghostGo.SetActive(false);
 
             BuildGroundMarker();
-            Populate();
+            // Paints the side selector's initial state and fills the list.
+            SetTeam(_team);
 
             _map.ViewModeChanged += OnViewModeChanged;
             _map.StyleChanged += OnStyleChanged;
+            UnitRegistry.Changed += OnUnitsChanged;
         }
 
-        // ------------------------------------------------------- accordion
-
-        RectTransform AddSection(string label, bool startExpanded, float contentHeight)
+        static RectTransform MakeSectionContent(RectTransform body, string name)
         {
-            var header = UIFactory.CreatePanel(_accordionRoot, "Header_" + label, GameConfig.UiPanelLight);
-            var btn = header.gameObject.AddComponent<Button>();
-            btn.targetGraphic = header.GetComponent<Image>();
+            var rt = UIFactory.CreateGroup(body, "Section_" + name);
+            UIFactory.Stretch(rt);
+            return rt;
+        }
 
-            var arrow = UIFactory.CreateText(header, startExpanded ? "▾" : "▸", 13, GameConfig.UiAccent,
+        // ------------------------------------------------------------ header
+
+        void BuildHeader(RectTransform panel)
+        {
+            var emblem = UIFactory.CreateImage(panel, UiIcons.Shield, "Emblem");
+            emblem.color = UiTheme.Accent;
+            emblem.raycastTarget = false;
+            UIFactory.Place((RectTransform)emblem.transform, new Vector2(0f, 1f), new Vector2(Pad, -14), new Vector2(19, 19));
+
+            var title = UIFactory.CreateText(panel, "ORDER OF BATTLE", UiTheme.FontHeading,
+                UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Pad + 27, -13), new Vector2(210, 22));
+
+            AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
+            AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -116);
+
+            var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
+            rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
+            rule.pivot = new Vector2(0.5f, 1);
+            rule.anchoredPosition = new Vector2(0, -HeaderHeight + 6);
+        }
+
+        void AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, float y)
+        {
+            var row = UIFactory.CreatePanel(panel, "Nav_" + label, new Color(0, 0, 0, 0));
+            UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(PanelWidth, 34));
+            row.pivot = new Vector2(0f, 1f);
+
+            var btn = row.gameObject.AddComponent<Button>();
+            btn.targetGraphic = row.GetComponent<Image>();
+            btn.onClick.AddListener(() => SetSection(section));
+
+            // Left accent bar marks the active section, as in the design.
+            var bar = UIFactory.CreatePanel(row, "ActiveBar", UiTheme.Accent);
+            bar.anchorMin = new Vector2(0, 0); bar.anchorMax = new Vector2(0, 1);
+            bar.pivot = new Vector2(0, 0.5f);
+            bar.sizeDelta = new Vector2(3, 0);
+            bar.GetComponent<Image>().raycastTarget = false;
+
+            var img = UIFactory.CreateImage(row, glyph, "Glyph");
+            img.raycastTarget = false;
+            UIFactory.Place((RectTransform)img.transform, new Vector2(0f, 0.5f), new Vector2(Pad, 0), new Vector2(16, 16));
+
+            var text = UIFactory.CreateText(row, label, UiTheme.FontBody, UiTheme.TextDim,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(arrow.rectTransform, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(18, 26));
+            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(Pad + 26, 0), new Vector2(190, 20));
 
-            var text = UIFactory.CreateText(header, label, 14, GameConfig.UiText,
-                TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(26, 0), new Vector2(200, 26));
+            _navRows.Add((section, row, row.GetComponent<Image>(), img, text, bar));
+        }
 
-            var content = UIFactory.CreateGroup(_accordionRoot, "Content_" + label);
-            content.gameObject.SetActive(startExpanded);
-
-            var section = new AccordionSection
+        void SetSection(Section section)
+        {
+            _section = section;
+            foreach (var (s, _, fill, glyph, label, bar) in _navRows)
             {
-                header = header,
-                content = content,
-                arrow = arrow,
-                expanded = startExpanded,
-                contentHeight = contentHeight
-            };
-            _sections.Add(section);
-
-            btn.onClick.AddListener(() => ToggleSection(section));
-            return content;
+                bool on = s == section;
+                fill.color = on ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
+                glyph.color = on ? UiTheme.Accent : UiTheme.TextFaint;
+                label.color = on ? UiTheme.Text : UiTheme.TextDim;
+                bar.gameObject.SetActive(on);
+            }
+            foreach (var kv in _sectionContent)
+                kv.Value.gameObject.SetActive(kv.Key == section);
         }
 
-        void ToggleSection(AccordionSection s)
-        {
-            s.expanded = !s.expanded;
-            s.content.gameObject.SetActive(s.expanded);
-            s.arrow.text = s.expanded ? "▾" : "▸";
-            Relayout();
-        }
+        // ----------------------------------------------------- general section
 
         /// <summary>
-        /// Positions headers/contents by hand rather than via a layout group:
-        /// the flexible section is stretched between what sits above it and
-        /// what sits below it, so collapsed sections stay pinned and visible
-        /// instead of being pushed off the bottom of the panel.
+        /// Tactical graphics: derive each side's sector boundaries and FEBA from
+        /// where its units currently stand.
         /// </summary>
-        void Relayout()
+        void BuildGeneralSection(RectTransform content)
         {
-            int flex = -1;
-            for (int i = 0; i < _sections.Count; i++)
-                if (_sections[i].contentHeight <= 0f && _sections[i].expanded) { flex = i; break; }
+            SectionLabel(content, "TACTICAL GRAPHICS", -8);
 
-            float top = 0f;
-            int lastTop = flex >= 0 ? flex : _sections.Count - 1;
-            for (int i = 0; i <= lastTop; i++)
+            GeneralButton(content, "GENERATE SECTORS", -32, () => GenerateSectorsRequested?.Invoke());
+            GeneralButton(content, "CLEAR GRAPHICS", -72, () => ClearSectorsRequested?.Invoke());
+            _autoSectorBtn = GeneralButton(content, "AUTO-UPDATE: OFF", -112, () =>
             {
-                var s = _sections[i];
-                PlaceFromTop(s.header, ref top, HeaderHeight);
-                if (i == flex) break;                       // its content stretches, handled below
-                if (s.expanded) PlaceFromTop(s.content, ref top, s.contentHeight);
-            }
-
-            if (flex < 0) return;
-
-            float bottom = 0f;
-            for (int i = _sections.Count - 1; i > flex; i--)
-            {
-                var s = _sections[i];
-                if (s.expanded) PlaceFromBottom(s.content, ref bottom, s.contentHeight);
-                PlaceFromBottom(s.header, ref bottom, HeaderHeight);
-            }
-
-            var fc = _sections[flex].content;
-            fc.anchorMin = new Vector2(0, 0);
-            fc.anchorMax = new Vector2(1, 1);
-            fc.pivot = new Vector2(0.5f, 0.5f);
-            fc.offsetMax = new Vector2(0, -top);
-            fc.offsetMin = new Vector2(0, bottom);
-        }
-
-        static void PlaceFromTop(RectTransform rt, ref float y, float h)
-        {
-            rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(1, 1);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(0, h);
-            rt.anchoredPosition = new Vector2(0, -y);
-            y += h + Gap;
-        }
-
-        static void PlaceFromBottom(RectTransform rt, ref float y, float h)
-        {
-            rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(1, 0);
-            rt.pivot = new Vector2(0.5f, 0f);
-            rt.sizeDelta = new Vector2(0, h);
-            rt.anchoredPosition = new Vector2(0, y);
-            y += h + Gap;
-        }
-
-        // ------------------------------------------------------- general tab
-
-        /// <summary>
-        /// Tactical-graphics controls: derive each side's sector boundaries and
-        /// FEBA from where its units currently stand.
-        /// </summary>
-        void BuildGeneralTab(RectTransform content)
-        {
-            var heading = UIFactory.CreateText(content, "TACTICAL GRAPHICS", 12,
-                GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(heading.rectTransform, new Vector2(0f, 1f), new Vector2(4, -4), new Vector2(240, 18));
-
-            GeneralButton(content, "GENERATE SECTORS", -26, GameConfig.UiPanelLight,
-                () => GenerateSectorsRequested?.Invoke());
-
-            GeneralButton(content, "CLEAR GRAPHICS", -64, GameConfig.UiPanelLight,
-                () => ClearSectorsRequested?.Invoke());
-
-            _autoSectorBtn = GeneralButton(content, "AUTO-UPDATE: OFF", -102, GameConfig.UiPanelLight,
-                () =>
-                {
-                    _autoSectors = !_autoSectors;
-                    AutoSectorsChanged?.Invoke(_autoSectors);
-                    RefreshAutoSectorLabel();
-                });
+                _autoSectors = !_autoSectors;
+                AutoSectorsChanged?.Invoke(_autoSectors);
+                RefreshAutoSectorLabel();
+            });
 
             var hint = UIFactory.CreateText(content,
-                "Boundaries run rear-to-front between\nadjacent formations; FEBA follows the\nforward units.",
-                10, GameConfig.UiTextDim, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(4, -140), new Vector2(248, 40));
+                "Boundaries run rear-to-front between adjacent formations; the FEBA follows the forward units.",
+                UiTheme.FontSmall, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -156), new Vector2(InnerWidth, 56));
         }
 
-        Button GeneralButton(RectTransform content, string label, float y, Color bg,
-            UnityEngine.Events.UnityAction action)
+        Button GeneralButton(RectTransform content, string label, float y, UnityEngine.Events.UnityAction action)
         {
-            var b = UIFactory.CreateButton(content, label, action, bg, GameConfig.UiText, 13);
-            var rt = (RectTransform)b.transform;
-            rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(1, 1);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(-8, 32);
-            rt.anchoredPosition = new Vector2(0, y);
+            var frame = UIFactory.CreateBorderedPanel(content, "Btn_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 34));
+
+            var b = UIFactory.CreateButton(frame, label, action, new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)b.transform);
             return b;
         }
 
@@ -271,115 +260,298 @@ namespace IronMeridian.UI
             if (_autoSectorBtn == null) return;
             _autoSectorBtn.GetComponentInChildren<Text>(true).text =
                 _autoSectors ? "AUTO-UPDATE: ON" : "AUTO-UPDATE: OFF";
-            _autoSectorBtn.image.color = _autoSectors ? GameConfig.UiAccent : GameConfig.UiPanelLight;
+            _autoSectorBtn.GetComponentInChildren<Text>(true).color =
+                _autoSectors ? UiTheme.Accent : UiTheme.Text;
         }
 
-        // ------------------------------------------------------- units tab
+        // ------------------------------------------------------- units section
 
-        void BuildUnitsTab(RectTransform content)
+        void BuildUnitsSection(RectTransform content)
         {
-            _blueTab = UIFactory.CreateButton(content, "FRIENDLY", () => SetTeam(Team.User),
-                GameConfig.BlueTeam, Color.white, 15);
-            UIFactory.Place((RectTransform)_blueTab.transform, new Vector2(0f, 1f), new Vector2(2, -6), new Vector2(122, 36));
+            // --- side selector ---
+            float half = (InnerWidth - 6f) / 2f;
+            _blueTab = SideButton(content, "FRIENDLY", Pad, half, () => SetTeam(Team.User), out _blueFill);
+            _redTab = SideButton(content, "ENEMY", Pad + half + 6f, half, () => SetTeam(Team.Enemy), out _redFill);
 
-            _redTab = UIFactory.CreateButton(content, "ENEMY", () => SetTeam(Team.Enemy),
-                GameConfig.UiPanelLight, Color.white, 15);
-            UIFactory.Place((RectTransform)_redTab.transform, new Vector2(0f, 1f), new Vector2(132, -6), new Vector2(122, 36));
-
-            var affLabel = UIFactory.CreateText(content, "Affiliation", 14, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(affLabel.rectTransform, new Vector2(0f, 1f), new Vector2(4, -52), new Vector2(96, 24));
+            // --- affiliation + echelon ---
             var affDd = UIFactory.CreateDropdown(content,
                 new List<string> { "Friendly", "Hostile", "Neutral", "Unknown" }, 0,
                 i => _affiliation = (Affiliation)i);
-            UIFactory.Place((RectTransform)affDd.transform, new Vector2(0f, 1f), new Vector2(90, -48), new Vector2(164, 34));
+            StyleDropdown(affDd, -50);
 
-            var echLabel = UIFactory.CreateText(content, "Echelon", 14, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(echLabel.rectTransform, new Vector2(0f, 1f), new Vector2(4, -90), new Vector2(96, 24));
             var echNames = new List<string>(System.Enum.GetNames(typeof(Echelon)));
             var echDd = UIFactory.CreateDropdown(content, echNames, (int)Echelon.Battalion,
                 i => _echelon = (Echelon)i);
-            UIFactory.Place((RectTransform)echDd.transform, new Vector2(0f, 1f), new Vector2(90, -86), new Vector2(164, 34));
+            StyleDropdown(echDd, -90);
 
-            var hint = UIFactory.CreateText(content, "Drag a unit onto the map to deploy",
-                13, GameConfig.UiTextDim);
-            UIFactory.Place(hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -120), new Vector2(260, 22));
+            // --- search ---
+            var searchFrame = UIFactory.CreateBorderedPanel(content, "SearchFrame", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(searchFrame, new Vector2(0f, 1f), new Vector2(Pad, -130), new Vector2(InnerWidth, 34));
 
-            // Scrollable unit list
+            var glass = UIFactory.CreateImage(searchFrame, UiIcons.Search, "SearchGlyph");
+            glass.color = UiTheme.TextFaint;
+            glass.raycastTarget = false;
+            UIFactory.Place((RectTransform)glass.transform, new Vector2(0f, 0.5f), new Vector2(9, 0), new Vector2(14, 14));
+
+            var input = UIFactory.CreateInputField(searchFrame, "Search unit or type...", UiTheme.FontSmall);
+            var irt = (RectTransform)input.transform;
+            UIFactory.Stretch(irt);
+            irt.offsetMin = new Vector2(28, 0);
+            input.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            input.onValueChanged.AddListener(v => { _search = v == null ? "" : v.Trim(); Populate(); });
+
+            // --- list header: mode tabs + live count ---
+            _availableTabBtn = ListModeButton(content, "AVAILABLE", Pad, () => SetListMode(ListMode.Available));
+            _deployedTabBtn = ListModeButton(content, "DEPLOYED", Pad + 86f, () => SetListMode(ListMode.Deployed));
+
+            var badge = UIFactory.CreatePanel(content, "CountBadge", UiTheme.AccentWash);
+            UIFactory.Place(badge, new Vector2(0f, 1f), new Vector2(PanelWidth - Pad - 34, -172), new Vector2(34, 18));
+            badge.GetComponent<Image>().raycastTarget = false;
+            _listCount = UIFactory.CreateText(badge, "0", UiTheme.FontLabel, UiTheme.Accent,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIFactory.Stretch(_listCount.rectTransform);
+
+            // --- the list itself ---
             var scroll = UIFactory.CreateScrollView(content, out _listContent);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
             srt.offsetMin = new Vector2(0, 2);
-            srt.offsetMax = new Vector2(0, -146);
+            srt.offsetMax = new Vector2(0, -196);
+
+            var layout = _listContent.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 4;
+            layout.padding = new RectOffset((int)Pad, (int)Pad, 4, 8);
+
+            SetListMode(ListMode.Available);
+        }
+
+        Button SideButton(RectTransform content, string label, float x, float w,
+            UnityEngine.Events.UnityAction action, out Image fill)
+        {
+            var b = UIFactory.CreateButton(content, label, action, UiTheme.Surface, UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f), new Vector2(x, -8), new Vector2(w, 32));
+            fill = b.GetComponent<Image>();
+            return b;
+        }
+
+        void StyleDropdown(Dropdown dd, float y)
+        {
+            var rt = (RectTransform)dd.transform;
+            UIFactory.Place(rt, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 34));
+            dd.GetComponent<Image>().color = UiTheme.Surface;
+            if (dd.captionText != null)
+            {
+                dd.captionText.fontSize = UiTheme.FontSmall;
+                dd.captionText.color = UiTheme.Text;
+            }
+        }
+
+        Button ListModeButton(RectTransform content, string label, float x, UnityEngine.Events.UnityAction action)
+        {
+            var b = UIFactory.CreateButton(content, label, action, new Color(0, 0, 0, 0),
+                UiTheme.TextDim, UiTheme.FontLabel);
+            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f), new Vector2(x, -170), new Vector2(82, 22));
+            return b;
+        }
+
+        void SetListMode(ListMode mode)
+        {
+            _listMode = mode;
+            TintListTab(_availableTabBtn, mode == ListMode.Available);
+            TintListTab(_deployedTabBtn, mode == ListMode.Deployed);
+            Populate();
+        }
+
+        static void TintListTab(Button b, bool active)
+        {
+            if (b == null) return;
+            var t = b.GetComponentInChildren<Text>(true);
+            if (t != null) t.color = active ? UiTheme.Accent : UiTheme.TextFaint;
+            b.GetComponent<Image>().color = active ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
         }
 
         void SetTeam(Team team)
         {
             _team = team;
             _affiliation = team == Team.User ? Affiliation.Friendly : Affiliation.Hostile;
-            _blueTab.image.color = team == Team.User ? GameConfig.BlueTeam : GameConfig.UiPanelLight;
-            _redTab.image.color = team == Team.Enemy ? GameConfig.RedTeam : GameConfig.UiPanelLight;
+            _blueFill.color = team == Team.User ? UiTheme.Friendly : UiTheme.Surface;
+            _redFill.color = team == Team.Enemy ? UiTheme.Hostile : UiTheme.Surface;
             Populate();
         }
 
-        void Populate()
+        void OnUnitsChanged()
         {
-            foreach (Transform child in _listContent) Destroy(child.gameObject);
-            string folder = _team == Team.User ? "Friendly" : "Enemy";
-
-            string lastCategory = null;
-            foreach (var def in UnitDatabase.All)
-            {
-                if (def.category != lastCategory)
-                {
-                    lastCategory = def.category;
-                    var header = UIFactory.CreateText(_listContent,
-                        def.Category == UnitCategory.Drone ? "— DRONE UNITS —" : "— CORE GROUND UNITS —",
-                        13, GameConfig.UiAccent);
-                    var hrt = header.rectTransform;
-                    hrt.sizeDelta = new Vector2(0, 22);
-                }
-                CreateCard(def, folder);
-            }
+            if (_listMode == ListMode.Deployed) Populate();
         }
 
-        void CreateCard(UnitDefinition def, string folder)
+        // ------------------------------------------------------------ list
+
+        void Populate()
         {
-            var card = UIFactory.CreatePanel(_listContent, "Card_" + def.id, GameConfig.UiPanelLight);
-            card.sizeDelta = new Vector2(0, 48);
+            if (_listContent == null) return;
 
-            var sprite = UIFactory.LoadIconSprite(folder, def.id);
-            if (sprite != null)
+            // Unparent before Destroy: destruction is deferred to end of frame,
+            // so old rows would otherwise sit in the layout beside the new ones.
+            for (int i = _listContent.childCount - 1; i >= 0; i--)
             {
-                var icon = UIFactory.CreateImage(card, sprite, "Icon");
-                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(6, 0), new Vector2(42, 42));
-                ((RectTransform)icon.transform).pivot = new Vector2(0, 0.5f);
-            }
-            else
-            {
-                // Keep the layout intact and visibly flag the gap instead of leaving empty space.
-                var fallback = UIFactory.CreatePanel(card, "IconFallback", GameConfig.UiPanel);
-                UIFactory.Place(fallback, new Vector2(0f, 0.5f), new Vector2(6, 0), new Vector2(42, 42));
-                fallback.pivot = new Vector2(0, 0.5f);
-                var mark = UIFactory.CreateText(fallback, "?", 20, GameConfig.UiTextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
-                UIFactory.Stretch(mark.rectTransform);
+                var c = _listContent.GetChild(i);
+                c.SetParent(null, false);
+                Destroy(c.gameObject);
             }
 
-            var name = UIFactory.CreateText(card, def.name, 14, null, TextAnchor.MiddleLeft);
-            UIFactory.Stretch(name.rectTransform);
-            name.rectTransform.offsetMin = new Vector2(56, 15);
+            int count = _listMode == ListMode.Available ? PopulateAvailable() : PopulateDeployed();
+            if (_listCount != null) _listCount.text = count.ToString();
+        }
+
+        int PopulateAvailable()
+        {
+            string folder = _team == Team.User ? "Friendly" : "Enemy";
+            int count = 0;
+            foreach (var def in UnitDatabase.All)
+            {
+                if (!Matches(def.name, def.id, def.ammoType)) continue;
+                CreateAvailableCard(def, folder);
+                count++;
+            }
+            if (count == 0) EmptyRow("No unit type matches that search.");
+            return count;
+        }
+
+        int PopulateDeployed()
+        {
+            int count = 0, index = 0;
+            foreach (var actor in UnitRegistry.All)
+            {
+                if (actor == null || !actor.IsAlive) continue;
+                index++;
+                if (!Matches(actor.Def.name, actor.Def.id, actor.State.customName)) continue;
+                CreateDeployedCard(actor, index);
+                count++;
+            }
+            if (count == 0) EmptyRow(index == 0
+                ? "Nothing deployed yet — drag a unit from AVAILABLE onto the map."
+                : "No deployed unit matches that search.");
+            return count;
+        }
+
+        bool Matches(params string[] fields)
+        {
+            if (string.IsNullOrEmpty(_search)) return true;
+            foreach (var f in fields)
+                if (!string.IsNullOrEmpty(f) &&
+                    f.IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
+        }
+
+        void EmptyRow(string message)
+        {
+            var t = UIFactory.CreateText(_listContent, message, UiTheme.FontSmall,
+                UiTheme.TextFaint, TextAnchor.UpperLeft);
+            ((RectTransform)t.transform).sizeDelta = new Vector2(0, 52);
+        }
+
+        /// <summary>A draggable catalogue entry.</summary>
+        void CreateAvailableCard(UnitDefinition def, string folder)
+        {
+            var card = UIFactory.CreateBorderedPanel(_listContent, "Card_" + def.id, UiTheme.Surface, UiTheme.Border);
+            card.sizeDelta = new Vector2(0, 50);
+
+            var sprite = CardIcon(card, folder, def.id);
+
+            var name = UIFactory.CreateText(card, def.name, UiTheme.FontBody, UiTheme.Text, TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(50, 1), new Vector2(PanelWidth - 100, 18));
 
             var stats = UIFactory.CreateText(card,
-                $"ATK {def.attack:0}  DEF {def.defence:0}  SPD {def.speedKmh:0} km/h",
-                11, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Stretch(stats.rectTransform);
-            stats.rectTransform.offsetMin = new Vector2(56, 0);
-            stats.rectTransform.offsetMax = new Vector2(0, -21);
+                $"ATK {def.attack:0}  ·  DEF {def.defence:0}  ·  {def.speedKmh:0} km/h",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(stats.rectTransform, new Vector2(0f, 0.5f), new Vector2(50, -3), new Vector2(PanelWidth - 100, 16));
 
-            // Drag handling
             var trigger = card.gameObject.AddComponent<EventTrigger>();
             AddEvent(trigger, EventTriggerType.BeginDrag, e => BeginDrag(def, sprite));
             AddEvent(trigger, EventTriggerType.Drag, e => Drag((PointerEventData)e));
             AddEvent(trigger, EventTriggerType.EndDrag, e => EndDrag((PointerEventData)e));
+        }
+
+        /// <summary>A unit actually on the map: call sign, type and readiness.</summary>
+        void CreateDeployedCard(UnitActor actor, int index)
+        {
+            var s = actor.State;
+            var card = UIFactory.CreateBorderedPanel(_listContent, "Deployed_" + s.instanceId,
+                UiTheme.Surface, UiTheme.Border);
+            card.sizeDelta = new Vector2(0, 58);
+
+            var btn = card.gameObject.AddComponent<Button>();
+            btn.targetGraphic = card.GetComponent<Image>();
+            btn.onClick.AddListener(() => SelectUnitRequested?.Invoke(actor));
+
+            string folder = s.TeamEnum == Team.User ? "Friendly" : "Enemy";
+            CardIcon(card, folder, actor.Def.id);
+
+            string callSign = string.IsNullOrEmpty(s.customName)
+                ? $"1-{index} {Abbreviate(actor.Def.name)}"
+                : s.customName;
+
+            var title = UIFactory.CreateText(card, callSign, UiTheme.FontBody, UiTheme.Text,
+                TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(50, -6), new Vector2(PanelWidth - 106, 17));
+
+            var subtitle = UIFactory.CreateText(card, actor.Def.name, UiTheme.FontLabel,
+                UiTheme.TextDim, TextAnchor.UpperLeft);
+            UIFactory.Place(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(50, -23), new Vector2(PanelWidth - 106, 15));
+
+            // Third line is the design's metadata row. Real readiness data
+            // rather than a decorative timestamp.
+            var meta = UIFactory.CreateText(card,
+                $"{s.echelon}  ·  STR {s.strength * 100f:0}%  ·  {s.status}",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(meta.rectTransform, new Vector2(0f, 1f), new Vector2(50, -38), new Vector2(PanelWidth - 106, 15));
+
+            var dot = UIFactory.CreatePanel(card, "TeamDot",
+                s.TeamEnum == Team.User ? UiTheme.Friendly : UiTheme.Hostile);
+            UIFactory.Place(dot, new Vector2(0f, 1f), new Vector2(50, -40), new Vector2(5, 5));
+            dot.GetComponent<Image>().raycastTarget = false;
+
+            var kebab = UIFactory.CreateIconButton(card, UiIcons.Kebab,
+                () => RemoveUnitRequested?.Invoke(actor), new Color(0, 0, 0, 0), UiTheme.TextFaint, 7f);
+            UIFactory.Place((RectTransform)kebab.transform, new Vector2(1f, 0.5f), new Vector2(-6, 0), new Vector2(26, 26));
+        }
+
+        /// <summary>Framed unit icon, or a visible gap marker when the sprite is missing.</summary>
+        Sprite CardIcon(RectTransform card, string folder, string unitId)
+        {
+            var sprite = UIFactory.LoadIconSprite(folder, unitId);
+            if (sprite != null)
+            {
+                var icon = UIFactory.CreateImage(card, sprite, "Icon");
+                icon.raycastTarget = false;
+                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(36, 36));
+                return sprite;
+            }
+
+            // Keep the layout intact and visibly flag the gap.
+            var fallback = UIFactory.CreatePanel(card, "IconFallback", UiTheme.Panel);
+            UIFactory.Place(fallback, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(36, 36));
+            var mark = UIFactory.CreateText(fallback, "?", 16, UiTheme.TextFaint, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIFactory.Stretch(mark.rectTransform);
+            return null;
+        }
+
+        /// <summary>"Mechanised infantry" → "MECH INF": a call-sign-length label.</summary>
+        static string Abbreviate(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "UNIT";
+            var parts = name.Split(' ');
+            var sb = new System.Text.StringBuilder();
+            foreach (var p in parts)
+            {
+                if (p.Length == 0) continue;
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(p.Length <= 4 ? p.ToUpperInvariant()
+                                        : p.Substring(0, 4).ToUpperInvariant());
+                if (sb.Length >= 12) break;
+            }
+            return sb.ToString();
         }
 
         static void AddEvent(EventTrigger t, EventTriggerType type,
@@ -389,6 +561,117 @@ namespace IronMeridian.UI
             entry.callback.AddListener(cb);
             t.triggers.Add(entry);
         }
+
+        // ------------------------------------------------------- tool strip
+
+        void BuildToolStrip(RectTransform panel)
+        {
+            var strip = UIFactory.CreatePanel(panel, "ToolStrip", UiTheme.Chrome);
+            strip.anchorMin = new Vector2(0, 0); strip.anchorMax = new Vector2(1, 0);
+            strip.pivot = new Vector2(0.5f, 0);
+            strip.sizeDelta = new Vector2(0, ToolStripHeight);
+
+            var rule = UIFactory.CreateDivider(strip, UiTheme.Border);
+            rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
+            rule.pivot = new Vector2(0.5f, 1);
+            rule.anchoredPosition = Vector2.zero;
+
+            AddTool(strip, 0, UiIcons.Cursor, () => SelectToolRequested?.Invoke());
+            AddTool(strip, 1, UiIcons.Pencil, () => DefensiveLineToolRequested?.Invoke());
+            AddTool(strip, 2, UiIcons.Square, () => BoundaryToolRequested?.Invoke());
+            AddTool(strip, 3, UiIcons.Pin, () => GenerateSectorsRequested?.Invoke());
+            AddTool(strip, 4, UiIcons.Chart, ToggleView);
+
+            SetActiveTool(0);
+        }
+
+        void AddTool(RectTransform strip, int index, Sprite glyph, UnityEngine.Events.UnityAction action)
+        {
+            var frame = UIFactory.CreateBorderedPanel(strip, "Tool" + index, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 0.5f), new Vector2(Pad + index * 42f, 0), new Vector2(36, 32));
+
+            int captured = index;
+            var btn = UIFactory.CreateIconButton(frame, glyph, () =>
+            {
+                // Sector generation and the view toggle are one-shot commands,
+                // not modes — only the first three latch.
+                if (captured <= 2) SetActiveTool(captured);
+                action();
+            }, new Color(0, 0, 0, 0), UiTheme.TextDim, 8f);
+            UIFactory.Stretch((RectTransform)btn.transform);
+
+            // Find the glyph by name: GetComponentInChildren searches the object
+            // itself first and would hand back the button's own background.
+            _tools.Add((frame.Find("Fill").GetComponent<Image>(),
+                        btn.transform.Find("Glyph").GetComponent<Image>()));
+        }
+
+        void SetActiveTool(int index)
+        {
+            _activeTool = index;
+            for (int i = 0; i < _tools.Count; i++)
+            {
+                bool on = i == index;
+                _tools[i].fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                _tools[i].glyph.color = on ? UiTheme.Accent : UiTheme.TextDim;
+            }
+        }
+
+        /// <summary>Called by the controller when the draw tool exits on its own.</summary>
+        public void ResetToolToSelect() => SetActiveTool(0);
+
+        // -------------------------------------------------------- map section
+
+        void BuildMapSection(RectTransform content)
+        {
+            SectionLabel(content, "TILE STYLE", -8);
+
+            _styleDropdown = UIFactory.CreateDropdown(content,
+                new List<string> { "SATELLITE", "TERRAIN", "ROADS" },
+                System.Array.IndexOf(Styles, _map.Style), OnStyleSelected);
+            StyleDropdown(_styleDropdown, -30);
+
+            SectionLabel(content, "PROJECTION", -78);
+
+            var frame = UIFactory.CreateBorderedPanel(content, "ViewToggle", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -100), new Vector2(InnerWidth, 34));
+
+            var viewBtn = UIFactory.CreateButton(frame,
+                _map.ViewMode == ViewMode.Mode3D ? "VIEW: 3D" : "VIEW: 2D",
+                ToggleView, new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)viewBtn.transform);
+            _viewBtnLabel = viewBtn.GetComponentInChildren<Text>(true);
+        }
+
+        void SectionLabel(RectTransform content, string label, float y)
+        {
+            var t = UIFactory.CreateSectionHeader(content, label);
+            UIFactory.Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 18));
+        }
+
+        void ToggleView()
+        {
+            _map.ToggleViewMode();
+            _rig.SetMode(_map.ViewMode);
+        }
+
+        void OnViewModeChanged(ViewMode mode)
+        {
+            if (_viewBtnLabel == null) return;
+            _viewBtnLabel.text = mode == ViewMode.Mode3D ? "VIEW: 3D" : "VIEW: 2D";
+        }
+
+        void OnStyleSelected(int index) => _map.SetMapStyle(Styles[index]);
+
+        void OnStyleChanged(MapStyle style)
+        {
+            if (_styleDropdown == null) return;
+            int idx = System.Array.IndexOf(Styles, style);
+            _styleDropdown.SetValueWithoutNotify(idx);
+            _styleDropdown.RefreshShownValue();
+        }
+
+        // ---------------------------------------------------- drag to deploy
 
         void BeginDrag(UnitDefinition def, Sprite sprite)
         {
@@ -465,7 +748,7 @@ namespace IronMeridian.UI
             quad.transform.SetParent(_groundMarker.transform, false);
             quad.transform.localRotation = Quaternion.Euler(90, 0, 0);
             quad.transform.localScale = Vector3.one * 320f;
-            var mat = RuntimeMaterials.UnlitTexture(ProceduralTextures.Reticle(GameConfig.UiAccent));
+            var mat = RuntimeMaterials.UnlitTexture(ProceduralTextures.Reticle(UiTheme.Accent));
             quad.GetComponent<MeshRenderer>().material = mat;
 
             _markerAnim = _groundMarker.AddComponent<PlacementMarker>();
@@ -514,58 +797,11 @@ namespace IronMeridian.UI
             }
         }
 
-        // ------------------------------------------------------- map tab
-
-        void BuildMapTab(RectTransform content)
-        {
-            var styleLabel = UIFactory.CreateText(content, "Tile style", 14, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(styleLabel.rectTransform, new Vector2(0f, 1f), new Vector2(4, -4), new Vector2(120, 22));
-
-            _styleDropdown = UIFactory.CreateDropdown(content,
-                new List<string> { "SATELLITE", "TERRAIN", "ROADS" },
-                System.Array.IndexOf(Styles, _map.Style), OnStyleSelected);
-            var ddRt = (RectTransform)_styleDropdown.transform;
-            ddRt.anchorMin = new Vector2(0, 1); ddRt.anchorMax = new Vector2(1, 1);
-            ddRt.pivot = new Vector2(0.5f, 1f);
-            ddRt.offsetMin = new Vector2(4, -60);
-            ddRt.offsetMax = new Vector2(-4, -26);
-
-            var viewBtn = UIFactory.CreateButton(content, _map.ViewMode == ViewMode.Mode3D ? "VIEW: 3D" : "VIEW: 2D",
-                ToggleView, GameConfig.UiPanelLight, null, 15);
-            _viewBtnLabel = viewBtn.GetComponentInChildren<Text>(true);
-            var vbRt = (RectTransform)viewBtn.transform;
-            vbRt.anchorMin = new Vector2(0, 1); vbRt.anchorMax = new Vector2(1, 1);
-            vbRt.pivot = new Vector2(0.5f, 1f);
-            vbRt.offsetMin = new Vector2(4, -100);
-            vbRt.offsetMax = new Vector2(-4, -66);
-        }
-
-        void ToggleView()
-        {
-            _map.ToggleViewMode();
-            _rig.SetMode(_map.ViewMode);
-        }
-
-        void OnViewModeChanged(ViewMode mode)
-        {
-            if (_viewBtnLabel == null) return;
-            _viewBtnLabel.text = mode == ViewMode.Mode3D ? "VIEW: 3D" : "VIEW: 2D";
-        }
-
-        void OnStyleSelected(int index) => _map.SetMapStyle(Styles[index]);
-
-        void OnStyleChanged(MapStyle style)
-        {
-            if (_styleDropdown == null) return;
-            int idx = System.Array.IndexOf(Styles, style);
-            _styleDropdown.SetValueWithoutNotify(idx);
-            _styleDropdown.RefreshShownValue();
-        }
-
         void OnDestroy()
         {
-            // Build() subscribes to the map; without this the callbacks fire
-            // into a destroyed component on scene reload.
+            // Build() subscribes to the map and registry; without this the
+            // callbacks fire into a destroyed component on scene reload.
+            UnitRegistry.Changed -= OnUnitsChanged;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

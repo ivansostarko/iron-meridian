@@ -28,28 +28,28 @@ namespace IronMeridian.UI
 
         public void Build(Canvas canvas)
         {
-            _panel = UIFactory.CreatePanel(canvas.transform, "GroupPanel", GameConfig.UiPanel);
+            _panel = UIFactory.CreatePanel(canvas.transform, "GroupPanel", UiTheme.Panel);
             _panel.anchorMin = new Vector2(1, 0); _panel.anchorMax = new Vector2(1, 1);
             _panel.pivot = new Vector2(1, 0.5f);
             _panel.offsetMin = new Vector2(-300, 0);
-            _panel.offsetMax = new Vector2(0, -50);
+            _panel.offsetMax = new Vector2(0, -UiTheme.TopBarHeight);
 
             _title = UIFactory.CreateText(_panel, "0 UNITS SELECTED", 18,
-                GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
+                UiTheme.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Place(_title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -24), new Vector2(280, 32));
 
-            var hint = UIFactory.CreateText(_panel, "Name this selection as a group:", 13, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
+            var hint = UIFactory.CreateText(_panel, "Name this selection as a group:", 13, UiTheme.TextDim, TextAnchor.MiddleLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -56), new Vector2(264, 22));
 
             _nameInput = UIFactory.CreateInputField(_panel, "Group name…", 16);
             UIFactory.Place((RectTransform)_nameInput.transform, new Vector2(0.5f, 1f), new Vector2(0, -84), new Vector2(264, 36));
 
             var create = UIFactory.CreateButton(_panel, "CREATE GROUP", CreateGroup,
-                GameConfig.UiAccent, new Color(0.1f, 0.1f, 0.1f), 16);
+                UiTheme.Accent, new Color(0.1f, 0.1f, 0.1f), 16);
             UIFactory.Place((RectTransform)create.transform, new Vector2(0.5f, 1f), new Vector2(0, -128), new Vector2(264, 40));
 
             // ---- units in this selection ----
-            var unitsLabel = UIFactory.CreateText(_panel, "SELECTED UNITS", 14, GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var unitsLabel = UIFactory.CreateText(_panel, "SELECTED UNITS", 14, UiTheme.Accent, TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(unitsLabel.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -160), new Vector2(264, 24));
 
             var unitsScroll = UIFactory.CreateScrollView(_panel, out _unitsContent);
@@ -61,7 +61,7 @@ namespace IronMeridian.UI
             TightenRows(_unitsContent);
 
             var removeAll = UIFactory.CreateButton(_panel, "REMOVE ALL SELECTED", RemoveAllSelected,
-                new Color(0.55f, 0.18f, 0.18f), GameConfig.UiText, 14);
+                new Color(0.55f, 0.18f, 0.18f), UiTheme.Text, 14);
             var rart = (RectTransform)removeAll.transform;
             rart.anchorMin = new Vector2(0, 0.42f); rart.anchorMax = new Vector2(1, 0.42f);
             rart.pivot = new Vector2(0.5f, 1f);
@@ -69,7 +69,7 @@ namespace IronMeridian.UI
             rart.anchoredPosition = new Vector2(0, -6);
 
             // ---- saved groups ----
-            var groupsLabel = UIFactory.CreateText(_panel, "EXISTING GROUPS", 14, GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
+            var groupsLabel = UIFactory.CreateText(_panel, "EXISTING GROUPS", 14, UiTheme.Accent, TextAnchor.MiddleLeft, FontStyle.Bold);
             var glrt = groupsLabel.rectTransform;
             glrt.anchorMin = new Vector2(0, 0.42f); glrt.anchorMax = new Vector2(1, 0.42f);
             glrt.pivot = new Vector2(0.5f, 1f);
@@ -106,7 +106,7 @@ namespace IronMeridian.UI
             {
                 if (u == null || !u.IsAlive) continue;
 
-                var row = UIFactory.CreatePanel(_unitsContent, "Unit_" + u.State.instanceId, GameConfig.UiPanelLight);
+                var row = UIFactory.CreatePanel(_unitsContent, "Unit_" + u.State.instanceId, UiTheme.Surface);
                 row.sizeDelta = new Vector2(0, 34);
 
                 string folder = u.State.TeamEnum == Team.User ? "Friendly" : "Enemy";
@@ -120,7 +120,7 @@ namespace IronMeridian.UI
 
                 string name = string.IsNullOrEmpty(u.State.customName) ? u.Def.name : u.State.customName;
                 var lbl = UIFactory.CreateText(row, $"{name}  ({u.State.echelon})", 12,
-                    GameConfig.UiText, TextAnchor.MiddleLeft);
+                    UiTheme.Text, TextAnchor.MiddleLeft);
                 var lr = lbl.rectTransform;
                 lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
                 lr.offsetMin = new Vector2(36, 0);
@@ -130,7 +130,7 @@ namespace IronMeridian.UI
                 // changes, so the reference can't go stale behind the button.
                 var target = u;
                 var del = UIFactory.CreateButton(row, "✕", () => RemoveUnit(target),
-                    new Color(0.55f, 0.18f, 0.18f), GameConfig.UiText, 13);
+                    new Color(0.55f, 0.18f, 0.18f), UiTheme.Text, 13);
                 UIFactory.Place((RectTransform)del.transform, new Vector2(1f, 0.5f), new Vector2(-4, 0), new Vector2(26, 26));
             }
         }
@@ -207,7 +207,7 @@ namespace IronMeridian.UI
         void CreateGroupRow(string groupId, string groupName)
         {
             var row = UIFactory.CreateButton(_listContent, groupName, () => SelectGroup(groupId),
-                GameConfig.UiPanelLight, GameConfig.UiText, 15);
+                UiTheme.Surface, UiTheme.Text, 15);
             ((RectTransform)row.transform).sizeDelta = new Vector2(0, 40);
         }
 

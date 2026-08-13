@@ -27,21 +27,21 @@ namespace IronMeridian.UI
 
         public void Build(Canvas canvas)
         {
-            _panel = UIFactory.CreatePanel(canvas.transform, "UnitActionBar", GameConfig.UiPanel);
+            _panel = UIFactory.CreatePanel(canvas.transform, "UnitActionBar", UiTheme.Panel);
             _panel.anchorMin = new Vector2(0.5f, 0f);
             _panel.anchorMax = new Vector2(0.5f, 0f);
             _panel.pivot = new Vector2(0.5f, 0f);
             _panel.sizeDelta = new Vector2(430, 104);
             _panel.anchoredPosition = new Vector2(0, 44);   // clear of the help line
 
-            _title = UIFactory.CreateText(_panel, "", 13, GameConfig.UiAccent,
+            _title = UIFactory.CreateText(_panel, "", 13, UiTheme.Accent,
                 TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Place(_title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -6), new Vector2(400, 20));
 
-            _moveBtn = ActionButton("MOVE", 0, ProceduralTextures.MoveIcon(GameConfig.UiText), OnMove);
-            ActionButton("ATTACK", 1, ProceduralTextures.AttackIcon(GameConfig.UiText),
+            _moveBtn = ActionButton("MOVE", 0, ProceduralTextures.MoveIcon(UiTheme.Text), OnMove);
+            ActionButton("ATTACK", 1, ProceduralTextures.AttackIcon(UiTheme.Text),
                 () => Mock("Attack"));
-            ActionButton("DEFENCE", 2, ProceduralTextures.ShieldIcon(GameConfig.UiText),
+            ActionButton("DEFENCE", 2, ProceduralTextures.ShieldIcon(UiTheme.Text),
                 () => Mock("Defence"));
 
             Hide();
@@ -53,7 +53,7 @@ namespace IronMeridian.UI
             float total = w * 3 + gap * 2;
             float x = -total / 2f + w / 2f + index * (w + gap);
 
-            var btn = UIFactory.CreateButton(_panel, "", onClick, Idle, GameConfig.UiText, 12);
+            var btn = UIFactory.CreateButton(_panel, "", onClick, Idle, UiTheme.Text, 12);
             var rt = (RectTransform)btn.transform;
             UIFactory.Place(rt, new Vector2(0.5f, 0f), new Vector2(x, 10), new Vector2(w, h));
 
