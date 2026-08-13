@@ -102,6 +102,16 @@ Every effect in `VfxCatalog` can carry a sound; it is a field on the catalogue r
 
 Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact`. `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle.
 
+**Ordered attacks are the loudest thing on the map**, and all three of their sounds arrive through the effects above rather than through anything new — see [15-COMBAT-ORDERS.md §4](15-COMBAT-ORDERS.md):
+
+| Order moment | Effect | Sound heard |
+|---|---|---|
+| A volley takes ≥1.8% strength | `Explosion` (throttled to one per 2.4 s per order) | Explosion |
+| An **assault** goes in | `GroundFire` on the objective, 20 s | Fire |
+| **Suppressive fire** opens | `SmokeScreen` on the target, for the order's life | Smoke |
+
+The throttle is an audio decision as much as a visual one: unthrottled, a division-scale engagement would fire the explosion voice every tick and consume the whole 14-voice budget on one fight.
+
 **Files beat synthesis.** `EffectAudio` looks in `Resources/Audio/effects/<name>` first and only synthesises when nothing is there, so dropping in recorded audio needs no code change. The synthesis exists so the game is audible with no audio assets at all — the same rule `ProceduralVfx` follows for the visuals.
 
 **Voice budget:** 14 concurrent effect sources; past that the oldest is recycled. A corps-scale battle can have dozens of fires burning, and without the cap the mix turns to mud.
@@ -134,7 +144,7 @@ Tracked so the inventory stays honest and licensing stays traceable.
 | Units List | `UnitsList` | Menu theme | — | — | Click |
 | East France | `EastFrance` | Menu theme | — | — | Click |
 | Map editor (editing) | `Game` | Menu theme | — | Hand-placed effects (EFFECTS panel) | Click |
-| Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Combat + hand-placed effects | Click |
+| Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Combat, ordered attacks (§2.3) + hand-placed effects | Click |
 
 Each screen starts music in its bootstrap, next to `AudioManager.Apply()`:
 

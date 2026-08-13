@@ -115,12 +115,20 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 
 `DeployEffect` predates `VfxSystem` and owns its own shockwave ring, which the catalogue has no equivalent for. It is a migration candidate, not a second effects system — do not add new effects to it.
 
+### Ordered attacks
+
+Offensive tasks add three call sites on top of the automatic exchange above. See
+[15-COMBAT-ORDERS.md](15-COMBAT-ORDERS.md) for what each task does.
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| A volley takes ≥1.8% strength off the target | `Explosion` at the target | Throttled to one per 2.4 s **per order**, so a long engagement marks its heavy blows instead of carpeting the map | `AttackOrderSystem.Engage` |
+| An **assault** goes in | `GroundFire` on the objective, burning for 20 s | Once, when the engagement opens. The ground an assault crosses stays lit whether or not the order survives | `AttackOrderSystem.BeginEngagement` |
+| **Suppressive fire** opens | `SmokeScreen` on the target | Once, when the engagement opens; stopped when the order ends. This is the obscuration case the effect was defined for | `AttackOrderSystem.BeginEngagement` |
+
 ### Defined but not yet triggered
 
-| Effect | Intended case |
-|---|---|
-| `SmokeScreen` | Artillery-delivered or generator-laid obscuration as a unit order; should also reduce spotting once vision modelling exists |
-| `GroundFire` | Terrain set alight independently of a wreck — incendiary strikes, burning fuel dumps as map objects |
+Nothing. Every catalogue row now has at least one call site.
 
 ---
 

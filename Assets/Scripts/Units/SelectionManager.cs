@@ -54,6 +54,66 @@ namespace IronMeridian.Units
             if (_selection.Count == 0) return;
             _moveArmed = true;
         }
+
+        // ------------------------------------------------------- attack targeting
+
+        AttackTask? _attackArmed;
+
+        /// <summary>Raised with the chosen target once an armed attack order is placed.</summary>
+        public System.Action<UnitActor, AttackTask> AttackTargetPicked;
+        /// <summary>Raised when an armed attack order is placed or cancelled.</summary>
+        public System.Action AttackOrderResolved;
+
+        /// <summary>
+        /// Arms an offensive task: the next click on the map picks the target.
+        /// Unlike a move order this wants a *unit*, not a point on the ground —
+        /// clicking bare terrain is a miss, not an order to attack that spot.
+        /// </summary>
+        public void ArmAttackOrder(AttackTask task)
+        {
+            if (_selection.Count == 0) return;
+            _attackArmed = task;
+        }
+
+        /// <summary>True while the player is picking an attack target.</summary>
+        public bool IsPickingTarget => _attackArmed.HasValue;
+
+        void ResolveAttackOrder(string message)
+        {
+            _attackArmed = null;
+            if (message != null) Flash?.Invoke(message);
+            AttackOrderResolved?.Invoke();
+        }
+
+        /// <summary>
+        /// Turns a click into a target. Held in one place because every failure
+        /// here needs a reason on screen — an armed order that silently does
+        /// nothing when you click the wrong thing is the worst outcome.
+        /// </summary>
+        void HandleAttackTarget(AttackTask task)
+        {
+            var attacker = Selected;
+            if (attacker == null || !attacker.IsAlive)
+            {
+                ResolveAttackOrder("Nothing selected to attack with.");
+                return;
+            }
+
+            var target = UnitUnderMouse();
+            if (target == null)
+            {
+                Flash?.Invoke("Click an enemy formation — attack orders need a target, not a point on the map.");
+                return;      // stay armed: a miss is not a cancellation
+            }
+            if (target.State.TeamEnum == attacker.State.TeamEnum)
+            {
+                Flash?.Invoke("That is one of yours. Pick a target on the opposing side.");
+                return;
+            }
+
+            AttackTargetPicked?.Invoke(target, task);
+            ResolveAttackOrder(null);
+        }
         Image _boxImage;
         RectTransform _boxRect;
 
@@ -83,6 +143,21 @@ namespace IronMeridian.Units
                     HandleMoveOrder();
                     ResolveMoveOrder(null);
                 }
+                return;
+            }
+
+            // An armed attack task turns the next click into a target pick.
+            // Kept armed through a miss, so a slightly-off click costs one more
+            // click rather than the whole order.
+            if (_attackArmed.HasValue)
+            {
+                // Leaving battle mid-pick disarms: there is nothing to attack
+                // with in the scenario editor, and the order bar has gone.
+                if (BattleRunning != null && !BattleRunning()) { ResolveAttackOrder(null); return; }
+                if (Input.GetKeyDown(KeyCode.Escape)) { ResolveAttackOrder("Attack order cancelled."); return; }
+                if (Input.GetMouseButtonDown(1)) { ResolveAttackOrder("Attack order cancelled."); return; }
+                if (!blocked && Input.GetMouseButtonDown(0)) HandleAttackTarget(_attackArmed.Value);
+                UpdateHover(blocked);
                 return;
             }
             // Bare C only — Ctrl+C is copy, and would otherwise drop straight
@@ -391,6 +466,11 @@ namespace IronMeridian.Units
 
         void ApplySelection(List<UnitActor> newSelection)
         {
+            // An armed attack belongs to the unit that was selected when it was
+            // armed. Changing the selection from a panel while a target is being
+            // picked would otherwise fire the order from a different formation.
+            if (_attackArmed.HasValue) ResolveAttackOrder(null);
+
             foreach (var u in _selection) if (u != null && !newSelection.Contains(u)) u.SetSelected(false);
             foreach (var u in newSelection) if (u != null) u.SetSelected(true);
             _selection.Clear();

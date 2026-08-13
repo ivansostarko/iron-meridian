@@ -45,7 +45,7 @@ Assets/Scripts/
     GameHUD.cs           top bar: view toggle, line tools, save/load, battle
     UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel
     UnitInfoPanel.cs     right panel: full unit data on click
-    UnitActionBarUI.cs   battle order bar: Move / Attack / Defence (+ task submenu)
+    UnitActionBarUI.cs   battle order bar: Move / Attack / Defence (+ task submenus)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
     CameraRig.cs         3D orbit & 2D top-down strategy camera
@@ -57,8 +57,11 @@ Assets/Scripts/
     MoveTrail.cs         travelled trail + dashed planned route (battle mode only)
     HeadingArrow.cs      ground facing arrow under a selected unit
     UnitRegistry.cs      runtime unit list + change events
-    SelectionManager.cs  LMB select, RMB move order, C facing, hover
+    SelectionManager.cs  LMB select, RMB move order, C facing, attack targeting
     CombatSystem.cs      tick combat: power ratio, modifiers, consumption
+    AttackTaskCatalog.cs the five offensive tasks in numbers — docs/15-COMBAT-ORDERS.md
+    AttackOrderSystem.cs order lifecycle: approach → engage; ordered attacks beat the auto sweep
+    AttackArrow.cs       axis-of-attack arrow, drawn while an attack is pending
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
     MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions
@@ -123,4 +126,7 @@ would otherwise be sampled as terrain by a neighbour.
   vector road data on the map to snap to. The corridor search is forward-only, so
   a route can steer around an obstacle but not double back around one; a fully
   blocked corridor falls back to the direct line.
-- Attack orders are still a mockup; only Move and the three defensive tasks are wired.
+- Enemy formations never issue orders of their own — the five offensive tasks are
+  the player's to give, and Red only fights back through the automatic exchange.
+- Suppression costs a target morale and organisation but does not yet reduce its
+  outgoing fire; that needs the damage model to read organisation.

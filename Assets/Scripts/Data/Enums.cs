@@ -108,6 +108,26 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// Offensive tasks a unit can be given against a chosen enemy (FM 3-90
+    /// ch.3 — forms of the attack). They differ in how close the attacker
+    /// closes, how hard it hits, and what it is trying to achieve: destruction,
+    /// suppression, or surprise.
+    /// </summary>
+    public enum AttackTask
+    {
+        /// <summary>Deliberate attack: close to effective range and destroy the target.</summary>
+        Attack,
+        /// <summary>Close assault: get right on top of the objective. Decisive and expensive.</summary>
+        Assault,
+        /// <summary>Suppressive fire from maximum range: pin the target rather than kill it.</summary>
+        Suppress,
+        /// <summary>Lie in wait, concealed, and strike the target when it comes into range.</summary>
+        Ambush,
+        /// <summary>Strike back at an enemy that is committed to its own attack.</summary>
+        Counterattack
+    }
+
+    /// <summary>
     /// Point graphics pinned to the map by a defensive task. Unlike lines these
     /// mark a place rather than a limit, so they carry the owning unit and the
     /// direction the task is oriented on.

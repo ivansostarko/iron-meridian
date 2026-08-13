@@ -365,6 +365,25 @@ namespace IronMeridian.Units
         }
 
         /// <summary>
+        /// Damage to a formation's ability to act rather than to its numbers:
+        /// morale and organisation only. This is what suppressive fire is for —
+        /// a pinned battalion still has all its people and cannot do anything
+        /// with them. A formation whose organisation collapses is marked
+        /// Suppressed, which reads on the map and in the info panel.
+        /// </summary>
+        public void ApplyShock(float amount)
+        {
+            if (amount <= 0f || !IsAlive) return;
+            State.morale = Mathf.Max(0f, State.morale - amount);
+            State.organisation = Mathf.Max(0f, State.organisation - amount * 1.4f);
+
+            // Routed is the worse state and is owned by ApplyDamage; suppression
+            // must not quietly promote a routed formation back up to pinned.
+            if (State.organisation < 25f && State.status != UnitStatus.Routed.ToString())
+                State.status = UnitStatus.Suppressed.ToString();
+        }
+
+        /// <summary>
         /// Muzzle/dust signature when this unit shoots. Called by
         /// <see cref="CombatSystem"/>; throttled so it marks "this formation is
         /// in action" rather than firing once per resolved exchange.

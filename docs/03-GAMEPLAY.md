@@ -102,10 +102,39 @@ arrives, and exists only in battle mode.
 Stopping the battle abandons any march in progress and leaves every unit standing
 where it actually is, handing the map back to the editor.
 
-### Defensive orders (battle mode)
+### Orders (battle mode)
 
-Select a unit while a battle is running and the order bar appears. **DEFENCE**
-opens a submenu of the three defensive tasks:
+Select a unit while a battle is running and the bottom **order bar** appears:
+**MOVE**, **ATTACK**, **DEFENCE**. Attack and Defence each open a submenu of
+tasks. Full reference: [15-COMBAT-ORDERS.md](15-COMBAT-ORDERS.md).
+
+#### Attack — five offensive tasks
+
+Pick a task, then **click an enemy formation** to target it (`Esc` or right-click
+cancels; clicking bare ground is a miss and leaves the order armed).
+
+| Task | What it does |
+|---|---|
+| **ATTACK** | Close to effective range and destroy the target. |
+| **ASSAULT** | Close right up. Nearly double damage — and the heaviest return fire, because both sides are fully exposed. Sets the objective alight. |
+| **SUPPRESS** | Fire from maximum range. Barely dents the target's strength and wrecks its morale and organisation, marking it `Suppressed`. Lays a smoke screen on it. |
+| **AMBUSH** | Does **not** move. Sits concealed until the target walks into range, then strikes at ×2.4 with no reply — surprise is worth a great deal once. |
+| **COUNTERATTACK** | Strike an enemy already committed to its own attack; heavy opening blow. |
+
+If the target is out of range the unit **marches to a firing position** first,
+routed over the terrain like any other move. An **attack arrow** in the task's
+colour runs from the attacker to the target while the attack is pending, and
+**fades the moment the unit reaches its firing position** — from there the muzzle
+flashes, impacts, explosions and fires carry it. If the target withdraws, the
+attack follows.
+
+A unit acting on an order fires only at what it was told to; unordered units keep
+engaging anything in reach automatically. Orders are cleared when the battle
+stops and are not saved.
+
+#### Defence — three defensive tasks
+
+**DEFENCE** opens a submenu of the three defensive tasks:
 
 | Task | What it does |
 |---|---|

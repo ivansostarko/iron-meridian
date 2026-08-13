@@ -31,6 +31,7 @@ namespace IronMeridian.Core
         SectorSystem _sectors;
         DefenceOrderSystem _defence;
         CombatSystem _combat;
+        AttackOrderSystem _attacks;
         VfxSystem _vfx;
         WeatherSystem _weather;
         EffectPlacementTool _effects;
@@ -112,6 +113,11 @@ namespace IronMeridian.Core
 
             _combat = gameObject.AddComponent<CombatSystem>();
 
+            // Offensive tasks. Ordered attacks take precedence over the
+            // automatic exchange, so this has to exist before the first tick.
+            _attacks = gameObject.AddComponent<AttackOrderSystem>();
+            _attacks.Init(_combat, _map.Georeference);
+
             // Clock runs only in game mode; the editor is timeless.
             _clock = gameObject.AddComponent<GameClock>();
             _combat.RunningChanged += _clock.SetRunning;
@@ -150,6 +156,7 @@ namespace IronMeridian.Core
             _effects.Flash = _hud.Flash;
 
             _defence.Flash = _hud.Flash;
+            _attacks.Flash = _hud.Flash;
             _map.LoadError += _hud.Flash;
             // A tileset failure means the terrain will never finish: drop the
             // overlay at once so the player sees the HUD's error rather than a
@@ -250,6 +257,13 @@ namespace IronMeridian.Core
                 _actionBar.HoldRequested = () => _defence.Hold(_selection.Selected);
                 _actionBar.GuardRequested = () => _defence.Guard(_selection.Selected);
                 _selection.MoveOrderResolved = () => _actionBar.ClearMoveArmed();
+
+                // Attack: the bar picks the task, the next map click picks the
+                // target, and the order system does the rest.
+                _actionBar.AttackRequested = task => _selection.ArmAttackOrder(task);
+                _selection.AttackTargetPicked = (target, task) =>
+                    _attacks.Order(_selection.Selected, target, task);
+                _selection.AttackOrderResolved = () => _actionBar.ClearAttackArmed();
                 // The order bar belongs to game mode; leaving battle puts the
                 // editor back in charge.
                 _combat.RunningChanged += _ => RefreshActionBar();
