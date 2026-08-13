@@ -51,7 +51,15 @@ namespace IronMeridian.UI
 
         // ----------------------------------------------------------- layout
         public const float TopBarHeight = 68f;
-        public const float LeftPanelWidth = 274f;
+        /// <summary>
+        /// The always-present left rail: emblem, section nav and tool strip.
+        /// Anything that has to stay clear of the editor chrome measures from
+        /// here — the section panel beside it is a transient overlay and must
+        /// not push the map's own controls around as it opens and closes.
+        /// </summary>
+        public const float LeftPanelWidth = 232f;
+        /// <summary>The section panel that slides out of the rail to hold one section's controls.</summary>
+        public const float SectionPanelWidth = 274f;
         public const float RightPanelWidth = 300f;
         /// <summary>Standard inset from a panel's edge to its content.</summary>
         public const float PanelPadding = 12f;

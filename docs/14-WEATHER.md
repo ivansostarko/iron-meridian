@@ -37,7 +37,7 @@ It is also what makes the automatic day/night toggle coherent. If "Night" were j
 | Audio | `Assets/Scripts/Audio/AmbienceManager.cs` | The weather bed — see `docs/10-AUDIO.md` |
 | Persistence | `Assets/Scripts/Data/MapSaveData.cs` | `skyPhase`, `weatherCondition`, `autoDayNight` |
 
-Map editor → left panel → **WEATHER CONDITIONS**.
+Map editor → left rail → **WEATHER CONDITIONS** (opens the section panel).
 
 ---
 

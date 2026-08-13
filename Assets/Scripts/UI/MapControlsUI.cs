@@ -19,7 +19,7 @@ namespace IronMeridian.UI
     {
         const float ButtonSize = 36f;
         const float Gap = 6f;
-        /// <summary>Clears the left panel plus a margin.</summary>
+        /// <summary>Clears the left rail plus a margin. The floor for <see cref="SetLeftInset"/>.</summary>
         const float LeftInset = UiTheme.LeftPanelWidth + 16f;
         /// <summary>Clears the unit action bar and the shortcut hint line.</summary>
         const float BottomInset = 74f;
@@ -46,6 +46,19 @@ namespace IronMeridian.UI
 
             SetControlsVisible(ControlsVisible);
             SetCompassVisible(CompassVisible);
+        }
+
+        /// <summary>
+        /// Keeps the cluster clear of the editor's left chrome as the section
+        /// panel slides in and out. The palette drives this every frame while
+        /// the panel is moving, so the buttons travel with it rather than being
+        /// covered by it — and the inset never drops below the rail, so they
+        /// cannot end up underneath the nav.
+        /// </summary>
+        public void SetLeftInset(float chromeRight)
+        {
+            if (_cluster == null) return;
+            _cluster.anchoredPosition = new Vector2(Mathf.Max(LeftInset, chromeRight + 16f), BottomInset);
         }
 
         // ----------------------------------------------------------- cluster

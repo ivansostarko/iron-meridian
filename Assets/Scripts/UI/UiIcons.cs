@@ -186,6 +186,11 @@ namespace IronMeridian.UI
             Mathf.Max(Rect(u, v, 0.22f, 0.12f, 0.42f, 0.88f),
                       Rect(u, v, 0.58f, 0.12f, 0.78f, 0.88f)));
 
+        /// <summary>Dismiss a panel.</summary>
+        public static Sprite Close => Get(nameof(Close), (u, v) =>
+            Mathf.Max(Seg(u, v, 0.24f, 0.24f, 0.76f, 0.76f, 0.085f),
+                      Seg(u, v, 0.76f, 0.24f, 0.24f, 0.76f, 0.085f)));
+
         // --- bottom tool row ---
         public static Sprite Cursor => Get(nameof(Cursor), (u, v) =>
             InPoly(u, v, new[]

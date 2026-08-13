@@ -14,8 +14,24 @@ using IronMeridian.Weather;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// Left "Order of Battle" panel: a vertical section nav (General, Units,
-    /// Map), the section's controls, and a tool strip along the bottom.
+    /// The editor's left chrome, in two pieces:
+    ///
+    ///  • a narrow **rail** that is always there — emblem, the section nav
+    ///    (General, Units, Effects, Weather Conditions, Map, Date and Time) and
+    ///    the tool strip along the bottom;
+    ///  • a **section panel** that slides out from behind the rail carrying the
+    ///    controls for whichever section is open, and can be closed.
+    ///
+    /// Splitting them is what lets the map breathe: the sections are deep — the
+    /// weather and map ones run past 450 px — and a single fixed panel meant all
+    /// that depth was permanently parked over the terrain whether the player was
+    /// using it or not. Clicking the open section's nav row closes the panel, as
+    /// does the ✕ in its header, leaving only the rail.
+    ///
+    /// The rail is what other on-map chrome measures from
+    /// (<see cref="UiTheme.LeftPanelWidth"/>): the section panel is transient,
+    /// and controls that jumped sideways every time it opened would read as a
+    /// glitch rather than as a layout.
     ///
     /// The Units section carries the editor's core loop — pick team,
     /// affiliation and echelon, then DRAG a card onto the terrain. A live
@@ -63,14 +79,26 @@ namespace IronMeridian.UI
         };
 
         // ------------------------------------------------------------ layout
-        const float PanelWidth = UiTheme.LeftPanelWidth;
+        /// <summary>The always-present rail holding the nav and the tool strip.</summary>
+        const float RailWidth = UiTheme.LeftPanelWidth;
+        /// <summary>
+        /// The section panel. Every section builder lays itself out against this,
+        /// so it is deliberately the width the single panel used to be — the
+        /// split moved the content, it did not reflow it.
+        /// </summary>
+        const float PanelWidth = UiTheme.SectionPanelWidth;
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = PanelWidth - Pad * 2f;
         /// <summary>Text width inside a list card: card width less the icon column and right padding.</summary>
         const float CardTextWidth = InnerWidth - 58f;
-        /// <summary>Title block plus the six nav rows.</summary>
+        /// <summary>Emblem block plus the six nav rows, measured from the rail's top.</summary>
         const float HeaderHeight = 266f;
-        const float ToolStripHeight = 56f;
+        /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
+        const float ToolStripHeight = 74f;
+        /// <summary>Section panel header: the open section's name and its close button.</summary>
+        const float SectionHeaderHeight = 44f;
+        /// <summary>Seconds the panel takes to slide fully open or shut.</summary>
+        const float SlideSeconds = 0.16f;
 
         Team _team = Team.User;
         Affiliation _affiliation = Affiliation.Friendly;
@@ -90,9 +118,16 @@ namespace IronMeridian.UI
         Button _autoSectorBtn;
         bool _autoSectors;
 
-        readonly List<(Section section, RectTransform row, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
-            new List<(Section, RectTransform, Image, Image, Text, RectTransform)>();
+        readonly List<(Section section, string title, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
+            new List<(Section, string, Image, Image, Text, RectTransform)>();
         readonly Dictionary<Section, RectTransform> _sectionContent = new Dictionary<Section, RectTransform>();
+
+        // Section panel.
+        RectTransform _sectionPanel;
+        Text _sectionTitle;
+        bool _panelOpen;
+        /// <summary>0 = tucked behind the rail, 1 = fully out.</summary>
+        float _slide;
         readonly List<(Image fill, Image glyph)> _tools = new List<(Image, Image)>();
         int _activeTool;
 
@@ -152,13 +187,18 @@ namespace IronMeridian.UI
             _mapControls = mapControls;
             _drawTool = drawTool;
 
+            // The section panel is created first so it draws *behind* the rail —
+            // uGUI paints in hierarchy order, and the closed position tucks the
+            // panel underneath the rail rather than off-screen.
+            var body = BuildSectionPanel(canvas);
+
             var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
             panel.pivot = new Vector2(0, 0.5f);
             panel.offsetMin = new Vector2(0, 0);
-            panel.offsetMax = new Vector2(PanelWidth, -UiTheme.TopBarHeight);
+            panel.offsetMax = new Vector2(RailWidth, -UiTheme.TopBarHeight);
 
-            // Hairline down the panel's right edge, separating it from the map.
+            // Hairline down the rail's right edge, separating it from the map.
             var edge = UIFactory.CreatePanel(panel, "Edge", UiTheme.Border);
             edge.anchorMin = new Vector2(1, 0); edge.anchorMax = new Vector2(1, 1);
             edge.pivot = new Vector2(1, 0.5f);
@@ -166,11 +206,6 @@ namespace IronMeridian.UI
             edge.GetComponent<Image>().raycastTarget = false;
 
             BuildHeader(panel);
-
-            var body = UIFactory.CreateGroup(panel, "Body");
-            body.anchorMin = new Vector2(0, 0); body.anchorMax = new Vector2(1, 1);
-            body.offsetMin = new Vector2(0, ToolStripHeight);
-            body.offsetMax = new Vector2(0, -HeaderHeight);
 
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
@@ -187,7 +222,11 @@ namespace IronMeridian.UI
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
 
             BuildToolStrip(panel);
-            SetSection(Section.Units);
+            OpenSection(Section.Units);
+            // Skip the opening slide: the panel is simply already out when the
+            // editor appears.
+            _slide = 1f;
+            ApplySlide();
 
             // Drag ghost (top-most)
             var ghostGo = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
@@ -221,6 +260,120 @@ namespace IronMeridian.UI
             return rt;
         }
 
+        // ----------------------------------------------------- section panel
+
+        /// <summary>
+        /// Builds the sliding panel and returns the body every section's
+        /// controls are parented to. Its rect is driven by
+        /// <see cref="ApplySlide"/> rather than by anchors, so the panel can
+        /// travel horizontally while staying stretched to the full map height.
+        /// </summary>
+        RectTransform BuildSectionPanel(Canvas canvas)
+        {
+            _sectionPanel = UIFactory.CreatePanel(canvas.transform, "SectionPanel", UiTheme.Panel);
+            _sectionPanel.anchorMin = new Vector2(0, 0);
+            _sectionPanel.anchorMax = new Vector2(0, 1);
+            _sectionPanel.pivot = new Vector2(0, 0.5f);
+            _sectionPanel.sizeDelta = new Vector2(PanelWidth, -UiTheme.TopBarHeight);
+            _sectionPanel.anchoredPosition = new Vector2(RailWidth, -UiTheme.TopBarHeight * 0.5f);
+
+            var edge = UIFactory.CreatePanel(_sectionPanel, "Edge", UiTheme.Border);
+            edge.anchorMin = new Vector2(1, 0); edge.anchorMax = new Vector2(1, 1);
+            edge.pivot = new Vector2(1, 0.5f);
+            edge.sizeDelta = new Vector2(1, 0);
+            edge.GetComponent<Image>().raycastTarget = false;
+
+            _sectionTitle = UIFactory.CreateText(_sectionPanel, "", UiTheme.FontHeading, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_sectionTitle.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, -13), new Vector2(PanelWidth - Pad - 44f, 22));
+            UIFactory.Fit(_sectionTitle);
+
+            var close = UIFactory.CreateIconButton(_sectionPanel, UiIcons.Close, ClosePanel,
+                new Color(0, 0, 0, 0), UiTheme.TextDim, 8f);
+            UIFactory.Place((RectTransform)close.transform, new Vector2(1f, 1f),
+                new Vector2(-Pad + 4f, -8f), new Vector2(28, 28));
+
+            var rule = UIFactory.CreateDivider(_sectionPanel, UiTheme.Border);
+            rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
+            rule.pivot = new Vector2(0.5f, 1);
+            rule.anchoredPosition = new Vector2(0, -SectionHeaderHeight + 1f);
+
+            var body = UIFactory.CreateGroup(_sectionPanel, "Body");
+            body.anchorMin = new Vector2(0, 0); body.anchorMax = new Vector2(1, 1);
+            body.offsetMin = new Vector2(0, 0);
+            body.offsetMax = new Vector2(0, -SectionHeaderHeight);
+            return body;
+        }
+
+        /// <summary>Opens a section, or closes the panel if that section is already showing.</summary>
+        void OpenSection(Section section)
+        {
+            if (_panelOpen && _section == section) { ClosePanel(); return; }
+
+            _section = section;
+            _panelOpen = true;
+            _sectionPanel.gameObject.SetActive(true);
+
+            foreach (var kv in _sectionContent)
+                kv.Value.gameObject.SetActive(kv.Key == section);
+
+            foreach (var row in _navRows)
+                if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
+
+            PaintNav();
+        }
+
+        public void ClosePanel()
+        {
+            if (!_panelOpen) return;
+            _panelOpen = false;
+            PaintNav();
+        }
+
+        /// <summary>Which nav row reads as active — none at all while the panel is closed.</summary>
+        void PaintNav()
+        {
+            foreach (var (s, _, fill, glyph, label, bar) in _navRows)
+            {
+                bool on = _panelOpen && s == _section;
+                fill.color = on ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
+                glyph.color = on ? UiTheme.Accent : UiTheme.TextFaint;
+                label.color = on ? UiTheme.Text : UiTheme.TextDim;
+                bar.gameObject.SetActive(on);
+            }
+        }
+
+        void Update()
+        {
+            float target = _panelOpen ? 1f : 0f;
+            if (Mathf.Approximately(_slide, target)) return;
+
+            // Unscaled: the pause menu zeroes timeScale, and chrome that freezes
+            // mid-slide would look broken.
+            _slide = Mathf.MoveTowards(_slide, target, Time.unscaledDeltaTime / SlideSeconds);
+            ApplySlide();
+        }
+
+        /// <summary>
+        /// Positions the panel for the current slide value and switches it off
+        /// once it is fully shut — a hidden-but-active panel would still be
+        /// eating clicks meant for the map behind it.
+        /// </summary>
+        void ApplySlide()
+        {
+            if (_sectionPanel == null) return;
+
+            float x = Mathf.Lerp(RailWidth - PanelWidth, RailWidth, Mathf.SmoothStep(0f, 1f, _slide));
+            _sectionPanel.anchoredPosition = new Vector2(x, -UiTheme.TopBarHeight * 0.5f);
+
+            // The on-map zoom cluster rides the panel's edge so it is never
+            // buried underneath it.
+            if (_mapControls != null) _mapControls.SetLeftInset(x + PanelWidth);
+
+            if (_slide <= 0f) _sectionPanel.gameObject.SetActive(false);
+        }
+
         // ------------------------------------------------------------ header
 
         void BuildHeader(RectTransform panel)
@@ -232,7 +385,9 @@ namespace IronMeridian.UI
 
             var title = UIFactory.CreateText(panel, "ORDER OF BATTLE", UiTheme.FontHeading,
                 UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Pad + 27, -13), new Vector2(210, 22));
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Pad + 27, -13),
+                new Vector2(RailWidth - Pad - 33f, 22));
+            UIFactory.Fit(title);
 
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
@@ -250,12 +405,12 @@ namespace IronMeridian.UI
         void AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, float y)
         {
             var row = UIFactory.CreatePanel(panel, "Nav_" + label, new Color(0, 0, 0, 0));
-            UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(PanelWidth, 34));
+            UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(RailWidth, 34));
             row.pivot = new Vector2(0f, 1f);
 
             var btn = row.gameObject.AddComponent<Button>();
             btn.targetGraphic = row.GetComponent<Image>();
-            btn.onClick.AddListener(() => SetSection(section));
+            btn.onClick.AddListener(() => OpenSection(section));
 
             // Left accent bar marks the active section, as in the design.
             var bar = UIFactory.CreatePanel(row, "ActiveBar", UiTheme.Accent);
@@ -268,26 +423,15 @@ namespace IronMeridian.UI
             img.raycastTarget = false;
             UIFactory.Place((RectTransform)img.transform, new Vector2(0f, 0.5f), new Vector2(Pad, 0), new Vector2(16, 16));
 
+            // "WEATHER CONDITIONS" is the longest label the rail has to carry, so
+            // the row's text is fitted rather than clipped at a fixed width.
             var text = UIFactory.CreateText(row, label, UiTheme.FontBody, UiTheme.TextDim,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(Pad + 26, 0), new Vector2(190, 20));
+            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(Pad + 26, 0),
+                new Vector2(RailWidth - Pad - 34f, 20));
+            UIFactory.Fit(text);
 
-            _navRows.Add((section, row, row.GetComponent<Image>(), img, text, bar));
-        }
-
-        void SetSection(Section section)
-        {
-            _section = section;
-            foreach (var (s, _, fill, glyph, label, bar) in _navRows)
-            {
-                bool on = s == section;
-                fill.color = on ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
-                glyph.color = on ? UiTheme.Accent : UiTheme.TextFaint;
-                label.color = on ? UiTheme.Text : UiTheme.TextDim;
-                bar.gameObject.SetActive(on);
-            }
-            foreach (var kv in _sectionContent)
-                kv.Value.gameObject.SetActive(kv.Key == section);
+            _navRows.Add((section, label, row.GetComponent<Image>(), img, text, bar));
         }
 
         // ----------------------------------------------------- general section
@@ -653,6 +797,12 @@ namespace IronMeridian.UI
             rule.pivot = new Vector2(0.5f, 1);
             rule.anchoredPosition = Vector2.zero;
 
+            // Names the icon row. It used to sit under a full panel of labelled
+            // controls that gave it context; alone at the foot of the rail it
+            // reads as five unexplained glyphs without this.
+            var caption = UIFactory.CreateSectionHeader(strip, "TOOLS", UiTheme.TextFaint);
+            UIFactory.PlaceTopLeft(caption.rectTransform, Pad, 8f, RailWidth - Pad * 2f, 14f);
+
             AddTool(strip, 0, UiIcons.Cursor, () => SelectToolRequested?.Invoke());
             AddTool(strip, 1, UiIcons.Pencil, () => DefensiveLineToolRequested?.Invoke());
             AddTool(strip, 2, UiIcons.Square, () => BoundaryToolRequested?.Invoke());
@@ -664,8 +814,9 @@ namespace IronMeridian.UI
 
         void AddTool(RectTransform strip, int index, Sprite glyph, UnityEngine.Events.UnityAction action)
         {
+            // Anchored to the strip's bottom, clear of the caption band above.
             var frame = UIFactory.CreateBorderedPanel(strip, "Tool" + index, UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 0.5f), new Vector2(Pad + index * 42f, 0), new Vector2(36, 32));
+            UIFactory.Place(frame, new Vector2(0f, 0f), new Vector2(Pad + index * 42f, 10), new Vector2(36, 32));
 
             int captured = index;
             var btn = UIFactory.CreateIconButton(frame, glyph, () =>

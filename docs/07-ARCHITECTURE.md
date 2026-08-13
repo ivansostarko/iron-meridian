@@ -35,13 +35,15 @@ Assets/Scripts/
     BoundaryOptionsDialog.cs  control-measure type/side/colour before drawing
     MapControlsUI.cs     on-map zoom cluster + compass rose
     UiTheme.cs           map-editor design tokens (colours, sizes)
+                         LeftPanelWidth = the always-present rail; other on-map
+                         chrome measures from it, never from the section panel
     UiIcons.cs           HUD icon set, drawn procedurally
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         Dev + Map East France cards
     EastFranceUI.cs      "Under development" placeholder
     GameHUD.cs           top bar: view toggle, line tools, save/load, battle
-    UnitPaletteUI.cs     left OOB palette, drag & drop deployment
+    UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitActionBarUI.cs   battle order bar: Move / Attack / Defence (+ task submenu)
   Map/

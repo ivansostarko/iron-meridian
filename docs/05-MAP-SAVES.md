@@ -82,7 +82,7 @@ on older saves — `JsonUtility` leaves missing fields at their initialiser valu
 ### Tactical graphics
 
 `SectorSystem` derives a side's control measures from where its units stand
-(left panel → **GENERAL** → *Generate sectors*). Ids are prefixed
+(left rail → **GENERAL** → *Generate sectors*). Ids are prefixed
 `sector-<team>-`, and everything under that prefix is regenerated or cleared as
 a set, so hand-drawn lines are never touched.
 

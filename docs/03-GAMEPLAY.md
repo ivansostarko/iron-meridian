@@ -29,9 +29,27 @@ The map opens over **Lyon, France** on real Cesium 3D terrain with the default s
 - **User Team = Blue** (APP-6 blue rectangles), **Enemy Team = Red** (red diamonds).
 - Affiliations: **Friendly, Hostile, Neutral, Unknown** — selectable in the palette; stored per unit and shown in the info panel.
 
+### The left rail and the section panel
+
+The editor's left chrome is in two pieces:
+
+- The **rail** is always there: the **ORDER OF BATTLE** emblem, the section nav, and the tool strip along the bottom.
+- The **section panel** slides out from behind the rail carrying that section's controls.
+
+| Nav row | What the panel shows |
+|---|---|
+| **GENERAL** | Tactical graphics — generate / clear sectors, auto-update |
+| **UNITS** | Team, affiliation, echelon, search, and the AVAILABLE / DEPLOYED lists |
+| **EFFECTS** | Hand-placed fire, explosion and smoke |
+| **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
+| **MAP** | Tile style, 2D/3D, layers, unit-label size, boundary options |
+| **DATE AND TIME** | Scenario H-hour and presets |
+
+Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
+
 ### Deploying units (drag & drop)
 
-The left **ORDER OF BATTLE** palette lists all 37 unit types with their icons:
+Open **UNITS** in the left rail — the panel lists all 37 unit types with their icons:
 
 1. Pick the team tab (**FRIENDLY** / **ENEMY**).
 2. Choose **Affiliation** and **Echelon** (Team … Army). Echelon scales manpower and combat power.

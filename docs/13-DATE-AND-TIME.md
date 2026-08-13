@@ -55,7 +55,7 @@ The pause menu also forces `timeScale` to 0. `GameClock.Update` therefore checks
 
 ## 4. Setting H-hour
 
-**Map editor → left panel → DATE AND TIME.**
+**Map editor → left rail → DATE AND TIME** (opens the section panel).
 
 ### Current start
 
