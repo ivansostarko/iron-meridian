@@ -41,15 +41,30 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Map }
+        enum Section { General, Units, Map, DateTime }
         enum ListMode { Available, Deployed }
+
+        /// <summary>
+        /// Ready-made H-hours. Time of day is the operationally interesting
+        /// variable — light, not the calendar, decides how a scenario plays —
+        /// so the presets are one date at three points in the day.
+        /// </summary>
+        static readonly (string name, string detail, System.DateTime when)[] StartPresets =
+        {
+            ("DAWN ATTACK",   "First light — limited visibility",
+                new System.DateTime(1990, 6, 21, 5, 30, 0)),
+            ("MIDDAY ADVANCE", "Full daylight — best observation",
+                new System.DateTime(1990, 6, 21, 12, 0, 0)),
+            ("NIGHT OPERATION", "Darkness — movement under cover",
+                new System.DateTime(1990, 6, 21, 23, 0, 0))
+        };
 
         // ------------------------------------------------------------ layout
         const float PanelWidth = UiTheme.LeftPanelWidth;
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = PanelWidth - Pad * 2f;
-        /// <summary>Title block plus the three nav rows.</summary>
-        const float HeaderHeight = 158f;
+        /// <summary>Title block plus the four nav rows.</summary>
+        const float HeaderHeight = 194f;
         const float ToolStripHeight = 56f;
 
         Team _team = Team.User;
@@ -76,7 +91,10 @@ namespace IronMeridian.UI
         readonly List<(Image fill, Image glyph)> _tools = new List<(Image, Image)>();
         int _activeTool;
 
+        Text _startValueLabel;
+
         MapManager _map;
+        GameClock _clock;
         CameraRig _rig;
         Camera _worldCam;
         GameObject _groundMarker;
@@ -91,12 +109,13 @@ namespace IronMeridian.UI
         // starts hidden, and that call skips inactive children.
         Text _viewBtnLabel;
 
-        public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig)
+        public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig, GameClock clock)
         {
             _canvas = canvas;
             _map = map;
             _worldCam = worldCam;
             _rig = rig;
+            _clock = clock;
 
             var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
@@ -121,10 +140,12 @@ namespace IronMeridian.UI
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
+            _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
             BuildMapSection(_sectionContent[Section.Map]);
+            BuildDateTimeSection(_sectionContent[Section.DateTime]);
 
             BuildToolStrip(panel);
             SetSection(Section.Units);
@@ -145,6 +166,9 @@ namespace IronMeridian.UI
             _map.ViewModeChanged += OnViewModeChanged;
             _map.StyleChanged += OnStyleChanged;
             UnitRegistry.Changed += OnUnitsChanged;
+            // Loading a map sets the start after this panel is built, so the
+            // label has to follow the clock rather than only read it once.
+            if (_clock != null) _clock.StartChanged += RefreshStartLabel;
         }
 
         static RectTransform MakeSectionContent(RectTransform body, string name)
@@ -170,6 +194,7 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
             AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -116);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -152);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -620,6 +645,95 @@ namespace IronMeridian.UI
         /// <summary>Called by the controller when the draw tool exits on its own.</summary>
         public void ResetToolToSelect() => SetActiveTool(0);
 
+        // -------------------------------------------------- date & time section
+
+        /// <summary>
+        /// H-hour for the scenario: the current start (click to edit) plus three
+        /// ready-made times of day. Whatever is set here is the clock the top
+        /// bar shows once the battle starts, and it is saved with the map.
+        /// </summary>
+        void BuildDateTimeSection(RectTransform content)
+        {
+            SectionLabel(content, "SCENARIO START", -8);
+
+            var frame = UIFactory.CreateBorderedPanel(content, "StartButton", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -30), new Vector2(InnerWidth, 52));
+
+            var btn = UIFactory.CreateButton(frame, "", OpenStartEditor, new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var glyph = UIFactory.CreateImage(frame, UiIcons.Clock, "Glyph");
+            glyph.color = UiTheme.Accent;
+            glyph.raycastTarget = false;
+            UIFactory.Place((RectTransform)glyph.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(18, 18));
+
+            _startValueLabel = UIFactory.CreateText(frame, "", UiTheme.FontBody, UiTheme.Text,
+                TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.Place(_startValueLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, 1), new Vector2(190, 18));
+
+            var edit = UIFactory.CreateText(frame, "Click to change", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.UpperLeft);
+            UIFactory.Place(edit.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, -2), new Vector2(190, 16));
+
+            SectionLabel(content, "PRESETS", -96);
+
+            for (int i = 0; i < StartPresets.Length; i++)
+            {
+                var preset = StartPresets[i];
+                float y = -118f - i * 58f;
+
+                var pf = UIFactory.CreateBorderedPanel(content, "Preset" + i, UiTheme.Surface, UiTheme.Border);
+                UIFactory.Place(pf, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+                var pb = UIFactory.CreateButton(pf, "", () => ApplyStart(preset.when),
+                    new Color(0, 0, 0, 0), UiTheme.Text, 1);
+                UIFactory.Stretch((RectTransform)pb.transform);
+                var pc = pb.GetComponentInChildren<Text>(true);
+                if (pc != null) pc.gameObject.SetActive(false);
+
+                var name = UIFactory.CreateText(pf, preset.name, UiTheme.FontSmall, UiTheme.Text,
+                    TextAnchor.LowerLeft, FontStyle.Bold);
+                UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, 8), new Vector2(180, 16));
+
+                var when = UIFactory.CreateText(pf, preset.when.ToString("HH:mm  ·  dd.MM.yyyy"),
+                    UiTheme.FontLabel, UiTheme.Accent, TextAnchor.MiddleLeft);
+                UIFactory.Place(when.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -6), new Vector2(180, 14));
+
+                var detail = UIFactory.CreateText(pf, preset.detail, UiTheme.FontLabel, UiTheme.TextFaint,
+                    TextAnchor.UpperLeft);
+                UIFactory.Place(detail.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -18), new Vector2(230, 14));
+            }
+
+            var hint = UIFactory.CreateText(content,
+                "The clock runs only while a battle is in progress — the editor is timeless. " +
+                "This start time is saved with the map.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -302), new Vector2(InnerWidth, 56));
+
+            RefreshStartLabel();
+        }
+
+        void OpenStartEditor()
+        {
+            if (_clock == null || _canvas == null) return;
+            DateTimeDialog.Open(_canvas, _clock.StartDateTime, ApplyStart);
+        }
+
+        void ApplyStart(System.DateTime when)
+        {
+            if (_clock == null) return;
+            _clock.SetStart(when);
+            RefreshStartLabel();
+        }
+
+        void RefreshStartLabel()
+        {
+            if (_startValueLabel == null || _clock == null) return;
+            _startValueLabel.text = _clock.StartText;
+        }
+
         // -------------------------------------------------------- map section
 
         void BuildMapSection(RectTransform content)
@@ -802,6 +916,7 @@ namespace IronMeridian.UI
             // Build() subscribes to the map and registry; without this the
             // callbacks fire into a destroyed component on scene reload.
             UnitRegistry.Changed -= OnUnitsChanged;
+            if (_clock != null) _clock.StartChanged -= RefreshStartLabel;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

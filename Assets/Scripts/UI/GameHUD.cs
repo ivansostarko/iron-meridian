@@ -132,25 +132,42 @@ namespace IronMeridian.UI
             UIFactory.Place(_battleLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(46, 0), new Vector2(150, 24));
         }
 
-        /// <summary>Operational clock, left of the battle button. Game mode only.</summary>
+        /// <summary>
+        /// Operational clock, left of the battle button. Game mode only.
+        ///
+        /// Time and date sit side by side on one line rather than stacked: the
+        /// bar is 40 px tall, and two lines of type inside it left each of them
+        /// too small to read at a glance. Time leads on the left at full size
+        /// because it is what the player checks constantly; the date trails on
+        /// the right, dimmed, because it rarely changes mid-battle.
+        /// </summary>
         void BuildClock(RectTransform bar)
         {
             _clockPanel = UIFactory.CreateBorderedPanel(bar, "GameClock", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-278, 0), new Vector2(262, 40));
+            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-278, 0), new Vector2(320, 40));
             _clockPanel.pivot = new Vector2(1f, 0.5f);
 
-            _clockDate = UIFactory.CreateText(_clockPanel, "", UiTheme.FontLabel, UiTheme.TextDim, TextAnchor.LowerLeft);
-            UIFactory.Place(_clockDate.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, 1), new Vector2(84, 16));
+            _clockTime = UIFactory.CreateText(_clockPanel, "--:--", 19, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_clockTime.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(60, 26));
 
-            _clockTime = UIFactory.CreateText(_clockPanel, "", UiTheme.FontHeading, UiTheme.Text, TextAnchor.UpperLeft, FontStyle.Bold);
-            UIFactory.Place(_clockTime.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -1), new Vector2(84, 20));
+            // Right-aligned in its own slot, so the date's right edge stays put
+            // as the day/month digits change width.
+            _clockDate = UIFactory.CreateText(_clockPanel, "--.--.----", UiTheme.FontSmall, UiTheme.TextDim,
+                TextAnchor.MiddleRight);
+            UIFactory.Place(_clockDate.rectTransform, new Vector2(0f, 0.5f), new Vector2(74, 0), new Vector2(90, 20));
 
-            _clockSpeed = UIFactory.CreateText(_clockPanel, "", UiTheme.FontSmall, UiTheme.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Place(_clockSpeed.rectTransform, new Vector2(0f, 0.5f), new Vector2(100, 0), new Vector2(52, 20));
+            var sep = UIFactory.CreatePanel(_clockPanel, "Separator", UiTheme.Border);
+            UIFactory.Place(sep, new Vector2(0f, 0.5f), new Vector2(174, 0), new Vector2(1, 22));
+            sep.GetComponent<Image>().raycastTarget = false;
 
-            ClockBtn(-10, "»", _clock.Faster, "Speed up");
-            _pauseBtn = ClockBtn(-40, "❚❚", _clock.TogglePause, "Pause / resume");
-            ClockBtn(-70, "«", _clock.Slower, "Slow down");
+            _clockSpeed = UIFactory.CreateText(_clockPanel, "", UiTheme.FontSmall, UiTheme.Accent,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIFactory.Place(_clockSpeed.rectTransform, new Vector2(0f, 0.5f), new Vector2(182, 0), new Vector2(46, 20));
+
+            ClockBtn(-8, "»", _clock.Faster, "Speed up");
+            _pauseBtn = ClockBtn(-36, "❚❚", _clock.TogglePause, "Pause / resume");
+            ClockBtn(-64, "«", _clock.Slower, "Slow down");
 
             _clock.SpeedChanged += RefreshClockSpeed;
             _clockPanel.gameObject.SetActive(false);
@@ -174,7 +191,11 @@ namespace IronMeridian.UI
 
         void Update()
         {
-            if (_clock == null || !_clock.Running || _clockDate == null) return;
+            // Driven by panel visibility rather than by Running, so the readout
+            // is correct the instant battle starts — including while paused at
+            // speed 0, when the clock is not advancing.
+            if (_clock == null || _clockDate == null) return;
+            if (_clockPanel == null || !_clockPanel.gameObject.activeSelf) return;
             _clockDate.text = _clock.DateText;
             _clockTime.text = _clock.TimeText;
         }

@@ -105,7 +105,7 @@ namespace IronMeridian.Core
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
-            _selection.InputBlocked = () => Loading || _drawTool.Current != LineDrawTool.Mode.None;
+            _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen || _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
             // --- UI ---
@@ -129,7 +129,7 @@ namespace IronMeridian.Core
             BuildStep("unit palette", () =>
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
-                _palette.Build(canvas, _map, _rig.Cam, _rig);
+                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -233,7 +233,7 @@ namespace IronMeridian.Core
                 _pauseMenu.SaveRequested = SaveMap;
                 _pauseMenu.LoadRequested = LoadMap;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
-                _rig.InputBlocked = () => Loading || _pauseMenu.IsOpen;
+                _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen || _pauseMenu.IsOpen;
             });
 
             // --- content ---
@@ -448,6 +448,7 @@ namespace IronMeridian.Core
             _save.lines = _lines.Serialize();
             _save.viewMode = _map.ViewMode.ToString();
             _save.mapStyle = _map.Style.ToString();
+            _save.startDateTime = _clock.StartToSaveString();
             string path = SaveSystem.SaveMap(_save, mapFileName);
             _hud.Flash($"Saved -> {path}");
         }
@@ -471,6 +472,7 @@ namespace IronMeridian.Core
 
         void ApplySave(MapSaveData data)
         {
+            _clock.SetStartFromSaveString(data.startDateTime);
             foreach (var u in data.units)
                 UnitActor.Spawn(_map.Georeference, u);
             _lines.LoadFrom(data.lines);

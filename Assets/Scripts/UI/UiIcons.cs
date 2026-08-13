@@ -107,6 +107,12 @@ namespace IronMeridian.UI
                         Mathf.Max(Seg(u, v, 0.56f, 0.16f, 0.68f, 0.50f, 0.07f),
                                   Seg(u, v, 0.68f, 0.50f, 0.94f, 0.50f, 0.07f))))));
 
+        /// <summary>Date &amp; time section.</summary>
+        public static Sprite Clock => Get(nameof(Clock), (u, v) =>
+            Mathf.Max(RingAt(u, v, 0.5f, 0.5f, 0.38f, 0.08f),
+                Mathf.Max(Seg(u, v, 0.5f, 0.5f, 0.5f, 0.76f, 0.075f),
+                          Seg(u, v, 0.5f, 0.5f, 0.70f, 0.42f, 0.075f))));
+
         /// <summary>Start battle.</summary>
         public static Sprite Play => Get(nameof(Play), (u, v) =>
             InPoly(u, v, new[] { 0.20f, 0.10f, 0.20f, 0.90f, 0.86f, 0.50f }));

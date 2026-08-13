@@ -126,6 +126,14 @@ namespace IronMeridian.Data
         public string viewMode = "Mode3D"; // Mode2D | Mode3D
         public string mapStyle = "Satellite"; // Satellite | Terrain | Roads
 
+        /// <summary>
+        /// Scenario H-hour, round-tripped as "yyyy-MM-dd HH:mm" — a sortable,
+        /// culture-independent form that stays readable when someone edits the
+        /// JSON by hand. Empty or unparseable falls back to GameClock.DefaultStart.
+        /// See docs/13-DATE-AND-TIME.md.
+        /// </summary>
+        public string startDateTime = "1990-01-01 14:00";
+
         public List<UnitState> units = new List<UnitState>();
         public List<MapLineData> lines = new List<MapLineData>();
     }

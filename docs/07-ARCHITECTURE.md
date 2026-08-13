@@ -14,6 +14,7 @@ Assets/Scripts/
     GameConfig.cs        constants: scenes, colours, tuning
     CesiumTokenConfig.cs Cesium ion token resolution (file > constant)
     GameController.cs    Game scene entry point; wires all systems
+    GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
   Data/
     Enums.cs             Team, Affiliation, Echelon(+multipliers), UnitStatus, ViewMode
     UnitDefinition.cs    unit type stats + UnitDatabase (units.json loader)
@@ -27,6 +28,9 @@ Assets/Scripts/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
+    DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
+    UiTheme.cs           map-editor design tokens (colours, sizes)
+    UiIcons.cs           HUD icon set, drawn procedurally
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         Dev + Map East France cards
