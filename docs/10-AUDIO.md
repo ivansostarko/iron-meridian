@@ -14,18 +14,23 @@ Assets/Scripts/Audio/
   AudioCatalog.cs     the register in code: track → resource path, level, loop
   MusicManager.cs     persistent music channel; survives scene loads
   AmbienceManager.cs  persistent weather channel; plays under the music
+  EffectAudio.cs      3D positional effect sounds + voice budget
+  ProceduralAudio.cs  synthesises effect sounds when no file is installed
 ```
 
 ### Channels
 
-Two independent looping channels, each its own `DontDestroyOnLoad` singleton with its own `AudioSource`, so weather layers **under** the music instead of replacing it:
+Three independent channels. The two looping beds are `DontDestroyOnLoad` singletons with their own `AudioSource`; effect sounds are short-lived world sources created on demand:
 
-| Channel | Manager | Carries | Fade |
-|---|---|---|---|
-| Music | `MusicManager` | The menu theme, on every screen | 1.5 s |
-| Ambience | `AmbienceManager` | Weather beds (rain, storm, snow) | 1.0 s |
+| Channel | Manager | Carries | Spatial | Fade |
+|---|---|---|---|---|
+| Music | `MusicManager` | The menu theme, on every screen | 2D | 1.5 s |
+| Ambience | `AmbienceManager` | Weather beds (rain, storm, snow) | 2D | 1.0 s |
+| Effects | `EffectAudio` | Fire, explosions, smoke, impacts | **3D, positional** | — |
 
-Mixing both onto one source would make simultaneous playback impossible — a storm has to be audible *with* the music, not instead of it.
+Mixing them onto one source would make simultaneous playback impossible — a storm has to be audible *with* the music, and an explosion over both.
+
+The effects channel is the only **3D** one: sources are placed in the world, so a fire on the far side of the map is quiet and one under the camera is not. That needs rolloff distances in hundreds of metres rather than Unity's defaults (1 m / 500 m, logarithmic), which are silent almost immediately at this scale. Each source uses **linear** rolloff with `minDistance` = the effect's own diameter and `maxDistance` = 26× that, so a 320 m explosion carries far further than a 100 m camp fire.
 
 Four rules govern all audio:
 
@@ -49,7 +54,7 @@ There is currently **one** volume slider (master). Separate music/ambience/SFX b
 
 - **Fade-in:** music fades up over `AudioCatalog.MusicFadeInSeconds` (1.5 s) so it never starts abruptly.
 - **Pause-safe:** fades run on `Time.unscaledDeltaTime`. The pause menu sets `timeScale = 0`, and music must not freeze mid-fade.
-- **2D:** music uses `spatialBlend = 0`, so it is unaffected by the map camera's `AudioListener` moving around the globe.
+- **2D vs 3D:** music and ambience use `spatialBlend = 0`, unaffected by the map camera's `AudioListener` moving around the globe. Effect sounds use `spatialBlend = 1` and are placed in the world.
 - **Missing clip:** logged once, never per scene load, and never throws.
 
 ---
@@ -84,35 +89,52 @@ Track ids in code: `AmbienceTrack.Rain` / `.Storm` / `.Snow`. The Clear, Overcas
 |---|---|---|---|
 | Button click | *Generated in code* — `AudioManager.BuildClick()` | Every screen, on every `UIFactory.CreateButton` | 1.2 kHz sine with a 50 ms exponential decay, synthesised at runtime. No file: the project must run with no audio assets present. Wired automatically by the button factory — call sites do nothing. |
 
-### 2.3 Gameplay sound effects
+### 2.3 Particle effect sounds
 
-*None yet.* Combat, movement and destruction are currently silent; only particle effects mark them. See §5.
+Every effect in `VfxCatalog` can carry a sound; it is a field on the catalogue row, so an effect and its audio are defined in one place and cannot drift apart. Sources are 3D and parented to the effect, so a burning unit carries its crackle as it withdraws.
 
-### 2.4 Imported but not used
+| Sound | Source | Used by | Loops | Description |
+|---|---|---|---|---|
+| Fire | **Synthesised** (`ProceduralAudio.FireLoop`) — or `Assets/Resources/Audio/effects/fire.*` if installed | `FireSmall`, `FireMedium`, `FireLarge`, `GroundFire` | Yes | Band-limited noise with sparse crackle pops. Loop is cross-faded at the wrap so it does not click. |
+| Explosion | **Synthesised** (`ProceduralAudio.Explosion`) — or `Audio/effects/explosion.*` | `Explosion` | No | 90 Hz body falling to 28 Hz under a rolled-off noise crack, with a click transient and a 2.4 s tail. The pitch drop is what makes it read as a large blast rather than a pop. |
+| Smoke | **Synthesised** (`ProceduralAudio.SmokeLoop`) — or `Audio/effects/smoke.*` | `SmokePlume`, `SmokeScreen` | Yes | Slow low hiss with a gentle swell. Deliberately near sub-audible. |
+| Impact | **Synthesised** (`ProceduralAudio.Impact`) — or `Audio/effects/impact.*` | `ImpactBurst` | No | Short filtered thud for rounds landing. |
+
+Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact`. `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle.
+
+**Files beat synthesis.** `EffectAudio` looks in `Resources/Audio/effects/<name>` first and only synthesises when nothing is there, so dropping in recorded audio needs no code change. The synthesis exists so the game is audible with no audio assets at all — the same rule `ProceduralVfx` follows for the visuals.
+
+**Voice budget:** 14 concurrent effect sources; past that the oldest is recycled. A corps-scale battle can have dozens of fires burning, and without the cap the mix turns to mud.
+
+### 2.4 Other gameplay sound effects
+
+*None yet.* Movement and unit orders are still silent.
+
+### 2.5 Imported but not used
 
 Tracked so the inventory stays honest and licensing stays traceable.
 
 | Asset | Path | Source | Status |
 |---|---|---|---|
-| Fire loop (large) | `Assets/Vefects/Free Fire VFX URP/Audio/SFX_FireBig_L.wav` | [Free Fire VFX URP](https://assetstore.unity.com/packages/p/free-fire-vfx-urp-266226) | Not wired. Natural use: burning units / wrecks (`VfxId.FireLarge`) — see `docs/08-PARTICLE-SYSTEMS.md`. |
-| Fire loop (medium) | `Assets/Vefects/Free Fire VFX URP/Audio/SFX_FireMedium_L.wav` | Free Fire VFX URP | Not wired. Pairs with `VfxId.FireMedium`. |
-| Fire loop (small) | `Assets/Vefects/Free Fire VFX URP/Audio/SFX_FireSmall_L.wav` | Free Fire VFX URP | Not wired. Pairs with `VfxId.FireSmall`. |
+| Fire loop (large) | `Assets/Vefects/Free Fire VFX URP/Audio/SFX_FireBig_L.wav` | [Free Fire VFX URP](https://assetstore.unity.com/packages/p/free-fire-vfx-urp-266226) | Not wired — fire currently uses synthesis (§2.3). To use it instead, copy it to `Assets/Resources/Audio/effects/fire.wav`; no code change needed. |
+| Fire loop (medium) | `Assets/Vefects/Free Fire VFX URP/Audio/SFX_FireMedium_L.wav` | Free Fire VFX URP | Not wired. The effect system has one Fire sound for all sizes; per-size beds would need an `EffectSound` value each. |
+| Fire loop (small) | `Assets/Vefects/Free Fire VFX URP/Audio/SFX_FireSmall_L.wav` | Free Fire VFX URP | Not wired, as above. |
 
-Wiring these means positional 3D audio at map scale — rolloff distances measured in hundreds of metres, and a voice budget, since a front line can hold dozens of burning units at once. That is a design decision, not a mechanical one.
+> The positional-audio and voice-budget work these needed is now done (§2.3); using them is just a matter of copying a file into `Resources/Audio/effects/`.
 
 ---
 
 ## 3. Screen coverage
 
-| Screen | Scene | Music | Ambience | UI SFX | Gameplay SFX |
+| Screen | Scene | Music | Ambience | Effects | UI SFX |
 |---|---|---|---|---|---|
-| Main Menu | `MainMenu` | Menu theme | — | Click | — |
-| Settings | `Settings` | Menu theme | — | Click | — |
-| Testing | `Testing` | Menu theme | — | Click | — |
-| Units List | `UnitsList` | Menu theme | — | Click | — |
-| East France | `EastFrance` | Menu theme | — | Click | — |
-| Map editor (editing) | `Game` | Menu theme | — | Click | — |
-| Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Click | — |
+| Main Menu | `MainMenu` | Menu theme | — | — | Click |
+| Settings | `Settings` | Menu theme | — | — | Click |
+| Testing | `Testing` | Menu theme | — | — | Click |
+| Units List | `UnitsList` | Menu theme | — | — | Click |
+| East France | `EastFrance` | Menu theme | — | — | Click |
+| Map editor (editing) | `Game` | Menu theme | — | Hand-placed effects (EFFECTS panel) | Click |
+| Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Combat + hand-placed effects | Click |
 
 Each screen starts music in its bootstrap, next to `AudioManager.Apply()`:
 

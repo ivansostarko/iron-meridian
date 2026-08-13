@@ -16,6 +16,7 @@ Assets/Scripts/Vfx/
   VfxSystem.cs      the only entry point: resolve → anchor → scale → budget
   VfxInstance.cs    handle for a live effect; owns screen-size culling
   ProceduralVfx.cs  code-built fire/smoke/explosion/impact/dust fallbacks
+  EffectPlacementTool.cs  arm an effect, click the terrain to place it
 Assets/Editor/
   VfxInstaller.cs   Tools > Iron Meridian > Install VFX Prefabs
 ```
@@ -65,6 +66,8 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `SmokeScreen` | Deliberate obscuration (artillery / smoke generators) | 620 m | loops | 65 | procedural |
 | `Dust` | Kicked up by movement or a deployment drop | 140 m | 1.5 s | 10 | procedural |
 
+Each row also carries a **sound** (`VfxDef.sound`), played as 3D positional audio parented to the effect — so a burning unit takes its crackle with it. Fire effects loop `EffectSound.Fire`, `Explosion` fires a one-shot, the smoke effects loop `EffectSound.Smoke`, and `ImpactBurst` fires `EffectSound.Impact`. `WeaponFire` and `Dust` are deliberately silent: at one puff per firing formation they would turn a front line into a rattle. Clips come from `Resources/Audio/effects/` when present and are otherwise synthesised — full table in `docs/10-AUDIO.md` §2.3.
+
 **Priority** decides who dies when the concurrent-effect budget is full: lowest priority is evicted first, oldest among equals. Dust is deliberately the cheapest thing on the map, an explosion the most protected.
 
 `VfxCatalog.FireForScale(scale01)` picks Small / Medium / Large from a 0..1 formation size, so a burning squad and a burning army do not look the same.
@@ -92,6 +95,16 @@ Throttling matters: combat ticks once a second against **every** opposing unit i
 | Case | Effect | Trigger | File |
 |---|---|---|---|
 | A formation on the march | `Dust` | One puff every 500 m of ground covered (distance-based, so trail spacing is speed-independent) | `UnitMover.Update` |
+
+### Hand placement
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Player places a fire | `FireMedium` | **EFFECTS** panel → FIRE armed, then click the terrain | `EffectPlacementTool` |
+| Player places an explosion | `PlayWreck` (explosion + burning wreck) | **EFFECTS** panel → EXPLOSION armed, then click | `EffectPlacementTool` |
+| Player places smoke | `SmokePlume` | **EFFECTS** panel → SMOKE armed, then click | `EffectPlacementTool` |
+
+The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium streams terrain in, and a click over tiles that have not arrived has no ground to sit on. Those clicks are refused with a message rather than burying the effect inside the globe. A reticle tracks the real ground point while armed, so what you see is where it lands; the tool stays armed so a line of fires can be laid in one go, and right-click or Esc puts it away. Works in both editor and battle mode.
 
 ### Deployment
 

@@ -7,6 +7,7 @@ using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Map;
 using IronMeridian.Units;
+using IronMeridian.Vfx;
 using IronMeridian.Weather;
 
 namespace IronMeridian.UI
@@ -42,7 +43,7 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Weather, Map, DateTime }
+        enum Section { General, Units, Effects, Weather, Map, DateTime }
         enum ListMode { Available, Deployed }
 
         /// <summary>
@@ -64,8 +65,8 @@ namespace IronMeridian.UI
         const float PanelWidth = UiTheme.LeftPanelWidth;
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = PanelWidth - Pad * 2f;
-        /// <summary>Title block plus the five nav rows.</summary>
-        const float HeaderHeight = 230f;
+        /// <summary>Title block plus the six nav rows.</summary>
+        const float HeaderHeight = 266f;
         const float ToolStripHeight = 56f;
 
         Team _team = Team.User;
@@ -102,9 +103,14 @@ namespace IronMeridian.UI
         RectTransform _autoDayNightLamp;
         Text _autoDayNightLabel;
 
+        // Effects section.
+        readonly List<(VfxId id, Image fill, Text label)> _effectButtons =
+            new List<(VfxId, Image, Text)>();
+
         MapManager _map;
         GameClock _clock;
         WeatherSystem _weather;
+        EffectPlacementTool _effects;
         CameraRig _rig;
         Camera _worldCam;
         GameObject _groundMarker;
@@ -120,7 +126,7 @@ namespace IronMeridian.UI
         Text _viewBtnLabel;
 
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
-            GameClock clock, WeatherSystem weather)
+            GameClock clock, WeatherSystem weather, EffectPlacementTool effects)
         {
             _canvas = canvas;
             _map = map;
@@ -128,6 +134,7 @@ namespace IronMeridian.UI
             _rig = rig;
             _clock = clock;
             _weather = weather;
+            _effects = effects;
 
             var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
@@ -151,12 +158,14 @@ namespace IronMeridian.UI
 
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
+            _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
+            BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
@@ -185,6 +194,7 @@ namespace IronMeridian.UI
             if (_clock != null) _clock.StartChanged += RefreshStartLabel;
             // The system owns weather state; the panel only reflects it.
             if (_weather != null) _weather.Changed += RefreshWeather;
+            if (_effects != null) _effects.ArmedChanged += RefreshEffects;
         }
 
         static RectTransform MakeSectionContent(RectTransform body, string name)
@@ -209,9 +219,10 @@ namespace IronMeridian.UI
 
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -116);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -152);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -188);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -116);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -152);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -188);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -224);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -662,6 +673,86 @@ namespace IronMeridian.UI
         /// <summary>Called by the controller when the draw tool exits on its own.</summary>
         public void ResetToolToSelect() => SetActiveTool(0);
 
+        // ----------------------------------------------------- effects section
+
+        /// <summary>
+        /// Hand-placed effects: arm one, then click the terrain. Named EFFECTS
+        /// rather than "Particles" because that is what they are to the player —
+        /// how they are drawn is an implementation detail, and the same section
+        /// would hold a decal or a mesh effect later.
+        /// </summary>
+        void BuildEffectsSection(RectTransform content)
+        {
+            SectionLabel(content, "PLACE ON MAP", -8);
+
+            EffectButton(content, VfxId.FireMedium, "FIRE", "Burning ground — loops until removed",
+                UiIcons.Flame, new Color(1.00f, 0.55f, 0.15f), -30);
+            EffectButton(content, VfxId.Explosion, "EXPLOSION", "Detonation, then a burning wreck",
+                UiIcons.Burst, new Color(1.00f, 0.72f, 0.30f), -88);
+            EffectButton(content, VfxId.SmokePlume, "SMOKE", "Rising column — loops until removed",
+                UiIcons.SmokeStack, new Color(0.70f, 0.74f, 0.80f), -146);
+
+            var stop = UIFactory.CreateBorderedPanel(content, "StopPlacing", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, -212), new Vector2(InnerWidth, 32));
+            var stopBtn = UIFactory.CreateButton(stop, "STOP PLACING",
+                () => { if (_effects != null) _effects.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)stopBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                "Arm an effect, then click the terrain. A reticle tracks the real ground point, so what you " +
+                "see is where it lands. Ground that has not streamed in yet is refused. " +
+                "Right-click or Esc stops placing. Each effect carries its own positional sound.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -254), new Vector2(InnerWidth, 90));
+
+            RefreshEffects();
+        }
+
+        void EffectButton(RectTransform content, VfxId id, string label, string detail,
+            Sprite glyph, Color glyphColour, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Effect_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+            var btn = UIFactory.CreateButton(frame, "", () => { if (_effects != null) _effects.Toggle(id); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, glyph, "Glyph");
+            icon.color = glyphColour;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
+
+            var name = UIFactory.CreateText(frame, label, UiTheme.FontSmall, UiTheme.Text,
+                TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(46, 2), new Vector2(200, 16));
+
+            var sub = UIFactory.CreateText(frame, detail, UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.UpperLeft);
+            UIFactory.Place(sub.rectTransform, new Vector2(0f, 0.5f), new Vector2(46, -3), new Vector2(210, 16));
+
+            // Speaker pip: every one of these carries audio.
+            var pip = UIFactory.CreateText(frame, "♪", UiTheme.FontSmall, UiTheme.Accent, TextAnchor.MiddleRight);
+            UIFactory.Place(pip.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(16, 16));
+
+            _effectButtons.Add((id, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>Repaints from the tool's state — it owns what is armed, not the panel.</summary>
+        void RefreshEffects()
+        {
+            if (_effects == null) return;
+            foreach (var (id, fill, label) in _effectButtons)
+            {
+                bool on = _effects.Armed.HasValue && _effects.Armed.Value == id;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
         // ----------------------------------------------------- weather section
 
         /// <summary>
@@ -1075,6 +1166,7 @@ namespace IronMeridian.UI
             UnitRegistry.Changed -= OnUnitsChanged;
             if (_clock != null) _clock.StartChanged -= RefreshStartLabel;
             if (_weather != null) _weather.Changed -= RefreshWeather;
+            if (_effects != null) _effects.ArmedChanged -= RefreshEffects;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

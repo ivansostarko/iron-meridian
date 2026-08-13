@@ -31,6 +31,7 @@ namespace IronMeridian.Core
         CombatSystem _combat;
         VfxSystem _vfx;
         WeatherSystem _weather;
+        EffectPlacementTool _effects;
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
@@ -110,10 +111,15 @@ namespace IronMeridian.Core
             _weather.Init(_map.Sun, _rig.Cam, _clock);
             _combat.RunningChanged += _weather.SetBattleRunning;
 
+            // Hand-placed fire / explosion / smoke.
+            _effects = gameObject.AddComponent<EffectPlacementTool>();
+            _effects.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
-            _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen || _drawTool.Current != LineDrawTool.Mode.None;
+            _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen || _effects.IsArmed ||
+                                            _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
             // --- UI ---
@@ -123,6 +129,7 @@ namespace IronMeridian.Core
             _hud = gameObject.AddComponent<GameHUD>();
             _hud.Build(canvas, _combat, _clock);
             _selection.Flash = _hud.Flash;
+            _effects.Flash = _hud.Flash;
 
             _map.LoadError += _hud.Flash;
             // A tileset failure means the terrain will never finish: drop the
@@ -137,7 +144,7 @@ namespace IronMeridian.Core
             BuildStep("unit palette", () =>
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
-                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather);
+                _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;

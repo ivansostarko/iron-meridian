@@ -107,6 +107,38 @@ namespace IronMeridian.UI
                         Mathf.Max(Seg(u, v, 0.56f, 0.16f, 0.68f, 0.50f, 0.07f),
                                   Seg(u, v, 0.68f, 0.50f, 0.94f, 0.50f, 0.07f))))));
 
+        /// <summary>Fire effect.</summary>
+        public static Sprite Flame => Get(nameof(Flame), (u, v) =>
+        {
+            // Teardrop: a disc for the body, tapering to a point at the top.
+            float body = DiscAt(u, v, 0.5f, 0.34f, 0.28f);
+            float taper = v > 0.34f
+                ? Cov((0.28f * (1f - (v - 0.34f) / 0.60f)) - Mathf.Abs(u - 0.5f))
+                : 0f;
+            // Bite out of the base so it reads as flame, not a balloon.
+            float bite = DiscAt(u, v, 0.5f, 0.08f, 0.13f);
+            return Mathf.Clamp01(Mathf.Max(body, taper) - bite);
+        });
+
+        /// <summary>Explosion effect.</summary>
+        public static Sprite Burst => Get(nameof(Burst), (u, v) =>
+        {
+            float dx = u - 0.5f, dy = v - 0.5f;
+            float d = Mathf.Sqrt(dx * dx + dy * dy);
+            float ang = Mathf.Atan2(dy, dx);
+            // Star: radius spikes on a 6-lobed wave.
+            float r = 0.20f + 0.20f * Mathf.Pow(Mathf.Abs(Mathf.Cos(ang * 3f)), 0.6f);
+            return Cov(r - d);
+        });
+
+        /// <summary>Smoke effect — distinct from the weather cloud: a rising column.</summary>
+        public static Sprite SmokeStack => Get(nameof(SmokeStack), (u, v) =>
+            Mathf.Max(DiscAt(u, v, 0.44f, 0.80f, 0.19f),
+                Mathf.Max(DiscAt(u, v, 0.60f, 0.62f, 0.17f),
+                    Mathf.Max(DiscAt(u, v, 0.42f, 0.44f, 0.15f),
+                        Mathf.Max(DiscAt(u, v, 0.56f, 0.26f, 0.13f),
+                                  Rect(u, v, 0.30f, 0.06f, 0.70f, 0.12f))))));
+
         /// <summary>Weather conditions section.</summary>
         public static Sprite Cloud => Get(nameof(Cloud), (u, v) =>
             Mathf.Max(DiscAt(u, v, 0.34f, 0.48f, 0.20f),

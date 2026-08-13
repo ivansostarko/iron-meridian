@@ -25,6 +25,8 @@ Assets/Scripts/
     AudioCatalog.cs      music tracks: resource path, level, loop
     MusicManager.cs      persistent background music; survives scene loads
     AmbienceManager.cs   weather bed, layered under the music
+    EffectAudio.cs       3D positional effect sounds + voice budget
+    ProceduralAudio.cs   synthesised effect sounds (no asset dependency)
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
@@ -66,6 +68,7 @@ Assets/Scripts/
     VfxSystem.cs         the only entry point: resolve, geo-anchor, scale, budget
     VfxInstance.cs       handle for a live effect; screen-size culling
     ProceduralVfx.cs     code-built fallbacks (no asset dependency)
+    EffectPlacementTool.cs  hand-place fire/explosion/smoke on the terrain
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs

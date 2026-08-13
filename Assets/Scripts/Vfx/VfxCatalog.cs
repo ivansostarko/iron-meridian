@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using IronMeridian.Audio;
 
 namespace IronMeridian.Vfx
 {
@@ -69,6 +70,12 @@ namespace IronMeridian.Vfx
         /// </summary>
         public int priority;
 
+        /// <summary>
+        /// Positional audio played with the effect. Looping sounds live as long
+        /// as the effect does; one-shots fire once. See docs/10-AUDIO.md.
+        /// </summary>
+        public EffectSound sound = EffectSound.None;
+
         public bool Loops => lifeSeconds <= 0f;
     }
 
@@ -87,11 +94,13 @@ namespace IronMeridian.Vfx
         {
             new VfxDef { id = VfxId.Explosion,   prefabPath = null,
                          fallback = VfxFallback.Explosion, scaleMeters = 320f, lifeSeconds = 2.6f,
-                         tint = new Color(1.00f, 0.62f, 0.20f), priority = 100 },
+                         tint = new Color(1.00f, 0.62f, 0.20f), priority = 100,
+                         sound = EffectSound.Explosion },
 
             new VfxDef { id = VfxId.ImpactBurst, prefabPath = null,
                          fallback = VfxFallback.Impact,    scaleMeters = 110f, lifeSeconds = 1.1f,
-                         tint = new Color(0.72f, 0.66f, 0.58f), priority = 40 },
+                         tint = new Color(0.72f, 0.66f, 0.58f), priority = 40,
+                         sound = EffectSound.Impact },
 
             new VfxDef { id = VfxId.WeaponFire,  prefabPath = null,
                          fallback = VfxFallback.Impact,    scaleMeters = 80f,  lifeSeconds = 0.7f,
@@ -99,27 +108,33 @@ namespace IronMeridian.Vfx
 
             new VfxDef { id = VfxId.FireSmall,   prefabPath = "VFX/VFX_Fire_01_Small_Smoke",
                          fallback = VfxFallback.Fire,      scaleMeters = 100f, lifeSeconds = 0f,
-                         tint = new Color(1.00f, 0.55f, 0.15f), priority = 60 },
+                         tint = new Color(1.00f, 0.55f, 0.15f), priority = 60,
+                         sound = EffectSound.Fire },
 
             new VfxDef { id = VfxId.FireMedium,  prefabPath = "VFX/VFX_Fire_01_Medium_Smoke",
                          fallback = VfxFallback.Fire,      scaleMeters = 170f, lifeSeconds = 0f,
-                         tint = new Color(1.00f, 0.52f, 0.13f), priority = 70 },
+                         tint = new Color(1.00f, 0.52f, 0.13f), priority = 70,
+                         sound = EffectSound.Fire },
 
             new VfxDef { id = VfxId.FireLarge,   prefabPath = "VFX/VFX_Fire_01_Big_Smoke",
                          fallback = VfxFallback.Fire,      scaleMeters = 280f, lifeSeconds = 0f,
-                         tint = new Color(1.00f, 0.48f, 0.10f), priority = 80 },
+                         tint = new Color(1.00f, 0.48f, 0.10f), priority = 80,
+                         sound = EffectSound.Fire },
 
             new VfxDef { id = VfxId.GroundFire,  prefabPath = "VFX/VFX_Fire_Floor_01_Smoke",
                          fallback = VfxFallback.Fire,      scaleMeters = 230f, lifeSeconds = 0f,
-                         tint = new Color(1.00f, 0.45f, 0.12f), priority = 55 },
+                         tint = new Color(1.00f, 0.45f, 0.12f), priority = 55,
+                         sound = EffectSound.Fire },
 
             new VfxDef { id = VfxId.SmokePlume,  prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 300f, lifeSeconds = 0f,
-                         tint = new Color(0.24f, 0.23f, 0.22f), priority = 50 },
+                         tint = new Color(0.24f, 0.23f, 0.22f), priority = 50,
+                         sound = EffectSound.Smoke },
 
             new VfxDef { id = VfxId.SmokeScreen, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 620f, lifeSeconds = 0f,
-                         tint = new Color(0.72f, 0.72f, 0.70f), priority = 65 },
+                         tint = new Color(0.72f, 0.72f, 0.70f), priority = 65,
+                         sound = EffectSound.Smoke },
 
             new VfxDef { id = VfxId.Dust,        prefabPath = null,
                          fallback = VfxFallback.Dust,      scaleMeters = 140f, lifeSeconds = 1.5f,

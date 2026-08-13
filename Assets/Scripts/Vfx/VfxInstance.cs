@@ -1,4 +1,5 @@
 using UnityEngine;
+using IronMeridian.Audio;
 using IronMeridian.Core;
 
 namespace IronMeridian.Vfx
@@ -21,6 +22,7 @@ namespace IronMeridian.Vfx
         public bool IsPlaying { get; private set; }
 
         ParticleSystem[] _systems;
+        AudioSource _sound;
         bool _culled;
         float _nextCullCheck;
 
@@ -30,6 +32,13 @@ namespace IronMeridian.Vfx
             SpawnedAt = Time.time;
             IsPlaying = true;
             _systems = GetComponentsInChildren<ParticleSystem>(true);
+
+            // Positional audio, parented so it travels with the effect (a
+            // burning unit carries its fire, and its crackle, as it withdraws).
+            // The audible radius is the effect's own size, so a 320 m explosion
+            // carries much further than a 100 m camp fire.
+            if (def.sound != EffectSound.None)
+                _sound = EffectAudio.PlayAt(def.sound, transform.position, def.scaleMeters, transform);
 
             // One-shots clean themselves up; looping effects live until stopped.
             if (!def.Loops) Destroy(gameObject, def.lifeSeconds);
@@ -44,6 +53,11 @@ namespace IronMeridian.Vfx
         {
             if (!IsPlaying) return;
             IsPlaying = false;
+
+            // Kill a looping sound the moment the effect stops emitting — a
+            // fire that has been put out should not still be crackling while
+            // its last particles fade.
+            if (_sound != null) { EffectAudio.Stop(_sound); _sound = null; }
 
             if (immediate || _systems == null)
             {
