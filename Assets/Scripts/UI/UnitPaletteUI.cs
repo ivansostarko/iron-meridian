@@ -66,6 +66,8 @@ namespace IronMeridian.UI
         const float PanelWidth = UiTheme.LeftPanelWidth;
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = PanelWidth - Pad * 2f;
+        /// <summary>Text width inside a list card: card width less the icon column and right padding.</summary>
+        const float CardTextWidth = InnerWidth - 58f;
         /// <summary>Title block plus the six nav rows.</summary>
         const float HeaderHeight = 266f;
         const float ToolStripHeight = 56f;
@@ -527,13 +529,9 @@ namespace IronMeridian.UI
 
             var sprite = CardIcon(card, folder, def.id);
 
-            var name = UIFactory.CreateText(card, def.name, UiTheme.FontBody, UiTheme.Text, TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(50, 1), new Vector2(PanelWidth - 100, 18));
-
-            var stats = UIFactory.CreateText(card,
+            UIFactory.CreateStackedLabels(card, def.name,
                 $"ATK {def.attack:0}  ·  DEF {def.defence:0}  ·  {def.speedKmh:0} km/h",
-                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(stats.rectTransform, new Vector2(0f, 0.5f), new Vector2(50, -3), new Vector2(PanelWidth - 100, 16));
+                50f, CardTextWidth, topInset: 8f, titleSize: UiTheme.FontBody);
 
             var trigger = card.gameObject.AddComponent<EventTrigger>();
             AddEvent(trigger, EventTriggerType.BeginDrag, e => BeginDrag(def, sprite));
@@ -560,25 +558,36 @@ namespace IronMeridian.UI
                 ? $"1-{index} {Abbreviate(actor.Def.name)}"
                 : s.customName;
 
+            // Side reads as a stripe down the card's left edge. It used to be a
+            // dot in the text column, where it sat on top of the readiness line.
+            var stripe = UIFactory.CreatePanel(card, "TeamStripe",
+                s.TeamEnum == Team.User ? UiTheme.Friendly : UiTheme.Hostile);
+            stripe.anchorMin = new Vector2(0, 0); stripe.anchorMax = new Vector2(0, 1);
+            stripe.pivot = new Vector2(0, 0.5f);
+            stripe.anchoredPosition = new Vector2(1, 0);
+            stripe.sizeDelta = new Vector2(3, -2);
+            stripe.GetComponent<Image>().raycastTarget = false;
+
+            // Leaves room for the ⋮ button pinned to the card's right edge.
+            float cardW = CardTextWidth - 26f;
+
             var title = UIFactory.CreateText(card, callSign, UiTheme.FontBody, UiTheme.Text,
-                TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(50, -6), new Vector2(PanelWidth - 106, 17));
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(title.rectTransform, 50f, 5f, cardW, 17f);
+            UIFactory.Fit(title);
 
             var subtitle = UIFactory.CreateText(card, actor.Def.name, UiTheme.FontLabel,
-                UiTheme.TextDim, TextAnchor.UpperLeft);
-            UIFactory.Place(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(50, -23), new Vector2(PanelWidth - 106, 15));
+                UiTheme.TextDim, TextAnchor.MiddleLeft);
+            UIFactory.PlaceTopLeft(subtitle.rectTransform, 50f, 22f, cardW, 15f);
+            UIFactory.Fit(subtitle);
 
             // Third line is the design's metadata row. Real readiness data
             // rather than a decorative timestamp.
             var meta = UIFactory.CreateText(card,
                 $"{s.echelon}  ·  STR {s.strength * 100f:0}%  ·  {s.status}",
-                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(meta.rectTransform, new Vector2(0f, 1f), new Vector2(50, -38), new Vector2(PanelWidth - 106, 15));
-
-            var dot = UIFactory.CreatePanel(card, "TeamDot",
-                s.TeamEnum == Team.User ? UiTheme.Friendly : UiTheme.Hostile);
-            UIFactory.Place(dot, new Vector2(0f, 1f), new Vector2(50, -40), new Vector2(5, 5));
-            dot.GetComponent<Image>().raycastTarget = false;
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            UIFactory.PlaceTopLeft(meta.rectTransform, 50f, 38f, cardW, 15f);
+            UIFactory.Fit(meta);
 
             var kebab = UIFactory.CreateIconButton(card, UiIcons.Kebab,
                 () => RemoveUnitRequested?.Invoke(actor), new Color(0, 0, 0, 0), UiTheme.TextFaint, 7f);
@@ -741,13 +750,8 @@ namespace IronMeridian.UI
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
 
-            var name = UIFactory.CreateText(frame, label, UiTheme.FontSmall, UiTheme.Text,
-                TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(46, 2), new Vector2(200, 16));
-
-            var sub = UIFactory.CreateText(frame, detail, UiTheme.FontLabel, UiTheme.TextFaint,
-                TextAnchor.UpperLeft);
-            UIFactory.Place(sub.rectTransform, new Vector2(0f, 0.5f), new Vector2(46, -3), new Vector2(210, 16));
+            var (name, _) = UIFactory.CreateStackedLabels(frame, label, detail,
+                46f, InnerWidth - 78f, topInset: 9f);
 
             // Speaker pip: every one of these carries audio.
             var pip = UIFactory.CreateText(frame, "♪", UiTheme.FontSmall, UiTheme.Accent, TextAnchor.MiddleRight);
@@ -806,13 +810,9 @@ namespace IronMeridian.UI
             UIFactory.Place(_autoDayNightLamp, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(8, 8));
             _autoDayNightLamp.GetComponent<Image>().raycastTarget = false;
 
-            var autoTitle = UIFactory.CreateText(autoFrame, "AUTO DAY / NIGHT", UiTheme.FontSmall,
-                UiTheme.Text, TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(autoTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, 1), new Vector2(200, 16));
-
-            _autoDayNightLabel = UIFactory.CreateText(autoFrame, "", UiTheme.FontLabel,
-                UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(_autoDayNightLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, -2), new Vector2(220, 16));
+            var (_, autoState) = UIFactory.CreateStackedLabels(autoFrame,
+                "AUTO DAY / NIGHT", "", 28f, InnerWidth - 40f, topInset: 7f);
+            _autoDayNightLabel = autoState;
 
             // --- conditions ---
             SectionLabel(content, "CONDITIONS", -124);
@@ -833,13 +833,8 @@ namespace IronMeridian.UI
                 var caption = b.GetComponentInChildren<Text>(true);
                 if (caption != null) caption.gameObject.SetActive(false);
 
-                var name = UIFactory.CreateText(frame, def.name, UiTheme.FontSmall, UiTheme.Text,
-                    TextAnchor.LowerLeft, FontStyle.Bold);
-                UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, 1), new Vector2(190, 15));
-
-                var detail = UIFactory.CreateText(frame, def.detail, UiTheme.FontLabel,
-                    UiTheme.TextFaint, TextAnchor.UpperLeft);
-                UIFactory.Place(detail.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -2), new Vector2(230, 15));
+                var (name, _) = UIFactory.CreateStackedLabels(frame, def.name, def.detail,
+                    12f, InnerWidth - 44f, topInset: 4f);
 
                 // A speaker pip marks the conditions that bring an audio bed.
                 if (def.ambience != IronMeridian.Audio.AmbienceTrack.None)
@@ -932,13 +927,9 @@ namespace IronMeridian.UI
             glyph.raycastTarget = false;
             UIFactory.Place((RectTransform)glyph.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(18, 18));
 
-            _startValueLabel = UIFactory.CreateText(frame, "", UiTheme.FontBody, UiTheme.Text,
-                TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(_startValueLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, 1), new Vector2(190, 18));
-
-            var edit = UIFactory.CreateText(frame, "Click to change", UiTheme.FontLabel, UiTheme.TextFaint,
-                TextAnchor.UpperLeft);
-            UIFactory.Place(edit.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, -2), new Vector2(190, 16));
+            var (startValue, _) = UIFactory.CreateStackedLabels(frame, "", "Click to change",
+                40f, InnerWidth - 52f, topInset: 9f, titleSize: UiTheme.FontBody);
+            _startValueLabel = startValue;
 
             SectionLabel(content, "PRESETS", -96);
 
@@ -956,17 +947,21 @@ namespace IronMeridian.UI
                 var pc = pb.GetComponentInChildren<Text>(true);
                 if (pc != null) pc.gameObject.SetActive(false);
 
+                float presetW = InnerWidth - 24f;
                 var name = UIFactory.CreateText(pf, preset.name, UiTheme.FontSmall, UiTheme.Text,
-                    TextAnchor.LowerLeft, FontStyle.Bold);
-                UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, 8), new Vector2(180, 16));
+                    TextAnchor.MiddleLeft, FontStyle.Bold);
+                UIFactory.PlaceTopLeft(name.rectTransform, 12f, 4f, presetW, 15f);
+                UIFactory.Fit(name);
 
                 var when = UIFactory.CreateText(pf, preset.when.ToString("HH:mm  ·  dd.MM.yyyy"),
                     UiTheme.FontLabel, UiTheme.Accent, TextAnchor.MiddleLeft);
-                UIFactory.Place(when.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -6), new Vector2(180, 14));
+                UIFactory.PlaceTopLeft(when.rectTransform, 12f, 19f, presetW, 14f);
+                UIFactory.Fit(when);
 
                 var detail = UIFactory.CreateText(pf, preset.detail, UiTheme.FontLabel, UiTheme.TextFaint,
-                    TextAnchor.UpperLeft);
-                UIFactory.Place(detail.rectTransform, new Vector2(0f, 0.5f), new Vector2(12, -18), new Vector2(230, 14));
+                    TextAnchor.MiddleLeft);
+                UIFactory.PlaceTopLeft(detail.rectTransform, 12f, 34f, presetW, 14f);
+                UIFactory.Fit(detail);
             }
 
             var hint = UIFactory.CreateText(content,
@@ -1067,13 +1062,8 @@ namespace IronMeridian.UI
             bIcon.raycastTarget = false;
             UIFactory.Place((RectTransform)bIcon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(18, 18));
 
-            var bTitle = UIFactory.CreateText(boundaryFrame, "BOUNDARY OPTIONS", UiTheme.FontSmall, UiTheme.Text,
-                TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(bTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, 1), new Vector2(200, 16));
-
-            var bSub = UIFactory.CreateText(boundaryFrame, "Type, side, colour, width, caption", UiTheme.FontLabel,
-                UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(bSub.rectTransform, new Vector2(0f, 0.5f), new Vector2(40, -2), new Vector2(220, 16));
+            UIFactory.CreateStackedLabels(boundaryFrame, "BOUNDARY OPTIONS",
+                "Type, side, colour, width, caption", 40f, InnerWidth - 52f, topInset: 6f);
 
             RefreshMapSection();
         }
@@ -1094,12 +1084,16 @@ namespace IronMeridian.UI
             UIFactory.Place(lamp, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(8, 8));
             lamp.GetComponent<Image>().raycastTarget = false;
 
+            // Title and state share one line, so the two rects must not overlap:
+            // the title stops where the state column begins.
             var title = UIFactory.CreateText(frame, label, UiTheme.FontSmall, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, 0), new Vector2(160, 16));
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(28, 0),
+                new Vector2(InnerWidth - 28f - 74f, 16));
+            UIFactory.Fit(title);
 
             stateLabel = UIFactory.CreateText(frame, "", UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
-            UIFactory.Place(stateLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-12, 0), new Vector2(60, 16));
+            UIFactory.Place(stateLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-12, 0), new Vector2(62, 16));
 
             return lamp;
         }

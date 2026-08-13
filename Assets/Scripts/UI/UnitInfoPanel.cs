@@ -92,12 +92,15 @@ namespace IronMeridian.UI
             irt.offsetMin = new Vector2(6, 6);
             irt.offsetMax = new Vector2(-6, -6);
 
+            // Unit names run from "EOD" to "Surface-to-air missile", so the
+            // title has to shrink rather than overrun the close button.
             _title = UIFactory.CreateText(_panel, "", UiTheme.FontTitle, UiTheme.Text,
-                TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(_title.rectTransform, new Vector2(0f, 1f), new Vector2(76, -22), new Vector2(PanelWidth - 96, 26));
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(_title.rectTransform, 76f, 18f, PanelWidth - 96f, 26f);
+            UIFactory.Fit(_title, 12);
 
-            _affiliation = UIFactory.CreateText(_panel, "", UiTheme.FontSmall, UiTheme.Accent, TextAnchor.UpperLeft);
-            UIFactory.Place(_affiliation.rectTransform, new Vector2(0f, 1f), new Vector2(76, -48), new Vector2(PanelWidth - 96, 20));
+            _affiliation = UIFactory.CreateText(_panel, "", UiTheme.FontSmall, UiTheme.Accent, TextAnchor.MiddleLeft);
+            UIFactory.PlaceTopLeft(_affiliation.rectTransform, 76f, 46f, PanelWidth - 96f, 18f);
         }
 
         // -------------------------------------------------------------- tabs
@@ -136,7 +139,10 @@ namespace IronMeridian.UI
             UIFactory.Place((RectTransform)img.transform, new Vector2(0.5f, 1f), new Vector2(0, -8), new Vector2(17, 17));
 
             var text = UIFactory.CreateText(holder, label, 9, UiTheme.TextDim, TextAnchor.UpperCenter, FontStyle.Bold);
-            UIFactory.Place(text.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -28), new Vector2(w, 14));
+            UIFactory.Place(text.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -28), new Vector2(w - 4, 14));
+            // "EQUIPMENT" is the widest label and only just fits a quarter of
+            // the panel; let it shrink rather than run into its neighbours.
+            UIFactory.Fit(text, 7);
 
             // Active-tab indicator, sitting on the strip's bottom rule.
             var underline = UIFactory.CreatePanel(holder, "Underline", UiTheme.Accent);
@@ -454,23 +460,27 @@ namespace IronMeridian.UI
             rule.offsetMin = new Vector2(UiTheme.PanelPadding, 0);
             rule.offsetMax = new Vector2(-UiTheme.PanelPadding, 1);
 
-            // Both cells stretch with the row and are inset in pixels, so they
-            // track whatever width the layout hands the row. Fractional anchors
-            // plus overflow let text render outside the row entirely — labels
-            // used to spill off the panel's left edge and values off its right.
+            // The two cells split the row at a fixed seam and must not overlap:
+            // the label's right edge and the value's left edge are the same
+            // number. They used to be 0.46/0.50 of the width, which left a
+            // ~24 px band where a long label ran under its own value.
+            const float Seam = 0.52f;
+
             var lbl = UIFactory.CreateText(row, label, UiTheme.FontSmall, UiTheme.TextDim, TextAnchor.MiddleLeft);
             var lr = lbl.rectTransform;
             lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
             lr.offsetMin = new Vector2(UiTheme.PanelPadding, 0);
-            lr.offsetMax = new Vector2(-(PanelWidth * 0.46f), 0);
+            lr.offsetMax = new Vector2(-(PanelWidth * (1f - Seam)), 0);
+            UIFactory.Fit(lbl);
 
             var val = UIFactory.CreateText(row, value, UiTheme.FontSmall,
                 valueColour ?? UiTheme.Text, TextAnchor.MiddleRight, FontStyle.Bold);
             var vr = val.rectTransform;
             vr.anchorMin = new Vector2(1f, 0f); vr.anchorMax = new Vector2(1f, 1f);
             vr.pivot = new Vector2(1f, 0.5f);
-            vr.sizeDelta = new Vector2(PanelWidth * 0.5f, 0);
+            vr.sizeDelta = new Vector2(PanelWidth * Seam - UiTheme.PanelPadding * 2f, 0);
             vr.anchoredPosition = new Vector2(-UiTheme.PanelPadding, 0);
+            UIFactory.Fit(val);
 
             _values[label] = val;
         }

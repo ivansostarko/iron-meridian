@@ -465,6 +465,63 @@ namespace IronMeridian.UI
             rt.offsetMax = Vector2.zero;
         }
 
+        /// <summary>
+        /// Places a rect by its **top-left corner**, <paramref name="top"/>
+        /// pixels down from the parent's top edge.
+        ///
+        /// Use this for stacked rows. Anchoring two lines to the parent's centre
+        /// and nudging them a few pixels apart leaves their rects overlapping —
+        /// each is ~16 px tall around the same midpoint — and text drawn inside
+        /// overlapping rects collides on screen no matter how it is aligned.
+        /// Measuring from the top makes the stacking explicit and safe.
+        /// </summary>
+        public static void PlaceTopLeft(RectTransform rt, float x, float top, float width, float height)
+        {
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, -top);
+            rt.sizeDelta = new Vector2(width, height);
+        }
+
+        /// <summary>
+        /// Lets a label shrink to fit its rect rather than spilling over its
+        /// neighbours. Legacy <see cref="Text"/> has no ellipsis, so best-fit
+        /// between <paramref name="minSize"/> and the authored size, plus
+        /// vertical truncation, is the closest thing to a responsive label —
+        /// and it is what keeps long unit names and weather descriptions inside
+        /// a 274 px panel at any resolution.
+        /// </summary>
+        public static Text Fit(Text text, int minSize = 9)
+        {
+            text.resizeTextForBestFit = true;
+            text.resizeTextMinSize = minSize;
+            text.resizeTextMaxSize = text.fontSize;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            return text;
+        }
+
+        /// <summary>
+        /// Two-line "title over detail" block, the pattern every card and option
+        /// row in the map editor uses. Returns both labels so callers can keep
+        /// updating them.
+        /// </summary>
+        public static (Text title, Text detail) CreateStackedLabels(Transform parent,
+            string title, string detail, float x, float width,
+            float topInset = 8f, int titleSize = UiTheme.FontSmall, int detailSize = UiTheme.FontLabel,
+            Color? titleColor = null, Color? detailColor = null)
+        {
+            var t = CreateText(parent, title, titleSize, titleColor ?? UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            PlaceTopLeft(t.rectTransform, x, topInset, width, 16f);
+            Fit(t);
+
+            var d = CreateText(parent, detail, detailSize, detailColor ?? UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            PlaceTopLeft(d.rectTransform, x, topInset + 17f, width, 15f);
+            Fit(d);
+
+            return (t, d);
+        }
+
         public static void Place(RectTransform rt, Vector2 anchor, Vector2 pos, Vector2 size)
         {
             rt.anchorMin = anchor;
