@@ -49,7 +49,7 @@ The map opens over **Lyon, France** on real Cesium 3D terrain with the default s
 
 The editor's left chrome is in two pieces:
 
-- The **rail** is always there: the **ORDER OF BATTLE** emblem, the section nav, and the tool strip along the bottom.
+- The **rail** is always there: the emblem, the section nav, and the tool strip along the bottom. (There is no "ORDER OF BATTLE" caption — ten labelled nav rows already say what the rail is, and the heading cost a row of vertical space the sections needed more.)
 - The **section panel** slides out from behind the rail carrying that section's controls.
 
 | Nav row | What the panel shows |
@@ -108,6 +108,29 @@ reach the units past the fold.
 | `C` | Aim the selection's facing: move the mouse to swing every selected unit onto a bearing. The heading arrows brighten and the status line reads the live bearing. LMB/Enter confirms, `Esc` cancels |
 | `Esc` | Deselect |
 | **Hover** a unit icon | Tooltip beside the cursor: side, type, echelon, strength bar, status, morale/organisation/ammo/fuel and both ranges |
+
+### Connection alerts
+
+The map is **streamed**. Losing the network does not produce an error — it
+produces a map that quietly stops filling in, which looks like a hang. A banner
+appears at the bottom of the screen for **five seconds** and then fades:
+
+| Trigger | Message |
+|---|---|
+| Network route lost | *No internet connection — new map tiles and imagery will not load.* |
+| Network route back | *Connection restored — map tiles will resume loading.* |
+| A tileset request fails | *Map data failed to load — check your connection.* |
+
+Two signals, because neither is sufficient alone. `Application.internetReachability`
+knows whether a route *exists* — a cable in the socket, a carrier on the radio —
+but not whether anything at the other end answers, so a router with no upstream
+reads as reachable. `MapManager.LoadError` catches exactly that case, when a real
+request fails. Between them, "no route" and "route but no service" are both
+covered.
+
+Starting the editor with no network does **not** fire the alert: the first poll
+establishes a baseline rather than announcing it, and the loading screen's own
+failure path covers that case with a better message.
 
 **Hovering costs nothing.** Identifying a counter used to mean selecting it,
 which replaces the current selection, closes whatever is open on the right and

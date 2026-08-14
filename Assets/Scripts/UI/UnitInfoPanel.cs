@@ -23,6 +23,25 @@ namespace IronMeridian.UI
         public System.Action<int> CycleRequested;
 
         const float PanelWidth = UiTheme.RightPanelWidth;
+
+        /// <summary>
+        /// Horizontal inset for everything inside the stat table.
+        ///
+        /// Wider than <see cref="UiTheme.PanelPadding"/> on purpose. The table
+        /// lives inside a scroll viewport, and a 12 px inset put the first
+        /// character of every label and the last digit of every value hard
+        /// against the viewport's clipping edge — legible on paper, shaved in
+        /// practice. Pulling both columns in to 20 px costs a little width and
+        /// buys a table whose two ends are actually on screen.
+        /// </summary>
+        const float TableInset = 20f;
+
+        /// <summary>
+        /// Clear space between the label column and the value column. Without
+        /// it the two cells merely stop touching, and a long label sits flush
+        /// against its own number with nothing to separate them.
+        /// </summary>
+        const float ColumnGutter = 12f;
         /// <summary>Header (icon, name, affiliation) plus the tab strip.</summary>
         const float TopBlockHeight = 156f;
         /// <summary>Heading rotator, cycle row and the remove button.</summary>
@@ -116,8 +135,13 @@ namespace IronMeridian.UI
             rule.anchoredPosition = Vector2.zero;
 
             float w = PanelWidth / 4f;
+            // Captions are abbreviated where the full word does not fit a
+            // quarter of the panel. "EQUIPMENT" at 75 px was being best-fitted
+            // down to an unreadable 7 pt to squeeze in; "EQUIP" is shorter than
+            // the space it has and stays at full size, which is the better
+            // trade — the icon above it already carries the meaning.
             AddTab(strip, Tab.Info, "INFO", UiIcons.Info, 0 * w, w);
-            AddTab(strip, Tab.Equipment, "EQUIPMENT", UiIcons.Equipment, 1 * w, w);
+            AddTab(strip, Tab.Equipment, "EQUIP", UiIcons.Equipment, 1 * w, w);
             AddTab(strip, Tab.Orders, "ORDERS", UiIcons.Orders, 2 * w, w);
             AddTab(strip, Tab.Status, "STATUS", UiIcons.Pulse, 3 * w, w);
 
@@ -138,11 +162,11 @@ namespace IronMeridian.UI
             img.raycastTarget = false;
             UIFactory.Place((RectTransform)img.transform, new Vector2(0.5f, 1f), new Vector2(0, -8), new Vector2(17, 17));
 
-            var text = UIFactory.CreateText(holder, label, 9, UiTheme.TextDim, TextAnchor.UpperCenter, FontStyle.Bold);
-            UIFactory.Place(text.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -28), new Vector2(w - 4, 14));
-            // "EQUIPMENT" is the widest label and only just fits a quarter of
-            // the panel; let it shrink rather than run into its neighbours.
-            UIFactory.Fit(text, 7);
+            var text = UIFactory.CreateText(holder, label, 10, UiTheme.TextDim, TextAnchor.UpperCenter, FontStyle.Bold);
+            // Inset from the tab's own edges so adjacent captions have clear air
+            // between them rather than meeting in the middle of the seam.
+            UIFactory.Place(text.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -28), new Vector2(w - 10, 14));
+            UIFactory.Fit(text, 8);
 
             // Active-tab indicator, sitting on the strip's bottom rule.
             var underline = UIFactory.CreatePanel(holder, "Underline", UiTheme.Accent);
@@ -435,7 +459,7 @@ namespace IronMeridian.UI
 
             var h = UIFactory.CreateSectionHeader(holder, label);
             UIFactory.Place(h.rectTransform, new Vector2(0f, 0f),
-                new Vector2(UiTheme.PanelPadding, 4), new Vector2(PanelWidth - 24, 18));
+                new Vector2(TableInset, 4), new Vector2(PanelWidth - TableInset * 2f, 18));
         }
 
         void Row(string label, string value, Color? valueColour = null)
@@ -457,30 +481,37 @@ namespace IronMeridian.UI
             var rule = UIFactory.CreateDivider(row, new Color(1f, 1f, 1f, 0.045f));
             rule.anchorMin = new Vector2(0, 0); rule.anchorMax = new Vector2(1, 0);
             rule.pivot = new Vector2(0.5f, 0);
-            rule.offsetMin = new Vector2(UiTheme.PanelPadding, 0);
-            rule.offsetMax = new Vector2(-UiTheme.PanelPadding, 1);
+            rule.offsetMin = new Vector2(TableInset, 0);
+            rule.offsetMax = new Vector2(-TableInset, 1);
 
-            // The two cells split the row at a fixed seam and must not overlap:
-            // the label's right edge and the value's left edge are the same
-            // number. They used to be 0.46/0.50 of the width, which left a
-            // ~24 px band where a long label ran under its own value.
-            const float Seam = 0.52f;
+            // The row is split into a label column and a value column with a
+            // gutter between them, all measured from the *actual* row width
+            // rather than from PanelWidth.
+            //
+            // Measuring from PanelWidth was the bug: the row is laid out by a
+            // VerticalLayoutGroup inside a viewport, so its real width is the
+            // viewport's, and any inset the viewport adds made every cell that
+            // much too wide — pushing the label off the left edge and the value
+            // off the right. Stretch anchors make both columns follow whatever
+            // width the row actually gets.
+            const float LabelShare = 0.50f;
 
-            var lbl = UIFactory.CreateText(row, label, UiTheme.FontSmall, UiTheme.TextDim, TextAnchor.MiddleLeft);
+            var lbl = UIFactory.CreateText(row, label, UiTheme.FontLabel, UiTheme.TextDim, TextAnchor.MiddleLeft);
             var lr = lbl.rectTransform;
-            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-            lr.offsetMin = new Vector2(UiTheme.PanelPadding, 0);
-            lr.offsetMax = new Vector2(-(PanelWidth * (1f - Seam)), 0);
-            UIFactory.Fit(lbl);
+            lr.anchorMin = new Vector2(0f, 0f);
+            lr.anchorMax = new Vector2(LabelShare, 1f);
+            lr.offsetMin = new Vector2(TableInset, 0);
+            lr.offsetMax = new Vector2(-ColumnGutter * 0.5f, 0);
+            UIFactory.Fit(lbl, 8);
 
-            var val = UIFactory.CreateText(row, value, UiTheme.FontSmall,
+            var val = UIFactory.CreateText(row, value, UiTheme.FontLabel,
                 valueColour ?? UiTheme.Text, TextAnchor.MiddleRight, FontStyle.Bold);
             var vr = val.rectTransform;
-            vr.anchorMin = new Vector2(1f, 0f); vr.anchorMax = new Vector2(1f, 1f);
-            vr.pivot = new Vector2(1f, 0.5f);
-            vr.sizeDelta = new Vector2(PanelWidth * Seam - UiTheme.PanelPadding * 2f, 0);
-            vr.anchoredPosition = new Vector2(-UiTheme.PanelPadding, 0);
-            UIFactory.Fit(val);
+            vr.anchorMin = new Vector2(LabelShare, 0f);
+            vr.anchorMax = new Vector2(1f, 1f);
+            vr.offsetMin = new Vector2(ColumnGutter * 0.5f, 0);
+            vr.offsetMax = new Vector2(-TableInset, 0);
+            UIFactory.Fit(val, 8);
 
             _values[label] = val;
         }

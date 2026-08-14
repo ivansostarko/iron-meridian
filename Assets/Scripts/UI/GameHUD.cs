@@ -64,6 +64,7 @@ namespace IronMeridian.UI
                 new Vector2(0, -UiTheme.TopBarHeight - 14), new Vector2(900, 24));
 
             BuildCountdown(canvas);
+            BuildAlert(canvas);
 
             var help = UIFactory.CreateText(canvas.transform,
                 "LMB select   •   RMB place / move   •   C face   •   Ctrl+C/V copy-paste   •   Ctrl+Z undo   •   WASD pan   •   Wheel zoom   •   Q/E rotate   •   Esc/P pause",
@@ -206,6 +207,8 @@ namespace IronMeridian.UI
 
         void Update()
         {
+            TickAlert();
+
             // Driven by panel visibility rather than by Running, so the readout
             // is correct the instant battle starts — including while paused at
             // speed 0, when the clock is not advancing.
@@ -234,6 +237,93 @@ namespace IronMeridian.UI
         }
 
         public void Flash(string message) => _status.text = message;
+
+        // ------------------------------------------------------------- alerts
+
+        RectTransform _alert;
+        Image _alertFill, _alertGlyph;
+        Text _alertText;
+        CanvasGroup _alertGroup;
+        float _alertRemaining;
+
+        /// <summary>Seconds the banner spends fading out at the end of its life.</summary>
+        const float AlertFadeSeconds = 0.5f;
+
+        /// <summary>
+        /// A transient banner for things that have gone wrong outside the game's
+        /// control — losing the network being the one that matters, because the
+        /// map is streamed and stops filling in without it.
+        ///
+        /// Bottom-centre rather than under the top bar, which is already carrying
+        /// the status flash and the fire-mission countdown. An alert that covers
+        /// a running countdown trades one piece of urgent information for
+        /// another; down here it competes with nothing.
+        /// </summary>
+        void BuildAlert(Canvas canvas)
+        {
+            _alert = UIFactory.CreateBorderedPanel(canvas.transform, "Alert",
+                UiTheme.Chrome, UiTheme.Warning);
+            UIFactory.Place(_alert, new Vector2(0.5f, 0f), new Vector2(0, 56), new Vector2(660, 46));
+            _alertFill = _alert.Find("Fill").GetComponent<Image>();
+
+            _alertGroup = _alert.gameObject.AddComponent<CanvasGroup>();
+            // Never intercept a click: it appears unbidden over the map.
+            _alertGroup.blocksRaycasts = false;
+            _alertGroup.interactable = false;
+
+            _alertGlyph = UIFactory.CreateImage(_alert, UiIcons.Info, "Glyph");
+            _alertGlyph.raycastTarget = false;
+            UIFactory.Place((RectTransform)_alertGlyph.transform, new Vector2(0f, 0.5f),
+                new Vector2(16, 0), new Vector2(20, 20));
+
+            _alertText = UIFactory.CreateText(_alert, "", UiTheme.FontBody, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            _alertText.raycastTarget = false;
+            UIFactory.Place(_alertText.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(46, 0), new Vector2(600, 30));
+            UIFactory.Fit(_alertText, 11);
+
+            _alert.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Shows an alert for <paramref name="seconds"/>, then fades it out.
+        /// Calling again while one is up replaces it and restarts the clock,
+        /// so a burst of related problems reads as one message rather than a
+        /// queue the player has to wait out.
+        /// </summary>
+        public void ShowAlert(string message, float seconds = 5f, bool warning = true)
+        {
+            if (_alert == null) return;
+
+            _alertText.text = message;
+            var accent = warning ? UiTheme.Warning : UiTheme.Success;
+            _alert.GetComponent<Image>().color = accent;
+            _alertGlyph.color = accent;
+            _alertFill.color = UiTheme.Chrome;
+
+            _alertRemaining = Mathf.Max(0.1f, seconds);
+            _alertGroup.alpha = 1f;
+            _alert.gameObject.SetActive(true);
+        }
+
+        void TickAlert()
+        {
+            if (_alert == null || !_alert.gameObject.activeSelf) return;
+
+            // Unscaled: an alert about the network must not be frozen by a
+            // paused battle, which is exactly when the player is most likely to
+            // be sitting still and reading.
+            _alertRemaining -= Time.unscaledDeltaTime;
+
+            if (_alertRemaining <= 0f)
+            {
+                _alert.gameObject.SetActive(false);
+                return;
+            }
+
+            _alertGroup.alpha = Mathf.Clamp01(_alertRemaining / AlertFadeSeconds);
+        }
 
         // ------------------------------------------------------- fire mission
 

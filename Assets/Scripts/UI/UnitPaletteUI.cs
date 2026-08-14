@@ -97,8 +97,16 @@ namespace IronMeridian.UI
         // --- unit list card metrics ---
         /// <summary>Icon column width. Was 36 px, at which an APP-6 frame was a smudge.</summary>
         const float CardIconSize = 44f;
+        /// <summary>
+        /// Left inset of a list card's icon. The cards sit inside a scroll
+        /// viewport whose own edge was clipping the first few pixels of the
+        /// APP-6 frame — an 8 px inset left the blue rectangle's left stroke
+        /// half off the panel. 23 px clears it and gives the column an even
+        /// gutter against the rail beside it.
+        /// </summary>
+        const float CardIconX = 23f;
         /// <summary>Where a card's text column starts: icon inset + icon + gutter.</summary>
-        const float CardTextX = 8f + CardIconSize + 6f;
+        const float CardTextX = CardIconX + CardIconSize + 6f;
         /// <summary>
         /// Text width inside a list card. The card is the content width less the
         /// layout padding, and the content is the viewport less the scrollbar,
@@ -427,16 +435,14 @@ namespace IronMeridian.UI
 
         void BuildHeader(RectTransform panel)
         {
+            // Emblem only. The "ORDER OF BATTLE" caption beside it is gone: the
+            // rail's ten labelled nav rows already say what this is, and a
+            // heading that repeats the obvious is a heading that costs a row of
+            // vertical space the sections needed more.
             var emblem = UIFactory.CreateImage(panel, UiIcons.Shield, "Emblem");
             emblem.color = UiTheme.Accent;
             emblem.raycastTarget = false;
             UIFactory.Place((RectTransform)emblem.transform, new Vector2(0f, 1f), new Vector2(Pad, -14), new Vector2(19, 19));
-
-            var title = UIFactory.CreateText(panel, "ORDER OF BATTLE", UiTheme.FontHeading,
-                UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Pad + 27, -13),
-                new Vector2(RailWidth - Pad - 33f, 22));
-            UIFactory.Fit(title);
 
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
@@ -870,14 +876,14 @@ namespace IronMeridian.UI
             {
                 var icon = UIFactory.CreateImage(card, sprite, "Icon");
                 icon.raycastTarget = false;
-                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(8, 0),
+                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(CardIconX, 0),
                     new Vector2(CardIconSize, CardIconSize));
                 return sprite;
             }
 
             // Keep the layout intact and visibly flag the gap.
             var fallback = UIFactory.CreatePanel(card, "IconFallback", UiTheme.Panel);
-            UIFactory.Place(fallback, new Vector2(0f, 0.5f), new Vector2(8, 0),
+            UIFactory.Place(fallback, new Vector2(0f, 0.5f), new Vector2(CardIconX, 0),
                 new Vector2(CardIconSize, CardIconSize));
             var mark = UIFactory.CreateText(fallback, "?", 16, UiTheme.TextFaint, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Stretch(mark.rectTransform);

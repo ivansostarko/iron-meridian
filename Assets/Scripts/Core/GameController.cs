@@ -71,6 +71,7 @@ namespace IronMeridian.Core
         UnitPaletteUI _palette;
         BoundaryPanelUI _boundaryPanel;
         UnitHoverTooltip _hoverTooltip;
+        ConnectivityWatcher _connectivity;
         UnitInfoPanel _infoPanel;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -254,6 +255,21 @@ namespace IronMeridian.Core
             // selected — the info panel would keep reporting it.
             _fog.UnitHidden = u => { if (_selection.Selected == u) _selection.Select(null); };
             _map.LoadError += _hud.Flash;
+
+            // A tileset request that actually fails is the other half of the
+            // connectivity story — see ConnectivityWatcher for why neither
+            // signal is sufficient alone.
+            _map.LoadError += _ => _hud.ShowAlert(
+                "Map data failed to load — check your connection.", 5f);
+
+            // Losing the network does not stop the game, it stops the *map*
+            // filling in, which without a message looks like a hang.
+            _connectivity = gameObject.AddComponent<ConnectivityWatcher>();
+            _connectivity.ReachabilityChanged = reachable => _hud.ShowAlert(
+                reachable
+                    ? "Connection restored — map tiles will resume loading."
+                    : "No internet connection — new map tiles and imagery will not load.",
+                5f, warning: !reachable);
             // A tileset failure means the terrain will never finish: drop the
             // overlay at once so the player sees the HUD's error rather than a
             // bar that sits there until the timeout.

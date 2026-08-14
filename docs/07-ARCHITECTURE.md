@@ -15,6 +15,7 @@ Assets/Scripts/
     CesiumTokenConfig.cs Cesium ion token resolution (file > constant)
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
+    ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
   Data/
     Enums.cs             Team, Echelon(+multipliers), UnitStatus, ViewMode, AttackTask, ReconTask
     UnitDefinition.cs    unit type stats + UnitDatabase (units.json loader)
