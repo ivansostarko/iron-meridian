@@ -18,6 +18,15 @@ EditorBuildSettings:
     path: Assets/Scenes/EastFrance.unity
     guid: 850e5e737e297e64bbde965836e2df37
   - enabled: 1
+    path: Assets/Scenes/SinglePlayer.unity
+    guid: b48e40b26338f534caf19d6c4ce1fcbe
+  - enabled: 1
+    path: Assets/Scenes/Multiplayer.unity
+    guid: f3aae1f1e1607e944acb8b3e79d06756
+  - enabled: 1
+    path: Assets/Scenes/Extras.unity
+    guid: c6ad8941121844046bb11bab79e01cc5
+  - enabled: 1
     path: Assets/Scenes/UnitsList.unity
     guid: f520d0b4999450843b25639bbe718901
   - enabled: 1
