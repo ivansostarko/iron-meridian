@@ -60,6 +60,37 @@ namespace IronMeridian.Core
         public bool Paused => SpeedIndex == 0;
         public bool Running { get; private set; }
 
+        /// <summary>The clock in the current scene, or null outside the game.</summary>
+        public static GameClock Active { get; private set; }
+
+        void Awake() => Active = this;
+
+        /// <summary>
+        /// Scenario seconds elapsed since the last frame — the unit anything
+        /// measured in *operational* time should count in.
+        ///
+        /// Three cases, and each is the honest answer:
+        ///  • **Battle running**: real time times the chosen speed, so an hour of
+        ///    burning wreckage is an hour on the clock whether the player watches
+        ///    it at x1 or skips it at x300.
+        ///  • **Battle paused**: zero. The world is stopped, and a fire that
+        ///    burned out while nothing else moved would be the one thing in the
+        ///    scene disagreeing about that.
+        ///  • **Editor**: real time. The editor is timeless and the clock is not
+        ///    running, but an effect that never expires because no battle has
+        ///    started is a leak, not a feature — so scenario time runs at x1
+        ///    while a scenario is being laid out.
+        /// </summary>
+        public static float ScenarioDelta
+        {
+            get
+            {
+                var clock = Active;
+                float rate = clock == null ? 1f : (clock.Running ? clock.Speed : 1f);
+                return Time.unscaledDeltaTime * rate;
+            }
+        }
+
         /// <summary>Raised when the speed changes (not every tick).</summary>
         public event System.Action SpeedChanged;
 
@@ -156,6 +187,11 @@ namespace IronMeridian.Core
         {
             // Never leave the game frozen behind us on scene change.
             if (Time.timeScale != 1f) Time.timeScale = 1f;
+        }
+
+        void OnDestroy()
+        {
+            if (Active == this) Active = null;
         }
     }
 }

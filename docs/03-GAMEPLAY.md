@@ -307,8 +307,31 @@ lost inside a ridge or left floating over a valley.
 - **DRAW BOUNDARY** — yellow sector boundary separating the two teams.
 - **DRAW DEFENSIVE LINE** — thick team-coloured fortification line.
 - Left-click adds points, **right-click / Enter finishes**, `Esc` cancels.
-- **LINES: 3D / 2D** — lines follow the terrain in both modes; the flag chooses how far they stand off it (25 m in 3D, 140 m in 2D so the graphics read as an overlay from straight above).
+- **Lines are draped, not strung.** Every segment is subdivided at ~220 m and each sample is clamped to the ground, so a boundary drawn with two clicks across ten kilometres lies on the terrain the whole way rather than flying over the valleys and vanishing inside the ridges between its two vertices.
+- **STAND UP IN 3D** — for defensive lines and battle positions, which mark ground that is physically held, the flag chooses how far clear of the terrain the graphic floats (25 m in 3D, 140 m in 2D so it reads as an overlay from straight above). **Boundaries and phase lines ignore it and always read `DRAPED`**: a control measure is a line drawn on a map, not a fence standing in the world, and a wall of colour reaching into the sky hides the terrain the boundary is there to divide. Height is used for one thing only — putting the line on the ground.
 - A line's `label` amplifier is drawn on the map — at both ends for a long line, at the midpoint for a short one — so `FEBA`, `PL BLUE` and `DEFENCE LINE — …` say what they are and keep saying it after a reload.
+
+### Derived sector boundaries
+
+**GENERAL → GENERATE SECTORS** derives each side's control measures from where
+its units actually stand: lateral boundaries between laterally adjacent
+formations, a FEBA through the forward ones, and a rear boundary behind them
+(`SectorSystem`, following APP-6A / FM 101-5-1).
+
+**A side gets one set per body of troops, not one per side.** The geometry
+assumes a single front with a single frontage axis, which is true of a force
+deployed in one place and false the moment a side is fighting in two: run over a
+corps at Lyon and a brigade two hundred kilometres away, the principal axis lands
+somewhere between them and the "boundary" is drawn through empty country between
+two formations that are not adjacent to anything. So a side's units are first
+split into groups by proximity — within 15 km of each other, transitively — and
+each group gets its own frontage axis, its own lateral boundaries, its own FEBA
+(captioned `FEBA 1`, `FEBA 2`, … when there is more than one) and its own rear
+boundary. Each group is also oriented against the enemy formations *nearest to
+it* rather than against the enemy's overall centre of mass, because with two
+separated fronts those are different directions and only the first is "forward"
+for that group. A group of fewer than two formations is left alone: it has no
+adjacent pair to bound and no forward edge worth calling a FEBA.
 
 ### The front line
 

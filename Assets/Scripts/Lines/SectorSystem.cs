@@ -32,6 +32,18 @@ namespace IronMeridian.Lines
     /// have no doctrinal meaning — a boundary parallel to the front is a rear
     /// boundary, not a lateral one. Instead the split is computed purely in the
     /// lateral coordinate, which can only ever produce rear-to-front lines.
+    ///
+    /// **A side gets one set of control measures per body of troops, not one per
+    /// side.** All of the geometry above assumes a single front with a single
+    /// frontage axis, which is true of a force deployed in one place and false
+    /// the moment a side is fighting in two. Run over a corps in Lyon and a
+    /// brigade two hundred kilometres away, the principal axis lands somewhere
+    /// between them and the result is a "boundary" drawn through empty country
+    /// separating two formations that are not adjacent to anything. So the
+    /// side's units are first split into groups by proximity
+    /// (<see cref="ClusterGapKm"/>), and each group is given its own frontage
+    /// axis, its own lateral boundaries, its own FEBA and its own rear boundary
+    /// — which is what a force with two separated commands actually has.
     /// </summary>
     public class SectorSystem : MonoBehaviour
     {
@@ -46,6 +58,21 @@ namespace IronMeridian.Lines
         /// <summary>How far forward of its units the FEBA is drawn, km.</summary>
         const double FebaStandoffKm = 0.8;
         const int BoundarySamples = 5;
+        /// <summary>
+        /// Two of a side's formations belong to the same body of troops if they
+        /// are within this of each other, transitively. Set at the scale of a
+        /// deployed brigade's frontage: closer than this, formations are flank
+        /// neighbours with a boundary between them; further apart, they are
+        /// separate commands and a line drawn between them would be an
+        /// invention.
+        /// </summary>
+        const double ClusterGapKm = 15.0;
+        /// <summary>
+        /// A group this small has no adjacent pairs to bound, no forward edge
+        /// worth calling a FEBA and no rear area to close off. Left alone rather
+        /// than given a single line through the middle of nothing.
+        /// </summary>
+        const int MinGroupSize = 2;
 
         public bool AutoUpdate;
 
@@ -94,6 +121,9 @@ namespace IronMeridian.Lines
         /// <summary>
         /// Builds the full control-measure set for one side. Returns how many
         /// lines were produced (0 when the side has nothing to organise).
+        ///
+        /// One set per body of troops — see the class remarks for why a side
+        /// deployed in two places must not be given one front.
         /// </summary>
         public int Generate(Team team)
         {
@@ -103,7 +133,24 @@ namespace IronMeridian.Lines
             var enemy = AliveOf(team == Team.User ? Team.Enemy : Team.User);
             if (own.Count == 0) return 0;
 
-            // Local planar frame centred on the side's centroid. All the sector
+            var groups = Cluster(own);
+            int count = 0;
+            for (int g = 0; g < groups.Count; g++)
+                count += GenerateGroup(team, g, groups.Count, groups[g], enemy);
+            return count;
+        }
+
+        /// <summary>
+        /// The control measures for one body of troops. <paramref name="index"/>
+        /// keys the ids so several groups can coexist, and captions the FEBA
+        /// when there is more than one of them to tell apart.
+        /// </summary>
+        int GenerateGroup(Team team, int index, int groupCount, List<UnitActor> own,
+            List<UnitActor> enemy)
+        {
+            if (own.Count < MinGroupSize) return 0;
+
+            // Local planar frame centred on the group's centroid. All the sector
             // geometry below is planar; doing it in raw degrees would skew with
             // latitude and hand the eastern formations wider sectors.
             Centroid(own, out double originLat, out double originLon);
@@ -116,7 +163,13 @@ namespace IronMeridian.Lines
                 pos.Add(new Vector2d(e, n));
             }
 
-            if (!FrontAxis(own, enemy, pos, originLat, originLon, out Vector2d fwd, out Vector2d lat))
+            // Oriented against the enemy this group is actually facing, not
+            // against the enemy's overall centre of mass — with two separated
+            // fronts those are different directions, and only the first one is
+            // "forward" for this group.
+            var facing = NearestEnemies(own.Count, originLat, originLon, enemy);
+
+            if (!FrontAxis(own, facing, pos, originLat, originLon, out Vector2d fwd, out Vector2d lat))
                 return 0;
 
             // Project every unit onto the two axes: s = position along the
@@ -136,11 +189,84 @@ namespace IronMeridian.Lines
             double minD = double.MaxValue, maxD = double.MinValue;
             foreach (var s in slot) { minD = System.Math.Min(minD, s.d); maxD = System.Math.Max(maxD, s.d); }
 
+            string prefix = $"sector-{team}-g{index}";
+            string suffix = groupCount > 1 ? $" {index + 1}" : "";
+
             int count = 0;
-            count += BuildLateralBoundaries(team, slot, fwd, lat, originLat, originLon, minD, maxD);
-            count += BuildFeba(team, slot, fwd, lat, originLat, originLon, maxD);
-            count += BuildRearBoundary(team, slot, fwd, lat, originLat, originLon, minD);
+            count += BuildLateralBoundaries(team, prefix, slot, fwd, lat, originLat, originLon, minD, maxD);
+            count += BuildFeba(team, prefix, suffix, slot, fwd, lat, originLat, originLon, maxD);
+            count += BuildRearBoundary(team, prefix, slot, fwd, lat, originLat, originLon, minD);
             return count;
+        }
+
+        // ------------------------------------------------------- clustering
+
+        /// <summary>
+        /// Splits a side's formations into bodies of troops: two units are in
+        /// the same group if they are within <see cref="ClusterGapKm"/> of each
+        /// other, and the relation is transitive, so a chain of formations along
+        /// a front stays one group however long the front is.
+        ///
+        /// Single-linkage flood fill rather than k-means: the number of groups
+        /// is the answer, not an input, and nobody knows in advance whether a
+        /// scenario has one front or three.
+        /// </summary>
+        static List<List<UnitActor>> Cluster(List<UnitActor> units)
+        {
+            var groups = new List<List<UnitActor>>();
+            var taken = new bool[units.Count];
+            var frontier = new Queue<int>();
+
+            for (int seed = 0; seed < units.Count; seed++)
+            {
+                if (taken[seed]) continue;
+
+                var group = new List<UnitActor>();
+                taken[seed] = true;
+                frontier.Enqueue(seed);
+
+                while (frontier.Count > 0)
+                {
+                    int i = frontier.Dequeue();
+                    group.Add(units[i]);
+
+                    for (int j = 0; j < units.Count; j++)
+                    {
+                        if (taken[j]) continue;
+                        double km = GeoUtils.DistanceKm(
+                            units[i].State.latitude, units[i].State.longitude,
+                            units[j].State.latitude, units[j].State.longitude);
+                        if (km > ClusterGapKm) continue;
+                        taken[j] = true;
+                        frontier.Enqueue(j);
+                    }
+                }
+
+                groups.Add(group);
+            }
+
+            return groups;
+        }
+
+        /// <summary>
+        /// The enemy formations closest to a group, which are the ones it is
+        /// facing. Taking roughly as many as the group has of its own keeps the
+        /// bearing from being dragged around by a distant garrison, while still
+        /// averaging over enough of the opposing force to be stable.
+        /// </summary>
+        static List<UnitActor> NearestEnemies(int ownCount, double lat, double lon,
+            List<UnitActor> enemy)
+        {
+            if (enemy.Count == 0) return enemy;
+
+            int want = Mathf.Clamp(Mathf.Max(3, ownCount), 1, enemy.Count);
+            if (want >= enemy.Count) return enemy;
+
+            var sorted = new List<UnitActor>(enemy);
+            sorted.Sort((a, b) =>
+                GeoUtils.DistanceKm(lat, lon, a.State.latitude, a.State.longitude)
+                    .CompareTo(GeoUtils.DistanceKm(lat, lon, b.State.latitude, b.State.longitude)));
+            return sorted.GetRange(0, want);
         }
 
         public void ClearFor(Team team)
@@ -160,7 +286,7 @@ namespace IronMeridian.Lines
         /// formation is given the wider sector, which is why the split is not a
         /// plain midpoint.
         /// </summary>
-        int BuildLateralBoundaries(Team team, List<Slot> slot, Vector2d fwd, Vector2d lat,
+        int BuildLateralBoundaries(Team team, string prefix, List<Slot> slot, Vector2d fwd, Vector2d lat,
             double originLat, double originLon, double minD, double maxD)
         {
             if (slot.Count < 2) return 0;
@@ -187,13 +313,15 @@ namespace IronMeridian.Lines
                     pts.Add(Point(originLat, originLon, fwd, lat, s, d));
                 }
 
-                string id = $"sector-{team}-lateral-{i}";
+                string id = $"{prefix}-lateral-{i}";
                 _lines.Upsert(new MapLineData
                 {
                     id = id,
                     kind = LineKind.LateralBoundary.ToString(),
                     team = team.ToString(),
-                    is3D = true,
+                    // A boundary is a drawn graphic, never a wall standing in the
+                    // world — MapLine.FlatOnly enforces it, and this says so.
+                    is3D = false,
                     autoGenerated = true,
                     points = pts,
                     echelon = LargerEchelon(a.unit, b.unit),
@@ -204,7 +332,7 @@ namespace IronMeridian.Lines
                 // Label group sits where the boundary crosses the FEBA, which
                 // is where doctrine also places coordination points.
                 var anchor = Point(originLat, originLon, fwd, lat, s, maxD + FebaStandoffKm);
-                AddLabel($"sector-{team}-lateral-{i}",
+                AddLabel(id,
                     $"{Designation(a.unit)}\n{LargerEchelon(a.unit, b.unit)}\n{Designation(b.unit)}",
                     TeamColor(team), anchor.latitude, anchor.longitude);
                 made++;
@@ -217,7 +345,7 @@ namespace IronMeridian.Lines
         /// are reserves, not the forward edge, so including them would drag the
         /// line rearward through the middle of the sector.
         /// </summary>
-        int BuildFeba(Team team, List<Slot> slot, Vector2d fwd, Vector2d lat,
+        int BuildFeba(Team team, string prefix, string suffix, List<Slot> slot, Vector2d fwd, Vector2d lat,
             double originLat, double originLon, double maxD)
         {
             double band = System.Math.Max(MinForwardBandKm,
@@ -238,18 +366,18 @@ namespace IronMeridian.Lines
             // so it is drawn by MapLine and survives a save/load.
             _lines.Upsert(new MapLineData
             {
-                id = $"sector-{team}-feba",
+                id = $"{prefix}-feba",
                 kind = LineKind.Feba.ToString(),
                 team = team.ToString(),
-                is3D = true,
+                is3D = false,
                 autoGenerated = true,
                 points = pts,
-                label = team == Team.Enemy ? "FEBA (ENY)" : "FEBA"
+                label = (team == Team.Enemy ? "FEBA (ENY)" : "FEBA") + suffix
             });
             return 1;
         }
 
-        int BuildRearBoundary(Team team, List<Slot> slot, Vector2d fwd, Vector2d lat,
+        int BuildRearBoundary(Team team, string prefix, List<Slot> slot, Vector2d fwd, Vector2d lat,
             double originLat, double originLon, double minD)
         {
             if (slot.Count < 2) return 0;
@@ -267,10 +395,10 @@ namespace IronMeridian.Lines
 
             _lines.Upsert(new MapLineData
             {
-                id = $"sector-{team}-rear",
+                id = $"{prefix}-rear",
                 kind = LineKind.RearBoundary.ToString(),
                 team = team.ToString(),
-                is3D = true,
+                is3D = false,
                 autoGenerated = true,
                 points = pts,
                 // On a rear boundary the size marking is the subordinate's,

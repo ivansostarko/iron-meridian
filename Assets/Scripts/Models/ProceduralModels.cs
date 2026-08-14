@@ -32,6 +32,7 @@ namespace IronMeridian.Models
     {
         /// <summary>Model ids this class can build. Matched against <see cref="UnitModelDef.proceduralId"/>.</summary>
         public const string KamikazeDrone = "kamikaze_drone";
+        public const string ReconDrone = "recon_drone";
 
         /// <summary>
         /// Builds a model, or returns null if the id is not one of ours.
@@ -40,6 +41,7 @@ namespace IronMeridian.Models
         public static GameObject Build(string proceduralId) => proceduralId switch
         {
             KamikazeDrone => BuildKamikazeDrone(),
+            ReconDrone => BuildReconDrone(),
             _ => null
         };
 
@@ -49,6 +51,12 @@ namespace IronMeridian.Models
         static readonly Color Panel = new Color(0.22f, 0.24f, 0.21f);
         static readonly Color Warhead = new Color(0.42f, 0.20f, 0.16f);
         static readonly Color Blade = new Color(0.12f, 0.13f, 0.13f);
+        /// <summary>Pale airframe of a surveillance drone — the class is not painted to hide.</summary>
+        static readonly Color Survey = new Color(0.62f, 0.65f, 0.63f);
+        /// <summary>The sensor turret's housing.</summary>
+        static readonly Color Turret = new Color(0.16f, 0.17f, 0.18f);
+        /// <summary>Its window. The one bright thing on the model, and the end that is looking.</summary>
+        static readonly Color Lens = new Color(0.42f, 0.78f, 1.00f);
 
         // ------------------------------------------------------- kamikaze drone
 
@@ -106,6 +114,96 @@ namespace IronMeridian.Models
 
             AttachAnimation(root, swayGo.transform);
             return root;
+        }
+
+        // --------------------------------------------------------- recon drone
+
+        /// <summary>
+        /// A twin-boom surveillance UAV, nose along **+Z**, built to the same
+        /// convention as the loitering munition above.
+        ///
+        /// The silhouette is doing the work, and it is deliberately the opposite
+        /// of the kamikaze drone's in every respect that reads at map scale: a
+        /// **long straight high wing** instead of a swept delta, **twin tail
+        /// booms** instead of a stubby fuselage, a **pale** finish instead of an
+        /// olive one, and a **sensor turret under the nose** where the other has
+        /// a warhead. A player glancing at the map has to be able to tell in one
+        /// look whether the thing overhead is looking at them or coming for
+        /// them, and colour alone will not carry that at forty pixels.
+        ///
+        /// Authored roughly 5 m nose to tail and 7 m across — about life size for
+        /// a tactical ISR airframe. Callers scale it from its own bounds, so the
+        /// absolute figures matter only in keeping the proportions honest.
+        /// </summary>
+        static GameObject BuildReconDrone()
+        {
+            var root = new GameObject("ReconDrone_Procedural");
+
+            // Same arrangement as the munition: the flight code owns the root's
+            // rotation, so everything the idle clip animates hangs off Sway.
+            var swayGo = new GameObject("Sway");
+            swayGo.transform.SetParent(root.transform, false);
+            var sway = swayGo;
+
+            // Slim fuselage pod.
+            Box(sway, "Fuselage", new Vector3(0f, 0f, 0.10f),
+                new Vector3(0.30f, 0.30f, 2.10f), Survey);
+
+            // Rounded nose.
+            var nose = Box(sway, "Nose", new Vector3(0f, 0.02f, 1.22f),
+                new Vector3(0.24f, 0.24f, 0.36f), Survey);
+            nose.transform.localRotation = Quaternion.Euler(-8f, 0f, 0f);
+
+            // Sensor turret slung under the nose. Its own child so the clip can
+            // turn it independently of the airframe — a gimbal that scans is the
+            // single detail that says this drone is working rather than transiting.
+            var turret = new GameObject("Sensor");
+            turret.transform.SetParent(sway.transform, false);
+            turret.transform.localPosition = new Vector3(0f, -0.26f, 0.98f);
+
+            Box(turret, "TurretBody", Vector3.zero, new Vector3(0.34f, 0.34f, 0.34f), Turret);
+            Box(turret, "TurretLens", new Vector3(0f, -0.02f, 0.18f),
+                new Vector3(0.18f, 0.18f, 0.06f), Lens);
+
+            // High straight wing, one piece across the top of the fuselage. A
+            // long unswept span is the classic ISR planform and is what
+            // distinguishes it from the delta at a glance.
+            Box(sway, "Wing", new Vector3(0f, 0.18f, 0.05f),
+                new Vector3(6.60f, 0.07f, 0.62f), Survey);
+
+            // Twin tail booms running aft from the wing, with the tailplane
+            // spanning them.
+            Boom(sway, "BoomLeft", -1f);
+            Boom(sway, "BoomRight", 1f);
+            Box(sway, "Tailplane", new Vector3(0f, 0.14f, -1.62f),
+                new Vector3(1.90f, 0.05f, 0.40f), Panel);
+            TailFin(sway, "TailFinLeft", -1f);
+            TailFin(sway, "TailFinRight", 1f);
+
+            // Pusher propeller between the booms. As in the munition, the blades
+            // avoid the word "Prop" so RotorSpinner cannot grab them individually
+            // and tear the propeller apart — the hub is what turns.
+            var hub = new GameObject("Propeller");
+            hub.transform.SetParent(sway.transform, false);
+            hub.transform.localPosition = new Vector3(0f, 0.02f, -1.02f);
+
+            Box(hub, "BladeA", Vector3.zero, new Vector3(1.30f, 0.05f, 0.06f), Blade);
+            Box(hub, "BladeB", Vector3.zero, new Vector3(0.06f, 0.05f, 1.30f), Blade);
+
+            AttachReconAnimation(root);
+            return root;
+        }
+
+        static void Boom(GameObject parent, string name, float side)
+        {
+            Box(parent, name, new Vector3(side * 0.86f, 0.16f, -0.86f),
+                new Vector3(0.11f, 0.11f, 2.00f), Panel);
+        }
+
+        static void TailFin(GameObject parent, string name, float side)
+        {
+            Box(parent, name, new Vector3(side * 0.86f, 0.40f, -1.66f),
+                new Vector3(0.06f, 0.52f, 0.36f), Panel);
         }
 
         static void Wing(GameObject parent, string name, float side)
@@ -247,6 +345,52 @@ namespace IronMeridian.Models
             // owns the child and this asserts the path the curves are bound to.
             if (sway == null || sway.name != "Sway")
                 Debug.LogError("[ProceduralModels] Sway child missing — the idle clip will not bind.");
+        }
+
+        /// <summary>
+        /// The reconnaissance drone's idle clip. Three motions, and the third is
+        /// the one that matters.
+        ///
+        /// The **propeller** turns, slower than the munition's — this airframe
+        /// loiters rather than sprints. The airframe **rocks**, gently: a
+        /// surveying drone holding a steady orbit is not being thrown about.
+        /// And the **sensor turret sweeps**, one revolution every eight seconds,
+        /// which is the whole point of the model. A drone with a fixed gimbal
+        /// looks like a drone; a drone with a turret quartering the ground below
+        /// it looks like a drone doing a job, and that is the difference between
+        /// this and the loitering munition it sits beside in the menu.
+        ///
+        /// Bound as quaternion curves for the reasons set out on
+        /// <see cref="AttachAnimation"/> — <c>localEulerAngles</c> is not a real
+        /// serialised property and legacy playback will not reliably apply it.
+        /// </summary>
+        static void AttachReconAnimation(GameObject root)
+        {
+            var clip = new AnimationClip
+            {
+                name = ModelClips.CombatIdle,
+                legacy = true,
+                wrapMode = WrapMode.Loop
+            };
+
+            // Propeller: a full turn every 0.22 s, in 45° steps.
+            SpinCurves(clip, "Sway/Propeller", Vector3.forward, 0.22f, steps: 8);
+
+            // Sensor turret: a slow quartering sweep about its own vertical axis.
+            // Twelve steps rather than eight — at this speed the interpolation
+            // between keys is visible, and a turret that ticks reads as broken.
+            SpinCurves(clip, "Sway/Sensor", Vector3.up, 8.0f, steps: 12);
+
+            // Airframe: shallower than the munition's, on longer periods.
+            SwayCurves(clip, "Sway", rollPeriod: 3.4f, rollDegrees: 2.6f,
+                pitchPeriod: 4.9f, pitchDegrees: 1.0f);
+
+            var animation = root.AddComponent<Animation>();
+            animation.AddClip(clip, ModelClips.CombatIdle);
+            animation.clip = clip;
+            animation.wrapMode = WrapMode.Loop;
+            animation.playAutomatically = true;
+            animation.Play(ModelClips.CombatIdle);
         }
 
         /// <summary>A continuous spin about <paramref name="axis"/>, as quaternion curves.</summary>

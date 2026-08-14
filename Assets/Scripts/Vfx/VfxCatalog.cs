@@ -96,7 +96,23 @@ namespace IronMeridian.Vfx
         MissileHeavySmoke,
 
         /// <summary>Exhaust plume trailing a missile in flight — looping, killed on impact.</summary>
-        MissileTrail
+        MissileTrail,
+
+        // --- what a strike leaves behind (see StrikeAftermath) ---
+
+        /// <summary>Ground burning where a strike landed — looping, 30 scenario minutes.</summary>
+        StrikeAftermathFire,
+        /// <summary>Smoke over a burnt-out impact site — looping, 2 scenario hours.</summary>
+        StrikeAftermathSmoke,
+
+        // --- reconnaissance (see docs/19-UAV-STRIKES.md) ---
+
+        /// <summary>
+        /// The objective a reconnaissance drone is working: slow motes rising
+        /// off the ground inside the search ring — looping, stopped when the
+        /// drone leaves station.
+        /// </summary>
+        ReconMarker
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -361,6 +377,37 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.MissileTrail, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 90f, lifeSeconds = 0f,
                          tint = new Color(0.78f, 0.78f, 0.80f), priority = 30,
+                         sound = EffectSound.None },
+
+            // --- strike aftermath (StrikeAftermath) ---
+            // Both loop and are dispersed explicitly, in *scenario* time rather
+            // than by lifeSeconds — thirty minutes of fire cannot be expressed
+            // as a real-time lifetime when the clock runs anywhere from x1 to
+            // x300. Low priority on purpose: these outlive everything else on
+            // the map, and if the concurrency budget has to give, it should give
+            // up an hour-old scorch mark rather than a round landing now.
+            new VfxDef { id = VfxId.StrikeAftermathFire, prefabPath = "VFX/VFX_Fire_Floor_01_Smoke",
+                         fallback = VfxFallback.Fire,      scaleMeters = 200f, lifeSeconds = 0f,
+                         tint = new Color(1.00f, 0.47f, 0.13f), priority = 35,
+                         sound = EffectSound.Fire },
+
+            new VfxDef { id = VfxId.StrikeAftermathSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 260f, lifeSeconds = 0f,
+                         tint = new Color(0.30f, 0.29f, 0.28f), priority = 32,
+                         sound = EffectSound.None },
+
+            // --- reconnaissance objective (docs/19-UAV-STRIKES.md) ---
+            // Pale, slow and silent: this marks ground being *looked at*, and
+            // anything that read as damage would be saying the wrong thing. It
+            // is deliberately far larger than a burst — the search area is ten
+            // kilometres across, and motes at burst scale would be invisible
+            // inside it. The Smoke builder rather than the Dust one because
+            // Dust is a one-shot puff — this has to loop for as long as the
+            // drone is on station, and the pale tint is what keeps it reading as
+            // motes rather than as something burning.
+            new VfxDef { id = VfxId.ReconMarker, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 900f, lifeSeconds = 0f,
+                         tint = new Color(0.62f, 0.82f, 0.95f), priority = 38,
                          sound = EffectSound.None }
         };
 

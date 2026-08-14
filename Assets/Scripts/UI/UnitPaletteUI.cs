@@ -109,13 +109,21 @@ namespace IronMeridian.UI
         /// <summary>Icon column width. Was 36 px, at which an APP-6 frame was a smudge.</summary>
         const float CardIconSize = 44f;
         /// <summary>
-        /// Left inset of a list card's icon. The cards sit inside a scroll
-        /// viewport whose own edge was clipping the first few pixels of the
-        /// APP-6 frame — an 8 px inset left the blue rectangle's left stroke
-        /// half off the panel. 23 px clears it and gives the column an even
-        /// gutter against the rail beside it.
+        /// Left inset of a list card's icon, in both AVAILABLE and DEPLOYED.
+        ///
+        /// The cards sit inside a scroll viewport whose own edge was clipping
+        /// the first few pixels of the APP-6 frame — an 8 px inset left the blue
+        /// rectangle's left stroke half off the panel, and 23 px still had the
+        /// icon crowding the rail that runs down the outside of the section
+        /// panel. 43 px clears both and gives the column a gutter wide enough
+        /// that the frame reads as a counter rather than as something pressed
+        /// against the edge of the screen.
+        ///
+        /// <see cref="CardTextWidth"/> is derived from this, so the text column
+        /// gives up exactly the width the icon column takes — everything in a
+        /// card is best-fitted, so that is paid in type size, not truncation.
         /// </summary>
-        const float CardIconX = 23f;
+        const float CardIconX = 43f;
         /// <summary>Where a card's text column starts: icon inset + icon + gutter.</summary>
         const float CardTextX = CardIconX + CardIconSize + 6f;
         /// <summary>
@@ -320,6 +328,10 @@ namespace IronMeridian.UI
             if (_artillery != null) _artillery.ArmedChanged += RefreshArtillery;
             if (_airStrike != null) _airStrike.ArmedChanged += RefreshAirStrike;
             if (_uavStrike != null) _uavStrike.ArmedChanged += RefreshUavStrike;
+
+            // One allowance behind three menus — see StrikeBudget.
+            StrikeBudget.Changed += RefreshStrikeBudget;
+            RefreshStrikeBudget();
         }
 
         static RectTransform MakeSectionContent(RectTransform body, string name)
@@ -466,9 +478,28 @@ namespace IronMeridian.UI
 
             // The on-map zoom cluster rides the panel's edge so it is never
             // buried underneath it.
-            if (_mapControls != null) _mapControls.SetLeftInset(x + PanelWidth);
+            LeftChromeEdge = x + PanelWidth;
+            if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
 
             if (_slide <= 0f) _sectionPanel.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Where the rail and its section panel currently end, in canvas pixels.
+        /// The missile board docks in the same place and overrides this while it
+        /// is up — see <see cref="ReassertMapInset"/>.
+        /// </summary>
+        public float LeftChromeEdge { get; private set; } = RailWidth + PanelWidth;
+
+        /// <summary>
+        /// Puts the on-map controls back against the rail's own edge. Called
+        /// when the missile board closes: the slide animation is what normally
+        /// drives the inset, and it is not running at that moment, so nothing
+        /// else would ever take the board's width back off.
+        /// </summary>
+        public void ReassertMapInset()
+        {
+            if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
         }
 
         // ------------------------------------------------------------ header
@@ -1252,8 +1283,9 @@ namespace IronMeridian.UI
         void BuildArtillerySection(RectTransform content)
         {
             SectionLabel(content, "CALL FOR FIRE", -8);
+            StrikeBudgetRow(content, -28f);
 
-            BuildOriginTabs(content, -30f);
+            BuildOriginTabs(content, -64f);
 
             // One page per inventory, both laid out at the same origin; only the
             // selected one is active.
@@ -1295,7 +1327,8 @@ namespace IronMeridian.UI
 
         void BuildOriginPage(RectTransform page, ArtilleryOrigin origin)
         {
-            float y = -68f;
+            // Clear of the section label, the allowance readout and the tabs.
+            float y = -102f;
             ArtilleryKind? lastKind = null;
 
             foreach (var def in ArtilleryCatalog.OfOrigin(origin))
@@ -1412,8 +1445,9 @@ namespace IronMeridian.UI
         void BuildAirStrikeSection(RectTransform content)
         {
             SectionLabel(content, "TASK AN AIRFRAME", -8);
+            StrikeBudgetRow(content, -28f);
 
-            float y = -30f;
+            float y = -64f;
             foreach (var def in AirStrikeCatalog.All)
             {
                 AirStrikeButton(content, def, y);
@@ -1497,8 +1531,9 @@ namespace IronMeridian.UI
         void BuildUavStrikeSection(RectTransform content)
         {
             SectionLabel(content, "TASK A UAV", -8);
+            StrikeBudgetRow(content, -28f);
 
-            float y = -30f;
+            float y = -64f;
             foreach (var def in UavCatalog.All)
             {
                 UavButton(content, def, y);
@@ -1514,13 +1549,19 @@ namespace IronMeridian.UI
 
             var hint = UIFactory.CreateText(content,
                 "Pick a type, then click the map to place the objective. A ten second countdown runs in the HUD, " +
-                "then the drone launches, flies in and dives onto the point it was given. It is expended on the " +
-                "target — one aircraft, one warhead, and nothing comes back. The blast is deliberately the smallest " +
-                "of any strike here: a loitering munition carries a few kilograms, not a shell, which makes it a " +
-                "precision tool rather than cheap artillery.",
+                "then the drone launches and flies in.\n\n" +
+                "The attack types are expended on the target — one aircraft, one warhead, and nothing comes back. " +
+                "Their blast is deliberately the smallest of any strike here: a loitering munition carries a few " +
+                "kilograms, not a shell.\n\n" +
+                "The RECONNAISSANCE DRONE carries no warhead. The ring under the cursor is the 10 km it will " +
+                "uncover; it holds an orbit over the point for five operational minutes, lifts the fog off " +
+                "everything inside that circle, and flies home. What it saw stays on the map as last-known " +
+                "contacts. Turn FOG OF WAR on in GENERAL and start the battle, or there is nothing for it to " +
+                "uncover.\n\n" +
+                "Every sortie, armed or not, costs one of the scenario's 99 strikes.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
-                new Vector2(InnerWidth, 160));
+                new Vector2(InnerWidth, 300));
 
             RefreshUavStrike();
         }
@@ -1537,7 +1578,10 @@ namespace IronMeridian.UI
             var caption = btn.GetComponentInChildren<Text>(true);
             if (caption != null) caption.gameObject.SetActive(false);
 
-            var icon = UIFactory.CreateImage(frame, UiIcons.Quadcopter, "Glyph");
+            // The recon type gets its own glyph. It is the one row in this menu
+            // that does not end in an explosion, and a quadcopter icon shared
+            // with the loitering munitions would be the menu saying otherwise.
+            var icon = UIFactory.CreateImage(frame, def.isRecon ? UiIcons.ReconEye : UiIcons.Quadcopter, "Glyph");
             icon.color = def.markerColor;
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
@@ -1545,7 +1589,12 @@ namespace IronMeridian.UI
             var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
                 46f, InnerWidth - 92f, topInset: 9f);
 
-            var radius = UIFactory.CreateText(frame, def.radiusMeters.ToString("0") + " m", UiTheme.FontLabel,
+            // Metres for a warhead's beaten zone; kilometres for a search area.
+            // Ten thousand metres is a number nobody reads as ten kilometres.
+            string figure = def.isRecon
+                ? $"{def.reconRadiusKm:0} km"
+                : def.radiusMeters.ToString("0") + " m";
+            var radius = UIFactory.CreateText(frame, figure, UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight);
             radius.raycastTarget = false;
             UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
@@ -1940,6 +1989,52 @@ namespace IronMeridian.UI
             UIFactory.Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 18));
         }
 
+        // --------------------------------------------------- strike allowance
+
+        /// <summary>Every "STRIKES REMAINING" readout on the rail, repainted together.</summary>
+        readonly List<Text> _budgetLabels = new List<Text>();
+
+        /// <summary>
+        /// The shared strike allowance, shown at the head of each fire menu.
+        ///
+        /// It is on **all three** of them, and on the missile board, because the
+        /// pool is shared: a player who spends it on artillery has spent it on
+        /// air strikes too, and a counter that appeared only in the menu being
+        /// used would let them find that out the hard way. See
+        /// <see cref="StrikeBudget"/>.
+        /// </summary>
+        void StrikeBudgetRow(RectTransform content, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "StrikeBudget",
+                UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 28));
+
+            var name = UIFactory.CreateText(frame, "STRIKES REMAINING", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            name.raycastTarget = false;
+            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 0),
+                new Vector2(InnerWidth - 96f, 14));
+
+            var value = UIFactory.CreateText(frame, "", UiTheme.FontSmall, UiTheme.Accent,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            value.raycastTarget = false;
+            UIFactory.Place(value.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
+                new Vector2(80, 16));
+
+            _budgetLabels.Add(value);
+        }
+
+        /// <summary>Repaints every allowance readout. Driven by the budget's own event.</summary>
+        void RefreshStrikeBudget()
+        {
+            foreach (var label in _budgetLabels)
+            {
+                if (label == null) continue;
+                label.text = StrikeBudget.RemainingText;
+                label.color = StrikeBudget.RemainingColour(UiTheme.Accent, UiTheme.Warning, UiTheme.Hostile);
+            }
+        }
+
         void ToggleView()
         {
             _map.ToggleViewMode();
@@ -2075,6 +2170,7 @@ namespace IronMeridian.UI
             // Build() subscribes to the map and registry; without this the
             // callbacks fire into a destroyed component on scene reload.
             UnitRegistry.Changed -= OnUnitsChanged;
+            StrikeBudget.Changed -= RefreshStrikeBudget;
             if (_clock != null) _clock.StartChanged -= RefreshStartLabel;
             if (_weather != null) _weather.Changed -= RefreshWeather;
             if (_effects != null) _effects.ArmedChanged -= RefreshEffects;

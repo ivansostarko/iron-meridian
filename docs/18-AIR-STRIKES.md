@@ -69,6 +69,20 @@ Everything up to the moment something lands is identical between a fire mission 
 
 **One banner, three systems.** Artillery, air and UAV strikes all report a countdown every frame and there is one HUD banner, so left alone an idle system would blank it a frame after a busy one filled it. `GameController.RefreshStrikeBanner` gives each a slot and shows whichever strike is nearest to landing.
 
+### The strike allowance
+
+A tasked strike spends one of the scenario's **99** called strikes, shared with
+artillery, UAV sorties and missile systems — `Vfx/StrikeBudget.cs`, with the
+"STRIKES REMAINING" readout at the head of this section. Full rationale in
+docs/17-ARTILLERY.md § *The strike allowance*.
+
+### What a strike leaves behind
+
+Every completed pass plays `StrikeAftermath` at the target area: **thirty
+scenario minutes of fire, then two scenario hours of smoke**. One site per pass,
+not one per weapon — the stick walks a few hundred metres, which on an
+operational map is one struck position. See docs/08-PARTICLE-SYSTEMS.md §2.1.
+
 ### What the countdown means
 
 For artillery it is time to impact. Here it is **time until the aircraft is overhead** — the weapons land a couple of seconds later, after the run-in and the fall. That is the honest reading of a tasked strike, and it is why the target marker stays up until the run is finished rather than being dropped at zero.

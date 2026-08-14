@@ -16,7 +16,14 @@ namespace IronMeridian.Vfx
         /// loitering munition — it arrives from the operational depth rather
         /// than from the next ridge.
         /// </summary>
-        ShahedDrone
+        ShahedDrone,
+
+        /// <summary>
+        /// Tactical ISR drone. The one unmanned type here that carries no
+        /// warhead: it flies to a point, holds an orbit over it, lifts the fog
+        /// off everything within ten kilometres, and goes home.
+        /// </summary>
+        ReconDrone
     }
 
     /// <summary>One unmanned type: how it flies, what it does at the end of the flight.</summary>
@@ -98,6 +105,38 @@ namespace IronMeridian.Vfx
 
         /// <summary>Total seconds from launch to impact.</summary>
         public float FlightSeconds => cruiseSeconds + diveSeconds;
+
+        // ------------------------------------------------- reconnaissance
+        //
+        // The fields below are read only when <see cref="isRecon"/> is set. A
+        // recon type has no warhead, so burst / smoke / lethal radius mean
+        // nothing for it, and it has an orbit and a dwell that mean nothing for
+        // the attack types. One class rather than two because everything *up to*
+        // the objective — arming, the ring following the cursor, the countdown,
+        // the ten-second commit — is identical, and that is most of the work.
+
+        /// <summary>
+        /// True for the type that looks instead of detonating. Branches
+        /// <see cref="UavStrikeSystem"/> into its reconnaissance mission.
+        /// </summary>
+        public bool isRecon;
+
+        /// <summary>Ground radius the sensor covers while on station, km. Recon only.</summary>
+        public float reconRadiusKm;
+
+        /// <summary>
+        /// Scenario minutes spent working the objective before the drone leaves.
+        /// Operational minutes, not real ones: five minutes on station is five
+        /// minutes on the clock, so it costs the player five minutes of the
+        /// battle rather than five minutes of their afternoon.
+        /// </summary>
+        public float onStationMinutes;
+
+        /// <summary>Real seconds the transit in — and the transit out — take. Recon only.</summary>
+        public float transitSeconds;
+
+        /// <summary>Radius of the orbit flown over the objective, metres. Recon only.</summary>
+        public float orbitRadiusMeters;
     }
 
     /// <summary>
@@ -183,6 +222,40 @@ namespace IronMeridian.Vfx
                 wreckFireSeconds = 40f,
                 engineSound = Audio.EffectSound.ShahedEngine,
                 markerColor = new Color(1.00f, 0.52f, 0.30f)
+            },
+
+            new UavDef
+            {
+                uav = UavType.ReconDrone,
+                label = "RECONNAISSANCE DRONE",
+                name = "Reconnaissance drone",
+                detail = "Looks — 10 km search area, 5 minutes on station",
+                isRecon = true,
+                // The target area *is* the search area: ten kilometres of ground
+                // the fog comes off. Shown as a ring under the cursor before the
+                // commit, exactly as a beaten zone is, so the player places a
+                // sensor footprint rather than guessing where one will land.
+                radiusMeters = 10000f,
+                reconRadiusKm = 10f,
+                onStationMinutes = 5f,
+                modelId = UnitModelLibrary.ReconDrone,
+                // Larger on the map than the attack drones. It is a bigger
+                // airframe, and it has to stay readable at the altitude a 10 km
+                // ring forces the camera back to.
+                spanMeters = 220f,
+                noseYawOffsetDeg = 0f,
+                // High and slow: the profile that keeps a sensor pointed at the
+                // ground rather than at the horizon.
+                cruiseAltitudeMeters = 1500f,
+                approachKm = 9f,
+                transitSeconds = 9f,
+                orbitRadiusMeters = 2600f,
+                // Unused by the recon mission, but left honest rather than zero:
+                // FlightSeconds is public and something will read it one day.
+                cruiseSeconds = 9f,
+                diveSeconds = 0f,
+                engineSound = Audio.EffectSound.DroneBuzz,
+                markerColor = new Color(0.42f, 0.78f, 1.00f)
             }
         };
 

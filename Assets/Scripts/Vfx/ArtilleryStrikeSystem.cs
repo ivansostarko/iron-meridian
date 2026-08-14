@@ -82,6 +82,12 @@ namespace IronMeridian.Vfx
                     yield return new WaitForSecondsRealtime(def.shellIntervalSeconds);
             }
 
+            // The mission's mark on the ground: one site at the aim point, not
+            // one per round — a salvo is a single event on the map, and five
+            // overlapping fires would cost five times as much for a worse
+            // picture. See StrikeAftermath.
+            StrikeAftermath.Play(lat, lon, def.burstScale);
+
             if (marker != null) Destroy(marker.gameObject);
 
             Flash?.Invoke(destroyed > 0

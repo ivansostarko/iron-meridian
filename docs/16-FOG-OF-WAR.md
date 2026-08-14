@@ -54,7 +54,7 @@ once the centre has moved 4% of the radius.
 
 | State | Enemy formation |
 |---|---|
-| Inside a friendly unit's `viewRangeKm`, or a recon sensor's footprint | Drawn normally |
+| Inside a friendly unit's `viewRangeKm`, or a recon sensor's footprint (including a reconnaissance drone's) | Drawn normally |
 | Outside all of them | **Removed from the map** — icon, strength bar, label, selection ring and any fire attached to it |
 
 Losing sight of a formation leaves a **contact** where it was last seen:
@@ -129,6 +129,35 @@ use (`AxisArrow`), pointed at a fixed ground point rather than at a formation.
 A task ends when the battle stops, the unit dies, or that unit is given another
 order. Its sensor goes with it, and whatever it was holding in view returns to
 fog.
+
+### The reconnaissance drone's sensor
+
+One more sensor is registered from outside `ReconOrderSystem` entirely: the
+**reconnaissance drone** in the UAV STRIKES menu (docs/19-UAV-STRIKES.md). It is
+not an order given to a formation — there is no unit involved at all — but it
+speaks to the fog through exactly the same interface.
+
+| | |
+|---|---|
+| Registered by | `UavStrikeSystem.RunReconnaissance` → `FogOfWarSystem.AddSensor` |
+| Radius | **10 km**, fixed (`UavDef.reconRadiusKm`) |
+| Registered when | The drone **arrives** on station, not when the mission is tasked |
+| Removed when | It turns for home, five scenario minutes later |
+
+The timing is the point. The ground is uncovered because something is over it
+looking: a footprint that appeared the moment the mission was ordered would be
+intelligence the player has not paid for yet, and one that lingered after the
+drone left would be intelligence nobody is gathering.
+
+What survives the sortie is what reconnaissance actually leaves behind. The
+terrain it uncovered stays **explored** in the blanket (§2a), and every enemy
+formation it saw becomes a **last-known contact** with the scenario time stamped
+on it, whose ring then grows exactly as any other stale contact's does. The live
+view goes home with the drone.
+
+Like every sensor here, it does nothing unless fog is armed *and* a battle is
+running — `InEffect`. Flying one in the editor is a nine-second animation and no
+intelligence, which is what the rail section warns.
 
 ---
 

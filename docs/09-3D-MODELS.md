@@ -20,6 +20,7 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | `attack_helicopter` | `Models/AttackHelicopter` | [RTS Modern Combat Vehicle Pack Free](https://assetstore.unity.com/packages/3d/vehicles/rts-modern-combat-vehicle-pack-free-281758) — `MSH_N2_LE.fbx` | static; rotors spun by `RotorSpinner` | Flown by `AirStrikeSystem`; also the whole rotary-wing branch: `attack_helicopter`, `recon_helicopter`, `transport_helicopter`, `utility_helicopter`, `medevac_helicopter` |
 | `strike_fighter` | `Models/StrikeFighter` | RTS Modern Combat Vehicle Pack Free — `FA_N26_LE.fbx` | static | Flown by `AirStrikeSystem`; also the fixed-wing branch: `cas_aircraft`, `strike_aircraft`, `fighter_aircraft`, `isr_aircraft`, `aewc`, `transport_aircraft`, `aerial_refuelling`, `ew_aircraft` |
 | `kamikaze_drone` | **none — built in code** | `ProceduralModels.BuildKamikazeDrone` | `combat_idle`, built at runtime: propeller spin + airframe sway | Flown by `UavStrikeSystem` (docs/19-UAV-STRIKES.md); also `fpv_attack_uas`, `loitering_munition`, `interceptor_uas`, `cargo_uas`, `decoy_uas` |
+| `recon_drone` | **none — built in code** | `ProceduralModels.BuildReconDrone` | `combat_idle`, built at runtime: propeller spin + airframe sway + **sensor turret sweep** (one revolution every 8 s) | Flown by `UavStrikeSystem` as the reconnaissance sortie (docs/19-UAV-STRIKES.md); also the fixed-wing unmanned types `recon_uas`, `armed_uas`, `ew_uas`, `relay_uas` |
 | `shahed_drone` | `Models/ShahedDrone` | [ALSTRA INFINITE — Kamikaze Drones PolyPack Starter](https://assetstore.unity.com/packages/3d/vehicles/air/kamikaze-drones-polypack-starter-low-poly-asset-381716) — `StarterAsset_KamikazeDroneV1.fbx` | static; propeller spun by `RotorSpinner` | The Shahed UAV strike type (docs/19-UAV-STRIKES.md) |
 | `stealth_bomber` | `Models/StealthBomber` | [Hessburg — Stealth Bomber](https://assetstore.unity.com/packages/package/56765) — `Stealth_Bomber.fbx` | static | **Not a unit** — flown by `AirStrikeSystem`; see docs/18-AIR-STRIKES.md |
 
@@ -41,14 +42,16 @@ The other three airframes now serve double duty: the strike systems fly them, an
 
 **Why it is legitimate rather than a placeholder.** At map scale a loitering munition is forty pixels across. What has to read is the silhouette — delta body, warhead nose, pusher propeller — and a silhouette is precisely what primitives are good at.
 
+**Two models are built this way, and they are built to be told apart.** The `recon_drone` is the opposite of the `kamikaze_drone` in every respect that reads at that size: a long straight high wing against a swept delta, twin tail booms against a stubby body, a pale finish against an olive one, and a sensor turret under the nose where the other has a warhead. A player has to be able to tell in one glance whether the thing overhead is looking at them or coming for them, and colour alone will not carry that at forty pixels. The recon drone's clip adds a third motion for the same reason: the turret **sweeps**, once every eight seconds, which is what makes it read as a drone doing a job rather than a drone transiting.
+
 **Animation.** The idle clip is an `AnimationClip` created at runtime and driven by legacy `Animation`. Clips *can* be built at runtime; Animator Controllers cannot, which is why the whole project is on the legacy path. Two details matter:
 
 - **Rotation is animated as a quaternion**, on `localRotation.x/y/z/w`. `localEulerAngles` is a computed convenience on `Transform`, not a serialised property, so a curve bound to it is not reliably applied by legacy playback. Legacy `Animation` normalises quaternion curves as it applies them, so linear interpolation between keys is safe as long as the keys are close together — hence 45° steps on the propeller.
-- **The sway is bound to a `Sway` child, not to the model root.** `DroneRun` sets the root's rotation to apply the type's nose offset; two things writing one transform is a fight whose winner depends on script execution order.
+- **The sway is bound to a `Sway` child, not to the model root.** `DroneRun` and `ReconDroneRun` set the root's rotation to fly the aircraft; two things writing one transform is a fight whose winner depends on script execution order. Everything either clip animates hangs off that child, including the recon drone's sensor turret (`Sway/Sensor`).
 
 **`UnitModelLibrary.CreateInstance` is the only way to build a model.** It was already golden rule 10 that call sites do not `Resources.Load` a prefab; it matters more now that a model can legitimately have no prefab at all, because a call site checking for one would decide the kamikaze drone was missing when it is the one model that cannot be. `BomberRun`, `DroneRun`, `MissileRun` and `ModelPreview` all go through it.
 
-**Not yet modelled:** the `Naval` category outright, and the `Drone` types that are neither quadcopter- nor delta-shaped (`recon_uas`, `armed_uas`, `deep_strike_uas`, `ew_uas`, `relay_uas`). `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message. Handing a MALE drone the quadcopter would be the same mistake as handing a drone the infantryman — the point was never "show something", it was "do not show a lie".
+**Not yet modelled:** the `Naval` category outright, and `deep_strike_uas`. `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message. The fixed-wing unmanned types that used to be in that list — `recon_uas`, `armed_uas`, `ew_uas`, `relay_uas` — now take `recon_drone`, which is the shape they actually are. Handing a MALE drone the quadcopter would be the same mistake as handing a drone the infantryman — the point was never "show something", it was "do not show a lie".
 
 **Static vs animated.** Only the rifleman has a rig. The vehicles and props are static meshes, which is what they should be — the preview's turntable is their motion. `idleClip` is `null` and `animated` is `false` for them, so the installer skips the Legacy-rig conversion (forcing a rig type onto a mesh with no skeleton reimports the pack for nothing) and `ModelPreview` does not warn about a clip that was never meant to exist.
 
@@ -157,6 +160,7 @@ It will: find the source FBXs, switch their rigs to Legacy (reimporting if neede
 | Screen | What it shows | File |
 |---|---|---|
 | Testing → Units List | Detail panel on the right: the selected unit type's model playing `combat_idle`, orbitable by drag, zoomable by scroll | `UnitsListUI.BuildDetailPanel` → `ModelPreview` |
+| Map editor → in flight | The strike airframes over the map: bomber, fighter, helicopter, attack drones and the reconnaissance drone on its orbit | `BomberRun`, `DroneRun`, `ReconDroneRun`, `MissileRun` |
 
 **Add a row here whenever a model appears somewhere new.**
 

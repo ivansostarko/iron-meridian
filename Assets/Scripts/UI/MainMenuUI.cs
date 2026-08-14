@@ -23,11 +23,18 @@ namespace IronMeridian.UI
     ///   entry now carries a one-line description of what is behind it, which is
     ///   the difference between a menu you read and a menu you guess at.
     ///
-    /// • **The entries were not equivalent and were presented as though they
-    ///   were.** Starting a battle, opening the unit catalogue and quitting the
-    ///   program are three different kinds of act. They are now three labelled
-    ///   groups, with QUIT alone at the bottom where it cannot be hit on the way
-    ///   to something else.
+    /// • **The board scrolls.** The entries live in a scroll view rather than at
+    ///   fixed offsets, so the list can outgrow the window instead of running
+    ///   off the bottom of a short one — which is what a fixed column does the
+    ///   moment a seventh entry is added or the game is played at 1280×720.
+    ///
+    /// The OPERATIONS / REFERENCE / SYSTEM group headings and the descriptive
+    /// blurb under the masthead are **gone**. Each entry already states what it
+    /// is on its own second line, so the headings were captions over captions,
+    /// and between them the two devices cost roughly 150 px of the very
+    /// vertical space the entries needed. QUIT keeps its place at the bottom of
+    /// the list — position, not a heading, is what keeps it clear of the cursor's
+    /// resting place.
     ///
     /// Built entirely at runtime like every other screen (golden rule 2), from
     /// <see cref="UIFactory"/> and the <see cref="UiTheme"/> palette.
@@ -41,11 +48,16 @@ namespace IronMeridian.UI
         const float ScrimWidth = BoardX * 2f + BoardWidth;
         /// <summary>Y of the emblem row, measured from the top of the screen.</summary>
         const float TitleY = -96f;
-        /// <summary>Y the first group header starts at.</summary>
-        const float MenuTop = -330f;
+        /// <summary>
+        /// Y the scrolling list starts at, measured from the top of the screen.
+        /// Higher than it used to be: the blurb that sat between the masthead
+        /// rule and the first entry is gone, and the list took the space.
+        /// </summary>
+        const float MenuTop = -212f;
+        /// <summary>Clear space under the list, above the footer rule and version line.</summary>
+        const float MenuBottom = 100f;
 
         const float EntryHeight = 72f, EntryGap = 6f;
-        const float GroupHeaderHeight = 22f, GroupGap = 26f;
         /// <summary>Accent strip down an entry's left edge, at rest and under the cursor.</summary>
         const float StripRest = 4f, StripHover = 8f;
 
@@ -137,77 +149,66 @@ namespace IronMeridian.UI
             UIFactory.Place(rule, new Vector2(0f, 1f),
                 new Vector2(BoardX + 90f, TitleY - 86f), new Vector2(BoardWidth - 90f, 1));
             rule.GetComponent<Image>().raycastTarget = false;
-
-            var blurb = UIFactory.CreateText(parent,
-                "Deploy an order of battle on real terrain. Draw the control measures, " +
-                "fight the battle, and watch the front line move.",
-                17, UiTheme.TextDim, TextAnchor.UpperLeft);
-            UIFactory.Place(blurb.rectTransform, new Vector2(0f, 1f),
-                new Vector2(BoardX, TitleY - 118f), new Vector2(BoardWidth - 20f, 60));
         }
 
         // -------------------------------------------------------------- menu
 
+        /// <summary>
+        /// The entries, in a scroll view spanning the board between the masthead
+        /// and the footer.
+        ///
+        /// The order is the argument the groups used to make, and it makes it
+        /// without spending a row: play first, because it is what most people
+        /// opened the program to do; reference next; system last, so QUIT sits
+        /// at the far end of the list from where the cursor comes to rest.
+        /// </summary>
         void BuildMenu(Transform parent)
         {
-            float y = MenuTop;
+            var scroll = UIFactory.CreateScrollView(parent, out RectTransform content,
+                withScrollbar: true);
+            // The board field behind it already carries the darkening; the
+            // scroll view's own default wash would double it up into a slab.
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
 
-            // Play first: what most people opened the program to do. Reference
-            // second. System last, so QUIT is the furthest thing from the
-            // cursor's resting place at the top of the list.
-            GroupHeader(parent, "OPERATIONS", ref y);
-            MenuEntry(parent, ref y, UiIcons.Flag, "SINGLE PLAYER",
+            var rt = (RectTransform)scroll.transform;
+            rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(0, 1);
+            rt.pivot = new Vector2(0, 0.5f);
+            rt.offsetMin = new Vector2(BoardX, MenuBottom);
+            rt.offsetMax = new Vector2(BoardX + BoardWidth, MenuTop);
+
+            // The shared scroll defaults are tuned for the map editor's small
+            // cards; these rows are 72 px tall and carry their own left inset,
+            // so they want no padding of their own.
+            var layout = content.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = EntryGap;
+            layout.padding = new RectOffset(0, 0, 0, 12);
+
+            MenuEntry(content, UiIcons.Flag, "SINGLE PLAYER",
                 "Fight a scenario against the enemy commander",
                 () => SceneManager.LoadScene(GameConfig.SceneSinglePlayer));
-            MenuEntry(parent, ref y, UiIcons.Person, "MULTIPLAYER",
+            MenuEntry(content, UiIcons.Person, "MULTIPLAYER",
                 "Take one side against another commander",
                 () => SceneManager.LoadScene(GameConfig.SceneMultiplayer));
-
-            y -= GroupGap;
-            GroupHeader(parent, "REFERENCE", ref y);
-            MenuEntry(parent, ref y, UiIcons.Layers, "TESTING",
+            MenuEntry(content, UiIcons.Layers, "TESTING",
                 "The map editor, the unit catalogue and the development scenarios",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting));
-            MenuEntry(parent, ref y, UiIcons.Chart, "EXTRAS",
+            MenuEntry(content, UiIcons.Chart, "EXTRAS",
                 "Background material, credits and reference reading",
                 () => SceneManager.LoadScene(GameConfig.SceneExtras));
-
-            y -= GroupGap;
-            GroupHeader(parent, "SYSTEM", ref y);
-            MenuEntry(parent, ref y, UiIcons.Gear, "SETTINGS",
+            MenuEntry(content, UiIcons.Gear, "SETTINGS",
                 "Display, audio and map data",
                 () => SceneManager.LoadScene(GameConfig.SceneSettings));
-            MenuEntry(parent, ref y, UiIcons.Close, "QUIT",
+            MenuEntry(content, UiIcons.Close, "QUIT",
                 "Leave Iron Meridian", ShowQuitModal, danger: true);
         }
 
-        void GroupHeader(Transform parent, string label, ref float y)
-        {
-            var text = UIFactory.CreateSectionHeader(parent, label, UiTheme.TextFaint);
-            UIFactory.Place(text.rectTransform, new Vector2(0f, 1f),
-                new Vector2(BoardX, y), new Vector2(200, GroupHeaderHeight));
-            text.alignment = TextAnchor.LowerLeft;
-            text.fontSize = 13;
-
-            // Hairline continuing from the label to the edge of the board, so a
-            // group reads as a band across the column rather than as a caption
-            // floating above the first entry in it.
-            var rule = UIFactory.CreatePanel(parent, "GroupRule_" + label, UiTheme.Border);
-            UIFactory.Place(rule, new Vector2(0f, 1f),
-                new Vector2(BoardX + 210f, y - GroupHeaderHeight * 0.5f),
-                new Vector2(BoardWidth - 210f, 1));
-            rule.GetComponent<Image>().raycastTarget = false;
-
-            y -= GroupHeaderHeight + 10f;
-        }
-
-        void MenuEntry(Transform parent, ref float y, Sprite glyph, string label, string detail,
+        void MenuEntry(Transform parent, Sprite glyph, string label, string detail,
             UnityEngine.Events.UnityAction action, bool danger = false)
         {
             var frame = UIFactory.CreateBorderedPanel(parent, "Entry_" + label,
                 UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(BoardX, y),
-                new Vector2(BoardWidth, EntryHeight));
+            // Width is driven by the layout group; only the height is ours.
+            frame.sizeDelta = new Vector2(0, EntryHeight);
 
             var btn = UIFactory.CreateButton(frame, "", action, new Color(0, 0, 0, 0), UiTheme.Text, 1);
             UIFactory.Stretch((RectTransform)btn.transform);
@@ -236,7 +237,9 @@ namespace IronMeridian.UI
             // and fits its text into 16 px rows, which would shrink a 24 px
             // menu label straight back down to panel size.
             const float TextX = 72f;
-            float textWidth = BoardWidth - TextX - 24f;
+            // The row is as wide as the board less the scrollbar the list now
+            // carries, so the text column stops clear of both.
+            float textWidth = BoardWidth - UIFactory.ScrollbarWidth - TextX - 24f;
 
             var title = UIFactory.CreateText(frame, label, 24, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -262,8 +265,6 @@ namespace IronMeridian.UI
             AddEvent(trigger, EventTriggerType.PointerEnter, () => Paint(entry, accent, true));
             AddEvent(trigger, EventTriggerType.PointerExit, () => Paint(entry, accent, false));
             Paint(entry, accent, false);
-
-            y -= EntryHeight + EntryGap;
         }
 
         static void Paint(Entry e, Color accent, bool hover)

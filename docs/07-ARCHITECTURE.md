@@ -37,7 +37,8 @@ Assets/Scripts/
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
     BoundaryPanelUI.cs   docked right panel: control-measure side/colour/width/caption
     FrontlinePanelUI.cs  docked right panel: front-line settings, opened by clicking the line
-    MissilePanelUI.cs    docked right panel: ten missile systems (docs/20-MISSILE-SYSTEMS.md)
+    MissilePanelUI.cs    docked LEFT panel, in the section panel's place: ten
+                          missile systems (docs/20-MISSILE-SYSTEMS.md)
     UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
     MapControlsUI.cs     on-map zoom cluster (bottom-left) + compass (bottom-right)
     UiTheme.cs           map-editor design tokens (colours, sizes)
@@ -89,8 +90,10 @@ Assets/Scripts/
     BlastDamage.cs       what a shell/bomb/warhead does to formations under it
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
-    MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions,
-                          optional invisible ribbon MeshCollider for click picking
+    MapLine.cs           LineRenderer polyline, terrain DRAPING (segments are
+                          subdivided and every sample clamped), styles, captions,
+                          optional invisible ribbon MeshCollider for click picking.
+                          Boundary kinds are FlatOnly: always draped, never 3D
     LineManager.cs       line collection <-> save data
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground
@@ -118,8 +121,13 @@ Assets/Scripts/
     BomberRun.cs         the flying aircraft and its bomb release (code-animated)
     RotorSpinner.cs      spins rotors/propellers on unrigged models by mesh name
     UavCatalog.cs        the unmanned types — see docs/19-UAV-STRIKES.md
-    UavStrikeSystem.cs   tasked UAV strike: countdown, then a one-way flight
+    UavStrikeSystem.cs   tasked UAV sortie: a one-way attack, or a recon orbit
     DroneRun.cs          the drone's cruise, nose-over and terminal dive
+    ReconDroneRun.cs     the recon drone's transit, orbit on station and egress
+    StrikeAftermath.cs   30 scenario minutes of fire, then 2 hours of smoke,
+                          left where any strike landed (docs/08-PARTICLE-SYSTEMS.md)
+    StrikeBudget.cs      the 99 called strikes a scenario has, shared by
+                          artillery, air, UAV and missiles
     TargetAreaMarker.cs  3D target-area volume (procedural mesh, vertex colours)
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
@@ -180,7 +188,20 @@ MainMenu ─▶ Testing ─▶ Game scene
 
 Everything drawn on the map — unit icons, lines, their captions, move trails and
 task markers — samples the terrain and stands off it by a fixed clearance, in
-**both** view modes. Cesium streams tiles, so the first sample after a spawn or a
+**both** view modes.
+
+Lines go further and are **draped**, not strung. Clamping only the vertices the
+player clicked made a two-click boundary across ten kilometres a single straight
+chord between two terrain heights: it flew over the valleys and disappeared
+inside every ridge in between. `MapLine` subdivides each segment at ~220 m and
+clamps every sample, capped at 512 rendered points so a hundred-kilometre phase
+line costs a bounded number of raycasts. The click ribbon follows the drawn
+points for the same reason — a target cutting the chord would sit off the line
+over every rise. Control-measure kinds (`MapLine.FlatOnly`: lateral and rear
+boundaries, phase lines, the legacy boundary) ignore the 2D/3D flag entirely and
+are always draped: a boundary is a line drawn on a map, not a fence standing in
+the world, and a wall of colour reaching into the sky hides the very terrain the
+boundary is being judged against. Cesium streams tiles, so the first sample after a spawn or a
 load routinely finds nothing; each of these retries on a cadence until real ground
 is underneath, then refreshes slowly or stops. `GeoUtils.TrySampleTerrainHeight`
 is the shared primitive: it reports whether the ground was found (so a miss never

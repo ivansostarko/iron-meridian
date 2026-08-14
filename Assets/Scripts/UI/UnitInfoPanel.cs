@@ -25,16 +25,21 @@ namespace IronMeridian.UI
         const float PanelWidth = UiTheme.RightPanelWidth;
 
         /// <summary>
-        /// Horizontal inset for everything inside the stat table.
+        /// Horizontal inset for everything inside the stat table — the section
+        /// headings (GENERAL, POSITION, WEAPONS…), the label/value rows and the
+        /// hairline under each row.
         ///
-        /// Wider than <see cref="UiTheme.PanelPadding"/> on purpose. The table
-        /// lives inside a scroll viewport, and a 12 px inset put the first
-        /// character of every label and the last digit of every value hard
-        /// against the viewport's clipping edge — legible on paper, shaved in
-        /// practice. Pulling both columns in to 20 px costs a little width and
-        /// buys a table whose two ends are actually on screen.
+        /// Much wider than <see cref="UiTheme.PanelPadding"/> on purpose. The
+        /// table lives inside a scroll viewport, and a narrow inset put the
+        /// first character of every label and the last digit of every value
+        /// hard against the viewport's clipping edge — legible on paper, shaved
+        /// in practice. A generous, *equal* gutter on both sides is also what
+        /// makes the block read as a page of data rather than as text pinned to
+        /// the edge of the screen; every value is best-fitted
+        /// (<see cref="UIFactory.Fit"/>), so the width this costs is paid in
+        /// type size rather than in truncation.
         /// </summary>
-        const float TableInset = 20f;
+        const float TableInset = 50f;
 
         /// <summary>
         /// Clear space between the label column and the value column. Without

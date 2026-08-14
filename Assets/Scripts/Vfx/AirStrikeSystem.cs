@@ -81,6 +81,11 @@ namespace IronMeridian.Vfx
                 yield return FallbackStick(def, lat, lon, heading);
             }
 
+            // One aftermath site at the target area rather than one per weapon:
+            // the stick walks a few hundred metres, which on an operational map
+            // is one struck position. See StrikeAftermath.
+            StrikeAftermath.Play(lat, lon, def.burstScale);
+
             if (marker != null) Destroy(marker.gameObject);
 
             Flash?.Invoke(_destroyed > 0

@@ -69,6 +69,42 @@ Left rail → ARTILLERY STRIKE      UnitPaletteUI.BuildArtillerySection
 
 Everything up to the moment something lands is identical across all three, and lives in `CalledStrikeSystem<TKey>`. `ArtilleryStrikeSystem` supplies the natures and the salvo; `AirStrikeSystem` supplies the airframes and the bombing run; `UavStrikeSystem` supplies the drone and its dive. All three share `TargetAreaMarker` and the HUD banner — `GameController.RefreshStrikeBanner` shows whichever of the three is nearest to landing. See docs/18-AIR-STRIKES.md and docs/19-UAV-STRIKES.md.
 
+### The strike allowance
+
+A scenario has **99 called strikes**, and artillery, air strikes, UAV sorties and
+missile systems all spend from the same pool. It lives in `Vfx/StrikeBudget.cs`,
+is consumed by `CalledStrikeSystem.Launch`, and is shown as a "STRIKES REMAINING"
+readout at the head of all four menus.
+
+**Why one pool rather than four.** Every one of these menus asks the same
+question — commit a piece of ground and something lands on it. With unlimited
+missions the answer is always yes, and the choice between a 105 mm fire mission
+and an Iskander stops being a choice at all: you call both. A single shared
+allowance makes every strike cost the same thing, which is *the next strike*, and
+that is what turns four menus into one decision. Four separate pools would have
+said the opposite — that artillery is free once air is spent — and would have
+needed four counters on screen to explain it.
+
+**Ninety-nine, and it is a hard stop.** Deliberately larger than any scenario
+needs, so it never gets in the way of laying one out; it is there to stop the map
+editor being used as an infinite paint tool. The count is spent when a mission is
+**placed**, not when it lands: a mission cannot be recalled once away, so that is
+the moment the player spent it. An exhausted allowance refuses both arming and
+firing, and stands the tube down after the last one.
+
+The readout turns amber under a fifth remaining and red at zero.
+`StrikeBudget.Reset()` runs when the scene starts and on RESET — the state is
+static and survives a scene load, and a fresh map opening with forty strikes
+already spent would be inexplicable.
+
+### What a mission leaves behind
+
+The salvo is over in a few seconds; the mark on the ground is not. Every
+completed fire mission plays `StrikeAftermath` at the aim point: **thirty
+scenario minutes of fire, then two scenario hours of smoke**. One site per
+mission, not one per round. See docs/08-PARTICLE-SYSTEMS.md §2.1 for why those
+figures are on the operational clock rather than on a real one.
+
 ### The countdown is the feature
 
 A strike that lands the instant you click is a paint tool. One that lands ten seconds later is a decision: the ground is committed to, the marker sits there advertising exactly where the rounds are going, and nothing can be done about it afterwards. That is why:

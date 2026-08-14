@@ -113,16 +113,31 @@ See docs/08-PARTICLE-SYSTEMS.md and docs/10-AUDIO.md for the full registers.
 
 ## 4. The panel
 
-The MISSILE SYSTEMS row in the left rail opens a board on the **right**, not a section in the sliding left panel — the only rail row that behaves this way.
+The MISSILE SYSTEMS row in the left rail opens a board **on the left**, docked
+against the rail exactly where the sliding section panel docks, and standing in
+its place: only one of the two is ever up.
 
-The left section panel is 274 px and designed for controls you set and forget: a weather condition, a tile style. A missile system is chosen by *comparing* it against nine others on numbers that matter — what it covers, whether that number is a warhead or an umbrella, which side fields it. That comparison needs a designation, a description and a radius on the same row, and the right panel has the width for it.
+It used to open on the right. That gave it the width it needed and cost it the
+thing that mattered more — clicking a row on the left to open a board on the
+right reads as a mis-click, and the right-hand edge belongs to the unit info
+panel and the front-line panel, so opening a fire menu had to drop the player's
+selection to make room. Docked left it takes nothing down but the section panel.
+
+It is still **wider than a section** (`UiTheme.MissilePanelWidth`, 320 px against
+274) because it is doing a different job. The sections hold controls you set and
+forget: a weather condition, a tile style. A missile system is chosen by
+*comparing* it against nine others on numbers that matter — what it covers,
+whether that number is a warhead or an umbrella, which side fields it. That
+comparison needs a designation, a description and a radius on the same row.
 
 Consequences, all deliberate:
 
-- `UnitPaletteUI.OpenSection` special-cases `Section.Missiles`: it **closes** the sliding panel and raises `MissileSystemsRequested` rather than showing an empty section. Leaving the left panel open on whatever was last shown would look like the click missed.
+- `UnitPaletteUI.OpenSection` special-cases `Section.Missiles`: it **closes** the sliding panel and raises `MissileSystemsRequested` rather than showing an empty section. Two boards docked at the same x would be one on top of the other.
 - The nav row cannot use the section panel's own open state to light up, so `SetMissilePanelOpen` drives it. A nav row that never highlights reads as a button that did nothing.
-- Three boards want the right-hand edge — control measures, the front line and this. Each one's `Opened` takes the other two down and drops the unit selection, which is what closes the info panel.
+- The on-map zoom cluster rides whichever left-hand board is up: `MissilePanelUI.LeftInsetChanged` moves it out while the board is open, and `UnitPaletteUI.ReassertMapInset` puts it back when the board closes — the slide animation that normally drives the inset is not running at that moment, so nothing else would take the width back off.
+- Selecting a formation **no longer** closes the board. The two are at opposite edges now, so a launcher can stay chosen while a unit is inspected. Arming a draw tool still closes it, because you cannot draw a boundary and aim a missile with the same click.
 - **Closing the board stands the launcher down.** Leaving a system armed behind a panel that is no longer on screen would turn the next click on the map into a missile strike nobody asked for.
+- The board carries the shared **"STRIKES REMAINING"** readout, because the 99 called strikes are one pool across all four menus — see docs/17-ARTILLERY.md § *The strike allowance*. A missile impact also leaves the standard aftermath: thirty scenario minutes of fire, then two hours of smoke (docs/08-PARTICLE-SYSTEMS.md §2.1).
 
 ---
 

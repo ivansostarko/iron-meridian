@@ -155,8 +155,14 @@ namespace IronMeridian.UI
             }, out _plannedLabel);
             y -= 40f;
 
+            // Not offered for boundaries and phase lines: those are drawn on the
+            // map, not built on the ground, so there is nothing for them to
+            // stand up in. The row stays visible and reports DRAPED rather than
+            // vanishing — a control that appears and disappears as the kind
+            // changes is harder to read than one that says why it is off.
             _threeDLamp = ToggleRow(_panel, "STAND UP IN 3D", y, inner, () =>
             {
+                if (FlatKind) return;
                 _draw3D = !_draw3D;
                 Refresh();
             }, out _threeDLabel);
@@ -343,9 +349,13 @@ namespace IronMeridian.UI
             _plannedLamp.color = _planned ? UiTheme.Warning : UiTheme.TextFaint;
             _plannedLabel.text = _planned ? "PLANNED" : "ACTUAL";
 
-            _threeDLamp.color = _draw3D ? UiTheme.Success : UiTheme.TextFaint;
-            _threeDLabel.text = _draw3D ? "ON" : "FLAT";
+            bool standing = _draw3D && !FlatKind;
+            _threeDLamp.color = standing ? UiTheme.Success : UiTheme.TextFaint;
+            _threeDLabel.text = FlatKind ? "DRAPED" : standing ? "ON" : "FLAT";
         }
+
+        /// <summary>True when the chosen kind is always drawn on the ground — see <see cref="MapLine.FlatOnly"/>.</summary>
+        bool FlatKind => LineDrawTool.IsFlatKind(Kinds[_kind].kind);
 
         /// <summary>Pushes the settings onto the draw tool and arms it.</summary>
         void Apply()

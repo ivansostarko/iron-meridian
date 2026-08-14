@@ -35,7 +35,7 @@ namespace IronMeridian.UI
 
         /// <summary>Where BACK goes. The main menu for everything reached from it.</summary>
         protected virtual string BackScene => GameConfig.SceneMainMenu;
-        protected virtual string BackLabel => "< BACK TO MAIN MENU";
+        protected virtual string BackLabel => "BACK TO MAIN MENU";
 
         void Start()
         {
@@ -59,10 +59,8 @@ namespace IronMeridian.UI
             UIFactory.Place(sub.rectTransform, new Vector2(0.5f, 0.5f),
                 new Vector2(0, -90), new Vector2(1200, 60));
 
-            var back = UIFactory.CreateButton(canvas.transform, BackLabel,
-                GoBack, GameConfig.UiPanelLight, GameConfig.UiText, 24);
-            UIFactory.Place((RectTransform)back.transform, new Vector2(0.5f, 0f),
-                new Vector2(0, 90), new Vector2(380, 70));
+            UIFactory.CreateBackButton(canvas.transform, BackLabel, GoBack,
+                new Vector2(0.5f, 0f), new Vector2(0, 90), new Vector2(380, 66));
         }
 
         void GoBack() => SceneManager.LoadScene(BackScene);

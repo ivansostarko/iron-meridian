@@ -41,6 +41,7 @@ namespace IronMeridian.Core
         AirStrikeSystem _airStrike;
         UavStrikeSystem _uavStrike;
         MissileStrikeSystem _missiles;
+        StrikeAftermath _aftermath;
 
         // Latest countdown reported by each strike system. A null title means
         // that system has nothing in the air; see RefreshStrikeBanner.
@@ -105,6 +106,9 @@ namespace IronMeridian.Core
             IronMeridian.Audio.AudioManager.Apply();
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             UnitRegistry.Clear();
+            // Static, so it survives a scene load: a fresh scenario opening with
+            // half its strikes already spent would be inexplicable.
+            StrikeBudget.Reset();
 
             // Up first, on its own high-sorting canvas, so it covers the map and
             // the HUD built below while Cesium streams the terrain in.
@@ -153,6 +157,11 @@ namespace IronMeridian.Core
             // strength starts burning the moment it is built.
             _vfx = gameObject.AddComponent<VfxSystem>();
             _vfx.Init(_map.Georeference);
+
+            // What a strike leaves on the ground once the burst is over: half an
+            // hour of fire, then two hours of smoke, both on the operational
+            // clock — see docs/08-PARTICLE-SYSTEMS.md.
+            _aftermath = gameObject.AddComponent<StrikeAftermath>();
 
             _combat = gameObject.AddComponent<CombatSystem>();
 
@@ -341,13 +350,22 @@ namespace IronMeridian.Core
                 _missilePanel = MissilePanelUI.Create(canvas, _missiles);
                 _missilePanel.Opened = () =>
                 {
-                    // One right-hand edge, three boards that want it. Opening
-                    // this one takes the others down and drops the selection,
-                    // which is what closes the info panel.
-                    _selection.Select(null);
-                    if (_boundaryPanel != null) _boundaryPanel.Hide();
-                    if (_frontlinePanel != null) _frontlinePanel.Hide();
-                    if (_palette != null) _palette.SetMissilePanelOpen(true);
+                    // The board docks where the rail's section panel docks, so
+                    // opening it closes that panel; nothing on the right-hand
+                    // edge is disturbed any more, which means a formation can
+                    // stay selected while a launcher is being chosen.
+                    if (_palette != null)
+                    {
+                        _palette.ClosePanel();
+                        _palette.SetMissilePanelOpen(true);
+                    }
+                };
+                // The on-map zoom cluster rides whichever left-hand board is up.
+                _missilePanel.LeftInsetChanged = inset =>
+                {
+                    if (_mapControls == null) return;
+                    if (inset > 0f) _mapControls.SetLeftInset(inset);
+                    else if (_palette != null) _palette.ReassertMapInset();
                 };
             });
 
@@ -508,12 +526,10 @@ namespace IronMeridian.Core
                 bool infoPanelOpen = sel.Count == 1 && sel[0] != null;
                 // The info panel and the front line panel share the right-hand
                 // edge; selecting a formation is a clear statement about which
-                // of the two you now want.
-                if (infoPanelOpen)
-                {
-                    if (_frontlinePanel != null) _frontlinePanel.Hide();
-                    CloseMissilePanel();
-                }
+                // of the two you now want. The missile board is *not* taken
+                // down with them — it docks on the left, so a launcher can stay
+                // chosen while a formation is inspected on the right.
+                if (infoPanelOpen && _frontlinePanel != null) _frontlinePanel.Hide();
                 if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
                 if (_groupPanel != null) _groupPanel.SetSelection(sel);
                 // The compass lives in the bottom-right corner and steps aside
@@ -830,6 +846,10 @@ namespace IronMeridian.Core
                 if (a != null) Destroy(a.gameObject);
             UnitRegistry.Clear();
             if (_vfx != null) _vfx.StopAll();
+            // StopAll kills the effects; this is what stops the bookkeeping
+            // outliving them and trying to swap a dead fire for smoke.
+            if (_aftermath != null) _aftermath.ClearAll();
+            StrikeBudget.Reset();
             EditHistory.Clear();
 
             ApplySave(_save);
@@ -855,6 +875,7 @@ namespace IronMeridian.Core
             // World-anchored wreck fires and smoke outlive their units by design,
             // so they have to be cleared explicitly on a reload.
             if (_vfx != null) _vfx.StopAll();
+            if (_aftermath != null) _aftermath.ClearAll();
             // Undo closures captured actors that no longer exist.
             EditHistory.Clear();
             ApplySave(_save);

@@ -99,6 +99,16 @@ namespace IronMeridian.Vfx
         {
             if (_armed.HasValue && _armed.Value.Equals(key)) { Cancel(); return; }
 
+            // Refused at the point of arming as well as at the point of firing.
+            // Letting a spent allowance arm normally and only complain on the
+            // map click would waste the player's aim and read as the click
+            // having missed.
+            if (StrikeBudget.Exhausted)
+            {
+                Flash?.Invoke(StrikeBudget.ExhaustedMessage);
+                return;
+            }
+
             _armed = key;
 
             if (_aimMarker == null)
@@ -177,6 +187,16 @@ namespace IronMeridian.Vfx
 
             var key = _armed.Value;
 
+            // Spent when the mission is *placed*, because that is the moment it
+            // becomes irrevocable — nothing can recall a strike once away, so
+            // nothing should be able to get the allowance back either.
+            if (!StrikeBudget.TryConsume())
+            {
+                Cancel();
+                Flash?.Invoke(StrikeBudget.ExhaustedMessage);
+                return;
+            }
+
             // The mission gets its own marker so the aiming one stays with the
             // cursor — the next target can be lined up while this one is in the air.
             var marker = TargetAreaMarker.Create(Map.Georeference, RadiusFor(key), ColourFor(key));
@@ -194,6 +214,14 @@ namespace IronMeridian.Vfx
             });
 
             Flash?.Invoke(AwayMessage(key));
+
+            // That was the last one: stand the launcher down rather than leaving
+            // it armed over a map that can no longer answer a click.
+            if (StrikeBudget.Exhausted)
+            {
+                Cancel();
+                Flash?.Invoke(StrikeBudget.ExhaustedMessage);
+            }
         }
 
         void TickMissions()

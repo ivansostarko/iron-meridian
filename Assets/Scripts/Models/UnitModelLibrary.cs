@@ -91,6 +91,7 @@ namespace IronMeridian.Models
         public const string StrikeFighter = "strike_fighter";
         public const string KamikazeDrone = "kamikaze_drone";
         public const string ShahedDrone = "shahed_drone";
+        public const string ReconDrone = "recon_drone";
 
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
         {
@@ -243,6 +244,19 @@ namespace IronMeridian.Models
                 animated = true
             },
 
+            // Also built in code, and for the same reason as the loitering
+            // munition above: the one drone whose job is to *look* has no pack
+            // behind it and cannot lose one. Its twin-boom silhouette and its
+            // scanning sensor turret are the whole model — see ProceduralModels.
+            [ReconDrone] = new UnitModelDef
+            {
+                resourcePath = null,
+                sourceAsset = "Iron Meridian — built in code (ProceduralModels)",
+                proceduralId = ProceduralModels.ReconDrone,
+                idleClip = ModelClips.CombatIdle,
+                animated = true
+            },
+
             [ShahedDrone] = new UnitModelDef
             {
                 resourcePath = "Models/ShahedDrone",
@@ -340,7 +354,15 @@ namespace IronMeridian.Models
             ["loitering_munition"] = KamikazeDrone,
             ["interceptor_uas"] = KamikazeDrone,
             ["cargo_uas"] = KamikazeDrone,
-            ["decoy_uas"] = KamikazeDrone
+            ["decoy_uas"] = KamikazeDrone,
+
+            // The fixed-wing unmanned types. A surveillance drone is not a quad
+            // and never looked like one; now that the game owns a twin-boom ISR
+            // airframe, the types whose job is to loiter and look get it.
+            ["recon_uas"] = ReconDrone,
+            ["armed_uas"] = ReconDrone,
+            ["ew_uas"] = ReconDrone,
+            ["relay_uas"] = ReconDrone
         };
 
         public static UnitModelDef Get(string modelId) =>

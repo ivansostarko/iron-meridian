@@ -60,6 +60,13 @@ namespace IronMeridian.UI
         public const float LeftPanelWidth = 232f;
         /// <summary>The section panel that slides out of the rail to hold one section's controls.</summary>
         public const float SectionPanelWidth = 274f;
+        /// <summary>
+        /// The missile board, which docks against the rail like the section
+        /// panel but needs more width than a section gets — see
+        /// <see cref="MissilePanelUI"/>. It stands in the section panel's place
+        /// rather than beside it: only one of the two is ever up.
+        /// </summary>
+        public const float MissilePanelWidth = 320f;
         public const float RightPanelWidth = 300f;
         /// <summary>Standard inset from a panel's edge to its content.</summary>
         public const float PanelPadding = 12f;

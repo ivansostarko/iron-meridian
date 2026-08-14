@@ -32,6 +32,15 @@ namespace IronMeridian.Vfx
     {
         /// <summary>Wall height as a fraction of the radius. Tall enough to clear a ridge, short enough not to be a tower.</summary>
         const float HeightRatio = 0.60f;
+        /// <summary>
+        /// Ceiling on the wall, metres. The ratio is right for a beaten zone a
+        /// few hundred metres across and absurd for a search area ten kilometres
+        /// across, where it would put a six-kilometre curtain of light across the
+        /// map and hide everything the area was drawn to show. Past this the
+        /// volume stops growing upward and simply gets wider, which is the honest
+        /// reading anyway — a big area is big on the ground, not in the sky.
+        /// </summary>
+        const float MaxHeightMeters = 1200f;
         /// <summary>Segments around the circle. 72 is smooth at 260 m and still a trivial mesh.</summary>
         const int Segments = 72;
         /// <summary>Dashes in the rotating sweep ring.</summary>
@@ -165,7 +174,7 @@ namespace IronMeridian.Vfx
         void BuildMesh()
         {
             float r = _radius;
-            float h = r * HeightRatio;
+            float h = Mathf.Min(r * HeightRatio, MaxHeightMeters);
 
             var verts = new List<Vector3>();
             var colours = new List<Color>();

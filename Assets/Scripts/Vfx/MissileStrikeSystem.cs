@@ -79,6 +79,9 @@ namespace IronMeridian.Vfx
                 Detonate(def, lat, lon);
             }
 
+            // Thirty minutes of fire, then two hours of smoke. See StrikeAftermath.
+            StrikeAftermath.Play(lat, lon, def.burstScale);
+
             if (marker != null) Destroy(marker.gameObject);
 
             Flash?.Invoke($"Impact — {def.name} on target.");

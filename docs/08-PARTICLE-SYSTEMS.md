@@ -23,7 +23,10 @@ Assets/Scripts/Vfx/
   AirStrikeCatalog.cs     the three strike airframes — see docs/18-AIR-STRIKES.md
   AirStrikeSystem.cs      tasked air strike; BomberRun.cs flies the aircraft
   UavCatalog.cs           the unmanned types — see docs/19-UAV-STRIKES.md
-  UavStrikeSystem.cs      tasked UAV strike; DroneRun.cs flies the drone
+  UavStrikeSystem.cs      tasked UAV sortie; DroneRun.cs flies an attack,
+                          ReconDroneRun.cs flies the reconnaissance orbit
+  StrikeAftermath.cs      what a strike leaves: 30 min of fire, then 2 h of smoke
+  StrikeBudget.cs         the 99 called strikes a scenario has, shared by all four
   RotorSpinner.cs         spins rotors/propellers on unrigged models
   TargetAreaMarker.cs     the 3D target-area volume a strike is placed with
 Assets/Editor/
@@ -64,8 +67,8 @@ VfxSystem.PlayWreck(lat, lon, severity01);
 |---|---|---|
 | `Explosion` | Flash, fireball, smoke column, ground dust ring | `Explosion` |
 | `Impact` | Small one-shot puff | `ImpactBurst`, `WeaponFire` |
-| `Fire` | Flame cone with a noise field, plus a smoke crown | all `Fire*`, `GroundFire` |
-| `Smoke` | Rising, churning column | `SmokePlume`, `SmokeScreen`, all artillery smoke |
+| `Fire` | Flame cone with a noise field, plus a smoke crown | all `Fire*`, `GroundFire`, `StrikeAftermathFire` |
+| `Smoke` | Rising, churning column | `SmokePlume`, `SmokeScreen`, all artillery smoke, `StrikeAftermathSmoke`, `ReconMarker` (pale tint) |
 | `Dust` | Flat ring across the ground plane | `Dust` |
 | `ArtilleryAirBurst` | White-hot flash, **flat fast shrapnel disc**, small core | `ArtilleryLightBurst`, `UavWarheadBurst` |
 | `ArtilleryDirtColumn` | **Narrow vertical soil column** under gravity, small flash, low skirt | `ArtilleryMortarBurst` |
@@ -113,6 +116,9 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `MissileMediumSmoke` | Smoke off a medium missile impact | 440 m | loops | 48 | procedural |
 | `MissileHeavySmoke` | Towering column off a heavy missile impact | 820 m | loops | 52 | procedural |
 | `MissileTrail` | Exhaust plume trailing a missile in flight | 90 m | loops | 30 | procedural |
+| `StrikeAftermathFire` | Ground burning where a strike landed — **30 scenario minutes** | 200 m | loops | 35 | `VFX_Fire_Floor_01_Smoke` |
+| `StrikeAftermathSmoke` | Smoke over a burnt-out impact site — **2 scenario hours** | 260 m | loops | 32 | procedural |
+| `ReconMarker` | Objective a reconnaissance drone is working — pale motes inside the search ring | 900 m | loops | 38 | procedural |
 
 The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -123,6 +129,21 @@ Each row also carries a **sound** (`VfxDef.sound`), played as 3D positional audi
 **Priority** decides who dies when the concurrent-effect budget is full: lowest priority is evicted first, oldest among equals. Dust is deliberately the cheapest thing on the map, an explosion the most protected.
 
 `VfxCatalog.FireForScale(scale01)` picks Small / Medium / Large from a 0..1 formation size, so a burning squad and a burning army do not look the same.
+
+### 2.1 Strike aftermath — the two rows that are measured in *scenario* time
+
+`StrikeAftermathFire` and `StrikeAftermathSmoke` both loop, and neither is dispersed by `VfxSystem.StopAfter`. They are owned by **`StrikeAftermath`**, which counts down in **operational minutes** through `GameClock.ScenarioDelta`:
+
+| Phase | Length | Reads as |
+|---|---|---|
+| Fire | 30 scenario minutes | *this is burning now* |
+| Smoke | 120 scenario minutes | *this burned* |
+
+Why not `lifeSeconds`, and why not `StopAfter`: both are real-time, and the operational clock runs anywhere from x1 to x300. Thirty real minutes of fire is either half an hour of the battle or four days of it depending on a setting that has nothing to do with ordnance. Thirty *scenario* minutes is thirty minutes either way — half an hour of watching at x1, thirty seconds at x60, and frozen while the battle is paused, because the world is stopped and a fire burning out over a motionless map would be the one thing disagreeing about that. In the editor, where the clock never runs, scenario time ticks at x1 so an effect placed while laying a scenario out still expires.
+
+The bursts every strike plays last two to four seconds — right for a detonation, wrong for its consequence. Ten seconds after a battery had put five rounds into a position the map showed nothing at all. What ordnance leaves is the part that is visible for hours, and on an operational map that mark is real information: which positions have been worked over, and roughly how long ago.
+
+**One site per mission, at the aim point** — not one per round or per weapon. A five-round salvo is a single event on the ground; five overlapping fires would cost five times as much for a worse picture. `StrikeAftermath.MaxSites` (20) caps the concurrent sites and retires the oldest first, so long-lived loops can never crowd out the bursts of the strikes still landing; both rows carry a deliberately low priority for the same reason.
 
 ---
 
@@ -183,8 +204,20 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 |---|---|---|---|
 | Kamikaze warhead | `UavWarheadBurst` + `UavWarheadSmoke` | Once, where the drone reaches the ground | `DroneRun.Update` → `UavStrikeSystem.Detonate` |
 | Shahed warhead | `ShahedWarheadBurst` + `ShahedWarheadSmoke` + `ShahedWreckFire` | Same, for the heavier one-way type | `UavStrikeSystem.Detonate` |
+| Reconnaissance drone's objective | `ReconMarker` under the search ring | Played when the sortie is flown, stopped when the drone has gone home | `UavStrikeSystem.RunReconnaissance` |
 
-**UAV STRIKES** panel → pick a type → click the terrain → a 10 s countdown → the drone launches, cruises in and dives onto the point. The kamikaze drone is deliberately the smallest blast of any strike here; the Shahed is closer to a 155 mm shell and leaves the ground burning. Full detail in **docs/19-UAV-STRIKES.md**.
+**UAV STRIKES** panel → pick a type → click the terrain → a 10 s countdown → the drone launches and flies in. The kamikaze drone is deliberately the smallest blast of any strike here; the Shahed is closer to a 155 mm shell and leaves the ground burning. The **reconnaissance drone** has no warhead at all: it orbits the point for five operational minutes with `ReconMarker` on the ground under it, lifts the fog off a 10 km circle, and flies home. Full detail in **docs/19-UAV-STRIKES.md**.
+
+### Strike aftermath
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Any artillery fire mission completes | `StrikeAftermathFire` → `StrikeAftermathSmoke` at the aim point | Once per mission, when the salvo ends | `ArtilleryStrikeSystem.RunStrike` |
+| Any air strike completes | as above, at the target area | Once per pass | `AirStrikeSystem.RunStrike` |
+| Any UAV attack completes | as above, at the objective | Once per sortie; the recon type leaves nothing | `UavStrikeSystem.RunAttack` |
+| Any missile impacts | as above, at the aim point | Once per mission | `MissileStrikeSystem.RunStrike` |
+
+Thirty scenario minutes of fire, then two scenario hours of smoke — see §2.1 for why those figures are on the operational clock and not on a real one.
 
 ### Missile systems
 
@@ -267,11 +300,13 @@ The strategic camera can show a whole front, so effect count is bounded rather t
 | Looping effects stop emitting when sub-pixel | `GameConfig.VfxMinApparentSize` = 0.005 (0.5 % of screen height), re-checked 4×/s | `VfxInstance.Update` |
 | Per-unit throttles on impact and firing effects | 1.8 s / 2.6 s | `GameConfig` |
 | Wreck fires burn out rather than persisting | 14–32 s | `GameConfig.VfxWreck*` |
+| Concurrent strike-aftermath sites, oldest retired first | 20 | `StrikeAftermath.MaxSites` |
+| Called strikes per scenario, across all four delivery means | 99 | `StrikeBudget.Limit` |
 | One shared material for all procedural effects | — | `ProceduralVfx.PuffMaterial` |
 
 Effects are **not pooled** — each spawn allocates a `GameObject`. The cap and throttles keep the churn low enough that this has not mattered; if profiling says otherwise, pooling belongs in `VfxSystem.Populate`.
 
-World-anchored effects (wrecks) deliberately outlive their unit, so `GameController.LoadMap` calls `VfxSystem.StopAll()` on reload.
+World-anchored effects (wrecks, aftermath sites) deliberately outlive their unit, so `GameController.LoadMap` and `ResetEditor` call `VfxSystem.StopAll()` on reload — and `StrikeAftermath.ClearAll()` with it, so the bookkeeping does not outlive the effects it is tracking and try to swap a dead fire for smoke.
 
 ---
 

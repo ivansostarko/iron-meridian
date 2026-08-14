@@ -10,14 +10,23 @@ namespace IronMeridian.UI
     /// arming a strike whose destruction radius is drawn on the map before
     /// anything is committed to.
     ///
-    /// **Why this one is on the right when the other fires menus are on the
-    /// left.** The left rail's section panel is 274 px wide and is designed for
-    /// controls you set and forget — a weather condition, a tile style. A
-    /// missile system is chosen by *comparing* it against nine others on
-    /// numbers that matter: what it covers, whether that number is a warhead or
-    /// an umbrella, and which side fields it. That comparison needs room for a
-    /// designation, a description and a radius on the same row, and the right
-    /// panel has it.
+    /// **This board is on the left, with the other fire menus.** It used to
+    /// dock on the right, which gave it the width it needed and cost it the
+    /// thing that mattered more: MISSILE SYSTEMS is a row in the left rail, and
+    /// clicking a row on the left to open a board on the right reads as a
+    /// mis-click. Worse, the right edge is where the unit info panel and the
+    /// front-line panel live, so opening a fire menu had to drop the player's
+    /// selection to make room. It now stands exactly where the rail's section
+    /// panel stands, and simply takes the section panel's place — only one of
+    /// the two is ever up, and both slide out from behind the same rail.
+    ///
+    /// It is wider than a section (<see cref="UiTheme.MissilePanelWidth"/>
+    /// against <see cref="UiTheme.SectionPanelWidth"/>) because it is doing a
+    /// different job. The sections hold controls you set and forget — a weather
+    /// condition, a tile style. A missile system is chosen by *comparing* it
+    /// against nine others on numbers that matter: what it covers, whether that
+    /// number is a warhead or an umbrella, and which side fields it. That
+    /// comparison needs a designation, a description and a radius on one row.
     ///
     /// **Air defence and surface strike are separated and labelled**, because
     /// their radius figures mean opposite things. A 3 km circle on SAMP/T is
@@ -32,11 +41,21 @@ namespace IronMeridian.UI
         /// <summary>True while the panel is showing.</summary>
         public static bool IsOpen { get; private set; }
 
-        /// <summary>Raised when the panel opens, so competing right-hand panels can stand down.</summary>
+        /// <summary>Raised when the panel opens, so competing panels can stand down.</summary>
         public System.Action Opened;
+
+        /// <summary>
+        /// Raised whenever the board appears or disappears, with the width it
+        /// occupies on the left (0 when hidden). The on-map zoom cluster rides
+        /// this so it is never buried underneath the board.
+        /// </summary>
+        public System.Action<float> LeftInsetChanged;
 
         const float Pad = UiTheme.PanelPadding;
         const float RowHeight = 52f;
+        /// <summary>Where the board's left edge sits: hard against the always-present rail.</summary>
+        const float DockX = UiTheme.LeftPanelWidth;
+        const float PanelWidth = UiTheme.MissilePanelWidth;
 
         MissileStrikeSystem _missiles;
         RectTransform _panel;
@@ -48,6 +67,7 @@ namespace IronMeridian.UI
             new List<(MissileOrigin, Image, Text)>();
         readonly List<(MissileSystemId id, Image fill, Image glyph, Text label)> _buttons =
             new List<(MissileSystemId, Image, Image, Text)>();
+        Text _budgetLabel;
 
         public static MissilePanelUI Create(Canvas canvas, MissileStrikeSystem missiles)
         {
@@ -58,12 +78,14 @@ namespace IronMeridian.UI
             panel._missiles = missiles;
             panel.Build(canvas);
             missiles.ArmedChanged += panel.Refresh;
+            StrikeBudget.Changed += panel.Refresh;
             return panel;
         }
 
         void OnDestroy()
         {
             if (_missiles != null) _missiles.ArmedChanged -= Refresh;
+            StrikeBudget.Changed -= Refresh;
             if (IsOpen) IsOpen = false;
         }
 
@@ -72,19 +94,21 @@ namespace IronMeridian.UI
         void Build(Canvas canvas)
         {
             _panel = UIFactory.CreatePanel(canvas.transform, "MissileSystems", UiTheme.Panel);
-            _panel.anchorMin = new Vector2(1, 0);
-            _panel.anchorMax = new Vector2(1, 1);
-            _panel.pivot = new Vector2(1, 0.5f);
-            _panel.offsetMin = new Vector2(-UiTheme.RightPanelWidth, 0);
-            _panel.offsetMax = new Vector2(0, -UiTheme.TopBarHeight);
+            _panel.anchorMin = new Vector2(0, 0);
+            _panel.anchorMax = new Vector2(0, 1);
+            _panel.pivot = new Vector2(0, 0.5f);
+            _panel.offsetMin = new Vector2(DockX, 0);
+            _panel.offsetMax = new Vector2(DockX + PanelWidth, -UiTheme.TopBarHeight);
 
+            // Hairline down the board's outboard edge, where it meets the map —
+            // the inboard edge butts against the rail and needs no rule.
             var edge = UIFactory.CreatePanel(_panel, "Edge", UiTheme.Border);
-            edge.anchorMin = new Vector2(0, 0); edge.anchorMax = new Vector2(0, 1);
-            edge.pivot = new Vector2(0, 0.5f);
+            edge.anchorMin = new Vector2(1, 0); edge.anchorMax = new Vector2(1, 1);
+            edge.pivot = new Vector2(1, 0.5f);
             edge.sizeDelta = new Vector2(1, 0);
             edge.GetComponent<Image>().raycastTarget = false;
 
-            float inner = UiTheme.RightPanelWidth - Pad * 2f;
+            float inner = PanelWidth - Pad * 2f;
 
             var title = UIFactory.CreateText(_panel, "MISSILE SYSTEMS", UiTheme.FontHeading,
                 UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -101,7 +125,8 @@ namespace IronMeridian.UI
             rule.pivot = new Vector2(0.5f, 1);
             rule.anchoredPosition = new Vector2(0, -38);
 
-            BuildTabs(-48f, inner);
+            StrikeBudgetRow(-46f, inner);
+            BuildTabs(-82f, inner);
 
             // One page per inventory, both laid out at the same origin; only the
             // selected one is active. Same device as the artillery menu, for the
@@ -142,9 +167,34 @@ namespace IronMeridian.UI
             }
         }
 
+        /// <summary>
+        /// The shared strike allowance. The same readout the three rail fire
+        /// menus carry, because it is the same ninety-nine — see
+        /// <see cref="StrikeBudget"/>.
+        /// </summary>
+        void StrikeBudgetRow(float y, float inner)
+        {
+            var frame = UIFactory.CreateBorderedPanel(_panel, "StrikeBudget",
+                UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(inner, 28));
+
+            var name = UIFactory.CreateText(frame, "STRIKES REMAINING", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            name.raycastTarget = false;
+            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 0),
+                new Vector2(inner - 96f, 14));
+
+            _budgetLabel = UIFactory.CreateText(frame, "", UiTheme.FontSmall, UiTheme.Accent,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            _budgetLabel.raycastTarget = false;
+            UIFactory.Place(_budgetLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
+                new Vector2(80, 16));
+        }
+
         void BuildPage(RectTransform page, MissileOrigin origin, float inner)
         {
-            float y = -88f;
+            // Clear of the title, the allowance readout and the inventory tabs.
+            float y = -122f;
             MissileRole? lastRole = null;
 
             // Air defence first: it is the larger group and the one whose radius
@@ -265,17 +315,20 @@ namespace IronMeridian.UI
             _panel.gameObject.SetActive(true);
             IsOpen = true;
             Opened?.Invoke();
+            LeftInsetChanged?.Invoke(DockX + PanelWidth);
             Refresh();
         }
 
         public void Hide()
         {
+            bool was = IsOpen;
             if (_panel != null) _panel.gameObject.SetActive(false);
             IsOpen = false;
             // Closing the board stands the launcher down: leaving a system armed
             // behind a panel that is no longer on screen would turn the next
             // click on the map into a missile strike nobody asked for.
             if (_missiles != null) _missiles.Cancel();
+            if (was) LeftInsetChanged?.Invoke(0f);
         }
 
         public void Toggle()
@@ -286,6 +339,13 @@ namespace IronMeridian.UI
         /// <summary>Repaints which system is armed. Driven by the system's own event.</summary>
         void Refresh()
         {
+            if (_budgetLabel != null)
+            {
+                _budgetLabel.text = StrikeBudget.RemainingText;
+                _budgetLabel.color = StrikeBudget.RemainingColour(
+                    UiTheme.Accent, UiTheme.Warning, UiTheme.Hostile);
+            }
+
             var armed = _missiles != null ? _missiles.Armed : null;
 
             foreach (var (id, fill, glyph, label) in _buttons)

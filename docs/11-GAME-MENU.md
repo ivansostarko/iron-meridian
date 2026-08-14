@@ -90,12 +90,48 @@ Map terrain and imagery are streamed by Cesium, not shipped as textures — see 
 
 | Screen | Scene | Background | Scrim | Notes |
 |---|---|---|---|---|
-| Main Menu | `MainMenu` | Default | 0.42 | Artwork behind the command board. The scrim is lighter than a working screen's because the board carries its own darker field down the left-hand edge, so the artwork on the right stays close to how it was authored. |
+| Main Menu | `MainMenu` | Default | 0.42 | Artwork behind the command board. The scrim is lighter than a working screen's because the board carries its own darker field down the left-hand edge, so the artwork on the right stays close to how it was authored. The board's entries now sit in a **scroll view** between the masthead and the footer, so the list can outgrow a short window instead of running off the bottom of it — see §3.1. |
 | Settings | `Settings` | Default | 0.62 | Behind the Video/Audio tab panels. |
 | Testing | `Testing` | Default | 0.62 | Behind the scenario cards. |
 | Units List | `UnitsList` | Default | **0.86** | Dense table and stat panel — legibility beats atmosphere. |
 | East France | `EastFrance` | Default | 0.62 | Behind the "under development" placeholder. |
 | Map editor / game | `Game` | **None** | — | Deliberate: the Cesium globe *is* the background. A full-screen image would cover the map. |
+
+### 3.1 The main menu board
+
+`MainMenuUI` lays the menu out as a command board down the left-hand edge:
+masthead, a scrolling list of entries, then the version footer.
+
+**What is deliberately not there.** The `OPERATIONS` / `REFERENCE` / `SYSTEM`
+group headings and the descriptive blurb under the masthead were removed. Each
+entry already states what it is on its own second line, so the headings were
+captions over captions; between them the two devices cost roughly 150 px of the
+vertical space the entries needed. Ordering carries the argument the groups used
+to make — play first, reference next, system last — and `QUIT` stays at the
+bottom of the list, furthest from where the cursor comes to rest. Position, not a
+heading, is what keeps it out of the way.
+
+**The list scrolls.** The entries are children of a `VerticalLayoutGroup` in a
+scroll view spanning the board from `MenuTop` to `MenuBottom`, with a visible
+scrollbar down its right edge. Fixed offsets were fine for six entries at 1080p
+and would have run off the bottom at 1280×720 or with a seventh entry added.
+
+### 3.2 The BACK control
+
+Every menu screen's BACK button comes from `UIFactory.CreateBackButton`.
+
+It used to be a plain `CreateButton` with a "&lt; BACK" caption — a flat slab
+whose only affordance was the word on it, sitting on full-bleed artwork where a
+mid-grey rectangle has nothing to separate it from the photograph behind. The
+shared control borrows all three of its devices from the main menu's own entries,
+so the screens read as one interface: a hairline-bordered surface so the control
+has an edge of its own, an accent strip down its leading edge that widens under
+the cursor, and a `UiIcons.ArrowLeft` glyph so the direction is legible before the
+label is read.
+
+Used by `PlaceholderScreenUI` (Single Player, Multiplayer, Extras), `TestingUI`,
+`SettingsUI`, `EastFranceUI` and `UnitsListUI`. Each passes its own anchor and
+position; the default is the top-left corner.
 
 ---
 

@@ -379,6 +379,82 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
+        /// The one BACK control every menu screen uses.
+        ///
+        /// It used to be <see cref="CreateButton"/> with a "&lt; BACK" caption —
+        /// a flat slab whose only affordance was the word on it, sitting on
+        /// full-bleed artwork where a mid-grey rectangle has nothing to separate
+        /// it from the photograph behind. Three things fix that, and all three
+        /// are borrowed from the main menu's own entries so the screens read as
+        /// one interface: a **hairline-bordered surface** so the control has an
+        /// edge of its own, an **accent strip** down its leading edge that
+        /// widens under the cursor, and a **glyph** so the direction is legible
+        /// before the label is read.
+        ///
+        /// Placement is the caller's: pass <paramref name="anchor"/> and
+        /// <paramref name="position"/> as for <see cref="Place"/>. The default
+        /// is the top-left corner, which is where a back control belongs on a
+        /// page you read left to right.
+        /// </summary>
+        public static Button CreateBackButton(Transform parent, string label, UnityAction onClick,
+            Vector2? anchor = null, Vector2? position = null, Vector2? size = null)
+        {
+            Vector2 a = anchor ?? new Vector2(0f, 1f);
+            Vector2 p = position ?? new Vector2(64f, -60f);
+            Vector2 s = size ?? new Vector2(300f, 62f);
+
+            var frame = CreateBorderedPanel(parent, "BackButton", UiTheme.Surface, UiTheme.BorderStrong);
+            Place(frame, a, p, s);
+
+            var btn = CreateButton(frame, "", onClick, new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            Stretch((RectTransform)btn.transform);
+            // CreateButton always makes a caption; this control draws its own,
+            // so the one it made is switched off rather than left to render an
+            // empty string over the top of it.
+            var made = btn.GetComponentInChildren<Text>(true);
+            if (made != null) made.gameObject.SetActive(false);
+
+            var strip = CreatePanel(frame, "Strip", UiTheme.Accent);
+            strip.anchorMin = new Vector2(0, 0); strip.anchorMax = new Vector2(0, 1);
+            strip.pivot = new Vector2(0, 0.5f);
+            strip.sizeDelta = new Vector2(4f, 0);
+            strip.GetComponent<Image>().raycastTarget = false;
+
+            var glyph = CreateImage(frame, UiIcons.ArrowLeft, "Glyph");
+            glyph.color = UiTheme.Accent;
+            glyph.raycastTarget = false;
+            Place((RectTransform)glyph.transform, new Vector2(0f, 0.5f), new Vector2(24f, 0f),
+                new Vector2(20f, 20f));
+
+            var caption = CreateText(frame, label, 20, UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            PlaceTopLeft(caption.rectTransform, 56f, (s.y - 24f) * 0.5f, s.x - 72f, 24f);
+            Fit(caption, 11);
+
+            var fill = frame.Find("Fill").GetComponent<Image>();
+            var trigger = frame.gameObject.AddComponent<EventTrigger>();
+            AddHover(trigger, EventTriggerType.PointerEnter, () => PaintBack(fill, strip, glyph, caption, true));
+            AddHover(trigger, EventTriggerType.PointerExit, () => PaintBack(fill, strip, glyph, caption, false));
+            PaintBack(fill, strip, glyph, caption, false);
+
+            return btn;
+        }
+
+        static void PaintBack(Image fill, RectTransform strip, Image glyph, Text caption, bool hover)
+        {
+            fill.color = hover ? UiTheme.SurfaceHover : UiTheme.Surface;
+            strip.sizeDelta = new Vector2(hover ? 8f : 4f, 0);
+            glyph.color = hover ? Color.white : UiTheme.Accent;
+            caption.color = hover ? Color.white : UiTheme.Text;
+        }
+
+        static void AddHover(EventTrigger trigger, EventTriggerType type, System.Action callback)
+        {
+            var entry = new EventTrigger.Entry { eventID = type };
+            entry.callback.AddListener(_ => callback());
+            trigger.triggers.Add(entry);
+        }
+
+        /// <summary>
         /// Small-caps section header — letter-spaced, accent-coloured, with an
         /// optional count badge on the right, as in the map editor panels.
         /// </summary>

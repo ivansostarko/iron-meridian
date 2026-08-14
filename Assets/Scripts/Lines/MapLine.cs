@@ -12,17 +12,31 @@ namespace IronMeridian.Lines
     /// A rendered polyline on the globe: sector boundary, defensive line or
     /// battle position.
     ///
-    /// Vertices are clamped to the terrain in **both** view modes. A constant
-    /// height band looks tidy on a flat map right up until the ground rises
-    /// through it, at which point the line disappears inside a ridge; following
-    /// the terrain and standing off it by a fixed clearance is what keeps a
-    /// control measure readable everywhere. The 2D/3D flag now chooses how much
-    /// clearance rather than whether to clamp at all — 2D lifts further clear so
-    /// the graphics read as a drawn overlay from straight above.
+    /// **The line is draped, not strung.** Only the vertices the player clicked
+    /// used to be clamped to the ground, so a boundary drawn with two clicks
+    /// across ten kilometres was a single straight chord between two terrain
+    /// heights — it flew over the valleys and disappeared inside every ridge in
+    /// between. Each segment is now subdivided at
+    /// <see cref="DrapeSpacingM"/> and every sample is clamped, so the line lies
+    /// on the ground the whole way along it. The subdivision is capped
+    /// (<see cref="MaxRenderPoints"/>) so a hundred-kilometre phase line costs a
+    /// bounded number of terrain samples rather than one per two hundred metres.
+    ///
+    /// **Boundaries are a 2D graphic.** A control measure is a line drawn on a
+    /// map, not a fence standing in the world: it exists to say where one
+    /// formation's ground ends and the next one's begins, and a wall of colour
+    /// reaching into the sky hides the very terrain the boundary is being judged
+    /// against. So every kind in <see cref="FlatOnly"/> ignores the 2D/3D flag
+    /// entirely and is always drawn draped, with height used for nothing except
+    /// putting the line on the terrain (<see cref="ClearanceDrapedM"/>). The
+    /// remaining kinds — defensive lines and battle positions, which mark ground
+    /// that is being physically held — keep the old behaviour, where the flag
+    /// chooses how far clear of the ground the graphic floats.
     ///
     /// Because Cesium streams tiles, the first clamp routinely finds no ground.
-    /// The line keeps re-clamping until every vertex has real terrain under it,
-    /// then stops sampling.
+    /// The line keeps re-clamping until every sample has real terrain under it,
+    /// then stops — with an attempt cap, because ground the camera never goes
+    /// near never streams in and a line waiting for it would sample forever.
     /// </summary>
     public class MapLine : MonoBehaviour
     {
@@ -32,14 +46,46 @@ namespace IronMeridian.Lines
         const double Clearance3DM = 25.0;
         /// <summary>Metres above the terrain in the top-down 2D view.</summary>
         const double Clearance2DM = 140.0;
-        /// <summary>Seconds between re-clamps while some vertex still has no terrain under it.</summary>
+        /// <summary>
+        /// Metres above the terrain for a draped control measure, in both view
+        /// modes. Small: the line is meant to read as painted on the ground, and
+        /// the only reason it is not at zero is that a polyline sitting exactly
+        /// on a streamed mesh z-fights with it.
+        /// </summary>
+        const double ClearanceDrapedM = 30.0;
+        /// <summary>Ground spacing between draped samples along a segment, metres.</summary>
+        const double DrapeSpacingM = 220.0;
+        /// <summary>Ceiling on rendered vertices — the drape spacing is widened to stay under it.</summary>
+        const int MaxRenderPoints = 512;
+        /// <summary>Seconds between re-clamps while some sample still has no terrain under it.</summary>
         const float ReclampSeconds = 1.5f;
+        /// <summary>
+        /// How many times a line will go back for missing ground before giving
+        /// up. Terrain the camera never approaches is never streamed, and
+        /// without this a line drawn across it re-samples every 1.5 s forever.
+        /// </summary>
+        const int MaxReclampAttempts = 24;
 
         CesiumGeoreference _geo;
         LineRenderer _lr;
         readonly List<MapLabel> _labels = new List<MapLabel>();
+        /// <summary>World positions actually drawn — the authored points plus the draped samples between them.</summary>
+        readonly List<Vector3> _render = new List<Vector3>();
         int _unresolved;
         float _reclampTimer;
+        int _reclampAttempts;
+        LineKind _kind;
+
+        /// <summary>
+        /// True for the kinds that are map graphics rather than things standing
+        /// on the ground: sector boundaries, rear boundaries, phase lines and the
+        /// legacy hand-drawn boundary (which the automatic front line also uses).
+        /// These are always draped and never stand up in 3D — see the class
+        /// remarks.
+        /// </summary>
+        public bool FlatOnly =>
+            _kind == LineKind.LateralBoundary || _kind == LineKind.RearBoundary ||
+            _kind == LineKind.PhaseLine || _kind == LineKind.Boundary;
 
         // --- click picking ---
         /// <summary>Multiplier and floor applied to the drawn width to get a click target.</summary>
@@ -103,6 +149,12 @@ namespace IronMeridian.Lines
         void Build(CesiumGeoreference geo, MapLineData data)
         {
             _geo = geo; Data = data;
+            System.Enum.TryParse(data.kind, out _kind);
+            // A boundary saved from an older map may still carry is3D; the flag
+            // is meaningless for these kinds now, so it is normalised on load
+            // rather than being quietly ignored in two places.
+            if (FlatOnly) data.is3D = false;
+
             _lr = gameObject.AddComponent<LineRenderer>();
             _lr.useWorldSpace = true;
             _lr.textureMode = LineTextureMode.Tile;
@@ -127,7 +179,7 @@ namespace IronMeridian.Lines
 
         void ApplyStyle()
         {
-            System.Enum.TryParse(Data.kind, out LineKind kind);
+            LineKind kind = _kind;
 
             Color color;
             float width;
@@ -206,14 +258,34 @@ namespace IronMeridian.Lines
             : Data.team == Team.User.ToString() ? GameConfig.BlueTeam
             : fallback;
 
-        /// <summary>Recompute world positions from geodetic points.</summary>
+        /// <summary>
+        /// Recompute world positions from the geodetic points, draping the line
+        /// over the terrain between them.
+        ///
+        /// The authored vertices keep their own resolved heights — those are
+        /// what the save file carries, and what every other reader of
+        /// <see cref="MapLineData"/> sees. The extra samples exist only to draw
+        /// with, which is why they live in <see cref="_render"/> and not in the
+        /// data.
+        /// </summary>
         public void Rebuild()
         {
             var pts = Data.points;
-            double clearance = Data.is3D ? Clearance3DM : Clearance2DM;
+            double clearance = FlatOnly ? ClearanceDrapedM
+                : (Data.is3D ? Clearance3DM : Clearance2DM);
 
             _unresolved = 0;
-            _lr.positionCount = pts.Count;
+            _render.Clear();
+
+            if (pts.Count == 0)
+            {
+                _lr.positionCount = 0;
+                _reclampTimer = ReclampSeconds;
+                RefreshLabels();
+                return;
+            }
+
+            // Authored vertices first: they are the ones whose heights persist.
             for (int i = 0; i < pts.Count; i++)
             {
                 if (GeoUtils.TrySampleTerrainHeight(_geo, pts[i].latitude, pts[i].longitude, out double ground))
@@ -228,13 +300,72 @@ namespace IronMeridian.Lines
                     if (pts[i].heightMeters <= 0.0) pts[i].heightMeters = 250.0 + clearance;
                     _unresolved++;
                 }
-                _lr.SetPosition(i, GeoUtils.GeoToUnity(_geo, pts[i].latitude, pts[i].longitude,
-                    pts[i].heightMeters));
             }
+
+            double spacing = DrapeSpacing(pts);
+
+            _render.Add(GeoUtils.GeoToUnity(_geo, pts[0].latitude, pts[0].longitude, pts[0].heightMeters));
+
+            for (int i = 0; i + 1 < pts.Count; i++)
+            {
+                var a = pts[i];
+                var b = pts[i + 1];
+                double metres = GeoUtils.DistanceKm(a.latitude, a.longitude, b.latitude, b.longitude) * 1000.0;
+                int steps = Mathf.Max(1, Mathf.CeilToInt((float)(metres / spacing)));
+
+                for (int s = 1; s <= steps; s++)
+                {
+                    double t = s / (double)steps;
+                    double lat = a.latitude + (b.latitude - a.latitude) * t;
+                    double lon = a.longitude + (b.longitude - a.longitude) * t;
+
+                    double height;
+                    if (s == steps)
+                    {
+                        height = b.heightMeters;         // already resolved above
+                    }
+                    else if (GeoUtils.TrySampleTerrainHeight(_geo, lat, lon, out double ground))
+                    {
+                        height = ground + clearance;
+                    }
+                    else
+                    {
+                        // No ground under this sample: fall back to the straight
+                        // chord between the two authored heights, which is what
+                        // the line used to be everywhere.
+                        height = a.heightMeters + (b.heightMeters - a.heightMeters) * t;
+                        _unresolved++;
+                    }
+
+                    _render.Add(GeoUtils.GeoToUnity(_geo, lat, lon, height));
+                }
+            }
+
+            _lr.positionCount = _render.Count;
+            _lr.SetPositions(_render.ToArray());
 
             _reclampTimer = ReclampSeconds;
             RefreshLabels();
             if (Pickable) BuildPicker();
+        }
+
+        /// <summary>
+        /// Ground distance between draped samples. <see cref="DrapeSpacingM"/>
+        /// normally; widened when that would blow the vertex ceiling, so the
+        /// cost of a line is bounded by its point count rather than by its
+        /// length.
+        /// </summary>
+        double DrapeSpacing(List<GeoPoint> pts)
+        {
+            double metres = 0.0;
+            for (int i = 0; i + 1 < pts.Count; i++)
+                metres += GeoUtils.DistanceKm(pts[i].latitude, pts[i].longitude,
+                    pts[i + 1].latitude, pts[i + 1].longitude) * 1000.0;
+
+            // Every segment costs at least one sample, so the budget for the
+            // subdivision is what is left after the authored points.
+            int budget = Mathf.Max(1, MaxRenderPoints - pts.Count);
+            return System.Math.Max(DrapeSpacingM, metres / budget);
         }
 
         /// <summary>
@@ -253,8 +384,11 @@ namespace IronMeridian.Lines
         /// </summary>
         void BuildPicker()
         {
-            var pts = Data.points;
-            if (pts.Count < 2)
+            // The ribbon follows what is drawn, not what was clicked: a draped
+            // line bends where the ground bends, and a click target cutting the
+            // straight chord would sit off the line over every ridge.
+            int count = _render.Count;
+            if (count < 2)
             {
                 if (_picker != null) _picker.enabled = false;
                 return;
@@ -272,21 +406,21 @@ namespace IronMeridian.Lines
 
             float half = Mathf.Max(_lastWidth * PickWidthFactor, MinPickWidthM) * 0.5f;
 
-            var verts = new List<Vector3>(pts.Count * 2);
-            var tris = new List<int>((pts.Count - 1) * 6);
+            var verts = new List<Vector3>(count * 2);
+            var tris = new List<int>((count - 1) * 6);
 
             // World positions come back through the line's own transform: the
             // LineRenderer draws in world space but a collider mesh is local, and
             // Cesium re-origins the georeference as the camera roams.
-            for (int i = 0; i < pts.Count; i++)
+            for (int i = 0; i < count; i++)
             {
-                Vector3 here = transform.InverseTransformPoint(_lr.GetPosition(i));
+                Vector3 here = transform.InverseTransformPoint(_render[i]);
 
                 // Direction of travel at this vertex, averaged across the joint
                 // so the ribbon does not pinch on a corner.
-                Vector3 prev = i > 0 ? transform.InverseTransformPoint(_lr.GetPosition(i - 1)) : here;
-                Vector3 next = i + 1 < pts.Count
-                    ? transform.InverseTransformPoint(_lr.GetPosition(i + 1)) : here;
+                Vector3 prev = i > 0 ? transform.InverseTransformPoint(_render[i - 1]) : here;
+                Vector3 next = i + 1 < count
+                    ? transform.InverseTransformPoint(_render[i + 1]) : here;
                 Vector3 dir = next - prev;
                 dir.y = 0f;
                 if (dir.sqrMagnitude < 1e-6f) dir = Vector3.forward;
@@ -297,7 +431,7 @@ namespace IronMeridian.Lines
                 verts.Add(here + side);
             }
 
-            for (int i = 0; i + 1 < pts.Count; i++)
+            for (int i = 0; i + 1 < count; i++)
             {
                 int b = i * 2;
                 // Both windings: the ribbon lies flat and is clicked from above
@@ -320,21 +454,35 @@ namespace IronMeridian.Lines
 
         void Update()
         {
-            if (_unresolved <= 0) return;
+            if (_unresolved <= 0 || _reclampAttempts >= MaxReclampAttempts) return;
             _reclampTimer -= Time.deltaTime;
             if (_reclampTimer > 0f) return;
+            _reclampAttempts++;
             Rebuild();
         }
 
         public void SetPoints(List<GeoPoint> points)
         {
             Data.points = points;
+            // New geometry is new ground: whatever was given up on before says
+            // nothing about whether this line's terrain will arrive.
+            _reclampAttempts = 0;
             Rebuild();
         }
 
+        /// <summary>
+        /// Switches between the tilted and top-down clearances.
+        ///
+        /// A no-op for <see cref="FlatOnly"/> kinds — a boundary is a graphic on
+        /// the map in both projections, and the view mode has nothing to say
+        /// about it. Everything else takes the flag.
+        /// </summary>
         public void Set3D(bool is3D)
         {
+            if (FlatOnly) return;
+            if (Data.is3D == is3D) return;
             Data.is3D = is3D;
+            _reclampAttempts = 0;
             Rebuild();
         }
 

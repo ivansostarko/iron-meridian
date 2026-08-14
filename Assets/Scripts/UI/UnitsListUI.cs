@@ -41,6 +41,20 @@ namespace IronMeridian.UI
         const float BottomMargin = 44f;
         const float RowPad = 8f;      // CreateScrollView's content padding
 
+        /// <summary>
+        /// Left inset of the ICON column's content, inside its own cell.
+        ///
+        /// The icons used to start 6 px into the column, which put the first
+        /// one hard against the scroll viewport's clipping edge — an APP-6
+        /// frame is a rectangle, and the left stroke of that rectangle was the
+        /// part being shaved. Indenting the column's contents gives the table a
+        /// gutter at the same place its header has one, and the two icons and
+        /// the NAME column that follows all still fit the cell.
+        /// </summary>
+        const float IconColumnInset = 36f;
+        /// <summary>Inset from the detail panel's edges to everything drawn inside it.</summary>
+        const float PanelInset = 50f;
+
         enum SortKey { Name, Branch, Attack, Defence, Armour, Range, Speed, Manpower }
         enum TeamView { Both, Friendly, Enemy }
 
@@ -65,9 +79,13 @@ namespace IronMeridian.UI
 
         static readonly Column[] Columns =
         {
-            // ICON carries two 44 px icons side by side, so it needs the widest
-            // share that is not text.
-            new Column("ICON",     1.20f),
+            // ICON carries two 44 px icons side by side *plus* the column's
+            // left indent (IconColumnInset), so it needs the widest share that
+            // is not text. Widened from 1.20 when the indent was introduced:
+            // the columns are shares of the table width, so at a tall aspect
+            // ratio the old share was narrower than the pair it had to hold and
+            // the enemy icon overhung NAME.
+            new Column("ICON",     1.50f),
             new Column("NAME",     3.10f, SortKey.Name),
             new Column("BRANCH",   1.25f, SortKey.Branch),
             new Column("ATK",      0.70f, SortKey.Attack),
@@ -150,10 +168,9 @@ namespace IronMeridian.UI
             _resultCount = UIFactory.CreateText(parent, "", 20, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
             UIFactory.Place(_resultCount.rectTransform, new Vector2(0f, 1f), new Vector2(80, -122), new Vector2(700, 30));
 
-            var back = UIFactory.CreateButton(parent, "< BACK",
+            UIFactory.CreateBackButton(parent, "BACK TO TESTING",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting),
-                GameConfig.UiPanelLight, GameConfig.UiText, 24);
-            UIFactory.Place((RectTransform)back.transform, new Vector2(1f, 1f), new Vector2(-80, -70), new Vector2(180, 60));
+                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(280, 62));
         }
 
         // ---------------------------------------------------------- toolbar
@@ -357,9 +374,11 @@ namespace IronMeridian.UI
 
                 if (!col.Sort.HasValue)
                 {
+                    // ICON is the only unsorted column, and its heading sits over
+                    // the indented icons rather than over the cell's own edge.
                     var t = UIFactory.CreateText(_header, label, 15, GameConfig.UiAccent,
                         TextAnchor.MiddleLeft, FontStyle.Bold);
-                    SpanColumn(t.rectTransform, col, RowPad + 4f, 34f);
+                    SpanColumn(t.rectTransform, col, IconColumnInset, 34f);
                     UIFactory.Fit(t, 10);
                     continue;
                 }
@@ -488,7 +507,7 @@ namespace IronMeridian.UI
             // Icon column: one icon per affiliation shown, side by side when both.
             // Anchored inside the column rather than at an absolute x, so they
             // stay in their cell when the table reflows.
-            float iconX = 6f;
+            float iconX = IconColumnInset;
             if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", def.id, iconX, Columns[0]); iconX += 50f; }
             if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", def.id, iconX, Columns[0]);
 
@@ -573,31 +592,38 @@ namespace IronMeridian.UI
             panel.offsetMin = new Vector2(-(ScreenMargin + PanelW), BottomMargin);
             panel.offsetMax = new Vector2(-ScreenMargin, PanelY);
 
+            // Everything inside the panel is inset by PanelInset on both sides.
+            // The panel is a column of dense text standing against the edge of
+            // the screen, and text that starts at the frame reads as spilling
+            // out of it; the same gutter on both sides is what makes the block
+            // read as a page rather than as a list stuck to a wall.
+            float inner = PanelW - PanelInset * 2f;
+
             _detailName = UIFactory.CreateText(panel, "", 26, GameConfig.UiAccent,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(_detailName.rectTransform, new Vector2(0f, 1f), new Vector2(20, -16), new Vector2(PanelW - 40, 34));
+            UIFactory.Place(_detailName.rectTransform, new Vector2(0f, 1f), new Vector2(PanelInset, -16), new Vector2(inner, 34));
 
             _detailSub = UIFactory.CreateText(panel, "", 15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(_detailSub.rectTransform, new Vector2(0f, 1f), new Vector2(20, -52), new Vector2(PanelW - 40, 22));
+            UIFactory.Place(_detailSub.rectTransform, new Vector2(0f, 1f), new Vector2(PanelInset, -52), new Vector2(inner, 22));
 
             _detailIcons = UIFactory.CreateGroup(panel, "Icons");
-            UIFactory.Place(_detailIcons, new Vector2(0f, 1f), new Vector2(20, -80), new Vector2(PanelW - 40, 46));
+            UIFactory.Place(_detailIcons, new Vector2(0f, 1f), new Vector2(PanelInset, -80), new Vector2(inner, 46));
 
-            var previewSize = new Vector2(PanelW - 40, 300);
+            var previewSize = new Vector2(inner, 300);
             _preview = ModelPreview.Create(panel, previewSize);
             UIFactory.Place((RectTransform)_preview.transform, new Vector2(0f, 1f),
-                new Vector2(20, -134), previewSize);
+                new Vector2(PanelInset, -134), previewSize);
 
             var hint = UIFactory.CreateText(panel, "Drag to orbit · scroll to zoom", 13,
                 GameConfig.UiTextDim, TextAnchor.MiddleRight);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(20, -438), new Vector2(PanelW - 40, 18));
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(PanelInset, -438), new Vector2(inner, 18));
 
             var scroll = UIFactory.CreateScrollView(panel, out _detailStats, withScrollbar: true);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
             srt.pivot = new Vector2(0.5f, 0.5f);
-            srt.offsetMin = new Vector2(16, 16);
-            srt.offsetMax = new Vector2(-16, -462);
+            srt.offsetMin = new Vector2(PanelInset, 16);
+            srt.offsetMax = new Vector2(-PanelInset, -462);
         }
 
         void Select(UnitDefinition def)

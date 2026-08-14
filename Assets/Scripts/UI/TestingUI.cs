@@ -25,10 +25,9 @@ namespace IronMeridian.UI
                 GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(80, -70), new Vector2(600, 80));
 
-            var back = UIFactory.CreateButton(canvas.transform, "< BACK",
+            UIFactory.CreateBackButton(canvas.transform, "BACK TO MAIN MENU",
                 () => SceneManager.LoadScene(GameConfig.SceneMainMenu),
-                GameConfig.UiPanelLight, GameConfig.UiText, 24);
-            UIFactory.Place((RectTransform)back.transform, new Vector2(1f, 1f), new Vector2(-80, -70), new Vector2(180, 60));
+                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
 
             Card(canvas.transform, -580, "MAP EDITOR",
                 "Main game screen.\nCesium 3D terrain over Lyon.\nDeploy units, draw lines, fight.",

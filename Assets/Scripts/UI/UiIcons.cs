@@ -366,6 +366,33 @@ namespace IronMeridian.UI
             Mathf.Max(Seg(u, v, 0.24f, 0.24f, 0.76f, 0.76f, 0.085f),
                       Seg(u, v, 0.76f, 0.24f, 0.24f, 0.76f, 0.085f)));
 
+        /// <summary>
+        /// Go back. A chevron with a shaft behind it rather than a bare "&lt;":
+        /// the shaft is what makes the glyph read as a direction of travel at
+        /// 20 px, which is the whole job of a back control.
+        /// </summary>
+        public static Sprite ArrowLeft => Get(nameof(ArrowLeft), (u, v) =>
+            Mathf.Max(
+                Seg(u, v, 0.88f, 0.50f, 0.26f, 0.50f, 0.085f),
+                Mathf.Max(Seg(u, v, 0.52f, 0.82f, 0.18f, 0.50f, 0.095f),
+                          Seg(u, v, 0.18f, 0.50f, 0.52f, 0.18f, 0.095f))));
+
+        /// <summary>
+        /// Reconnaissance: an eye over a scanned footprint. Used for the recon
+        /// drone, which is the one thing in the UAV menu that looks rather than
+        /// destroys — see docs/19-UAV-STRIKES.md.
+        /// </summary>
+        public static Sprite ReconEye => Get(nameof(ReconEye), (u, v) =>
+        {
+            // Lens: a ring with a pupil, drawn high in the square.
+            float lens = Mathf.Max(RingAt(u, v, 0.5f, 0.62f, 0.24f, 0.075f),
+                                   DiscAt(u, v, 0.5f, 0.62f, 0.10f));
+            // Two sweep bars beneath it, the footprint being looked at.
+            float sweep = Mathf.Max(Seg(u, v, 0.20f, 0.20f, 0.80f, 0.20f, 0.065f),
+                                    Seg(u, v, 0.32f, 0.06f, 0.68f, 0.06f, 0.055f));
+            return Mathf.Max(lens, sweep);
+        });
+
         // --- bottom tool row ---
         public static Sprite Cursor => Get(nameof(Cursor), (u, v) =>
             InPoly(u, v, new[]
