@@ -196,6 +196,64 @@ advance carries a formation out toward its edge, and exploration is forgotten by
 
 ---
 
+## 2b. The mission area
+
+A single-player mission can name the ground it is fought over — a closed polygon
+on the mission record, drawn in the editor's MISSIONS panel. See
+docs/22-MISSIONS.md §1a for how it is authored and stored; what it does to the
+fog is here.
+
+**Outside the area is a fourth tier, above all three others.**
+
+| Tier | Opacity | Cleared by |
+|---|---|---|
+| Watched | clear | Anything of the player's, in bounds |
+| Explored | 0.52 | Having been watched earlier this battle |
+| Unexplored | 0.94 | Being watched |
+| **Out of bounds** | **0.97** | **Nothing** |
+
+**It applies whether or not fog is armed.** A bounded mission blacks out its
+surroundings in battle even with `fogOfWar = false`: the boundary is what the
+scenario *is*, not an intelligence setting. `FogOfWarSystem` splits the two
+questions accordingly —
+
+| Property | True when | Governs |
+|---|---|---|
+| `InEffect` | fog armed **and** battle running | Hiding formations, contacts |
+| `BlanketInEffect` | (fog armed **or** area set) **and** battle running | Whether the blanket is laid at all |
+
+With an area but no fog the blanket runs in **mask-only** mode: everything inside
+is simply clear, and the blanket is doing nothing but framing the battlefield.
+
+**Three further consequences in the sweep:**
+
+- A **watcher outside the area reveals nothing.** It is dropped from the watcher
+  list before the sweep runs — otherwise something standing off the map would
+  punch a hole in the dark from outside the battlefield.
+- An **enemy outside the area is hidden outright**, and gets *no* contact ring. A
+  contact says "this was seen and could still be somewhere"; that is the wrong
+  claim about a formation that is out of the scenario.
+- The grid is **laid over the mission's ground, not the units'**, and never
+  re-fitted. It covers about 1.6 × the area's radius so the dark reaches the edge
+  of the screen — a mask that stopped at the boundary would leave a lit ring of
+  out-of-bounds terrain around it, saying the opposite of what it is for.
+
+**Grid sizing.** The half-extent ceiling is 45 km when the blanket is following
+the units and **200 km** when it is covering an area, or a 120 km scenario would
+have its boundary drawn well inside itself — a mask that lies about where the
+battlefield ends is worse than no mask. Vertices per side then follow the extent
+(80 → 128, aiming at ~1.4 km cells) so a cell stays about the same size on the
+ground: a fixed 80² grid over a 260 km theatre would step in four-kilometre
+blocks.
+
+Which vertices fall inside is computed **once**, when the grid is laid: six to
+sixteen thousand point-in-polygon tests several times a second, for an answer
+that cannot change during a battle, would be the most expensive thing the fog
+does. Changing the area therefore has to re-lay the grid, which
+`FogOfWarSystem.SetArea` does.
+
+---
+
 ## 3. Known leaks
 
 Fog hides the **units**, and now the **ground**. Several derived graphics are
@@ -208,6 +266,7 @@ report enemy positions the player has not earned:
 | Red sectors and FEBA (`SectorSystem`) | Derives the enemy's control measures from where its units stand |
 | Enemy defence lines and markers | `DefenceOrderSystem` graphics are map data and are not fogged |
 | Range rings on a selected enemy | Only reachable if the unit is visible, so minor |
+| Combat across the mission boundary | An out-of-bounds formation is hidden but still fights; `CombatSystem` does not read the area |
 
 The **DEPLOYED list** does *not* leak: hidden formations are excluded from it,
 and a formation that vanishes while selected is deselected so the info panel
@@ -229,7 +288,8 @@ than the fog itself, and is deliberately not in this one.
 | `Assets/Scripts/Units/AxisArrow.cs` | The objective arrow (shared with attack orders) |
 | `Assets/Scripts/Units/UnitActor.cs` | `HiddenByFog`, `SetHiddenByFog` |
 | `Assets/Scripts/Units/RangeRing.cs` | Range volumes — line of sight, weapon range, contact rings |
-| `Assets/Scripts/Units/FogBlanket.cs` | The dark over unobserved ground (§2a) |
+| `Assets/Scripts/Units/FogBlanket.cs` | The dark over unobserved ground (§2a) and outside the mission area (§2b) |
+| `Assets/Scripts/Data/MissionArea.cs` | The mission boundary: containment, extent, clamping (§2b) |
 | `Assets/Scripts/UI/UnitPaletteUI.cs` | **GENERAL → INTELLIGENCE** toggles (line of sight, fog) |
 | `Assets/Scripts/Core/GameController.cs` | `SetLineOfSightVisible`, ring captions |
 | `Assets/Scripts/UI/UnitActionBarUI.cs` | The RECON button and its submenu |

@@ -159,7 +159,7 @@ It will: find the source FBXs, switch their rigs to Legacy (reimporting if neede
 
 | Screen | What it shows | File |
 |---|---|---|
-| Testing → Units List | Detail panel on the right: the selected unit type's model playing `combat_idle`, orbitable by drag, zoomable by scroll | `UnitsListUI.BuildDetailPanel` → `ModelPreview` |
+| Development → Units and Weapons | Detail panel on the right: the selected unit type's model playing `combat_idle`, orbitable by drag, zoomable by scroll. The AIR STRIKES and UAV STRIKES tabs preview their `modelId` the same way, through `ModelPreview.ShowModel` | `UnitsListUI.RefreshPreview` → `ModelPreview` |
 | Map editor → in flight | The strike airframes over the map: bomber, fighter, helicopter, attack drones and the reconnaissance drone on its orbit | `BomberRun`, `DroneRun`, `ReconDroneRun`, `MissileRun` |
 
 **Add a row here whenever a model appears somewhere new.**
@@ -194,7 +194,7 @@ QuickOutline works here and only here. It extrudes geometry along vertex normals
 3. **Assign it**: add per-unit-id entries to `UnitModelLibrary.Overrides`, or extend `DefaultFor` if it is a category-wide stand-in.
 4. **Register the source FBXs** in `ModelInstaller` (`SourceModelFbx` / `Clips`) if the installer must generate a prefab for it.
 5. **Run Tools → Iron Meridian → Install Unit Models.**
-6. **Check the preview**: Play → Testing → Units List → click the unit. Console must be clean.
+6. **Check the preview**: Play → Development → Units and Weapons → click the unit. Console must be clean.
 7. **Update this file** — the register in §1 *and*, if it appears somewhere new, the usage table in §3.
 
 ### Animation clip naming

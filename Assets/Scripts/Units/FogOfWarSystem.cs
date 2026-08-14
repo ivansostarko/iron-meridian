@@ -94,6 +94,7 @@ namespace IronMeridian.Units
             _geo = geo;
             _clock = clock;
             _blanket = FogBlanket.Create(geo);
+            _blanket.SetArea(null, maskOnly: true);
             Active = this;
         }
 
@@ -105,10 +106,51 @@ namespace IronMeridian.Units
         /// <summary>True while fog is actually blinding the player — armed *and* in battle.</summary>
         public bool InEffect => Enabled && CombatSystem.BattleRunning;
 
+        /// <summary>
+        /// The mission's ground. Set from the mission record when one is opened;
+        /// null in the editor and for an unbounded mission.
+        /// </summary>
+        MissionArea _area;
+
+        public bool HasArea => _area != null && _area.HasArea;
+
+        /// <summary>
+        /// True while the terrain blanket should be laid: fog armed, **or** the
+        /// mission bounds its ground. A bounded mission blacks out everything
+        /// outside its area in battle whether or not the player is fighting
+        /// blind — the boundary is what the scenario is, not an intelligence
+        /// setting. See <see cref="MissionArea"/>.
+        /// </summary>
+        public bool BlanketInEffect => (Enabled || HasArea) && CombatSystem.BattleRunning;
+
+        /// <summary>
+        /// Points the fog at a mission's ground. Safe to call with null (the
+        /// editor's own map) and safe to call repeatedly.
+        /// </summary>
+        public void SetArea(MissionArea area)
+        {
+            _area = area != null && area.HasArea ? area : null;
+            if (_blanket != null) _blanket.SetArea(_area, maskOnly: !Enabled);
+            _blanketLaid = false;
+        }
+
+        /// <summary>
+        /// Whether a formation is on the mission's ground at all. Anything
+        /// outside it is off the battlefield: it is hidden from the player, and
+        /// it is not tracked as a contact either, because a contact states that
+        /// something was seen *and could still be somewhere* — which is the
+        /// wrong claim about a formation that is out of the scenario.
+        /// </summary>
+        public bool InBounds(UnitActor unit) =>
+            unit == null || _area == null || _area.Contains(unit.State.latitude, unit.State.longitude);
+
         public void SetEnabled(bool on)
         {
             if (Enabled == on) return;
             Enabled = on;
+            // The blanket's job changes with the switch even when it stays up:
+            // armed it tracks what is watched, disarmed it only frames the area.
+            if (_blanket != null) _blanket.SetArea(_area, maskOnly: !on);
             if (!InEffect) RevealAll();
             EnabledChanged?.Invoke(on);
         }
@@ -143,10 +185,10 @@ namespace IronMeridian.Units
             if (_timer > 0f) return;
             _timer = SweepSeconds;
 
-            if (!InEffect)
+            if (!BlanketInEffect)
             {
-                // Covers both "fog off" and "battle stopped" without either
-                // caller having to remember to clean up.
+                // Covers "fog off with no area" and "battle stopped" without
+                // either caller having to remember to clean up.
                 if (_contacts.Count > 0 || AnyHidden()) RevealAll();
                 if (_blanket != null) _blanket.SetWanted(false);
                 return;
@@ -158,12 +200,37 @@ namespace IronMeridian.Units
         void Sweep()
         {
             var watchers = new List<UnitActor>(UnitRegistry.OfTeam(Team.User));
+            // Something standing off the mission's ground is not watching any of
+            // it — and letting it clear the blanket would punch a hole in the
+            // dark from outside the battlefield.
+            watchers.RemoveAll(w => !InBounds(w));
 
             UpdateBlanket(watchers);
 
             foreach (var enemy in new List<UnitActor>(UnitRegistry.OfTeam(Team.Enemy)))
             {
                 if (enemy == null || !enemy.IsAlive) continue;
+
+                // Off the battlefield: hidden outright, no contact kept.
+                if (!InBounds(enemy))
+                {
+                    if (!enemy.HiddenByFog)
+                    {
+                        enemy.SetHiddenByFog(true);
+                        UnitHidden?.Invoke(enemy);
+                    }
+                    DropContact(enemy);
+                    continue;
+                }
+
+                // In bounds and fog disarmed: the area is framing the battle,
+                // not blinding the player, so nothing is hidden.
+                if (!InEffect)
+                {
+                    if (enemy.HiddenByFog) enemy.SetHiddenByFog(false);
+                    DropContact(enemy);
+                    continue;
+                }
 
                 bool held = _contacts.ContainsKey(enemy);
                 bool seen = Detected(enemy, watchers, held ? 0f : HoldHysteresisKm);
@@ -202,15 +269,18 @@ namespace IronMeridian.Units
             _blanket.SetWanted(true);
 
             // Lay the grid on the first sweep of a battle, and re-lay it if the
-            // advance has carried a formation out toward the edge of it.
+            // advance has carried a formation out toward the edge of it. A
+            // bounded mission never re-fits: the grid covers the mission's own
+            // ground and is not supposed to follow anybody off it.
             bool refit = !_blanketLaid;
-            if (!refit)
+            if (!refit && !HasArea)
                 foreach (var w in watchers)
                     if (_blanket.NeedsRefit(w)) { refit = true; break; }
 
             if (refit)
             {
-                _blanket.Fit(UnitRegistry.All);
+                if (HasArea) _blanket.FitToArea(_area);
+                else _blanket.Fit(UnitRegistry.All);
                 _blanketLaid = true;
             }
 

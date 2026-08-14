@@ -37,6 +37,14 @@ namespace IronMeridian.Audio
             src.Play();
         }
 
+        /// <summary>
+        /// The UI click, so the DEVELOPMENT → AUDIO screen can list it with
+        /// everything else. It is the one sound in the game with no catalogue
+        /// row, because it has no file — leaving it off the register would make
+        /// the register wrong rather than short.
+        /// </summary>
+        public static AudioClip ClickClip => BuildClick();
+
         static AudioClip _click;
         static AudioClip BuildClick()
         {

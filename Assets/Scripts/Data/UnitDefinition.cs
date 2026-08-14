@@ -87,6 +87,14 @@ namespace IronMeridian.Data
             }
         }
 
+        /// <summary>
+        /// Drops the parsed-<see cref="branch"/> cache. Anything that writes to
+        /// <see cref="branch"/> after load — the tuning layer, and the
+        /// DEVELOPMENT screen's editor — must call this, or the record keeps
+        /// reporting the arm of service it had when it was first read.
+        /// </summary>
+        public void RefreshDerived() => _branch = null;
+
         /// <summary>True for types that stand on the ground and can take terrain.</summary>
         public bool HoldsGround => Category == UnitCategory.CoreGround;
 
@@ -128,6 +136,17 @@ namespace IronMeridian.Data
             _all = file.units;
             _byId = new Dictionary<string, UnitDefinition>();
             foreach (var u in _all) _byId[u.id] = u;
+
+            // The player's own tuning goes on last, over the generated file, so
+            // regenerating units.json never silently discards it and the values
+            // the game fights with are the ones the DEVELOPMENT screen shows.
+            // See Save.TuningStore and docs/04-UNITS.md.
+            foreach (var u in _all)
+            {
+                Save.TuningStore.Apply(GameCatalogs.Units, u.id, u);
+                u.RefreshDerived();
+            }
+
             Debug.Log($"[UnitDatabase] Loaded {_all.Count} unit definitions.");
         }
     }

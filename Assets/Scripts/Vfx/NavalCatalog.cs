@@ -262,11 +262,22 @@ namespace IronMeridian.Vfx
             }
         };
 
-        public static IReadOnlyList<NavalGunDef> All => Defs;
+        /// <summary>Applies the player's tuning of these guns — see <see cref="Save.TuningStore"/>.</summary>
+        static bool _tuned;
+        static void EnsureTuned()
+        {
+            if (_tuned) return;
+            _tuned = true;      // set first: Apply must never re-enter this
+            foreach (var d in Defs)
+                Save.TuningStore.Apply(Data.GameCatalogs.Naval, d.gun.ToString(), d);
+        }
+
+        public static IReadOnlyList<NavalGunDef> All { get { EnsureTuned(); return Defs; } }
 
         /// <summary>Guns from one fleet, ascending by calibre.</summary>
         public static IEnumerable<NavalGunDef> OfOrigin(NavalOrigin origin)
         {
+            EnsureTuned();
             foreach (var d in Defs) if (d.origin == origin) yield return d;
         }
 
@@ -274,6 +285,7 @@ namespace IronMeridian.Vfx
 
         public static NavalGunDef Get(NavalGun gun)
         {
+            EnsureTuned();
             if (_byGun == null)
             {
                 _byGun = new Dictionary<NavalGun, NavalGunDef>(Defs.Length);

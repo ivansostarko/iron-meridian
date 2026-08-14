@@ -49,8 +49,31 @@ All of these are edited in the map editor's **MISSIONS** panel. `MissionDefiniti
 | `startDateTime` | H-hour — docs/13-DATE-AND-TIME.md |
 | `skyPhase`, `weatherCondition`, `autoDayNight` | Weather — docs/14-WEATHER.md |
 | `fogOfWar` | Armed on entry. The one editor toggle a mission decides for the player, because a mission is a fight rather than a layout exercise |
+| `area` | The ground the mission is fought over — a closed polygon. Empty means unbounded. See §1a |
 | `order` | Position on its campaign board, ascending |
 | `available` | False hides a work-in-progress mission from the board without deleting it |
+
+---
+
+## 1a. The mission area
+
+`MissionArea` in `Assets/Scripts/Data/MissionArea.cs`. A list of WGS84 vertices, implicitly closed, drawn in the editor's MISSIONS panel and stored on the mission record — **not** in the map file, because the same ground can carry two missions with different boundaries and the boundary has to survive the map being re-saved.
+
+**Fewer than three vertices means no area**, which is the state of every mission written before this existed and is read as *unbounded*. Everything below is then switched off.
+
+It does three things at once, and they are the same thing:
+
+| It bounds… | How | Where |
+|---|---|---|
+| **the battle** | The camera's focus is clamped to the polygon, and the zoom-out ceiling drops to about 2.4 × the area's radius. **In battle only** — the editor has to be able to fly outside an area to draw it | `CameraRig.ClampFocus` / `SetMaxDistance`, driven by `GameController.ApplyMissionArea` |
+| **what is shown** | Terrain outside the polygon is blacked out at `MissionArea.OutsideOpacity` and stays that way whatever anybody can see. This happens **whether or not fog of war is armed** — the boundary is what the scenario *is*, not an intelligence setting | `FogBlanket`, see docs/16-FOG-OF-WAR.md §2a |
+| **intelligence** | A formation outside the area is off the battlefield: hidden outright, and *not* tracked as a contact. A watcher outside the area reveals nothing, or it would punch a hole in the dark from off the map | `FogOfWarSystem.InBounds` |
+
+**Point-in-polygon runs in plate carrée.** The even-odd crossing test is exact in any consistent planar frame, and lon/lat is one over ground a battle is fought on. It would be wrong for an area straddling the antimeridian or a pole — neither of which a scenario can usefully cover. Area and radius figures use the local east/north plane instead, because a degree of longitude is 111 km at the equator and 71 km at Lyon and the number is shown to somebody sizing a battlefield.
+
+**Which vertices of the fog grid fall inside is baked once**, when the grid is laid, not per sweep: the answer cannot change for the length of a battle, and thousands of point-in-polygon tests several times a second for a constant would be the most expensive thing the fog does. See docs/16-FOG-OF-WAR.md §2b for how the grid is sized to the area.
+
+**Clamping slides along the edge** rather than snapping to the centre. A camera that jumped to the middle of the map when it touched the boundary would be unusable; one that slides feels like a wall.
 
 ---
 
@@ -83,7 +106,7 @@ Main menu → SINGLE PLAYER        SinglePlayerUI (campaign board)
   ↓ playing                      Esc / P → PauseMenuUI, EXIT returns to SINGLE PLAYER
 ```
 
-**One scene does both jobs.** The Game scene is the map editor reached from Testing *and* what a mission is played in — deliberately, because a mission is a map with an order of battle on it, and a second scene would be the same dozen systems wired the same way under a different name. What a mission changes is where the map opens, what the HUD's identity block says, and where BACK and EXIT go.
+**One scene does both jobs.** The Game scene is the map editor reached from DEVELOPMENT *and* what a mission is played in — deliberately, because a mission is a map with an order of battle on it, and a second scene would be the same dozen systems wired the same way under a different name. What a mission changes is where the map opens, what the HUD's identity block says, and where BACK and EXIT go.
 
 **Two pages, one scene, for the menus too.** The campaign board and the mission board share a background, a music bed and a frame, and moving between them has to be instant — a scene load between two pages of a menu would put a loading screen in the middle of picking something.
 
@@ -95,7 +118,7 @@ Main menu → SINGLE PLAYER        SinglePlayerUI (campaign board)
 
 ## 4. Authoring a mission
 
-Map editor (Testing → Map Editor) → **MISSIONS** in the left rail.
+Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The panel scrolls — it is the one section that outgrew the rail, and its controls are placed at absolute offsets, so the whole page sits inside a scroll view rather than being reflowed into a stack.
 
 | Control | What it does |
 |---|---|
@@ -105,9 +128,17 @@ Map editor (Testing → Map Editor) → **MISSIONS** in the left rail.
 | Name / location / briefing | The board's text |
 | Start point, start altitude | Where the mission opens |
 | **FOG OF WAR** | Armed on entry |
+| **MISSION AREA** readout | `UNBOUNDED`, or `BOUNDED` with corner count, km² and radius |
+| **DRAW AREA ON MAP** | Click the corners on the terrain. Right-click or Enter closes it (min 3), Backspace undoes a corner, Esc cancels |
+| **20 KM / 50 KM / 120 KM** | Replaces the area with a box that wide, centred on the point the camera is looking at |
+| **CLEAR AREA** | Drops the area — the mission is unbounded again |
 | **SAVE MISSION + MAP** | Writes the record **and** the current map |
 | **NEW MISSION HERE** | Starts one at the point the camera is looking at, in the chosen campaign |
 | **DELETE MISSION** | Removes it from the board, after a confirmation |
+
+**Three box sizes rather than a number field.** Those are the scales a scenario is actually laid out at — a town, a corps sector, a theatre — and typing `37` would be a decision nobody has a reason to make. Draw the polygon when the ground has a shape worth following; press a box when it does not.
+
+**The area overlay is always visible** while a mission is open, drawing or not, in amber and wider than a control measure. It is deliberately not the doctrinal boundary yellow: this is the edge of the scenario, not a control measure somebody drew for the troops, and the two must never read as the same object. It is built directly rather than through `LineManager`, which is what keeps it out of `MapSaveData.lines`.
 
 **Picking a mission and opening it are separate on purpose.** Choosing one in the dropdown to correct its briefing is cheap; loading its map throws away whatever is on the editor's map right now, and that should take a deliberate second click.
 
@@ -124,11 +155,13 @@ Map editor (Testing → Map Editor) → **MISSIONS** in the left rail.
 | Script | Role |
 |---|---|
 | `Data/MissionData.cs` | `Campaign`, `CampaignInfo`, `MissionDefinition`, `MissionBook` |
+| `Data/MissionArea.cs` | The mission's boundary polygon: containment, extent, clamping, and the rectangle builder |
+| `Lines/MissionAreaTool.cs` | Click-to-draw the boundary, and the always-on overlay that shows it |
 | `Save/MissionLibrary.cs` | Read / write / create / delete, the map fallback, and the `Selected` hand-off |
 | `UI/SinglePlayerUI.cs` | The campaign board and the mission board |
 | `Core/SceneLoader.cs` | Async scene load behind the standard overlay |
 | `UI/UnitPaletteUI.cs` | `BuildMissionsSection` — the editor panel |
-| `Core/GameController.cs` | `OpenMission` / `SaveMission` / `CreateMissionHere` / `DeleteMission`, and reading `MissionLibrary.Selected` at startup |
+| `Core/GameController.cs` | `OpenMission` / `SaveMission` / `CreateMissionHere` / `DeleteMission` / `ApplyMissionArea`, and reading `MissionLibrary.Selected` at startup |
 | `UI/GameHUD.cs` | `SetTitle`, `HomeScene` — the bar says which job the scene is doing |
 | `UI/PauseMenuUI.cs` | `ExitScene` — where EXIT goes |
 
@@ -142,7 +175,9 @@ Map editor (Testing → Map Editor) → **MISSIONS** in the left rail.
 - **No objectives, no victory condition, no scoring.** A mission is a place and a force; nothing yet says what winning is.
 - **No progression.** Every mission is available from the start; `order` decides where it sits on the board and nothing gates it.
 - **No campaign-level state.** Missions do not carry losses forward, and finishing one does not change another.
-- **The editor's undo does not cover mission edits.** Ctrl+Z tracks unit placements, not the MISSIONS panel's fields.
+- **The editor's undo does not cover mission edits.** Ctrl+Z tracks unit placements, not the MISSIONS panel's fields — including the area.
+- **Nothing stops a unit being deployed outside the mission area.** The editor will place it and the battle will hide it, which is honest but unhelpful; a warning at deploy time would be better.
+- **The area does not constrain the AI or movement orders.** A formation ordered across the boundary will march across it and disappear rather than refusing the order.
 
 ---
 

@@ -114,14 +114,36 @@ namespace IronMeridian.Models
         /// </summary>
         public void Show(UnitDefinition unit)
         {
+            Show(UnitModelLibrary.Resolve(unit), unit == null
+                ? "Select a unit to preview its model."
+                : $"No 3D model for {unit.name} yet.\nSee docs/09-3D-MODELS.md.");
+        }
+
+        /// <summary>
+        /// Shows a model by its <see cref="UnitModelLibrary"/> id — the route
+        /// the weapon catalogues take, since an airframe or a UAV is a
+        /// <c>modelId</c> on a strike definition rather than a unit type.
+        /// Still through the library, never a Resources path (golden rule 10).
+        /// </summary>
+        public void ShowModel(string modelId, string what)
+        {
+            if (string.IsNullOrEmpty(modelId))
+            {
+                Show(null, $"{what} has no 3D model.\nSee docs/09-3D-MODELS.md.");
+                return;
+            }
+            Show(UnitModelLibrary.Get(modelId),
+                $"Model '{modelId}' is not registered.\nSee docs/09-3D-MODELS.md.");
+        }
+
+        /// <summary>Swaps in a resolved model, or explains why there is not one.</summary>
+        public void Show(UnitModelDef def, string missingMessage)
+        {
             ClearModel();
 
-            var def = UnitModelLibrary.Resolve(unit);
             if (def == null)
             {
-                ShowPlaceholder(unit == null
-                    ? "Select a unit to preview its model."
-                    : $"No 3D model for {unit.name} yet.\nSee docs/09-3D-MODELS.md.");
+                ShowPlaceholder(missingMessage);
                 return;
             }
 

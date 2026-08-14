@@ -228,12 +228,23 @@ namespace IronMeridian.Vfx
             }
         };
 
-        public static IReadOnlyList<AircraftDef> All => Defs;
+        /// <summary>Applies the player's tuning of these airframes — see <see cref="Save.TuningStore"/>.</summary>
+        static bool _tuned;
+        static void EnsureTuned()
+        {
+            if (_tuned) return;
+            _tuned = true;      // set first: Apply must never re-enter this
+            foreach (var d in Defs)
+                Save.TuningStore.Apply(Data.GameCatalogs.AirStrike, d.aircraft.ToString(), d);
+        }
+
+        public static IReadOnlyList<AircraftDef> All { get { EnsureTuned(); return Defs; } }
 
         static Dictionary<StrikeAircraft, AircraftDef> _byAircraft;
 
         public static AircraftDef Get(StrikeAircraft aircraft)
         {
+            EnsureTuned();
             if (_byAircraft == null)
             {
                 _byAircraft = new Dictionary<StrikeAircraft, AircraftDef>(Defs.Length);

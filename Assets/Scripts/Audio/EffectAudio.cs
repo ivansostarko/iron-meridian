@@ -203,5 +203,32 @@ namespace IronMeridian.Audio
             _clips[sound] = clip;
             return clip;
         }
+
+        // ------------------------------------------------------ registry access
+        // The DEVELOPMENT screens list every sound the game can make and play it
+        // outside the world. They go through these rather than reaching for
+        // Resources themselves, so what the lab plays is exactly what a burst
+        // plays — including the synthesised stand-in when no file is installed.
+
+        /// <summary>The clip this sound resolves to: the installed file, or the synthesised stand-in.</summary>
+        public static AudioClip Clip(EffectSound sound) =>
+            sound == EffectSound.None ? null : Resolve(sound);
+
+        /// <summary>
+        /// Where this sound's file is looked for under <c>Resources</c>, or an
+        /// empty string for a sound that is only ever synthesised.
+        /// </summary>
+        public static string ResourcePath(EffectSound sound) =>
+            ResourcePaths.TryGetValue(sound, out string path) ? path : "";
+
+        /// <summary>True when a real file was found; false means the clip is synthesised.</summary>
+        public static bool HasInstalledFile(EffectSound sound)
+        {
+            string path = ResourcePath(sound);
+            return !string.IsNullOrEmpty(path) && Resources.Load<AudioClip>(path) != null;
+        }
+
+        /// <summary>True for the sounds that run until their caller stops them.</summary>
+        public static bool IsLooping(EffectSound sound) => Loops(sound);
     }
 }

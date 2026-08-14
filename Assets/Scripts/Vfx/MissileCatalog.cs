@@ -305,12 +305,23 @@ namespace IronMeridian.Vfx
             }
         };
 
-        public static IReadOnlyList<MissileSystemDef> All => Defs;
+        /// <summary>Applies the player's tuning of these systems — see <see cref="Save.TuningStore"/>.</summary>
+        static bool _tuned;
+        static void EnsureTuned()
+        {
+            if (_tuned) return;
+            _tuned = true;      // set first: Apply must never re-enter this
+            foreach (var d in Defs)
+                Save.TuningStore.Apply(Data.GameCatalogs.Missiles, d.id.ToString(), d);
+        }
+
+        public static IReadOnlyList<MissileSystemDef> All { get { EnsureTuned(); return Defs; } }
 
         static Dictionary<MissileSystemId, MissileSystemDef> _byId;
 
         public static MissileSystemDef Get(MissileSystemId id)
         {
+            EnsureTuned();
             if (_byId == null)
             {
                 _byId = new Dictionary<MissileSystemId, MissileSystemDef>(Defs.Length);
@@ -322,6 +333,7 @@ namespace IronMeridian.Vfx
         /// <summary>Systems of one inventory, in catalogue order.</summary>
         public static IEnumerable<MissileSystemDef> OfOrigin(MissileOrigin origin)
         {
+            EnsureTuned();
             foreach (var d in Defs)
                 if (d.origin == origin) yield return d;
         }

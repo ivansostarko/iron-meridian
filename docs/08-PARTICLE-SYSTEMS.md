@@ -277,6 +277,19 @@ Offensive tasks add three call sites on top of the automatic exchange above. See
 
 Nothing. Every catalogue row now has at least one call site.
 
+### The effects lab
+
+**DEVELOPMENT → PARTICLE EFFECTS** (`EffectsListUI` + `VfxPreview`) plays every row of §2 in 3D, on a ground plane, looping, with the sound it carries.
+
+It exists because the catalogue is the register of what the game can draw, and the only other way to see an entry was to make the event that triggers it happen on the map — which for half these rows means calling a fire mission and watching a 300 m burst from 20 km up.
+
+Two things about it are deliberate:
+
+- **Effects are shown at their authored size** — roughly one world unit — not at `scaleMeters`. A 760 m missile burst rendered at 760 units is a wall of orange; the lab is for seeing an effect's *shape*, and the metre figure is written beside it in words.
+- **It resolves prefabs and audio the way the game does**, through `VfxSystem.LoadPrefab` and `EffectAudio`, and reports which one it got. A row that falls back to a procedural stand-in in the lab is one that falls back on the map — which given §4 is the single most useful thing the screen says.
+
+The preview rig is the same device `ModelPreview` uses: a parked container far below the scene, its own camera, a `RenderTexture` on a `RawImage`. Sound is played 2D from the screen rather than through `EffectAudio.PlayAt`, whose kilometre rolloff would be silent at that distance.
+
 ---
 
 ## 4. Render pipeline — read this before using the authored pack
@@ -332,6 +345,7 @@ World-anchored effects (wrecks, aftermath sites) deliberately outlive their unit
 5. **Call it** via `VfxSystem.Play` / `Attach` / a composite helper. Throttle anything that can fire per combat tick.
 6. **If it uses an authored prefab**, put the prefab name in the catalogue and run **Tools → Iron Meridian → Install VFX Prefabs**.
 7. **Update this file** — the catalogue table in §2 *and* the usage table in §3.
+8. **Check it in the lab** — DEVELOPMENT → PARTICLE EFFECTS. The new row appears there automatically; confirm it plays, that SOURCE says what you expect, and that its sound is the one you meant.
 
 ---
 

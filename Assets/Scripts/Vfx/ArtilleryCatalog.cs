@@ -327,11 +327,27 @@ namespace IronMeridian.Vfx
             }
         };
 
-        public static IReadOnlyList<ArtilleryDef> All => Defs;
+        /// <summary>
+        /// Applies the player's tuning of these natures — see
+        /// <see cref="Save.TuningStore"/>. Every accessor below runs it first,
+        /// so the values the game fires with and the values the DEVELOPMENT
+        /// screen shows cannot drift apart.
+        /// </summary>
+        static bool _tuned;
+        static void EnsureTuned()
+        {
+            if (_tuned) return;
+            _tuned = true;      // set first: Apply must never re-enter this
+            foreach (var d in Defs)
+                Save.TuningStore.Apply(Data.GameCatalogs.Artillery, d.caliber.ToString(), d);
+        }
+
+        public static IReadOnlyList<ArtilleryDef> All { get { EnsureTuned(); return Defs; } }
 
         /// <summary>Natures from one inventory, mortars first then guns, ascending by calibre.</summary>
         public static IEnumerable<ArtilleryDef> OfOrigin(ArtilleryOrigin origin)
         {
+            EnsureTuned();
             foreach (var d in Defs) if (d.origin == origin && d.kind == ArtilleryKind.Mortar) yield return d;
             foreach (var d in Defs) if (d.origin == origin && d.kind == ArtilleryKind.Gun) yield return d;
         }
@@ -340,6 +356,7 @@ namespace IronMeridian.Vfx
 
         public static ArtilleryDef Get(ArtilleryCaliber caliber)
         {
+            EnsureTuned();
             if (_byCaliber == null)
             {
                 _byCaliber = new Dictionary<ArtilleryCaliber, ArtilleryDef>(Defs.Length);

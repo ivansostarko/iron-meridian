@@ -259,12 +259,23 @@ namespace IronMeridian.Vfx
             }
         };
 
-        public static IReadOnlyList<UavDef> All => Defs;
+        /// <summary>Applies the player's tuning of these types — see <see cref="Save.TuningStore"/>.</summary>
+        static bool _tuned;
+        static void EnsureTuned()
+        {
+            if (_tuned) return;
+            _tuned = true;      // set first: Apply must never re-enter this
+            foreach (var d in Defs)
+                Save.TuningStore.Apply(Data.GameCatalogs.Uav, d.uav.ToString(), d);
+        }
+
+        public static IReadOnlyList<UavDef> All { get { EnsureTuned(); return Defs; } }
 
         static Dictionary<UavType, UavDef> _byType;
 
         public static UavDef Get(UavType type)
         {
+            EnsureTuned();
             if (_byType == null)
             {
                 _byType = new Dictionary<UavType, UavDef>(Defs.Length);

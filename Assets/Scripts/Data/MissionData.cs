@@ -140,6 +140,14 @@ namespace IronMeridian.Data
         public bool fogOfWar = true;
 
         /// <summary>
+        /// The ground this mission is fought over, drawn in the editor's
+        /// MISSIONS panel. Empty on every mission written before this existed,
+        /// which means unbounded and is the correct reading of an old file —
+        /// see <see cref="MissionArea"/>.
+        /// </summary>
+        public MissionArea area = new MissionArea();
+
+        /// <summary>
         /// Position within its campaign board, ascending. Ties fall back to the
         /// order the file lists them in, so a hand-edited file with no orders at
         /// all still reads sensibly.
@@ -178,6 +186,10 @@ namespace IronMeridian.Data
             weatherCondition = weatherCondition,
             autoDayNight = autoDayNight,
             fogOfWar = fogOfWar,
+            // Deep-copied: the area is a reference type shared with the live
+            // editor overlay, and a shallow copy would track later edits rather
+            // than recording the mission as it stood.
+            area = area?.Clone() ?? new MissionArea(),
             order = order,
             available = available
         };

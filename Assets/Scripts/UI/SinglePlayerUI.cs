@@ -184,7 +184,7 @@ namespace IronMeridian.UI
             if (missions.Count == 0)
             {
                 Empty("No missions in this campaign yet. Add one from the map editor's " +
-                      "MISSIONS panel — Testing → Map Editor.");
+                      "MISSIONS panel — Development → Map Editor.");
                 return;
             }
 

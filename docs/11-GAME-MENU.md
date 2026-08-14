@@ -53,7 +53,7 @@ All three layers set `raycastTarget = false`, so the background never intercepts
 
 | Asset | Path | Resource path | Screens | Scrim | Description |
 |---|---|---|---|---|---|
-| Default menu artwork | `Assets/Resources/Backgrounds/default_background.png` | `Backgrounds/default_background` | Main Menu, Settings, Testing, Units List, East France — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
+| Default menu artwork | `Assets/Resources/Backgrounds/default_background.png` | `Backgrounds/default_background` | Main Menu, Settings, Development, Units and Weapons, Particle Effects, Audio, East France — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
 | Single player | *not supplied yet* | `Backgrounds/single_player` | Single Player | 0.62 | **Awaiting artwork.** Falls back to the default image. |
 | Multiplayer | *not supplied yet* | `Backgrounds/multiplayer` | Multiplayer | 0.62 | **Awaiting artwork.** Falls back to the default image. |
 | Extras | *not supplied yet* | `Backgrounds/extras` | Extras | 0.62 | **Awaiting artwork.** Falls back to the default image. |
@@ -93,7 +93,9 @@ Map terrain and imagery are streamed by Cesium, not shipped as textures — see 
 | Main Menu | `MainMenu` | Default | 0.42 | Artwork behind the command board. The scrim is lighter than a working screen's because the board carries its own darker field down the left-hand edge, so the artwork on the right stays close to how it was authored. The board's entries now sit in a **scroll view** between the masthead and the footer, so the list can outgrow a short window instead of running off the bottom of it — see §3.1. |
 | Single Player | `SinglePlayer` | Single Player | 0.62 | Behind the campaign board and the mission board — two pages of one scene. See docs/22-MISSIONS.md. |
 | Settings | `Settings` | Default | 0.62 | Behind the Video/Audio tab panels. |
-| Testing | `Testing` | Default | 0.62 | Behind the scenario cards. |
+| Development | `Testing` | Default | 0.62 | Behind the hub's card grid. |
+| Particle Effects | `EffectsList` | Default | 0.86 | Dense table + 3D preview; the heavier scrim keeps rows legible. |
+| Audio | `AudioList` | Default | 0.86 | Dense table + transport; same scrim as the other data screens. |
 | Units List | `UnitsList` | Default | **0.86** | Dense table and stat panel — legibility beats atmosphere. |
 | East France | `EastFrance` | Default | 0.62 | Behind the "under development" placeholder. |
 | Map editor / game | `Game` | **None** | — | Deliberate: the Cesium globe *is* the background. A full-screen image would cover the map. |

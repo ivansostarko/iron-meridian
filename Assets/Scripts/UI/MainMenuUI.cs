@@ -19,7 +19,7 @@ namespace IronMeridian.UI
     ///   and gives the menu a place to grow into.
     ///
     /// • **Six unlabelled words are not a menu, they are a list.** "EXTRAS" and
-    ///   "TESTING" told a returning player nothing and a new one less. Every
+    ///   "DEVELOPMENT" told a returning player nothing and a new one less. Every
     ///   entry now carries a one-line description of what is behind it, which is
     ///   the difference between a menu you read and a menu you guess at.
     ///
@@ -189,8 +189,8 @@ namespace IronMeridian.UI
             MenuEntry(content, UiIcons.Person, "MULTIPLAYER",
                 "Take one side against another commander",
                 () => SceneManager.LoadScene(GameConfig.SceneMultiplayer));
-            MenuEntry(content, UiIcons.Layers, "TESTING",
-                "The map editor, the unit catalogue and the development scenarios",
+            MenuEntry(content, UiIcons.Layers, "DEVELOPMENT",
+                "The map editor and the reference labs — units, effects and audio",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting));
             MenuEntry(content, UiIcons.Chart, "EXTRAS",
                 "Background material, credits and reference reading",

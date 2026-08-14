@@ -114,4 +114,4 @@ Positions are geodetic (WGS84), so saves are independent of the Unity scene orig
 
 ## Creating a new scenario
 
-Copy `lyon_dev.json`, change `mapName`, `centerLatitude/Longitude`, edit the `units` array, and point `GameController.mapFileName` at the new file (or extend `TestingUI` with a new card).
+Copy `lyon_dev.json`, change `mapName`, `centerLatitude/Longitude`, edit the `units` array, and point `GameController.mapFileName` at the new file (or extend `TestingUI` — the DEVELOPMENT hub — with a new card).

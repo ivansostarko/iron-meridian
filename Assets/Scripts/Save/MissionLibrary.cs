@@ -99,7 +99,15 @@ namespace IronMeridian.Save
             // A record with no id cannot be saved, deleted or given a map file,
             // so give it one now rather than letting it fail later.
             foreach (var m in book.missions)
+            {
                 if (string.IsNullOrEmpty(m.id)) m.id = MakeId(m.name);
+                // Missions written before areas existed have no `area` object at
+                // all, and one written by hand can have a null point list. Both
+                // mean "unbounded", and every reader is entitled to a non-null
+                // area to ask that question of.
+                if (m.area == null) m.area = new MissionArea();
+                if (m.area.points == null) m.area.points = new List<GeoPoint>();
+            }
 
             Debug.Log($"[Missions] Loaded {book.missions.Count} mission(s) from {path}");
             return book;

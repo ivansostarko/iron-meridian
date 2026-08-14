@@ -28,7 +28,7 @@ namespace IronMeridian.UI
                 26, GameConfig.UiTextDim);
             UIFactory.Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, -90), new Vector2(1200, 60));
 
-            UIFactory.CreateBackButton(canvas.transform, "BACK TO TESTING",
+            UIFactory.CreateBackButton(canvas.transform, "BACK TO DEVELOPMENT",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting),
                 new Vector2(0.5f, 0f), new Vector2(0, 90), new Vector2(360, 66));
         }

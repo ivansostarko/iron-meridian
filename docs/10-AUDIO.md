@@ -65,7 +65,7 @@ There is currently **one** volume slider (master). Separate music/ambience/SFX b
 
 | Asset | Path | Resource path | Screens | Level | Loop | Description |
 |---|---|---|---|---|---|---|
-| Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **All six**: Main Menu, Settings, Testing, Units List, East France, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
+| Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **Every screen except the two labs**: Main Menu, Settings, Development, Units and Weapons, East France, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
 
 | Single player | *not supplied yet* | `Audio/main-menu/single_player` | Single Player | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
 | Multiplayer | *not supplied yet* | `Audio/main-menu/multiplayer` | Multiplayer | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
@@ -187,8 +187,10 @@ Tracked so the inventory stays honest and licensing stays traceable.
 |---|---|---|---|---|---|
 | Main Menu | `MainMenu` | Menu theme | — | — | Click |
 | Settings | `Settings` | Menu theme | — | — | Click |
-| Testing | `Testing` | Menu theme | — | — | Click |
-| Units List | `UnitsList` | Menu theme | — | — | Click |
+| Development | `Testing` | Menu theme | — | — | Click |
+| Units and Weapons | `UnitsList` | Menu theme | — | — | Click |
+| Particle Effects lab | `EffectsList` | **stopped** | — | The selected effect's sound, 2D (§2.3) | Click |
+| Audio lab | `AudioList` | **stopped** | Any bed, on demand | Any effect sound, on demand | Click |
 | East France | `EastFrance` | Menu theme | — | — | Click |
 | Map editor (editing) | `Game` | Menu theme | — | Hand-placed effects (EFFECTS panel) | Click |
 | Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Combat, ordered attacks (§2.3) + hand-placed effects | Click |
@@ -201,6 +203,25 @@ IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
 ```
 
 Every scene has an `AudioListener` — menu scenes get one from `ProjectBootstrap`, the Game scene from `CameraRig`.
+
+### The two labs stop the music
+
+`EffectsList` and `AudioList` call `MusicManager.Stop()` in their bootstrap instead of `Play`. Both exist to let you hear one sound on its own, and the bed would be the loudest thing in the mix. Navigating away restarts it, because the next screen asks for it as usual.
+
+They play through **their own 2D `AudioSource`**, not through `EffectAudio.PlayAt`: that places 3D sources with kilometre rolloff, which at a preview rig's distance from the listener is silence. The *clip* still comes from `EffectAudio`, so what a lab plays is exactly what a burst plays — including the synthesised stand-in where no file is installed.
+
+### The audio register, in game
+
+**DEVELOPMENT → AUDIO** (`AudioListUI`) lists every row of §2 with its resolved source and a transport. It is the fastest way to answer "is that file actually installed?", because it reports what *resolved* rather than what the catalogue names:
+
+| Source | Meaning |
+|---|---|
+| **File** | Loaded from the catalogued path |
+| **Fallback** | The catalogued path is empty; a `MusicDef.fallback` track was used instead |
+| **Synthesised** | Built at runtime by `ProceduralAudio` — no file installed |
+| **No clip** | Nothing resolves. This sound is silent in game |
+
+Adding a sound to a catalogue is enough to make it appear there; the screen walks `AudioCatalog`, the `EffectSound` enum and `AudioManager.ClickClip`, and derives which effects carry each sound from `VfxCatalog`.
 
 ---
 
@@ -226,7 +247,7 @@ Force To Mono is appropriate for positional gameplay SFX, not for the music bed.
    **SFX:** load through a small catalogue entry the same way — never `Resources.Load` at a call site.
 4. **Balance the level** in `AudioCatalog`, not at the call site.
 5. **Verify:** Play → walk every screen listed in §3 → music must not restart on navigation, and the master volume slider must govern it.
-6. **Update this file** — the register in §2 *and* the coverage table in §3, with path, screens and description.
+6. **Update this file** — the register in §2 *and* the coverage table in §3, with path, screens and description. Then open **DEVELOPMENT → AUDIO** and check the new row reads *File* rather than *Synthesised* or *No clip*.
 7. **Record the source** and its licence/Asset Store URL for any purchased or downloaded audio.
 
 ---

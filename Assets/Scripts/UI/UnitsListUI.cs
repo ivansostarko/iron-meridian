@@ -5,142 +5,133 @@ using UnityEngine.UI;
 using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Models;
+using IronMeridian.Save;
+using IronMeridian.Vfx;
 
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// Reference catalogue: every unit definition in a filterable, sortable
-    /// table, with a detail panel on the right showing the selected type's
-    /// animated 3D model and full stat block. Reached from Testing.
+    /// UNITS AND WEAPONS — the reference catalogue for every data table the game
+    /// is built from, and the one place they can be tuned.
+    ///
+    /// **Six tables, one screen.** Unit types were only ever half the answer to
+    /// "what can this thing do": artillery natures, strike airframes, UAVs,
+    /// missile systems and naval guns are all catalogues of the same shape and
+    /// were previously readable only in source. They are tabs here, driven from
+    /// <see cref="GameCatalogs"/> — adding a weapon family adds a tab.
+    ///
+    /// **Editing.** EDIT turns the detail panel's value column into fields;
+    /// every write lands in the live catalogue at once, so the effect is visible
+    /// the next time the map editor is opened without a restart. SAVE writes
+    /// them to your own <c>tuning.json</c>, which is a sparse patch over the
+    /// shipped data rather than a copy of it — see <see cref="TuningStore"/> for
+    /// why that matters. REVERT puts the selected record back; RESET ALL puts
+    /// every record back and deletes the file.
+    ///
+    /// Reached from DEVELOPMENT.
     /// </summary>
     public class UnitsListUI : MonoBehaviour
     {
         // ------------------------------------------------------------ layout
         //
-        // Everything here is anchor-driven rather than laid out in absolute
-        // pixels. The canvas scaler matches width and height equally, so the
-        // reference width is only 1920 at exactly 16:9 — at any other aspect it
-        // shrinks, and a table pinned at a fixed 1185 px ran under a detail
-        // panel pinned to the right edge. Stretching the table between the two
-        // insets, and giving its columns proportional widths, means the whole
-        // row is visible at every window shape.
-        /// <summary>Inset from the left edge to the table, and from the right edge to the detail panel.</summary>
+        // Everything is anchor-driven rather than laid out in absolute pixels.
+        // The canvas scaler matches width and height equally, so the reference
+        // width is only 1920 at exactly 16:9 — at any other aspect it shrinks,
+        // and a table pinned at a fixed x ran under a detail panel pinned to the
+        // right edge. Stretching the table between the two insets, and giving
+        // its columns proportional widths, means the whole row is visible at
+        // every window shape.
         const float ScreenMargin = 60f;
-        /// <summary>Gap between the table and the detail panel.</summary>
         const float ColumnGap = 24f;
-        /// <summary>Detail panel width. The one fixed dimension — its stat rows need a stable column split.</summary>
+        /// <summary>Detail panel width. The one fixed dimension — its rows need a stable column split.</summary>
         const float PanelW = 560f;
-        /// <summary>Top of the table and of the detail panel, measured from the top of the screen.</summary>
-        /// <remarks>
-        /// The table starts lower than it used to: the branch filter needs a row
-        /// of its own. Ten arms will not sit beside the search box and the
-        /// affiliation tabs at any window width worth supporting.
-        /// </remarks>
-        const float TableY = -308f, PanelY = -170f;
-        /// <summary>Bottom margin under both, so neither runs off a short window.</summary>
+        const float PanelY = -170f;
         const float BottomMargin = 44f;
         const float RowPad = 8f;      // CreateScrollView's content padding
 
+        /// <summary>Rows the header block occupies, measured from the top of the screen.</summary>
+        const float TabsY = -164f, ToolbarY = -222f, BranchY = -278f, HintY = -326f;
+        /// <summary>Top of the table, with and without the branch-filter row.</summary>
+        const float TableYWithBranches = -352f, TableYPlain = -300f;
+
         /// <summary>
-        /// Left inset of the ICON column's content, inside its own cell.
-        ///
-        /// The icons used to start 6 px into the column, which put the first
-        /// one hard against the scroll viewport's clipping edge — an APP-6
-        /// frame is a rectangle, and the left stroke of that rectangle was the
-        /// part being shaved. Indenting the column's contents gives the table a
-        /// gutter at the same place its header has one, and the two icons and
-        /// the NAME column that follows all still fit the cell.
+        /// Left inset of the ICON column's content, inside its own cell. An
+        /// APP-6 frame is a rectangle, and without a gutter the scroll
+        /// viewport's clipping edge shaves its left stroke.
         /// </summary>
         const float IconColumnInset = 36f;
-        /// <summary>Inset from the detail panel's edges to everything drawn inside it.</summary>
         const float PanelInset = 50f;
 
-        enum SortKey { Name, Branch, Attack, Defence, Armour, Range, Speed, Manpower }
         enum TeamView { Both, Friendly, Enemy }
 
         /// <summary>
         /// A table column, sized as a **share of the table width** rather than in
-        /// pixels. <see cref="Start"/> and <see cref="End"/> are the normalised
-        /// bounds every header cell and row cell anchors to, so the table reflows
-        /// with the window and no column can be cut off the right-hand edge.
+        /// pixels, so the table reflows with the window and no column can be cut
+        /// off the right-hand edge.
         /// </summary>
-        // Not a readonly struct: Start/End are computed once at startup, and an
-        // array element is addressable so they can be written in place.
-        struct Column
+        class Column
         {
             public readonly string Label;
             public readonly float Weight;
-            public readonly SortKey? Sort;
-            public float Start, End;      // filled in by NormaliseColumns
+            /// <summary>Sort key, or null for a column that cannot be sorted on.</summary>
+            public readonly string Sort;
+            /// <summary>Cell text for one row; null for the icon column.</summary>
+            public readonly System.Func<CatalogEntry, string> Cell;
+            public float Start, End;
 
-            public Column(string label, float weight, SortKey? sort = null)
-            { Label = label; Weight = weight; Sort = sort; Start = 0f; End = 0f; }
+            public Column(string label, float weight, string sort,
+                System.Func<CatalogEntry, string> cell)
+            { Label = label; Weight = weight; Sort = sort; Cell = cell; }
         }
 
-        static readonly Column[] Columns =
-        {
-            // ICON carries two 44 px icons side by side *plus* the column's
-            // left indent (IconColumnInset), so it needs the widest share that
-            // is not text. Widened from 1.20 when the indent was introduced:
-            // the columns are shares of the table width, so at a tall aspect
-            // ratio the old share was narrower than the pair it had to hold and
-            // the enemy icon overhung NAME.
-            new Column("ICON",     1.50f),
-            new Column("NAME",     3.10f, SortKey.Name),
-            new Column("BRANCH",   1.25f, SortKey.Branch),
-            new Column("ATK",      0.70f, SortKey.Attack),
-            new Column("DEF",      0.70f, SortKey.Defence),
-            new Column("ARM",      0.70f, SortKey.Armour),
-            new Column("RANGE",    1.00f, SortKey.Range),
-            new Column("SPEED",    1.10f, SortKey.Speed),
-            new Column("MANPOWER", 1.15f, SortKey.Manpower),
-        };
-
-        /// <summary>
-        /// Turns the weights into cumulative 0..1 bounds. Run once at startup so
-        /// every cell can anchor straight to them.
-        /// </summary>
-        static void NormaliseColumns()
+        /// <summary>Turns the weights into cumulative 0..1 bounds every cell anchors to.</summary>
+        static void NormaliseColumns(List<Column> columns)
         {
             float total = 0f;
-            foreach (var c in Columns) total += c.Weight;
+            foreach (var c in columns) total += c.Weight;
             if (total <= 0f) return;
 
             float cursor = 0f;
-            for (int i = 0; i < Columns.Length; i++)
+            foreach (var c in columns)
             {
-                Columns[i].Start = cursor / total;
-                cursor += Columns[i].Weight;
-                Columns[i].End = cursor / total;
+                c.Start = cursor / total;
+                cursor += c.Weight;
+                c.End = cursor / total;
             }
         }
 
         // ------------------------------------------------------------- state
-        SortKey _sortKey = SortKey.Name;
+        CatalogGroup _catalog;
+        List<CatalogEntry> _entries = new List<CatalogEntry>();
+        List<Column> _columns = new List<Column>();
+
+        string _sortKey = "name";
         bool _sortAscending = true;
         TeamView _team = TeamView.Both;
-        /// <summary>Arm of service filter; null shows every branch.</summary>
+        /// <summary>Arm of service filter; null shows every branch. Units tab only.</summary>
         UnitBranch? _branch;
         string _search = "";
-        UnitDefinition _selected;
+        CatalogEntry _selected;
+        bool _editing;
 
-        RectTransform _header, _rowsContent;
-        Text _resultCount;
-        /// <summary>Explains the current filter: either how the screen works, or what the chosen branch is.</summary>
-        Text _hint;
+        RectTransform _header, _rowsContent, _table, _branchRow;
+        Text _resultCount, _hint, _statusLine;
         InputField _searchField;
+        Button _editButton;
         readonly Dictionary<string, Image> _rowImages = new Dictionary<string, Image>();
-        /// <summary>Toolbar controls that repaint themselves from filter state on every rebuild.</summary>
+        /// <summary>Controls that repaint themselves from filter state on every rebuild.</summary>
         readonly List<System.Action> _repaints = new List<System.Action>();
 
         // detail panel
         ModelPreview _preview;
-        Text _detailName, _detailSub;
+        Text _detailName, _detailSub, _previewHint;
         RectTransform _detailIcons, _detailStats;
+        StatEditorPanel _stats;
+
+        bool IsUnits => _catalog != null && _catalog.key == GameCatalogs.Units;
 
         void Start()
         {
-            NormaliseColumns();
             IronMeridian.Audio.AudioManager.Apply();
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             var canvas = UIFactory.CreateCanvas("UnitsListCanvas");
@@ -149,38 +140,104 @@ namespace IronMeridian.UI
             UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Default,
                 BackgroundCatalog.DenseScreenScrim);
 
+            _catalog = GameCatalogs.All[0];
+
             BuildHeaderBar(canvas.transform);
+            BuildCatalogTabs(canvas.transform);
             BuildToolbar(canvas.transform);
             BuildTable(canvas.transform);
             BuildDetailPanel(canvas.transform);
 
-            Rebuild();
+            SelectCatalog(_catalog);
         }
 
         // ------------------------------------------------------- header bar
 
         void BuildHeaderBar(Transform parent)
         {
-            var title = UIFactory.CreateText(parent, "UNITS LIST", 48,
+            var title = UIFactory.CreateText(parent, "UNITS AND WEAPONS", 46,
                 GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(80, -70), new Vector2(600, 70));
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(80, -66), new Vector2(760, 70));
 
-            _resultCount = UIFactory.CreateText(parent, "", 20, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(_resultCount.rectTransform, new Vector2(0f, 1f), new Vector2(80, -122), new Vector2(700, 30));
+            _resultCount = UIFactory.CreateText(parent, "", 19, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
+            UIFactory.Place(_resultCount.rectTransform, new Vector2(0f, 1f), new Vector2(80, -116), new Vector2(760, 28));
 
-            UIFactory.CreateBackButton(parent, "BACK TO TESTING",
+            _statusLine = UIFactory.CreateText(parent, "", 15, GameConfig.UiAccent, TextAnchor.MiddleRight);
+            UIFactory.Place(_statusLine.rectTransform, new Vector2(1f, 1f), new Vector2(-80, -136), new Vector2(760, 24));
+
+            UIFactory.CreateBackButton(parent, "BACK TO DEVELOPMENT",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting),
-                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(280, 62));
+                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
+
+            // The tuning controls. Grouped at the right of the header rather
+            // than in the detail panel: SAVE and RESET ALL act on the whole
+            // file, not on the record that happens to be selected.
+            _editButton = UIFactory.CreateButton(parent, "EDIT", ToggleEditing,
+                GameConfig.UiPanelLight, GameConfig.UiText, 16);
+            UIFactory.Place((RectTransform)_editButton.transform, new Vector2(1f, 1f),
+                new Vector2(-396, -66), new Vector2(120, 42));
+
+            var save = UIFactory.CreateButton(parent, "SAVE", SaveTuning,
+                UiTheme.Success, Color.white, 16);
+            UIFactory.Place((RectTransform)save.transform, new Vector2(1f, 1f),
+                new Vector2(-518, -66), new Vector2(120, 42));
+
+            var revert = UIFactory.CreateButton(parent, "REVERT", RevertSelected,
+                GameConfig.UiPanelLight, GameConfig.UiTextDim, 15);
+            UIFactory.Place((RectTransform)revert.transform, new Vector2(1f, 1f),
+                new Vector2(-640, -66), new Vector2(120, 42));
+
+            var reset = UIFactory.CreateButton(parent, "RESET ALL", ResetAll,
+                UiTheme.Danger, Color.white, 15);
+            UIFactory.Place((RectTransform)reset.transform, new Vector2(1f, 1f),
+                new Vector2(-762, -66), new Vector2(130, 42));
+
+            RefreshTuningControls();
+        }
+
+        // ------------------------------------------------------ catalogue tabs
+
+        void BuildCatalogTabs(Transform parent)
+        {
+            var row = UIFactory.CreateGroup(parent, "CatalogTabs");
+            StretchToTableWidth(row, TabsY, 44f);
+
+            var buttons = new List<(Button button, CatalogGroup group)>();
+            const float segW = 168f;
+
+            for (int i = 0; i < GameCatalogs.All.Length; i++)
+            {
+                var group = GameCatalogs.All[i];
+                var btn = UIFactory.CreateButton(row, group.title, () => SelectCatalog(group),
+                    GameConfig.UiPanelLight, GameConfig.UiText, 16);
+                UIFactory.Place((RectTransform)btn.transform, new Vector2(0f, 1f),
+                    new Vector2(i * (segW + 3f), 0), new Vector2(segW, 42));
+                UIFactory.Fit(btn.GetComponentInChildren<Text>(), 11);
+                buttons.Add((btn, group));
+            }
+
+            _repaints.Add(() =>
+            {
+                foreach (var (button, group) in buttons)
+                {
+                    bool on = group == _catalog;
+                    button.GetComponent<Image>().color = on ? GameConfig.UiAccent : GameConfig.UiPanelLight;
+                    var txt = button.GetComponentInChildren<Text>();
+                    if (txt == null) continue;
+                    txt.color = on ? GameConfig.UiBackground : GameConfig.UiText;
+                    txt.fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
+                }
+            });
         }
 
         // ---------------------------------------------------------- toolbar
 
         void BuildToolbar(Transform parent)
         {
-            var bar = UIFactory.CreateGroup(parent, "Toolbar");
-            StretchToTableWidth(bar, -170f, 52f);
+            var toolbar = UIFactory.CreateGroup(parent, "Toolbar");
+            StretchToTableWidth(toolbar, ToolbarY, 48f);
 
-            _searchField = UIFactory.CreateInputField(bar, "Search name, id or ammo...", 18);
+            _searchField = UIFactory.CreateInputField(toolbar, "Search name, id or detail...", 18);
             UIFactory.Place((RectTransform)_searchField.transform, new Vector2(0f, 1f),
                 new Vector2(0, 0), new Vector2(320, 46));
             _searchField.onValueChanged.AddListener(v =>
@@ -189,48 +246,42 @@ namespace IronMeridian.UI
                 Rebuild();
             });
 
-            Segmented(bar, 340f, 106f, new[] { "BOTH", "FRIENDLY", "ENEMY" }, () => (int)_team,
-                i => { _team = (TeamView)i; Rebuild(); });
+            Segmented(toolbar, 340f, 106f, new[] { "BOTH", "FRIENDLY", "ENEMY" }, () => (int)_team,
+                i => { _team = (TeamView)i; Rebuild(); }, unitsOnly: true);
 
-            var reset = UIFactory.CreateButton(bar, "RESET", () =>
+            var reset = UIFactory.CreateButton(toolbar, "RESET FILTERS", () =>
             {
                 _team = TeamView.Both; _branch = null; _search = "";
-                _sortKey = SortKey.Name; _sortAscending = true;
+                _sortKey = "name"; _sortAscending = true;
                 // Clearing the field fires onValueChanged, which rebuilds — but
                 // only if the text was non-empty, so rebuild unconditionally after.
                 if (_searchField != null) _searchField.text = "";
                 Rebuild();
-            }, GameConfig.UiPanelLight, GameConfig.UiTextDim, 16);
-            UIFactory.Place((RectTransform)reset.transform, new Vector2(0f, 1f), new Vector2(672, 0), new Vector2(110, 46));
+            }, GameConfig.UiPanelLight, GameConfig.UiTextDim, 14);
+            UIFactory.Place((RectTransform)reset.transform, new Vector2(0f, 1f),
+                new Vector2(672, 0), new Vector2(150, 46));
 
             BuildBranchFilter(parent);
 
-            // Both sides field the same catalogue, so say what the filter does
-            // rather than letting it look like it is dropping unit types. Picking
-            // a branch replaces this with what that branch actually is.
             _hint = UIFactory.CreateText(parent, "", 15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            StretchToTableWidth(_hint.rectTransform, -280f, 22f);
+            StretchToTableWidth(_hint.rectTransform, HintY, 22f);
         }
 
         const string AllBranchesHint =
             "Both teams field the same catalogue — the affiliation filter switches which icon set is shown. " +
-            "Click a column heading to sort; click a row for its 3D model.";
+            "Click a column heading to sort; click a row for its 3D model and full values.";
 
         /// <summary>
         /// The arm-of-service filter: ALL plus one button per
-        /// <see cref="UnitBranch"/>, each carrying how many types it holds.
-        ///
-        /// A row of its own rather than a segment beside the affiliation tabs —
-        /// ten arms is too many to squeeze in next to anything, and the count on
-        /// each button is the fastest read of the catalogue's shape there is.
-        /// The counts are of the whole catalogue, not of the current search:
-        /// a number that moved while typing would be reporting on the search box
-        /// rather than on the branch.
+        /// <see cref="UnitBranch"/>, each carrying how many types it holds. The
+        /// counts are of the whole catalogue, not of the current search — a
+        /// number that moved while typing would be reporting on the search box.
+        /// Units tab only; hidden for the weapon catalogues, which have no arms.
         /// </summary>
         void BuildBranchFilter(Transform parent)
         {
-            var row = UIFactory.CreateGroup(parent, "BranchFilter");
-            StretchToTableWidth(row, -226f, 46f);
+            _branchRow = UIFactory.CreateGroup(parent, "BranchFilter");
+            StretchToTableWidth(_branchRow, BranchY, 46f);
 
             var counts = new Dictionary<UnitBranch, int>();
             foreach (var def in UnitDatabase.All)
@@ -244,7 +295,7 @@ namespace IronMeridian.UI
 
             void Add(string label, UnitBranch? branch, int index)
             {
-                var btn = UIFactory.CreateButton(row, label, () => { _branch = branch; Rebuild(); },
+                var btn = UIFactory.CreateButton(_branchRow, label, () => { _branch = branch; Rebuild(); },
                     GameConfig.UiPanelLight, GameConfig.UiText, 14);
                 UIFactory.Place((RectTransform)btn.transform, new Vector2(0f, 1f),
                     new Vector2(index * (segW + 2f), 0), new Vector2(segW, 42));
@@ -280,7 +331,7 @@ namespace IronMeridian.UI
         /// every rebuild, so the control always reflects the real filter state.
         /// </summary>
         void Segmented(Transform parent, float x, float segW, string[] labels,
-            System.Func<int> current, System.Action<int> onPick)
+            System.Func<int> current, System.Action<int> onPick, bool unitsOnly = false)
         {
             var buttons = new Button[labels.Length];
 
@@ -299,6 +350,7 @@ namespace IronMeridian.UI
                 int active = current();
                 for (int i = 0; i < buttons.Length; i++)
                 {
+                    if (unitsOnly) buttons[i].gameObject.SetActive(IsUnits);
                     bool on = i == active;
                     buttons[i].GetComponent<Image>().color = on ? GameConfig.UiAccent : GameConfig.UiPanelLight;
                     var txt = buttons[i].GetComponentInChildren<Text>();
@@ -315,20 +367,20 @@ namespace IronMeridian.UI
 
         void BuildTable(Transform parent)
         {
-            var table = UIFactory.CreateGroup(parent, "Table");
+            _table = UIFactory.CreateGroup(parent, "Table");
             // Full height between the header block and the bottom margin, so the
-            // list grows with the window instead of stopping at a fixed 780 px.
-            table.anchorMin = new Vector2(0, 0); table.anchorMax = new Vector2(1, 1);
-            table.pivot = new Vector2(0.5f, 1f);
-            table.offsetMin = new Vector2(ScreenMargin, BottomMargin);
-            table.offsetMax = new Vector2(-(ScreenMargin + PanelW + ColumnGap), TableY);
+            // list grows with the window instead of stopping at a fixed height.
+            _table.anchorMin = new Vector2(0, 0); _table.anchorMax = new Vector2(1, 1);
+            _table.pivot = new Vector2(0.5f, 1f);
+            _table.offsetMin = new Vector2(ScreenMargin, BottomMargin);
+            _table.offsetMax = new Vector2(-(ScreenMargin + PanelW + ColumnGap), TableYWithBranches);
 
-            _header = UIFactory.CreatePanel(table, "Header", GameConfig.UiPanel);
+            _header = UIFactory.CreatePanel(_table, "Header", GameConfig.UiPanel);
             _header.anchorMin = new Vector2(0, 1); _header.anchorMax = new Vector2(1, 1);
             _header.pivot = new Vector2(0.5f, 1);
             _header.offsetMin = new Vector2(0, -42); _header.offsetMax = Vector2.zero;
 
-            var scroll = UIFactory.CreateScrollView(table, out _rowsContent, withScrollbar: true);
+            var scroll = UIFactory.CreateScrollView(_table, out _rowsContent, withScrollbar: true);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
             srt.offsetMin = Vector2.zero; srt.offsetMax = new Vector2(0, -46);
@@ -336,8 +388,8 @@ namespace IronMeridian.UI
 
         /// <summary>
         /// Spans a rect across the table's column of the screen: from the left
-        /// margin to where the detail panel begins. Used by the toolbar and the
-        /// hint line so they track the table rather than drifting over the panel.
+        /// margin to where the detail panel begins. Used by the toolbar rows so
+        /// they track the table rather than drifting over the panel.
         /// </summary>
         static void StretchToTableWidth(RectTransform rt, float top, float height)
         {
@@ -347,12 +399,6 @@ namespace IronMeridian.UI
             rt.offsetMax = new Vector2(-(ScreenMargin + PanelW + ColumnGap), top);
         }
 
-        /// <summary>
-        /// Empties a container now rather than at end of frame. `Destroy` is
-        /// deferred, so a layout group would spend this frame measuring the old
-        /// children alongside the new ones — the table visibly jumps on every
-        /// filter change. Detaching first takes them out of the layout at once.
-        /// </summary>
         static void ClearChildren(RectTransform parent)
         {
             for (int i = parent.childCount - 1; i >= 0; i--)
@@ -363,27 +409,90 @@ namespace IronMeridian.UI
             }
         }
 
+        // ------------------------------------------------------- catalogues
+
+        void SelectCatalog(CatalogGroup group)
+        {
+            if (group == null) return;
+            _catalog = group;
+            _entries = group.Load();
+            _columns = BuildColumns(group);
+            NormaliseColumns(_columns);
+
+            _selected = null;
+            _branch = null;
+            _sortKey = "name";
+            _sortAscending = true;
+
+            // The branch filter belongs to the unit catalogue alone; the table
+            // takes the row back when it is not shown rather than leaving a gap
+            // where a control used to be.
+            if (_branchRow != null) _branchRow.gameObject.SetActive(IsUnits);
+            if (_table != null)
+                _table.offsetMax = new Vector2(_table.offsetMax.x,
+                    IsUnits ? TableYWithBranches : TableYPlain);
+
+            Rebuild();
+        }
+
+        /// <summary>
+        /// The columns for a catalogue. Units get the stat table they always
+        /// had; every other table is a name, what it belongs to and what it is
+        /// for, because those records have no shared numbers worth a column —
+        /// an airframe's approach time and a naval gun's calibre are not the
+        /// same kind of figure and would make a nonsense of one heading.
+        /// </summary>
+        List<Column> BuildColumns(CatalogGroup group)
+        {
+            if (group.key == GameCatalogs.Units)
+                return new List<Column>
+                {
+                    // ICON carries two 44 px icons side by side *plus* the
+                    // column's left indent, so it needs the widest share that is
+                    // not text.
+                    new Column("ICON",     1.50f, null,       null),
+                    new Column("NAME",     3.10f, "name",     e => e.name),
+                    new Column("BRANCH",   1.25f, "group",    e => e.group),
+                    new Column("ATK",      0.70f, "attack",   e => $"{Unit(e).attack:0}"),
+                    new Column("DEF",      0.70f, "defence",  e => $"{Unit(e).defence:0}"),
+                    new Column("ARM",      0.70f, "armour",   e => $"{Unit(e).armour:0}"),
+                    new Column("RANGE",    1.00f, "range",    e => $"{Unit(e).weaponRangeKm:0.#} km"),
+                    new Column("SPEED",    1.10f, "speed",    e => $"{Unit(e).speedKmh:0} km/h"),
+                    new Column("MANPOWER", 1.15f, "manpower", e => $"{Unit(e).manpower:n0}"),
+                };
+
+            return new List<Column>
+            {
+                new Column("NAME",   2.60f, "name",  e => e.name),
+                new Column("GROUP",  1.60f, "group", e => e.group),
+                new Column("DETAIL", 4.20f, null,    e => e.detail),
+                new Column("ID",     1.60f, "id",    e => e.id),
+            };
+        }
+
+        /// <summary>The unit behind an entry, or null — the weapon catalogues have none, and neither does an empty table.</summary>
+        static UnitDefinition Unit(CatalogEntry e) => e?.record as UnitDefinition;
+
         void BuildHeaderCells()
         {
             ClearChildren(_header);
 
-            foreach (var col in Columns)
+            foreach (var col in _columns)
             {
-                bool active = col.Sort.HasValue && col.Sort.Value == _sortKey;
+                bool active = col.Sort != null && col.Sort == _sortKey;
                 string label = col.Label + (active ? (_sortAscending ? "  ▲" : "  ▼") : "");
 
-                if (!col.Sort.HasValue)
+                if (col.Sort == null)
                 {
-                    // ICON is the only unsorted column, and its heading sits over
-                    // the indented icons rather than over the cell's own edge.
                     var t = UIFactory.CreateText(_header, label, 15, GameConfig.UiAccent,
                         TextAnchor.MiddleLeft, FontStyle.Bold);
-                    SpanColumn(t.rectTransform, col, IconColumnInset, 34f);
+                    SpanColumn(t.rectTransform, col,
+                        col.Label == "ICON" ? IconColumnInset : RowPad, 34f);
                     UIFactory.Fit(t, 10);
                     continue;
                 }
 
-                var key = col.Sort.Value;
+                string key = col.Sort;
                 var btn = UIFactory.CreateButton(_header, label, () => ToggleSort(key),
                     new Color(1f, 1f, 1f, active ? 0.08f : 0.02f),
                     active ? GameConfig.UiAccent : GameConfig.UiText, 15);
@@ -397,7 +506,7 @@ namespace IronMeridian.UI
             }
         }
 
-        void ToggleSort(SortKey key)
+        void ToggleSort(string key)
         {
             // Re-picking the active column flips direction; a new column starts
             // ascending, which is what a name/number list should default to.
@@ -408,14 +517,18 @@ namespace IronMeridian.UI
 
         // ------------------------------------------------------- filter/sort
 
-        List<UnitDefinition> VisibleUnits()
+        List<CatalogEntry> VisibleEntries()
         {
-            var list = new List<UnitDefinition>();
-            foreach (var def in UnitDatabase.All)
+            var list = new List<CatalogEntry>();
+            foreach (var e in _entries)
             {
-                if (_branch.HasValue && def.Branch != _branch.Value) continue;
-                if (!MatchesSearch(def)) continue;
-                list.Add(def);
+                if (IsUnits && _branch.HasValue)
+                {
+                    var unit = Unit(e);
+                    if (unit == null || unit.Branch != _branch.Value) continue;
+                }
+                if (!MatchesSearch(e)) continue;
+                list.Add(e);
             }
 
             list.Sort((a, b) =>
@@ -428,31 +541,47 @@ namespace IronMeridian.UI
             return list;
         }
 
-        bool MatchesSearch(UnitDefinition def)
+        bool MatchesSearch(CatalogEntry e)
         {
             if (string.IsNullOrEmpty(_search)) return true;
-            return Contains(def.name) || Contains(def.id) || Contains(def.ammoType);
+            if (Contains(e.name) || Contains(e.id) || Contains(e.detail) || Contains(e.group)) return true;
+            // Ammunition designations are the other thing anyone searches a unit
+            // catalogue for, and they are not on the row.
+            return Unit(e) != null && Contains(Unit(e).ammoType);
 
             bool Contains(string s) =>
                 !string.IsNullOrEmpty(s) &&
                 s.IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        int Compare(UnitDefinition a, UnitDefinition b) => _sortKey switch
+        int Compare(CatalogEntry a, CatalogEntry b)
         {
-            SortKey.Name => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase),
-            // By the branch's declaration order rather than alphabetically, so
-            // sorting on it groups the catalogue the way the Units doc reads:
-            // manoeuvre, then fires, then air, then the tail.
-            SortKey.Branch => ((int)a.Branch).CompareTo((int)b.Branch),
-            SortKey.Attack => a.attack.CompareTo(b.attack),
-            SortKey.Defence => a.defence.CompareTo(b.defence),
-            SortKey.Armour => a.armour.CompareTo(b.armour),
-            SortKey.Range => a.weaponRangeKm.CompareTo(b.weaponRangeKm),
-            SortKey.Speed => a.speedKmh.CompareTo(b.speedKmh),
-            SortKey.Manpower => a.manpower.CompareTo(b.manpower),
-            _ => 0
-        };
+            switch (_sortKey)
+            {
+                case "name": return string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase);
+                case "id": return string.Compare(a.id, b.id, System.StringComparison.OrdinalIgnoreCase);
+                case "group":
+                    // Units sort by the branch's declaration order rather than
+                    // alphabetically, so the table groups the way the Units doc
+                    // reads: manoeuvre, then fires, then air, then the tail.
+                    if (IsUnits && Unit(a) != null && Unit(b) != null)
+                        return ((int)Unit(a).Branch).CompareTo((int)Unit(b).Branch);
+                    return string.Compare(a.group, b.group, System.StringComparison.OrdinalIgnoreCase);
+            }
+
+            var ua = Unit(a); var ub = Unit(b);
+            if (ua == null || ub == null) return 0;
+            return _sortKey switch
+            {
+                "attack" => ua.attack.CompareTo(ub.attack),
+                "defence" => ua.defence.CompareTo(ub.defence),
+                "armour" => ua.armour.CompareTo(ub.armour),
+                "range" => ua.weaponRangeKm.CompareTo(ub.weaponRangeKm),
+                "speed" => ua.speedKmh.CompareTo(ub.speedKmh),
+                "manpower" => ua.manpower.CompareTo(ub.manpower),
+                _ => 0
+            };
+        }
 
         // ---------------------------------------------------------- rebuild
 
@@ -464,21 +593,23 @@ namespace IronMeridian.UI
             ClearChildren(_rowsContent);
             _rowImages.Clear();
 
-            var units = VisibleUnits();
-            foreach (var def in units) CreateRow(_rowsContent, def);
+            var rows = VisibleEntries();
+            foreach (var e in rows) CreateRow(_rowsContent, e);
 
-            _resultCount.text = units.Count == UnitDatabase.All.Count
-                ? $"{units.Count} unit types in {UnitBranchInfo.All.Length} branches"
-                : $"{units.Count} of {UnitDatabase.All.Count} unit types";
+            _resultCount.text = rows.Count == _entries.Count
+                ? $"{rows.Count} {Noun(_catalog)} · {_catalog.doc}"
+                : $"{rows.Count} of {_entries.Count} {Noun(_catalog)} · {_catalog.doc}";
 
             if (_hint != null)
-                _hint.text = _branch.HasValue
-                    ? $"{UnitBranchInfo.DisplayName(_branch.Value).ToUpperInvariant()} — {UnitBranchInfo.Blurb(_branch.Value)}"
-                    : AllBranchesHint;
+                _hint.text = IsUnits
+                    ? (_branch.HasValue
+                        ? $"{UnitBranchInfo.DisplayName(_branch.Value).ToUpperInvariant()} — {UnitBranchInfo.Blurb(_branch.Value)}"
+                        : AllBranchesHint)
+                    : _catalog.blurb;
 
-            if (units.Count == 0)
+            if (rows.Count == 0)
             {
-                var empty = UIFactory.CreateText(_rowsContent, "No unit types match these filters.",
+                var empty = UIFactory.CreateText(_rowsContent, "Nothing matches these filters.",
                     18, GameConfig.UiTextDim);
                 ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 60);
                 Select(null);
@@ -490,40 +621,47 @@ namespace IronMeridian.UI
             // surviving selection only needs its new row re-highlighted —
             // re-running Select would reload the model and restart its
             // animation on every keystroke in the search box.
-            if (_selected != null && units.Contains(_selected)) HighlightSelectedRow();
-            else Select(units[0]);
+            if (_selected != null && rows.Contains(_selected)) HighlightSelectedRow();
+            else Select(rows[0]);
         }
 
-        void CreateRow(Transform parent, UnitDefinition def)
+        static string Noun(CatalogGroup g) =>
+            g.key == GameCatalogs.Units ? "unit types" : g.title.ToLowerInvariant();
+
+        void CreateRow(Transform parent, CatalogEntry entry)
         {
-            var row = UIFactory.CreatePanel(parent, "Row_" + def.id, RowColour(def, false));
-            row.sizeDelta = new Vector2(0, 56);
+            var row = UIFactory.CreatePanel(parent, "Row_" + entry.id, RowColour(false));
+            row.sizeDelta = new Vector2(0, IsUnits ? 56 : 48);
 
             var btn = row.gameObject.AddComponent<Button>();
             btn.targetGraphic = row.GetComponent<Image>();
-            btn.onClick.AddListener(() => Select(def));
-            _rowImages[def.id] = row.GetComponent<Image>();
+            btn.onClick.AddListener(() => Select(entry));
+            _rowImages[entry.id] = row.GetComponent<Image>();
 
-            // Icon column: one icon per affiliation shown, side by side when both.
-            // Anchored inside the column rather than at an absolute x, so they
-            // stay in their cell when the table reflows.
-            float iconX = IconColumnInset;
-            if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", def.id, iconX, Columns[0]); iconX += 50f; }
-            if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", def.id, iconX, Columns[0]);
+            foreach (var col in _columns)
+            {
+                if (col.Cell == null)
+                {
+                    // The icon column: one icon per affiliation shown, side by
+                    // side when both. Anchored inside the column rather than at
+                    // an absolute x, so they stay in their cell when the table
+                    // reflows.
+                    float iconX = IconColumnInset;
+                    if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", entry.id, iconX, col); iconX += 50f; }
+                    if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", entry.id, iconX, col);
+                    continue;
+                }
 
-            Cell(row, def.name, Columns[1], 17, GameConfig.UiText);
-            Cell(row, UnitBranchInfo.DisplayName(def.Branch), Columns[2], 14, GameConfig.UiTextDim);
-            Cell(row, $"{def.attack:0}", Columns[3], 15, GameConfig.UiText);
-            Cell(row, $"{def.defence:0}", Columns[4], 15, GameConfig.UiText);
-            Cell(row, $"{def.armour:0}", Columns[5], 15, GameConfig.UiText);
-            Cell(row, $"{def.weaponRangeKm:0.#} km", Columns[6], 15, GameConfig.UiText);
-            Cell(row, $"{def.speedKmh:0} km/h", Columns[7], 15, GameConfig.UiText);
-            Cell(row, $"{def.manpower:n0}", Columns[8], 15, GameConfig.UiText);
+                bool lead = col.Label == "NAME";
+                Cell(row, col.Cell(entry) ?? "", col, lead ? 17 : 15,
+                    lead ? GameConfig.UiText : GameConfig.UiTextDim);
+            }
         }
 
-        Color RowColour(UnitDefinition def, bool selected)
+        Color RowColour(bool selected)
         {
             if (selected) return new Color(GameConfig.UiAccent.r, GameConfig.UiAccent.g, GameConfig.UiAccent.b, 0.22f);
+            if (!IsUnits) return new Color(1f, 1f, 1f, 0.03f);
             // Tint by the affiliation being viewed — a cheap way to keep the
             // filter state visible while scanning the table.
             return _team switch
@@ -539,14 +677,14 @@ namespace IronMeridian.UI
         /// container. <paramref name="col"/> anchors it inside a table column;
         /// pass null (the detail panel) to anchor to the container itself.
         /// </summary>
-        void PlaceIcon(Transform parent, string folder, string unitId, float x, Column? col = null)
+        void PlaceIcon(Transform parent, string folder, string unitId, float x, Column col = null)
         {
             var sprite = UIFactory.LoadIconSprite(folder, unitId);
             if (sprite == null) return;
             var img = UIFactory.CreateImage(parent, sprite, folder + "Icon");
             var rt = (RectTransform)img.transform;
 
-            float left = col.HasValue ? col.Value.Start : 0f;
+            float left = col != null ? col.Start : 0f;
             rt.anchorMin = rt.anchorMax = new Vector2(left, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
             rt.anchoredPosition = new Vector2(x, 0f);
@@ -567,8 +705,8 @@ namespace IronMeridian.UI
 
         /// <summary>
         /// Anchors a rect to a column's share of the table width, vertically
-        /// centred in its row. Horizontal anchors do the work, so the cell tracks
-        /// the table at any window size without anything recomputing pixels.
+        /// centred in its row, so the cell tracks the table at any window size
+        /// without anything recomputing pixels.
         /// </summary>
         static void SpanColumn(RectTransform rt, Column col, float inset, float height)
         {
@@ -585,18 +723,15 @@ namespace IronMeridian.UI
         {
             var panel = UIFactory.CreatePanel(parent, "DetailPanel", GameConfig.UiPanel);
             // Pinned to the right edge and stretched to the bottom margin, so the
-            // stat list gets whatever height the window has rather than a fixed
-            // 866 px that ran off the bottom of anything shorter than 1080.
+            // value list gets whatever height the window has.
             panel.anchorMin = new Vector2(1, 0); panel.anchorMax = new Vector2(1, 1);
             panel.pivot = new Vector2(1f, 1f);
             panel.offsetMin = new Vector2(-(ScreenMargin + PanelW), BottomMargin);
             panel.offsetMax = new Vector2(-ScreenMargin, PanelY);
 
-            // Everything inside the panel is inset by PanelInset on both sides.
-            // The panel is a column of dense text standing against the edge of
-            // the screen, and text that starts at the frame reads as spilling
-            // out of it; the same gutter on both sides is what makes the block
-            // read as a page rather than as a list stuck to a wall.
+            // Everything inside is inset on both sides. The panel is a column of
+            // dense text standing against the edge of the screen, and text that
+            // starts at the frame reads as spilling out of it.
             float inner = PanelW - PanelInset * 2f;
 
             _detailName = UIFactory.CreateText(panel, "", 26, GameConfig.UiAccent,
@@ -614,9 +749,9 @@ namespace IronMeridian.UI
             UIFactory.Place((RectTransform)_preview.transform, new Vector2(0f, 1f),
                 new Vector2(PanelInset, -134), previewSize);
 
-            var hint = UIFactory.CreateText(panel, "Drag to orbit · scroll to zoom", 13,
+            _previewHint = UIFactory.CreateText(panel, "Drag to orbit · scroll to zoom", 13,
                 GameConfig.UiTextDim, TextAnchor.MiddleRight);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(PanelInset, -438), new Vector2(inner, 18));
+            UIFactory.Place(_previewHint.rectTransform, new Vector2(0f, 1f), new Vector2(PanelInset, -438), new Vector2(inner, 18));
 
             var scroll = UIFactory.CreateScrollView(panel, out _detailStats, withScrollbar: true);
             var srt = (RectTransform)scroll.transform;
@@ -624,15 +759,20 @@ namespace IronMeridian.UI
             srt.pivot = new Vector2(0.5f, 0.5f);
             srt.offsetMin = new Vector2(PanelInset, 16);
             srt.offsetMax = new Vector2(-PanelInset, -462);
+
+            _stats = new StatEditorPanel(_detailStats);
+            // Editing a name or a stat has to show up in the table too, or the
+            // row and the panel disagree about the record they both point at.
+            _stats.FieldChanged = _ => { RefreshRowText(); RefreshTuningControls(); };
         }
 
-        void Select(UnitDefinition def)
+        void Select(CatalogEntry entry)
         {
             // Repaint the previous row before the reference moves on.
             if (_selected != null && _rowImages.TryGetValue(_selected.id, out var previous) && previous != null)
-                previous.color = RowColour(_selected, false);
+                previous.color = RowColour(false);
 
-            _selected = def;
+            _selected = entry;
             HighlightSelectedRow();
             RefreshDetail();
         }
@@ -641,122 +781,177 @@ namespace IronMeridian.UI
         {
             if (_selected == null) return;
             if (_rowImages.TryGetValue(_selected.id, out var image) && image != null)
-                image.color = RowColour(_selected, true);
+                image.color = RowColour(true);
         }
 
         void RefreshDetail()
         {
-            var def = _selected;
+            var entry = _selected;
 
-            _detailName.text = def == null ? "—" : def.name.ToUpperInvariant();
-            _detailSub.text = def == null
-                ? "No unit selected"
-                : $"{UnitBranchInfo.DisplayName(def.Branch)}  ·  {UnitCategoryInfo.DisplayName(def.Category)}  ·  id: {def.id}";
+            _detailName.text = entry == null ? "—" : entry.name.ToUpperInvariant();
+            _detailSub.text = entry == null
+                ? "Nothing selected"
+                : $"{entry.group}  ·  id: {entry.id}";
 
             ClearChildren(_detailIcons);
-            if (def != null)
+            // Icons exist for unit types only — a naval gun has no APP-6 symbol.
+            if (entry != null && IsUnits)
             {
-                PlaceIcon(_detailIcons, "Friendly", def.id, 0f);
-                PlaceIcon(_detailIcons, "Enemy", def.id, 52f);
+                PlaceIcon(_detailIcons, "Friendly", entry.id, 0f);
+                PlaceIcon(_detailIcons, "Enemy", entry.id, 52f);
             }
 
-            if (_preview != null) _preview.Show(def);
+            RefreshPreview(entry);
 
-            BuildStats(def);
-        }
-
-        void BuildStats(UnitDefinition def)
-        {
-            ClearChildren(_detailStats);
-            if (def == null) return;
-
-            if (!string.IsNullOrEmpty(def.description))
-            {
-                var d = UIFactory.CreateText(_detailStats, def.description, 15,
-                    GameConfig.UiTextDim, TextAnchor.UpperLeft);
-                // Height from the text rather than a fixed 54 px, which cut the
-                // longer descriptions off mid-sentence.
-                d.gameObject.AddComponent<ContentSizeFitter>().verticalFit =
-                    ContentSizeFitter.FitMode.PreferredSize;
-                ((RectTransform)d.transform).sizeDelta = new Vector2(0, 54);
-            }
-
-            Section("CLASSIFICATION");
-            Stat("Branch", UnitBranchInfo.DisplayName(def.Branch));
-            Stat("Category", UnitCategoryInfo.DisplayName(def.Category));
-            Stat("Holds ground", def.HoldsGround ? "Yes" : "No");
-
-            Section("COMBAT");
-            Stat("Attack", $"{def.attack:0}");
-            Stat("Hard attack", $"{def.hardAttack:0}");
-            Stat("Defence", $"{def.defence:0}");
-            Stat("Armour", $"{def.armour:0}");
-            Stat("Anti-air", $"{def.antiAir:0}");
-            Stat("Weapon range", $"{def.weaponRangeKm:0.#} km");
-            Stat("View range", $"{def.viewRangeKm:0.#} km");
-
-            Section("FORMATION");
-            Stat("Manpower (company)", $"{def.manpower:n0}");
-            Stat("Training", $"{def.training:0}");
-            Stat("Morale", $"{def.morale:0}");
-            Stat("Organisation", $"{def.organisation:0}");
-            Stat("Speed", $"{def.speedKmh:0} km/h");
-
-            Section("LOGISTICS");
-            Stat("Ammo type", string.IsNullOrEmpty(def.ammoType) ? "—" : def.ammoType);
-            Stat("Ammo carried", $"{def.ammoStock:n0}");
-            Stat("Fuel carried", def.fuelStock > 0 ? $"{def.fuelStock:n0} L" : "—");
-            Stat("Fuel per km", def.fuelUsePerKm > 0 ? $"{def.fuelUsePerKm:0.#} L" : "—");
-            Stat("Rations", $"{def.foodDays} days");
-
-            var flags = new List<string>();
-            if (def.canIndirectFire) flags.Add("Indirect fire");
-            if (def.canCounterUas) flags.Add("Counter-UAS");
-            if (def.isSupport) flags.Add("Support");
-            Section("CAPABILITIES");
-            Stat("Flags", flags.Count > 0 ? string.Join(", ", flags) : "—");
-
-            Section("3D MODEL");
-            var model = UnitModelLibrary.Resolve(def);
-            Stat("Source", model?.sourceAsset ?? "none yet");
-            Stat("Idle animation", model?.idleClip ?? "—");
-        }
-
-        void Section(string label)
-        {
-            var t = UIFactory.CreateText(_detailStats, label, 14, GameConfig.UiAccent,
-                TextAnchor.LowerLeft, FontStyle.Bold);
-            ((RectTransform)t.transform).sizeDelta = new Vector2(0, 30);
+            _stats.Show(_catalog?.key, entry?.id, entry?.record, _catalog?.readOnlyFields);
+            RefreshTuningControls();
         }
 
         /// <summary>
-        /// One label/value row. The two rects meet at <see cref="StatSplit"/>
-        /// rather than overlapping, and both shrink to fit — the longest values
-        /// here are asset names and ammunition designations, which used to run
-        /// straight off the panel.
+        /// Shows the record's 3D model where it has one. Units resolve through
+        /// their definition; airframes and UAVs name a model id directly. The
+        /// rest — artillery natures, missile systems, naval guns — are fired
+        /// from off the map and have nothing to show, so the preview is hidden
+        /// rather than left displaying the last thing that did.
         /// </summary>
-        const float StatSplit = 0.46f;
-
-        void Stat(string label, string value)
+        void RefreshPreview(CatalogEntry entry)
         {
-            var row = UIFactory.CreateGroup(_detailStats, "Stat_" + label);
-            row.sizeDelta = new Vector2(0, 26);
+            if (_preview == null) return;
 
-            var l = UIFactory.CreateText(row, label, 15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            l.rectTransform.anchorMin = new Vector2(0, 0); l.rectTransform.anchorMax = new Vector2(StatSplit, 1);
-            l.rectTransform.offsetMin = Vector2.zero; l.rectTransform.offsetMax = new Vector2(-6, 0);
-            UIFactory.Fit(l, 11);
+            string modelId = entry?.record switch
+            {
+                AircraftDef air => air.modelId,
+                UavDef uav => uav.modelId,
+                _ => null
+            };
 
-            var v = UIFactory.CreateText(row, value, 15, GameConfig.UiText, TextAnchor.MiddleRight);
-            v.rectTransform.anchorMin = new Vector2(StatSplit, 0); v.rectTransform.anchorMax = new Vector2(1, 1);
-            v.rectTransform.offsetMin = Vector2.zero; v.rectTransform.offsetMax = new Vector2(-4, 0);
-            UIFactory.Fit(v, 11);
+            bool shows = IsUnits || modelId != null;
+            _preview.gameObject.SetActive(shows);
+            if (_previewHint != null) _previewHint.gameObject.SetActive(shows);
+            if (!shows) return;
+
+            if (IsUnits) _preview.Show(Unit(entry));
+            else _preview.ShowModel(modelId, entry?.name ?? "This system");
+        }
+
+        /// <summary>Re-reads the selected row's cells after an edit, without rebuilding the whole table.</summary>
+        void RefreshRowText()
+        {
+            if (_selected == null) return;
+            if (!_rowImages.TryGetValue(_selected.id, out var image) || image == null) return;
+
+            // The entry's own display strings are snapshots taken at load, so a
+            // renamed record would keep its old caption until the tab was
+            // re-entered. Refresh them from the record before redrawing.
+            if (Unit(_selected) is UnitDefinition unit)
+            {
+                _selected.name = unit.name;
+                _selected.detail = unit.description;
+                _selected.group = UnitBranchInfo.DisplayName(unit.Branch);
+            }
+
+            var row = (RectTransform)image.transform;
+            ClearChildren(row);
+            foreach (var col in _columns)
+            {
+                if (col.Cell == null)
+                {
+                    float iconX = IconColumnInset;
+                    if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", _selected.id, iconX, col); iconX += 50f; }
+                    if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", _selected.id, iconX, col);
+                    continue;
+                }
+                bool lead = col.Label == "NAME";
+                Cell(row, col.Cell(_selected) ?? "", col, lead ? 17 : 15,
+                    lead ? GameConfig.UiText : GameConfig.UiTextDim);
+            }
+
+            _detailName.text = _selected.name.ToUpperInvariant();
+        }
+
+        // ------------------------------------------------------------ tuning
+
+        void ToggleEditing()
+        {
+            _editing = !_editing;
+            _stats.SetEditing(_editing);
+            RefreshTuningControls();
+        }
+
+        void RefreshTuningControls()
+        {
+            if (_editButton != null)
+            {
+                var caption = _editButton.GetComponentInChildren<Text>();
+                if (caption != null)
+                {
+                    caption.text = _editing ? "DONE" : "EDIT";
+                    caption.color = _editing ? GameConfig.UiBackground : GameConfig.UiText;
+                }
+                _editButton.GetComponent<Image>().color =
+                    _editing ? GameConfig.UiAccent : GameConfig.UiPanelLight;
+            }
+
+            if (_statusLine == null) return;
+
+            int changed = TuningStore.OverriddenRecordCount;
+            _statusLine.text = changed == 0
+                ? (TuningStore.HasOverrides ? "No changes — tuning file is empty." : "Shipped values.")
+                : $"{changed} record(s) changed — SAVE to keep them.";
+            _statusLine.color = changed == 0 ? GameConfig.UiTextDim : GameConfig.UiAccent;
+        }
+
+        void SaveTuning()
+        {
+            string path = TuningStore.Save();
+            _statusLine.text = $"Saved {TuningStore.OverriddenRecordCount} record(s) -> {path}";
+            _statusLine.color = UiTheme.Success;
+        }
+
+        void RevertSelected()
+        {
+            if (_selected == null) return;
+
+            if (!TuningStore.Revert(_catalog.key, _selected.id, _selected.record))
+            {
+                _statusLine.text = $"{_selected.name} is already at its shipped values.";
+                _statusLine.color = GameConfig.UiTextDim;
+                return;
+            }
+
+            if (_selected.record is UnitDefinition unit) unit.RefreshDerived();
+            TuningStore.Save();
+
+            RefreshRowText();
+            _stats.Rebuild();
+            _statusLine.text = $"Reverted {_selected.name}.";
+            _statusLine.color = UiTheme.Success;
+        }
+
+        void ResetAll()
+        {
+            int reverted = GameCatalogs.ResetAll();
+
+            // The entries hold display snapshots and the columns hold closures
+            // over the records, so the whole tab is reloaded rather than patched.
+            SelectCatalog(_catalog);
+
+            _statusLine.text = reverted == 0
+                ? "Nothing was overridden — everything is already shipped values."
+                : $"Reset {reverted} record(s). The tuning file is gone.";
+            _statusLine.color = UiTheme.Success;
         }
 
         void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
-                SceneManager.LoadScene(GameConfig.SceneTesting);
+            // Escape leaves — unless a field has focus, where it is how you get
+            // out of the field.
+            if (!Input.GetKeyDown(KeyCode.Escape)) return;
+
+            var focused = UnityEngine.EventSystems.EventSystem.current?.currentSelectedGameObject;
+            if (focused != null && focused.GetComponent<InputField>() != null) return;
+
+            SceneManager.LoadScene(GameConfig.SceneTesting);
         }
     }
 }

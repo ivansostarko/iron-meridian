@@ -17,6 +17,18 @@ namespace IronMeridian.Map
         /// <summary>Return true to freeze the camera entirely (e.g. the pause menu is open).</summary>
         public System.Func<bool> InputBlocked;
 
+        /// <summary>
+        /// Optional limit on where the camera may look: given a requested focus
+        /// point, return the one it is allowed to have. Used to keep a mission
+        /// inside the ground it was authored on — see
+        /// <see cref="Data.MissionArea"/>.
+        ///
+        /// A hook rather than the area itself, because the rig works in Unity
+        /// world space and the boundary is geodetic. Keeping the conversion at
+        /// the caller leaves the camera free of any opinion about the globe.
+        /// </summary>
+        public System.Func<Vector3, Vector3> ClampFocus;
+
         float _distance = 14000f;
         float _yaw = 0f;
         float _pitch3D = 55f;
@@ -25,6 +37,22 @@ namespace IronMeridian.Map
 
         const float MinDistance = 300f;
         const float MaxDistance = 120000f;
+
+        /// <summary>
+        /// Ceiling on the standoff. Normally <see cref="MaxDistance"/>; a
+        /// mission that bounds its ground lowers it, because being able to zoom
+        /// out to a continent when the battle is a valley is the same problem as
+        /// being able to pan to one.
+        /// </summary>
+        float _maxDistance = MaxDistance;
+
+        /// <summary>Lowers (or restores) the zoom-out ceiling, metres.</summary>
+        public void SetMaxDistance(float metres)
+        {
+            _maxDistance = Mathf.Clamp(metres, MinDistance * 2f, MaxDistance);
+            _distance = Mathf.Min(_distance, _maxDistance);
+            Apply();
+        }
 
         public void Init(Vector3 focus, float startDistance)
         {
@@ -67,10 +95,10 @@ namespace IronMeridian.Map
             {
                 float scroll = Input.GetAxis("Mouse ScrollWheel");
                 if (Mathf.Abs(scroll) > 0.0001f)
-                    _distance = Mathf.Clamp(_distance * (1f - scroll * 1.6f), MinDistance, MaxDistance);
+                    _distance = Mathf.Clamp(_distance * (1f - scroll * 1.6f), MinDistance, _maxDistance);
             }
-            if (Input.GetKey(KeyCode.R)) _distance = Mathf.Clamp(_distance * (1f - dt), MinDistance, MaxDistance);
-            if (Input.GetKey(KeyCode.F)) _distance = Mathf.Clamp(_distance * (1f + dt), MinDistance, MaxDistance);
+            if (Input.GetKey(KeyCode.R)) _distance = Mathf.Clamp(_distance * (1f - dt), MinDistance, _maxDistance);
+            if (Input.GetKey(KeyCode.F)) _distance = Mathf.Clamp(_distance * (1f + dt), MinDistance, _maxDistance);
 
             if (_mode == ViewMode.Mode3D)
             {
@@ -87,6 +115,12 @@ namespace IronMeridian.Map
 
         void Apply()
         {
+            // Clamped here rather than at each of the half-dozen places that
+            // move the focus — panning, jumping, loading a map, flying to a
+            // mission. One choke point is what makes the bound impossible to
+            // slip past by adding another way to move.
+            if (ClampFocus != null) _focus = ClampFocus(_focus);
+
             float pitch = _mode == ViewMode.Mode2D ? 89.9f : _pitch3D;
             Quaternion rot = Quaternion.Euler(pitch, _yaw, 0);
             Cam.transform.position = _focus - rot * Vector3.forward * _distance;
@@ -114,7 +148,7 @@ namespace IronMeridian.Map
         /// </summary>
         public void SetDistance(float metres)
         {
-            _distance = Mathf.Clamp(metres, MinDistance, MaxDistance);
+            _distance = Mathf.Clamp(metres, MinDistance, _maxDistance);
             Apply();
         }
 
@@ -137,7 +171,7 @@ namespace IronMeridian.Map
         /// </summary>
         public void ZoomBy(float factor)
         {
-            _distance = Mathf.Clamp(_distance * factor, MinDistance, MaxDistance);
+            _distance = Mathf.Clamp(_distance * factor, MinDistance, _maxDistance);
             Apply();
         }
 

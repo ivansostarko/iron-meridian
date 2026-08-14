@@ -29,7 +29,7 @@ namespace IronMeridian.Core
         /// The mission being played or edited, or null in the plain map editor.
         ///
         /// The Game scene is one scene doing two jobs: it is the map editor
-        /// reached from Testing, and it is what a single-player mission is
+        /// reached from DEVELOPMENT, and it is what a single-player mission is
         /// played in. That is deliberate — a mission *is* a map with an order of
         /// battle on it, and a second scene would be the same systems wired the
         /// same way with a different name. What the mission changes is where the
@@ -43,6 +43,8 @@ namespace IronMeridian.Core
         LineManager _lines;
         MarkerManager _markers;
         LineDrawTool _drawTool;
+        /// <summary>Draws and shows the open mission's boundary — see docs/22-MISSIONS.md.</summary>
+        MissionAreaTool _areaTool;
         FrontlineSystem _frontline;
         SectorSystem _sectors;
         DefenceOrderSystem _defence;
@@ -170,6 +172,12 @@ namespace IronMeridian.Core
             _drawTool = gameObject.AddComponent<LineDrawTool>();
             _drawTool.Init(_map, _rig.Cam, _lines);
 
+            // The mission's own boundary. Deliberately not a LineManager line:
+            // it belongs to the mission record, not to the map file underneath
+            // it — see MissionAreaTool.
+            _areaTool = gameObject.AddComponent<MissionAreaTool>();
+            _areaTool.Init(_map, _rig.Cam);
+
             _frontline = gameObject.AddComponent<FrontlineSystem>();
             _frontline.Init(_lines);
 
@@ -252,6 +260,7 @@ namespace IronMeridian.Core
                                             _uavStrike.IsArmed ||
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
+                                            _areaTool.Drawing ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -475,7 +484,37 @@ namespace IronMeridian.Core
                 _palette.MissionSaveRequested = SaveMission;
                 _palette.MissionCreateRequested = CreateMissionHere;
                 _palette.MissionDeleteRequested = DeleteMission;
-                if (_mission != null) _palette.ShowMission(_mission);
+
+                // The mission's boundary. The tool owns the drawing and the
+                // overlay; the controller only decides which mission it is
+                // pointed at and what happens when the area changes.
+                _palette.MissionAreaDrawRequested = () =>
+                {
+                    if (!PointAreaToolAtPanelMission()) return;
+                    _drawTool.CancelDrawing();
+                    _areaTool.StartDrawing();
+                };
+                _palette.MissionAreaRectangleRequested = MakeMissionRectangle;
+                _palette.MissionAreaClearRequested = () =>
+                {
+                    if (!PointAreaToolAtPanelMission()) return;
+                    _areaTool.ClearArea();
+                };
+
+                _areaTool.Flash = _hud.Flash;
+                _areaTool.DrawingChanged = _palette.SetMissionAreaDrawing;
+                _areaTool.AreaChanged = _ =>
+                {
+                    _palette.RefreshMissionArea();
+                    ApplyMissionArea();
+                };
+
+                if (_mission != null)
+                {
+                    _palette.ShowMission(_mission);
+                    _areaTool.Show(_mission.area);
+                    ApplyMissionArea();
+                }
 
                 // DEPLOYED list.
                 _palette.SelectUnitRequested = u => _selection.Select(u);
@@ -638,6 +677,11 @@ namespace IronMeridian.Core
                     if (_palette != null)
                         _palette.SyncGeneralToggles(false, _mission.fogOfWar, _showLineOfSight, _showWeaponRange);
                 }
+
+                // The camera is only bounded while a battle is running — the
+                // editor has to be able to fly outside an area to draw it.
+                _combat.RunningChanged += _ => ApplyMissionArea();
+                ApplyMissionArea();
             });
 
             // Everything is built; what remains is Cesium streaming tiles for
@@ -867,6 +911,11 @@ namespace IronMeridian.Core
             if (_palette != null) _palette.SyncGeneralToggles(false, mission.fogOfWar,
                 _showLineOfSight, _showWeaponRange);
 
+            if (mission.area == null) mission.area = new Data.MissionArea();
+            _areaTool.Show(mission.area);
+            ApplyMissionArea();
+            if (_palette != null) _palette.RefreshMissionArea();
+
             FlyTo(mission.latitude, mission.longitude, (float)mission.startAltitudeMeters);
 
             _hud.SetTitle(mission.name.ToUpperInvariant());
@@ -901,9 +950,21 @@ namespace IronMeridian.Core
             mapFileName = mission.ResolvedMapFile;
             _mission = mission;
             _hud.SetTitle(mission.name.ToUpperInvariant());
-            _hud.Flash($"Saved mission '{mission.name}' -> {mapPath}");
+
+            // The area travels with the record, so it is already written — this
+            // is about the editor catching up with the mission it just adopted.
+            _areaTool.Show(mission.area);
+            ApplyMissionArea();
+
+            bool bounded = mission.area != null && mission.area.HasArea;
+            _hud.Flash($"Saved mission '{mission.name}' -> {mapPath}" +
+                       (bounded ? "" : "  ·  no mission area set — the battle is unbounded"));
             if (_palette != null)
-                _palette.SetMissionStatus($"Saved {mission.id} · {_save.units.Count} unit(s).");
+            {
+                _palette.SetMissionStatus($"Saved {mission.id} · {_save.units.Count} unit(s)" +
+                    (bounded ? $" · {mission.area.AreaKm2():n0} km² area." : " · unbounded."));
+                _palette.RefreshMissionArea();
+            }
         }
 
         /// <summary>
@@ -926,7 +987,11 @@ namespace IronMeridian.Core
 
             _hud.SetTitle(mission.name.ToUpperInvariant());
             _hud.Flash($"Created mission '{mission.name}' in {Data.CampaignInfo.DisplayName(campaign)}. " +
-                       "Lay it out, then SAVE MISSION + MAP.");
+                       "Lay it out, set its area, then SAVE MISSION + MAP.");
+
+            _areaTool.Show(mission.area);
+            ApplyMissionArea();
+
             if (_palette != null)
             {
                 _palette.ShowMission(mission);
@@ -950,7 +1015,13 @@ namespace IronMeridian.Core
                         _hud.Flash($"Could not delete '{name}'.");
                         return;
                     }
-                    if (_mission == mission) { _mission = null; _hud.SetTitle("MAP EDITOR"); }
+                    if (_mission == mission)
+                    {
+                        _mission = null;
+                        _hud.SetTitle("MAP EDITOR");
+                        _areaTool.Hide();
+                        ApplyMissionArea();
+                    }
                     _hud.Flash($"Deleted mission '{name}'.");
                     if (_palette != null)
                     {
@@ -958,6 +1029,90 @@ namespace IronMeridian.Core
                         _palette.SetMissionStatus($"Deleted {name}. Its map file was kept.");
                     }
                 });
+        }
+
+        // --------------------------------------------------- mission area
+
+        /// <summary>
+        /// Checks there is a mission to bound and that it is the one the editor
+        /// actually has open, then aims the area tool at it.
+        ///
+        /// The panel's selection is not always the open mission — a designer can
+        /// pick one in the dropdown to correct its briefing without loading its
+        /// map. Drawing an area in that state would write a boundary into one
+        /// mission while the overlay drew it over another's ground, which is
+        /// worse than refusing: an area is drawn *against the terrain*, so it
+        /// only means anything on the map it belongs to.
+        /// </summary>
+        bool PointAreaToolAtPanelMission()
+        {
+            var picked = _palette != null ? _palette.CurrentMission : _mission;
+            if (picked == null)
+            {
+                _hud.Flash("Select or create a mission before setting its area.");
+                return false;
+            }
+            if (_mission != picked)
+            {
+                _hud.Flash($"Open '{picked.name}' in the editor first — an area is drawn on its own ground.");
+                return false;
+            }
+
+            if (picked.area == null) picked.area = new Data.MissionArea();
+            if (_areaTool.Area != picked.area) _areaTool.Show(picked.area);
+            return true;
+        }
+
+        /// <summary>
+        /// Boxes the mission's area around the point the camera is looking at.
+        /// "Here" rather than around the mission's start point, because the
+        /// designer has already flown to the ground they mean.
+        /// </summary>
+        void MakeMissionRectangle(float halfKm)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            GeoUtils.UnityToGeo(_map.Georeference, _rig.Focus, out double lat, out double lon, out _);
+            _areaTool.SetArea(Data.MissionArea.Rectangle(lat, lon, halfKm, halfKm));
+            _hud.Flash($"Mission area set to a {halfKm * 2f:0} km box. SAVE MISSION + MAP to keep it.");
+        }
+
+        /// <summary>
+        /// Pushes the open mission's boundary into the systems that enforce it:
+        /// the fog (which blacks out everything beyond it in battle) and the
+        /// camera (which will not be walked past it).
+        ///
+        /// **The camera is bounded in battle only.** The editor has to be able
+        /// to fly outside the area to draw it, and to see the ground it might
+        /// grow into. It is the battle that is fought on one piece of ground.
+        /// </summary>
+        void ApplyMissionArea()
+        {
+            var area = _mission?.area;
+            bool bounded = area != null && area.HasArea;
+
+            _fog.SetArea(bounded ? area : null);
+
+            if (!bounded || !_combat.Running)
+            {
+                _rig.ClampFocus = null;
+                _rig.SetMaxDistance(float.MaxValue);   // clamped to the rig's own ceiling
+                return;
+            }
+
+            _rig.ClampFocus = world =>
+            {
+                GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out _);
+                double clampedLat = lat, clampedLon = lon;
+                area.Clamp(ref clampedLat, ref clampedLon);
+                if (clampedLat == lat && clampedLon == lon) return world;
+                return GeoUtils.GeoToUnity(_map.Georeference, clampedLat, clampedLon, 300);
+            };
+
+            // Enough standoff to see the whole area and a margin of the dark
+            // around it, and no more — zooming out to a continent when the
+            // battle is a valley is the same problem as panning to one.
+            _rig.SetMaxDistance(Mathf.Max(2000f, area.RadiusKm() * 2.4f * 1000f));
         }
 
         /// <summary>Puts the camera over a geodetic point at a given standoff.</summary>

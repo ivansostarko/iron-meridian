@@ -26,10 +26,18 @@ Assets/Scripts/
     MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData, MapMarkerData
     MissionData.cs       Campaign, CampaignInfo, MissionDefinition, MissionBook
                           — the single-player campaign (docs/22-MISSIONS.md)
+    MissionArea.cs       a mission's boundary polygon: containment, extent,
+                          camera clamping (docs/22-MISSIONS.md §1a)
+    TunableFields.cs     reflection over a data record's editable fields — what
+                          drives the DEVELOPMENT catalogue editor
+    GameCatalogs.cs      the register of every data table (units + five weapon
+                          families), so one screen can list and tune them all
   Save/
     SaveSystem.cs        JSON load/save; user saves shadow shipped maps
     MissionLibrary.cs    the mission list, read by the campaign screens and
                           written by the editor's MISSIONS panel
+    TuningStore.cs       the player's sparse patch over units.json and the weapon
+                          catalogues, with shipped-value baselines so REVERT works
   Audio/                 sound — see docs/10-AUDIO.md
     AudioManager.cs      master volume (AudioListener) + procedural UI click
     AudioCatalog.cs      music tracks: resource path, level, loop
@@ -67,7 +75,14 @@ Assets/Scripts/
     ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
     MainMenuUI.cs        left-hand command board: grouped entries + quit modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
-    TestingUI.cs         Dev + Map East France cards
+    TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
+    UnitsListUI.cs       UNITS AND WEAPONS: six catalogues, editable, saved to
+                          tuning.json
+    StatEditorPanel.cs   generic label/value list for any data record; switches
+                          from reading to editing without being rebuilt
+    EffectsListUI.cs     PARTICLE EFFECTS lab (docs/08-PARTICLE-SYSTEMS.md §3)
+    AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
+                          (docs/10-AUDIO.md §3)
     EastFranceUI.cs      "Under development" placeholder
     GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle
     UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel
@@ -114,6 +129,9 @@ Assets/Scripts/
     TaskMarker.cs        hold/guard/defend point graphic on the ground
     DefenceOrderSystem.cs Defend / Hold / Guard — lines, battle position, distribution
     LineDrawTool.cs      click-to-draw boundaries & defensive lines
+    MissionAreaTool.cs   click-to-draw a mission's boundary, and the overlay that
+                          shows it. Deliberately NOT a LineManager line — the area
+                          belongs to the mission record, not the map file
     FrontlineSystem.cs   the front line: influence field over every formation,
                           solved in metres and smoothed (docs/03-GAMEPLAY.md)
   Models/                3D models — see docs/09-3D-MODELS.md
@@ -127,6 +145,7 @@ Assets/Scripts/
     VfxSystem.cs         the only entry point: resolve, geo-anchor, scale, budget
     VfxInstance.cs       handle for a live effect; screen-size culling
     ProceduralVfx.cs     code-built fallbacks (no asset dependency)
+    VfxPreview.cs        plays one effect in a uGUI panel, in 3D, with its sound
     EffectPlacementTool.cs  hand-place fire/explosion/smoke on the terrain
     CalledStrikeSystem.cs  shared arm/aim/countdown behind artillery + air strikes
     ArtilleryCatalog.cs  the four artillery natures — see docs/17-ARTILLERY.md
@@ -187,7 +206,7 @@ must change the other.
 ## Flow
 
 ```
-MainMenu ─▶ Testing ─▶ Game scene
+MainMenu ─▶ Development (Testing scene) ─▶ Game scene
                         GameController.Start()
                           ├─ LoadingScreenUI.Show            overlay until terrain streams in
                           ├─ MapManager.Build(Lyon)          Cesium globe

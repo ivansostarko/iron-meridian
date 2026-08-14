@@ -26,4 +26,4 @@ description: Working on Iron Meridian's Unity C# code — runtime-built UI, scen
 
 ## Verifying
 
-No automated tests. Sanity chain: clean console on import → `Tools > Iron Meridian > Setup Project` → Play → Testing → Dev → drag-drop a unit, LMB/RMB orders, draw a line, toggle 2D/3D, START BATTLE, F5/F9. Any change to save schema must load `lyon_dev.json` without errors (JsonUtility silently defaults missing fields — check values, not just absence of errors).
+No automated tests. Sanity chain: clean console on import → `Tools > Iron Meridian > Setup Project` → Play → Development → Map Editor → drag-drop a unit, LMB/RMB orders, draw a line, toggle 2D/3D, START BATTLE, F5/F9. Any change to save schema must load `lyon_dev.json` without errors (JsonUtility silently defaults missing fields — check values, not just absence of errors).

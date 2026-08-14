@@ -17,6 +17,10 @@ namespace IronMeridian.Core
         public const string SceneMultiplayer = "Multiplayer";
         public const string SceneExtras = "Extras";
         public const string SceneUnitsList = "UnitsList";
+        /// <summary>Particle-effect lab, reached from DEVELOPMENT.</summary>
+        public const string SceneEffectsList = "EffectsList";
+        /// <summary>Audio lab, reached from DEVELOPMENT.</summary>
+        public const string SceneAudioList = "AudioList";
         public const string SceneGame = "Game";
 
         // Default dev map: Lyon, France

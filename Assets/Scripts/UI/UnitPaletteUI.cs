@@ -1839,8 +1839,15 @@ namespace IronMeridian.UI
         ///
         /// See docs/22-MISSIONS.md.
         /// </summary>
-        void BuildMissionsSection(RectTransform content)
+        void BuildMissionsSection(RectTransform section)
         {
+            // The only section that outgrew the panel. Its controls are placed
+            // at absolute offsets like every other section's, so rather than
+            // reflowing them into a layout group the whole page is put inside a
+            // scroll view of a fixed height — the offsets stay meaningful and
+            // the content stops running off the bottom of a 1080 window.
+            var content = ScrollableSection(section, MissionsPageHeight);
+
             SectionLabel(content, "CAMPAIGN", -8);
 
             _campaignDropdown = UIFactory.CreateDropdown(content, CampaignNames(), 0, OnCampaignPicked);
@@ -1886,14 +1893,16 @@ namespace IronMeridian.UI
                 RefreshMissionFields();
             }, out _missionFogLabel);
 
+            BuildMissionAreaBlock(content);
+
             // --- actions ---
             var save = UIFactory.CreateBorderedPanel(content, "SaveMission", UiTheme.Success, UiTheme.Success);
-            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -530), new Vector2(InnerWidth, 36));
+            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -724), new Vector2(InnerWidth, 36));
             var saveBtn = UIFactory.CreateButton(save, "SAVE MISSION + MAP", CommitMission,
                 new Color(0, 0, 0, 0), Color.white, UiTheme.FontSmall);
             UIFactory.Stretch((RectTransform)saveBtn.transform);
 
-            MissionActionButton(content, "NEW MISSION HERE", -574, UiTheme.Surface, UiTheme.Text, () =>
+            MissionActionButton(content, "NEW MISSION HERE", -768, UiTheme.Surface, UiTheme.Text, () =>
             {
                 string name = _missionName != null && !string.IsNullOrWhiteSpace(_missionName.text)
                     ? _missionName.text.Trim()
@@ -1901,7 +1910,7 @@ namespace IronMeridian.UI
                 MissionCreateRequested?.Invoke(_missionCampaign, name);
             });
 
-            MissionActionButton(content, "DELETE MISSION", -614, UiTheme.Danger, Color.white, () =>
+            MissionActionButton(content, "DELETE MISSION", -808, UiTheme.Danger, Color.white, () =>
             {
                 if (_mission != null) MissionDeleteRequested?.Invoke(_mission);
             });
@@ -1909,7 +1918,7 @@ namespace IronMeridian.UI
             _missionStatus = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.Accent,
                 TextAnchor.UpperLeft);
             UIFactory.Place(_missionStatus.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad, -656), new Vector2(InnerWidth, 34));
+                new Vector2(Pad, -850), new Vector2(InnerWidth, 34));
 
             var hint = UIFactory.CreateText(content,
                 "A mission is this record plus its map file, and SAVE writes both — so whatever is on the " +
@@ -1921,10 +1930,148 @@ namespace IronMeridian.UI
                 "Missions are saved to your own copy of the list, which shadows the shipped one. Delete " +
                 "missions.json from the save folder to go back to the missions the game ships with.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -694),
-                new Vector2(InnerWidth, 260));
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -888),
+                new Vector2(InnerWidth, 250));
 
             RefreshMissionList();
+        }
+
+        /// <summary>Height of the MISSIONS page inside its scroll view.</summary>
+        const float MissionsPageHeight = 1160f;
+
+        /// <summary>
+        /// Wraps a section's content in a scroll view of a fixed page height,
+        /// returning the page to place controls on.
+        ///
+        /// The stock scroll content stacks its children with a
+        /// <see cref="VerticalLayoutGroup"/>, which would fight the absolute
+        /// offsets every section builder uses. Both that and the size fitter are
+        /// **disabled** rather than destroyed: <c>Destroy</c> on a component is
+        /// deferred to end of frame, so a destroyed layout group would still lay
+        /// out the children added to it a few lines later.
+        /// </summary>
+        static RectTransform ScrollableSection(RectTransform section, float pageHeight)
+        {
+            var scroll = UIFactory.CreateScrollView(section, out RectTransform page, withScrollbar: true);
+            UIFactory.Stretch((RectTransform)scroll.transform);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+
+            var layout = page.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) layout.enabled = false;
+            var fitter = page.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+
+            page.sizeDelta = new Vector2(0, pageHeight);
+            return page;
+        }
+
+        // ------------------------------------------------------- mission area
+
+        /// <summary>Arm the click-to-draw area tool.</summary>
+        public System.Action MissionAreaDrawRequested;
+        /// <summary>Replace the area with a box of the given half-size, in km, around the view.</summary>
+        public System.Action<float> MissionAreaRectangleRequested;
+        /// <summary>Drop the area — the mission becomes unbounded again.</summary>
+        public System.Action MissionAreaClearRequested;
+
+        Text _missionAreaState, _missionAreaFigures;
+        Button _missionAreaDrawBtn;
+
+        /// <summary>
+        /// The mission's boundary controls.
+        ///
+        /// **Why a mission has a boundary at all.** A scenario is a piece of
+        /// ground. Without one the player can pan to the next country, the fog
+        /// of war has to guess how much map to cover, and there is nothing to
+        /// say where the battle is supposed to be. With one, the camera stops at
+        /// the edge, everything outside goes dark in battle, and a formation
+        /// that wanders off it is off the battlefield.
+        ///
+        /// Two ways to set it, because there are two cases: most missions want a
+        /// box of about this size around here, which is one click; some want the
+        /// shape of a valley or a coastline, which is worth drawing.
+        ///
+        /// See docs/22-MISSIONS.md and docs/16-FOG-OF-WAR.md.
+        /// </summary>
+        void BuildMissionAreaBlock(RectTransform content)
+        {
+            SectionLabel(content, "MISSION AREA", -528);
+
+            var frame = UIFactory.CreateBorderedPanel(content, "MissionAreaState", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -548), new Vector2(InnerWidth, 42));
+
+            var (state, figures) = UIFactory.CreateStackedLabels(frame,
+                "UNBOUNDED", "The whole world is in play", 12f, InnerWidth - 24f, topInset: 5f);
+            _missionAreaState = state;
+            _missionAreaFigures = figures;
+
+            var drawFrame = UIFactory.CreateBorderedPanel(content, "DrawArea", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(drawFrame, new Vector2(0f, 1f), new Vector2(Pad, -598), new Vector2(InnerWidth, 32));
+            _missionAreaDrawBtn = UIFactory.CreateButton(drawFrame, "DRAW AREA ON MAP",
+                () => MissionAreaDrawRequested?.Invoke(),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)_missionAreaDrawBtn.transform);
+
+            // Three sizes rather than a number field: these are the scales a
+            // scenario is actually laid out at — a town, a corps sector, a
+            // theatre — and typing "37" would be a decision nobody has a reason
+            // to make.
+            float third = (InnerWidth - 8f) / 3f;
+            RectangleButton(content, "20 KM", 10f, 0, third, -638);
+            RectangleButton(content, "50 KM", 25f, 1, third, -638);
+            RectangleButton(content, "120 KM", 60f, 2, third, -638);
+
+            MissionActionButton(content, "CLEAR AREA", -678, UiTheme.Surface, UiTheme.TextDim,
+                () => MissionAreaClearRequested?.Invoke());
+        }
+
+        void RectangleButton(RectTransform content, string label, float halfKm, int index,
+            float width, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Rect_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f),
+                new Vector2(Pad + index * (width + 4f), y), new Vector2(width, 32));
+
+            var btn = UIFactory.CreateButton(frame, label,
+                () => MissionAreaRectangleRequested?.Invoke(halfKm),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            UIFactory.Fit(btn.GetComponentInChildren<Text>(), 9);
+        }
+
+        /// <summary>Tells the panel whether the area tool is armed, so its button can say so.</summary>
+        public void SetMissionAreaDrawing(bool drawing)
+        {
+            if (_missionAreaDrawBtn == null) return;
+
+            var caption = _missionAreaDrawBtn.GetComponentInChildren<Text>();
+            if (caption != null)
+            {
+                caption.text = drawing ? "DRAWING — RIGHT-CLICK TO CLOSE" : "DRAW AREA ON MAP";
+                caption.color = drawing ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
+        /// <summary>Repaints the area readout from the mission's own record.</summary>
+        public void RefreshMissionArea()
+        {
+            if (_missionAreaState == null) return;
+
+            var area = _mission?.area;
+            if (area == null || !area.HasArea)
+            {
+                _missionAreaState.text = "UNBOUNDED";
+                _missionAreaState.color = UiTheme.TextDim;
+                _missionAreaFigures.text = _mission == null
+                    ? "No mission selected"
+                    : "The whole world is in play";
+                return;
+            }
+
+            _missionAreaState.text = "BOUNDED";
+            _missionAreaState.color = UiTheme.Accent;
+            _missionAreaFigures.text =
+                $"{area.VertexCount} corners · {area.AreaKm2():n0} km² · {area.RadiusKm():0.#} km radius";
         }
 
         InputField MissionField(RectTransform content, string placeholder, float y,
@@ -2048,7 +2195,12 @@ namespace IronMeridian.UI
                 _missionStatus.text = m == null
                     ? "No mission selected."
                     : $"{m.id}  ·  map: {m.ResolvedMapFile}";
+
+            RefreshMissionArea();
         }
+
+        /// <summary>The mission the panel is editing, so the controller can read its area back.</summary>
+        public MissionDefinition CurrentMission => _mission;
 
         /// <summary>
         /// Reads the panel's controls back into the selected mission.

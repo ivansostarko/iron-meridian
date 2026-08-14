@@ -49,11 +49,14 @@ same two files. **Any change that breaks that property is the wrong change.**
 
 ```
 Assets/Scripts/Data/MissionData.cs      Campaign, CampaignInfo, MissionDefinition, MissionBook
+Assets/Scripts/Data/MissionArea.cs      the boundary polygon: Contains, Clamp, Rectangle, extent
+Assets/Scripts/Lines/MissionAreaTool.cs click-to-draw the boundary + the always-on overlay
 Assets/Scripts/Save/MissionLibrary.cs   read/write/create/delete, map fallback, Selected
 Assets/Scripts/UI/SinglePlayerUI.cs     campaign board + mission board (two pages, one scene)
 Assets/Scripts/Core/SceneLoader.cs      async scene load behind the loading overlay
 Assets/Scripts/UI/UnitPaletteUI.cs      BuildMissionsSection — the editor panel
 Assets/Scripts/Core/GameController.cs   OpenMission / SaveMission / CreateMissionHere / DeleteMission
+                                        ApplyMissionArea — pushes the boundary into fog + camera
 Assets/StreamingAssets/Data/missions.json   the shipped list
 ```
 
@@ -63,8 +66,14 @@ Assets/StreamingAssets/Data/missions.json   the shipped list
 
 Map editor → **MISSIONS** → set the campaign → **NEW MISSION HERE** (starts at the
 point the camera is looking at) → fill in name, location, briefing, start altitude
-→ lay out the order of battle → **SAVE MISSION + MAP**. It appears under SINGLE
-PLAYER immediately.
+→ lay out the order of battle → set its **MISSION AREA** (DRAW AREA ON MAP, or a
+20/50/120 km box) → **SAVE MISSION + MAP**. It appears under SINGLE PLAYER
+immediately.
+
+The area is the mission's ground: in battle the camera is clamped to it,
+everything outside it goes dark, and formations outside it are off the
+battlefield. Empty means unbounded, which is what every mission written before
+areas existed is. See docs/22-MISSIONS.md §1a and docs/16-FOG-OF-WAR.md §2b.
 
 ### Add a mission (in the shipped data)
 
@@ -104,6 +113,15 @@ nothing else to wire.
   box is not an instruction to move the mission into the Atlantic — `TryParse`
   and leave the old value alone.
 - **`OPEN IN EDITOR` is destructive.** It replaces everything on the editor's map.
+
+- **An area can only be drawn on the mission that is open.** Picking one in the
+  dropdown to correct its briefing does not load its map, and an area drawn then
+  would be written into one mission while the overlay drew it over another's
+  ground. `GameController.PointAreaToolAtPanelMission` refuses instead.
+
+- **The area belongs to the record, not the map.** It is drawn with
+  `MissionAreaTool`, not `LineDrawTool`, so it never lands in `MapSaveData.lines`
+  — the same ground can carry two missions with different boundaries.
   That is why picking a mission in the dropdown and opening it are two clicks.
 - **DELETE keeps the map file.** A scenario takes an evening to lay out and the
   button is one mis-click. Do not "tidy up" by deleting the scenario with it.
@@ -124,7 +142,7 @@ No automated tests. The chain that exercises the whole feature:
 2. Pick a campaign → the right missions; pick one → loader → the map opens at that
    place, at that altitude, with the HUD naming the mission.
 3. `Esc` → pause menu → **EXIT** returns to SINGLE PLAYER, not the main menu.
-4. Testing → Map Editor → **MISSIONS** → pick the same mission → **OPEN IN EDITOR**
+4. Development → Map Editor → **MISSIONS** → pick the same mission → **OPEN IN EDITOR**
    → deploy a unit → **SAVE MISSION + MAP**.
 5. Back to SINGLE PLAYER → the same mission → the unit is there. *This step is the
    feature; if it fails, nothing else matters.*

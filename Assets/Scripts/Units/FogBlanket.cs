@@ -42,15 +42,27 @@ namespace IronMeridian.Units
     public class FogBlanket : MonoBehaviour
     {
         /// <summary>
-        /// Vertices per side. 80² is 6 400 — fine enough that a view-range edge
-        /// reads as a curve at 20 km, and small enough that re-uploading the
-        /// colours every frame is not a per-frame megabyte.
+        /// Vertices per side, floor and ceiling. 80² is 6 400 — fine enough that
+        /// a view-range edge reads as a curve at 20 km, and small enough that
+        /// re-uploading the colours every frame is not a per-frame megabyte.
+        /// A large mission area buys more, up to 128² (16 384), because the
+        /// alternative is a boundary that steps in four-kilometre blocks.
         /// </summary>
-        const int Resolution = 80;
+        const int MinResolution = 80, MaxResolution = 128;
+        /// <summary>Cell size the resolution aims for, km. Only the ceiling above stops it being met.</summary>
+        const float TargetCellKm = 1.4f;
         /// <summary>Metres the blanket floats above the terrain.</summary>
         const float LiftM = 45f;
         /// <summary>Half-extent floor and ceiling for the covered area, km.</summary>
         const float MinHalfExtentKm = 6f, MaxHalfExtentKm = 45f;
+        /// <summary>
+        /// Ceiling when the blanket is covering a **mission area** rather than
+        /// following the units. It has to be larger than the ordinary one, or a
+        /// 120 km scenario would have its boundary drawn well inside itself —
+        /// the mask would then be lying about where the battlefield ends, which
+        /// is worse than not drawing one.
+        /// </summary>
+        const float MaxAreaHalfExtentKm = 200f;
         /// <summary>Margin added around the units' bounding box, km.</summary>
         const float MarginKm = 4f;
         /// <summary>Rebuild the grid once a friendly unit is within this fraction of the edge.</summary>
@@ -84,6 +96,28 @@ namespace IronMeridian.Units
         bool[] _explored;
         /// <summary>Target alpha per vertex; the mesh eases toward it so the edge does not pop.</summary>
         float[] _target;
+        /// <summary>
+        /// False for vertices outside the mission area. Computed once when the
+        /// grid is laid, because a point-in-polygon test per vertex per sweep is
+        /// thousands of tests a second for an answer that cannot change — the
+        /// area is fixed for the whole battle.
+        /// </summary>
+        bool[] _inArea;
+
+        /// <summary>
+        /// The mission's ground, or null for an unbounded scenario. Outside it
+        /// the blanket is opaque and stays that way whatever anybody can see —
+        /// see <see cref="Data.MissionArea"/>.
+        /// </summary>
+        Data.MissionArea _area;
+
+        /// <summary>
+        /// When true, everything inside the area is simply clear and only the
+        /// outside is masked. This is the shape the blanket takes for a mission
+        /// that bounds its ground but leaves fog of war off: the player is meant
+        /// to see the whole battlefield, and only the battlefield.
+        /// </summary>
+        bool _areaMaskOnly;
 
         int _sampleCursor;
         bool _settled;
@@ -135,6 +169,22 @@ namespace IronMeridian.Units
             for (int i = 0; i < _explored.Length; i++) _explored[i] = false;
         }
 
+        /// <summary>
+        /// The mission's ground. Pass null for an unbounded scenario. Changing
+        /// it invalidates the grid, because which vertices are inside is baked
+        /// in when the grid is laid.
+        /// </summary>
+        /// <remarks>
+        /// The caller re-lays the grid after this: which vertices fall inside is
+        /// baked in when the grid is built, so an area change that did not
+        /// trigger a rebuild would leave the old mask in place.
+        /// </remarks>
+        public void SetArea(Data.MissionArea area, bool maskOnly)
+        {
+            _area = area != null && area.HasArea ? area : null;
+            _areaMaskOnly = maskOnly;
+        }
+
         // ------------------------------------------------------------ layout
 
         /// <summary>
@@ -172,9 +222,35 @@ namespace IronMeridian.Units
             BuildGrid();
         }
 
-        /// <summary>True if this unit is far enough out that the grid should be re-laid.</summary>
+        /// <summary>
+        /// Lays the grid over the mission's own ground, plus enough margin to
+        /// cover the dark outside it.
+        ///
+        /// The margin is generous on purpose. The blanket is what *shows* the
+        /// boundary, so it has to extend past the area far enough that the dark
+        /// reaches the edge of the screen — a mask that stopped at the boundary
+        /// would leave a lit ring of out-of-bounds terrain around it, which says
+        /// the opposite of what it is for.
+        /// </summary>
+        public void FitToArea(Data.MissionArea area)
+        {
+            if (area == null || !area.HasArea) return;
+
+            area.Centre(out _centreLat, out _centreLon);
+            _halfExtentKm = Mathf.Clamp(area.RadiusKm() * 1.6f + MarginKm,
+                MinHalfExtentKm, MaxAreaHalfExtentKm);
+
+            BuildGrid();
+        }
+
+        /// <summary>
+        /// True if this unit is far enough out that the grid should be re-laid.
+        /// Never for a bounded mission: the grid is laid over the mission's
+        /// ground and is not supposed to follow anybody off it.
+        /// </summary>
         public bool NeedsRefit(UnitActor unit)
         {
+            if (_area != null) return false;
             if (unit == null || !unit.IsAlive || _verts == null) return false;
             double km = GeoUtils.DistanceKm(_centreLat, _centreLon,
                 unit.State.latitude, unit.State.longitude);
@@ -186,7 +262,12 @@ namespace IronMeridian.Units
             _centreHeight = GeoUtils.SampleTerrainHeight(_geo, _centreLat, _centreLon, 250.0);
             _anchor.longitudeLatitudeHeight = new double3(_centreLon, _centreLat, _centreHeight);
 
-            int n = Resolution;
+            // Resolution follows the extent so a cell stays about the same size
+            // on the ground: 80² over a 12 km editor engagement and 128² over a
+            // 260 km theatre are the same picture, where a fixed grid would make
+            // the second one step in four-kilometre blocks.
+            int n = Mathf.Clamp(Mathf.CeilToInt(_halfExtentKm * 2f / TargetCellKm) + 1,
+                MinResolution, MaxResolution);
             int count = n * n;
 
             if (_verts == null || _verts.Length != count)
@@ -197,6 +278,7 @@ namespace IronMeridian.Units
                 _north = new float[count];
                 _explored = new bool[count];
                 _target = new float[count];
+                _inArea = new bool[count];
             }
 
             float extentM = _halfExtentKm * 1000f;
@@ -212,9 +294,21 @@ namespace IronMeridian.Units
                     _north[idx] = nt / 1000f;
                     // Height starts flat and is replaced as the samples come in.
                     _verts[idx] = new Vector3(e, LiftM, nt);
-                    _colours[idx] = new Color(1f, 1f, 1f, UnexploredAlpha);
-                    _target[idx] = UnexploredAlpha;
                     _explored[idx] = false;
+
+                    // Baked once, here: which side of the mission boundary this
+                    // vertex falls on cannot change for the length of a battle.
+                    if (_area == null) _inArea[idx] = true;
+                    else
+                    {
+                        GeoUtils.FromLocalKm(_centreLat, _centreLon, _east[idx], _north[idx],
+                            out double lat, out double lon);
+                        _inArea[idx] = _area.Contains(lat, lon);
+                    }
+
+                    float start = _inArea[idx] ? UnexploredAlpha : Data.MissionArea.OutsideOpacity;
+                    _colours[idx] = new Color(1f, 1f, 1f, start);
+                    _target[idx] = start;
                 }
 
             var tris = new int[(n - 1) * (n - 1) * 6];
@@ -271,6 +365,19 @@ namespace IronMeridian.Units
 
             for (int i = 0; i < _target.Length; i++)
             {
+                // Out of bounds: opaque, and no amount of looking at it changes
+                // that. Skipping the eye loop for these vertices is also most of
+                // the sweep's work saved on a small area inside a large grid.
+                if (_inArea != null && !_inArea[i])
+                {
+                    _target[i] = Data.MissionArea.OutsideOpacity;
+                    continue;
+                }
+
+                // Bounded but with fog off: the battlefield is simply visible,
+                // and the blanket is doing nothing here but framing it.
+                if (_areaMaskOnly) { _target[i] = 0f; continue; }
+
                 float clear = 0f;                    // 1 = fully in view
 
                 for (int k = 0; k < eyes.Count && clear < 1f; k++)

@@ -35,7 +35,7 @@ The 3D map will not load without it. Follow [02-CESIUM.md](02-CESIUM.md) — sho
 ## 5. Generate the scenes
 
 Run **Tools → Iron Meridian → Setup Project** from the Unity menu bar.
-This creates `Assets/Scenes/` (MainMenu, Settings, Testing, EastFrance, Game), registers them in Build Settings and opens the main menu scene.
+This creates `Assets/Scenes/` (MainMenu, Settings, Testing, EastFrance, SinglePlayer, Multiplayer, Extras, UnitsList, EffectsList, AudioList, Game), registers them in Build Settings and opens the main menu scene. The `Testing` scene is the one the menu calls **DEVELOPMENT** — the scene name is kept so existing build-settings entries and `LoadScene` calls do not break.
 
 ## 6. Play
 

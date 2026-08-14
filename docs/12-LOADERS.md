@@ -68,7 +68,7 @@ Implementation: `Core/SceneLoader.cs` and `LoadingScreenUI` + `GameController.St
 
 **These two are consecutive stages of one wait**, and the player sees them as a single overlay. `SceneLoader` covers building the scene and is marked `DontDestroyOnLoad` so it survives the load it is driving; it sits one sorting order *above* the standard loader so that for the frames both exist, the outgoing one is reliably on top rather than losing a coin toss to instantiation order. It dismisses only after activation, which is what stops a frame of empty map showing between the two.
 
-Splitting them is the point. `GameController.Start` builds every system and every panel before it yields, and a synchronous `SceneManager.LoadScene` spends all of that on the player's last frame — the click reads as a hang. Async with an overlay in the outgoing scene acknowledges the click immediately and puts a moving bar over the work. Entering the map editor from Testing still uses the synchronous path (§3.2); it is the same build, but nobody arrives there expecting a mission to start.
+Splitting them is the point. `GameController.Start` builds every system and every panel before it yields, and a synchronous `SceneManager.LoadScene` spends all of that on the player's last frame — the click reads as a hang. Async with an overlay in the outgoing scene acknowledges the click immediately and puts a moving bar over the work. Entering the map editor from DEVELOPMENT still uses the synchronous path (§3.2); it is the same build, but nobody arrives there expecting a mission to start.
 
 ### 3.2 Scene transitions — no loader
 
@@ -76,10 +76,10 @@ All navigation uses synchronous `SceneManager.LoadScene`. Menu scenes build thei
 
 | From → To | Trigger | Why no loader |
 |---|---|---|
-| Main Menu → Testing / Settings | Menu buttons | Runtime-built uGUI only |
-| Testing → Game | "Dev" card | The `Game` scene shows its own loader (§3.1) once it starts |
+| Main Menu → Development / Settings | Menu buttons | Runtime-built uGUI only |
+| Development → Game | "MAP EDITOR" card | The `Game` scene shows its own loader (§3.1) once it starts |
 | Single player ↔ campaign / mission boards | Row clicks, Escape | Two pages of one scene — nothing is loaded between them |
-| Testing → East France / Units List | Cards | Runtime-built uGUI only |
+| Development → East France / Units and Weapons / Particle Effects / Audio | Cards | Runtime-built uGUI only |
 | Any → previous screen | Back buttons, Escape | Runtime-built uGUI only |
 
 If a screen ever gains a slow build step, give it a `LoadingScreenUI` and add it to §3.1.

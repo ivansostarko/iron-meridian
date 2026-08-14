@@ -195,28 +195,45 @@ namespace IronMeridian.Vfx
         {
             if (_prefabs.TryGetValue(def.id, out var cached)) return cached;
 
-            GameObject prefab = null;
-            if (!string.IsNullOrEmpty(def.prefabPath))
-            {
-                prefab = Resources.Load<GameObject>(def.prefabPath);
-                if (prefab != null && !Renderable(prefab))
-                {
-                    if (!_warnedPipeline)
-                    {
-                        _warnedPipeline = true;
-                        Debug.LogWarning(
-                            "[VfxSystem] Authored VFX prefabs found but their shaders have no supported " +
-                            "sub-shader for the active render pipeline — the Free Fire VFX pack is URP-only " +
-                            "and this project runs the built-in pipeline. Falling back to procedural fire " +
-                            "and smoke. See docs/08-PARTICLE-SYSTEMS.md.");
-                    }
-                    prefab = null;
-                }
-            }
-
+            var prefab = LoadPrefab(def);
             _prefabs[def.id] = prefab;
             return prefab;
         }
+
+        /// <summary>
+        /// The authored prefab for an effect, or null when there is none the
+        /// active render pipeline can draw.
+        ///
+        /// Static and public because the DEVELOPMENT → PARTICLE EFFECTS lab has
+        /// to answer the same question with no <see cref="VfxSystem"/> in the
+        /// scene — and a lab that decided prefab-versus-procedural by its own
+        /// rules would be showing something other than what the game plays.
+        /// </summary>
+        public static GameObject LoadPrefab(VfxDef def)
+        {
+            if (def == null || string.IsNullOrEmpty(def.prefabPath)) return null;
+
+            var prefab = Resources.Load<GameObject>(def.prefabPath);
+            if (prefab == null || Renderable(prefab)) return prefab;
+
+            if (!_warnedPipeline)
+            {
+                _warnedPipeline = true;
+                Debug.LogWarning(
+                    "[VfxSystem] Authored VFX prefabs found but their shaders have no supported " +
+                    "sub-shader for the active render pipeline — the Free Fire VFX pack is URP-only " +
+                    "and this project runs the built-in pipeline. Falling back to procedural fire " +
+                    "and smoke. See docs/08-PARTICLE-SYSTEMS.md.");
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Forces the prefab and procedural settings an authored pack needs to
+        /// obey at this project's map scale. Shared with the effects lab so the
+        /// preview and the map treat a pack the same way.
+        /// </summary>
+        public static void Normalise(GameObject visual) => NormaliseAuthoredPrefab(visual);
 
         /// <summary>
         /// True when every material on the prefab has a sub-shader the current
