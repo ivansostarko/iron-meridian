@@ -376,6 +376,20 @@ namespace IronMeridian.UI
             Row("Team", s.TeamEnum == Team.User ? "User (Blue)" : "Enemy (Red)");
             Row("Heading", $"{s.headingDeg:0}°");
 
+            // Only while there is a march to report. A MARCH block that always
+            // showed "—  ·  —  ·  —" would be three rows of nothing between the
+            // position and the combat power in the common case.
+            var mover = _current.Mover;
+            if (mover != null && mover.IsMoving)
+            {
+                Section("MARCH");
+                Row("March speed", $"{d.speedKmh:0} km/h");
+                Row("Distance to go", $"{mover.RemainingKm:0.#} km");
+                Row("ETA", UnitMover.FormatDuration(mover.EtaGameSeconds), UiTheme.Accent);
+                int legs = mover.WaypointsRemaining;
+                if (legs > 1) Row("Legs remaining", legs.ToString());
+            }
+
             Section("COMBAT POWER");
             Row("Combat power", $"{_current.CurrentPower():n0}");
             Row("Training", $"{d.training:0}/100");

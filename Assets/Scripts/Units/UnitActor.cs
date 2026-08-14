@@ -65,6 +65,10 @@ namespace IronMeridian.Units
         void ApplyLabelScale()
         {
             if (_label == null) return;
+            // Force the next LateUpdate to re-apply: the slider changes the
+            // player's multiplier, and the zoom attenuation is folded in on top
+            // of it rather than replacing it.
+            _labelZoom = -1f;
             _label.SetScale(BaseLabelScale * LabelScale);
         }
 
@@ -78,6 +82,75 @@ namespace IronMeridian.Units
         /// who wants the old weight back.
         /// </summary>
         const float BaseLabelScale = 0.013f;
+
+        // --- label attenuation with zoom ---
+        //
+        // The icon holds a constant apparent size at every zoom (see the scale
+        // maths in LateUpdate) and the label rides on it, so pulling the camera
+        // back used to keep every caption at full size while the ground under
+        // them shrank. At operational altitude that is a wall of overlapping
+        // text with a map somewhere behind it.
+        //
+        // So the caption alone is attenuated by camera depth: full size while
+        // you are working at unit level, tapering to a third across the middle
+        // band, and gone entirely once the icons are close enough together that
+        // no caption could be read anyway. Depth along the camera's forward axis
+        // is used rather than altitude so this behaves identically in the
+        // top-down 2D view and the tilted 3D one — in 2D the two are the same
+        // number, and in 3D depth is what actually decides apparent size.
+
+        /// <summary>Camera depth (m) up to which captions stay at their authored size.</summary>
+        const float LabelFullDepthM = 6000f;
+        /// <summary>Camera depth (m) at which captions reach <see cref="LabelMinZoomScale"/>.</summary>
+        const float LabelFadeDepthM = 45000f;
+        /// <summary>Camera depth (m) beyond which captions are not drawn at all.</summary>
+        const float LabelHideDepthM = 62000f;
+        /// <summary>Smallest the zoom attenuation goes before the caption is dropped.</summary>
+        const float LabelMinZoomScale = 0.34f;
+        /// <summary>Change in the attenuation below which the label transform is left alone.</summary>
+        const float LabelScaleEpsilon = 0.004f;
+
+        /// <summary>Last attenuation written to the label, so LateUpdate can skip a no-op write.</summary>
+        float _labelZoom = -1f;
+        bool _labelHidden;
+
+        /// <summary>
+        /// Caption size multiplier for a camera depth, 0 meaning "do not draw".
+        /// One curve, in one place, so every unit on the map agrees about how
+        /// far out captions stop carrying information.
+        /// </summary>
+        public static float LabelZoomScale(float depthMeters)
+        {
+            if (depthMeters >= LabelHideDepthM) return 0f;
+            float t = Mathf.InverseLerp(LabelFullDepthM, LabelFadeDepthM, depthMeters);
+            return Mathf.Lerp(1f, LabelMinZoomScale, t);
+        }
+
+        /// <summary>
+        /// Applies the zoom attenuation for this frame's camera depth. Writes
+        /// only on a real change: this runs once per unit per frame, and with a
+        /// full order of battle deployed an unconditional transform write plus a
+        /// SetActive call per unit is pure waste on the ~99% of frames where the
+        /// camera has not moved.
+        /// </summary>
+        void UpdateLabelZoom(float depth)
+        {
+            if (_label == null) return;
+
+            float zoom = LabelZoomScale(depth);
+            bool hide = zoom <= 0f;
+
+            if (hide != _labelHidden)
+            {
+                _labelHidden = hide;
+                _label.gameObject.SetActive(!hide);
+            }
+            if (hide) return;
+
+            if (Mathf.Abs(zoom - _labelZoom) < LabelScaleEpsilon) return;
+            _labelZoom = zoom;
+            _label.SetScale(BaseLabelScale * LabelScale * zoom);
+        }
 
         // --- battle damage effects (see docs/08-PARTICLE-SYSTEMS.md) ---
         VfxInstance _burning;
@@ -253,6 +326,9 @@ namespace IronMeridian.Units
             float s = Mathf.Clamp(depth / 18f, 30f, 2600f) / 260f;
             _billboard.localScale = new Vector3(_baseScale * s, _baseScale * 0.75f * s, 1f);
 
+            // The icon holds its apparent size; the caption on it does not.
+            UpdateLabelZoom(depth);
+
             // Anchor the icon's base (not its centre) at the ground point. This
             // offset must scale with `s` too — a fixed offset sized for one zoom
             // level makes the icon visibly float above the terrain at any other
@@ -290,7 +366,7 @@ namespace IronMeridian.Units
             // Breathe the selection outline in time with the ring. A static
             // outline reads as part of the icon's artwork; a moving one reads as
             // a state the player put the unit into.
-            if (_selected && _canOutline && !HiddenByFog)
+            if (_selected && _canOutline && !Hidden)
             {
                 float t = (Mathf.Sin(Time.time * 4f) + 1f) * 0.5f;
                 _iconRenderer.material.SetFloat(RuntimeMaterials.OutlineWidthId,
@@ -346,6 +422,16 @@ namespace IronMeridian.Units
         public bool HiddenByFog { get; private set; }
 
         /// <summary>
+        /// True while the unit is folded into a cluster marker because the
+        /// camera is too far out to draw it individually. See
+        /// <see cref="UI.UnitClusterLayer"/>.
+        /// </summary>
+        public bool HiddenByCluster { get; private set; }
+
+        /// <summary>True when anything at all is keeping this unit's graphics off the map.</summary>
+        public bool Hidden => HiddenByFog || HiddenByCluster;
+
+        /// <summary>
         /// Shows or hides everything this unit draws. Deactivating the billboard
         /// takes the icon's collider with it, so a hidden formation cannot be
         /// clicked or hovered either — being invisible but still selectable
@@ -355,25 +441,47 @@ namespace IronMeridian.Units
         {
             if (HiddenByFog == hidden) return;
             HiddenByFog = hidden;
+            ApplyVisibility();
 
+            // A burning formation would otherwise give itself away through the
+            // fire attached to it. Deliberately keyed to fog alone: clustering
+            // is a drawing decision, and a battalion on fire is exactly the kind
+            // of thing an operational view should still be showing.
+            RefreshBurning();
+        }
+
+        /// <summary>
+        /// Folds this unit into (or out of) a cluster marker. Separate from the
+        /// fog flag because the two mean different things and can be true at
+        /// once — fog is "you cannot see this", clustering is "you are too far
+        /// out for this to be worth a counter of its own" — and a shared flag
+        /// meant whichever system cleared it last put a fogged unit back on the
+        /// map.
+        /// </summary>
+        public void SetHiddenByCluster(bool hidden)
+        {
+            if (HiddenByCluster == hidden) return;
+            HiddenByCluster = hidden;
+            ApplyVisibility();
+        }
+
+        void ApplyVisibility()
+        {
+            bool hidden = Hidden;
             if (_billboard != null) _billboard.gameObject.SetActive(!hidden);
             if (_ring != null) _ring.gameObject.SetActive(!hidden && _selected);
             if (_arrow != null) _arrow.SetVisible(!hidden && _selected);
             ApplyOutline();
-
-            // A burning formation would otherwise give itself away through the
-            // fire attached to it.
-            RefreshBurning();
         }
 
         public void SetSelected(bool sel)
         {
             _selected = sel;
-            if (_ring != null) _ring.gameObject.SetActive(sel && !HiddenByFog);
+            if (_ring != null) _ring.gameObject.SetActive(sel && !Hidden);
             // Facing is shown for any selected unit — in the scenario editor as
             // much as in battle, because knowing which way a counter points is
             // what the editor is for.
-            if (_arrow != null) _arrow.SetVisible(sel && !HiddenByFog);
+            if (_arrow != null) _arrow.SetVisible(sel && !Hidden);
             ApplyOutline();
         }
 
@@ -391,12 +499,12 @@ namespace IronMeridian.Units
             if (!_canOutline || _iconRenderer == null) return;
 
             var mat = _iconRenderer.material;
-            if (_selected && !HiddenByFog)
+            if (_selected && !Hidden)
             {
                 mat.SetColor(RuntimeMaterials.OutlineColorId, GameConfig.SelectionOutline);
                 mat.SetFloat(RuntimeMaterials.OutlineWidthId, GameConfig.IconOutlineSelectedMin);
             }
-            else if (_hovered && !HiddenByFog)
+            else if (_hovered && !Hidden)
             {
                 mat.SetColor(RuntimeMaterials.OutlineColorId, GameConfig.HoverOutline);
                 mat.SetFloat(RuntimeMaterials.OutlineWidthId, GameConfig.IconOutlineHover);

@@ -29,6 +29,15 @@ namespace IronMeridian.Core
         public static readonly Color NeutralGreen = new Color(0.45f, 0.85f, 0.45f);
         public static readonly Color UnknownYellow = new Color(0.95f, 0.90f, 0.30f);
         public static readonly Color BoundaryYellow = new Color(1.00f, 0.85f, 0.10f);
+        /// <summary>
+        /// The automatic front line between the two sides. Red rather than the
+        /// doctrinal yellow used for hand-drawn boundaries: this line is not a
+        /// control measure somebody drew, it is where the fighting currently is,
+        /// and it needs to be the most legible thing on the map at a glance.
+        /// Hand-drawn measures keep the yellow, so the two never read as the
+        /// same kind of object.
+        /// </summary>
+        public static readonly Color FrontlineRed = new Color(0.90f, 0.16f, 0.20f);
         // Red marks how far the unit can see, light blue how far it can shoot.
         public static readonly Color ViewRangeColor = new Color(0.95f, 0.30f, 0.20f);
         public static readonly Color WeaponRangeColor = new Color(0.35f, 0.80f, 0.95f);
@@ -62,7 +71,10 @@ namespace IronMeridian.Core
         // Gameplay
         public const float CombatTickSeconds = 1.0f;
         public const float FrontlineUpdateSeconds = 3.0f;
-        public const float MoveSpeedMultiplier = 60f;   // game-time acceleration for movement
+        // There is deliberately no MoveSpeedMultiplier any more. March speed is
+        // GameClock.GameSecondsPerRealSecond applied to the unit's own km/h, so
+        // the clock and the ground a formation covers cannot disagree. Players
+        // who want to get somewhere faster speed the clock up.
 
         // Particle effects (see docs/08-PARTICLE-SYSTEMS.md)
         /// <summary>Hard cap on live effects; a corps-scale battle would otherwise spawn hundreds.</summary>

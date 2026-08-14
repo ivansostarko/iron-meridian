@@ -55,11 +55,20 @@ namespace IronMeridian.Vfx
         public static DroneRun Launch(CesiumGeoreference geo, UavDef def,
             double targetLat, double targetLon, float headingDeg)
         {
-            var prefab = LoadModel(def);
-            if (prefab == null) return null;
-
             var go = new GameObject("DroneRun_" + def.label);
             go.transform.SetParent(geo.transform, false);
+
+            // Built through the library, which handles both a prefab from an
+            // imported pack and a model the project builds itself. A null here
+            // is a genuinely absent model, not merely an uninstalled one.
+            var model = UnitModelLibrary.CreateInstance(def.modelId, go.transform);
+            if (model == null)
+            {
+                Debug.LogWarning($"[DroneRun] No usable model for '{def.modelId}' — " +
+                    "the strike will still land, but with nothing to watch.");
+                Destroy(go);
+                return null;
+            }
 
             var run = go.AddComponent<DroneRun>();
             run._geo = geo;
@@ -70,35 +79,14 @@ namespace IronMeridian.Vfx
             run._anchor = go.AddComponent<CesiumGlobeAnchor>();
 
             run.PlanTrack();
-            run.BuildModel(prefab);
+            run.ShapeModel(model);
 
-            // Propeller buzz, parented so it travels with the airframe.
-            run._buzz = EffectAudio.PlayAt(EffectSound.DroneBuzz, go.transform.position,
+            // Engine note, parented so it travels with the airframe. Which note
+            // is the type's own — see UavDef.engineSound.
+            run._buzz = EffectAudio.PlayAt(def.engineSound, go.transform.position,
                 def.spanMeters * 6f, go.transform);
 
             return run;
-        }
-
-        /// <summary>
-        /// Golden rule 10: model prefabs are reached through
-        /// <see cref="UnitModelLibrary"/>, never by a Resources path at a call site.
-        /// </summary>
-        static GameObject LoadModel(UavDef def)
-        {
-            var model = UnitModelLibrary.Get(def.modelId);
-            if (model == null)
-            {
-                Debug.LogError($"[DroneRun] No model '{def.modelId}' in UnitModelLibrary.");
-                return null;
-            }
-
-            var prefab = Resources.Load<GameObject>(model.resourcePath);
-            if (prefab == null)
-                Debug.LogWarning($"[DroneRun] Model '{model.resourcePath}' is not installed — " +
-                    "the strike will still land, but with no drone. Run " +
-                    "Tools > Iron Meridian > Install Unit Models (docs/09-3D-MODELS.md).");
-
-            return prefab;
         }
 
         void PlanTrack()
@@ -112,9 +100,9 @@ namespace IronMeridian.Vfx
             Place(0f);
         }
 
-        void BuildModel(GameObject prefab)
+        /// <summary>Sizes and orients an already-built model on the airframe root.</summary>
+        void ShapeModel(GameObject model)
         {
-            var model = Instantiate(prefab, transform);
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.identity;
 

@@ -103,6 +103,16 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `AerialBombSmoke` | Black column off an air-dropped weapon | 460 m | loops | 56 | procedural |
 | `UavWarheadBurst` | Loitering-munition warhead — the smallest strike blast | 150 m | 2.0 s | 135 | procedural |
 | `UavWarheadSmoke` | Thin smoke off a drone warhead | 150 m | loops | 42 | procedural |
+| `ShahedWarheadBurst` | Shahed-class warhead — a heavy one-way drone, not a shell | 300 m | 3.0 s | 150 | procedural |
+| `ShahedWarheadSmoke` | Oily black column off a Shahed warhead | 320 m | loops | 46 | procedural |
+| `ShahedWreckFire` | Burning ground left where a one-way drone went in | 180 m | loops | 60 | procedural |
+| `MissileLightBurst` | Interceptor / short-range missile impact | 220 m | 2.4 s | 152 | procedural |
+| `MissileMediumBurst` | Theatre missile impact — the standard heavy warhead | 420 m | 3.4 s | 158 | procedural |
+| `MissileHeavyBurst` | IRBM impact — the largest detonation in the game | 760 m | 4.6 s | 165 | procedural |
+| `MissileLightSmoke` | Smoke off a light missile impact | 240 m | loops | 44 | procedural |
+| `MissileMediumSmoke` | Smoke off a medium missile impact | 440 m | loops | 48 | procedural |
+| `MissileHeavySmoke` | Towering column off a heavy missile impact | 820 m | loops | 52 | procedural |
+| `MissileTrail` | Exhaust plume trailing a missile in flight | 90 m | loops | 30 | procedural |
 
 The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -171,9 +181,21 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 
 | Case | Effect | Trigger | File |
 |---|---|---|---|
-| Drone warhead | `UavWarheadBurst` + `UavWarheadSmoke` | Once, where the drone reaches the ground | `DroneRun.Update` → `UavStrikeSystem.Detonate` |
+| Kamikaze warhead | `UavWarheadBurst` + `UavWarheadSmoke` | Once, where the drone reaches the ground | `DroneRun.Update` → `UavStrikeSystem.Detonate` |
+| Shahed warhead | `ShahedWarheadBurst` + `ShahedWarheadSmoke` + `ShahedWreckFire` | Same, for the heavier one-way type | `UavStrikeSystem.Detonate` |
 
-**UAV STRIKES** panel → pick a type → click the terrain → a 10 s countdown → the drone launches, cruises in and dives onto the point. One aircraft, one warhead, and deliberately the smallest blast of any strike here. Full detail in **docs/19-UAV-STRIKES.md**.
+**UAV STRIKES** panel → pick a type → click the terrain → a 10 s countdown → the drone launches, cruises in and dives onto the point. The kamikaze drone is deliberately the smallest blast of any strike here; the Shahed is closer to a 155 mm shell and leaves the ground burning. Full detail in **docs/19-UAV-STRIKES.md**.
+
+### Missile systems
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Missile impact | `Missile{Light,Medium,Heavy}Burst` + matching smoke + `GroundFire` | Once, where the missile reaches the ground | `MissileRun.Update` → `MissileStrikeSystem.Detonate` |
+| Missile in flight | `MissileTrail` | Attached to the missile at launch, killed on impact | `MissileRun.Launch` |
+
+**MISSILE SYSTEMS** rail row → the right-hand board → pick a system → click the terrain → a 10 s countdown → a missile comes over the horizon on a ballistic arc and the warhead lands inside the ring. Three weights rather than one effect per system: ten distinct effects would be ten effects nobody could tell apart. Full detail in **docs/20-MISSILE-SYSTEMS.md**.
+
+`MissileTrail` is **attached** rather than played at a point — a trail spawned at the launch site would sit there while the missile left it behind — and carries the lowest priority in the catalogue (30), because when the concurrency budget has to give, losing a plume costs a flourish rather than an event.
 
 ### Deployment
 

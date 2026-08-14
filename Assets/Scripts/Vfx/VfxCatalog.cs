@@ -70,7 +70,33 @@ namespace IronMeridian.Vfx
         /// <summary>Loitering-munition warhead — small, sharp, precise.</summary>
         UavWarheadBurst,
         /// <summary>Thin smoke off a drone warhead — looping until dispersed.</summary>
-        UavWarheadSmoke
+        UavWarheadSmoke,
+
+        /// <summary>Shahed-class warhead — a heavy one-way drone, not a shell.</summary>
+        ShahedWarheadBurst,
+        /// <summary>Oily black column off a Shahed warhead — looping until dispersed.</summary>
+        ShahedWarheadSmoke,
+        /// <summary>Burning ground left where a one-way drone went in — looping.</summary>
+        ShahedWreckFire,
+
+        // --- missile systems (see docs/20-MISSILE-SYSTEMS.md) ---
+
+        /// <summary>Interceptor/short-range missile impact — fast, bright, contained.</summary>
+        MissileLightBurst,
+        /// <summary>Theatre missile impact — the standard heavy warhead.</summary>
+        MissileMediumBurst,
+        /// <summary>IRBM / heavy ballistic impact — the largest detonation in the game.</summary>
+        MissileHeavyBurst,
+
+        /// <summary>Smoke off a light missile impact — looping until dispersed.</summary>
+        MissileLightSmoke,
+        /// <summary>Smoke off a medium missile impact — looping until dispersed.</summary>
+        MissileMediumSmoke,
+        /// <summary>Towering column off a heavy missile impact — looping until dispersed.</summary>
+        MissileHeavySmoke,
+
+        /// <summary>Exhaust plume trailing a missile in flight — looping, killed on impact.</summary>
+        MissileTrail
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -269,6 +295,72 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.UavWarheadSmoke, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 150f, lifeSeconds = 0f,
                          tint = new Color(0.40f, 0.38f, 0.36f), priority = 42,
+                         sound = EffectSound.None },
+
+            // --- Shahed-class one-way drone ---
+            // Its own rows rather than a scaled UAV warhead: at fifty-odd
+            // kilograms this is closer to a 155 mm shell than to the few
+            // kilograms a tactical loitering munition carries, and the fire it
+            // leaves behind is the part that reads on the map afterwards.
+
+            new VfxDef { id = VfxId.ShahedWarheadBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryHeavyBlast, scaleMeters = 300f, lifeSeconds = 3.0f,
+                         tint = new Color(1.00f, 0.62f, 0.26f), priority = 150,
+                         sound = EffectSound.ShahedWarhead },
+
+            new VfxDef { id = VfxId.ShahedWarheadSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 320f, lifeSeconds = 0f,
+                         tint = new Color(0.22f, 0.21f, 0.20f), priority = 46,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.ShahedWreckFire, prefabPath = null,
+                         fallback = VfxFallback.Fire,      scaleMeters = 180f, lifeSeconds = 0f,
+                         tint = new Color(1.00f, 0.55f, 0.18f), priority = 60,
+                         sound = EffectSound.Fire },
+
+            // --- missile systems (docs/20-MISSILE-SYSTEMS.md) ---
+            // Three weights rather than one per system: ten launchers firing the
+            // same effect at three sizes would be honest, and ten distinct
+            // effects would be ten effects nobody could tell apart. The weight
+            // is what a player is actually choosing between.
+
+            new VfxDef { id = VfxId.MissileLightBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryAirBurst, scaleMeters = 220f, lifeSeconds = 2.4f,
+                         tint = new Color(1.00f, 0.86f, 0.48f), priority = 152,
+                         sound = EffectSound.MissileLight },
+
+            new VfxDef { id = VfxId.MissileMediumBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryHeavyBlast, scaleMeters = 420f, lifeSeconds = 3.4f,
+                         tint = new Color(1.00f, 0.58f, 0.22f), priority = 158,
+                         sound = EffectSound.MissileMedium },
+
+            new VfxDef { id = VfxId.MissileHeavyBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryHeavyBlast, scaleMeters = 760f, lifeSeconds = 4.6f,
+                         tint = new Color(1.00f, 0.42f, 0.16f), priority = 165,
+                         sound = EffectSound.MissileHeavy },
+
+            new VfxDef { id = VfxId.MissileLightSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 240f, lifeSeconds = 0f,
+                         tint = new Color(0.44f, 0.43f, 0.42f), priority = 44,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.MissileMediumSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 440f, lifeSeconds = 0f,
+                         tint = new Color(0.26f, 0.25f, 0.24f), priority = 48,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.MissileHeavySmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 820f, lifeSeconds = 0f,
+                         tint = new Color(0.16f, 0.15f, 0.15f), priority = 52,
+                         sound = EffectSound.None },
+
+            // Attached to the missile itself and killed on impact, so it has no
+            // life of its own. Low priority: a trail is the first thing that
+            // should be dropped when the concurrent budget is reached, because
+            // losing it costs a flourish rather than an event.
+            new VfxDef { id = VfxId.MissileTrail, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 90f, lifeSeconds = 0f,
+                         tint = new Color(0.78f, 0.78f, 0.80f), priority = 30,
                          sound = EffectSound.None }
         };
 

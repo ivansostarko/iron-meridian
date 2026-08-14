@@ -66,8 +66,159 @@ namespace IronMeridian.Audio
 
             EffectSound.DroneBuzz => DroneBuzz(),
 
+            // Shahed class: fifty-odd kilograms, so a shell's report rather than
+            // a munition's crack — between the 155 and the 203.
+            EffectSound.ShahedWarhead =>
+                Shell("fx_shahed_warhead", seed: 136, duration: 3.6f,
+                      startHz: 78f, endHz: 24f, pitchFallSeconds: 1.1f,
+                      bodyDecay: 1.5f, crackDecay: 4.2f, crackLowPass: 0.17f,
+                      bodyMix: 0.92f, crackMix: 0.54f, rumbleMix: 0.42f),
+
+            EffectSound.ShahedEngine => ShahedEngine(),
+
+            // Missiles: the same three-layer report, at the three weights the
+            // catalogue offers. Light is above every tube in the game; heavy is
+            // below everything including the air-dropped bomb.
+            EffectSound.MissileLight =>
+                Shell("fx_missile_light", seed: 3001, duration: 2.6f,
+                      startHz: 150f, endHz: 52f, pitchFallSeconds: 0.5f,
+                      bodyDecay: 2.8f, crackDecay: 6.5f, crackLowPass: 0.40f,
+                      bodyMix: 0.60f, crackMix: 0.85f, rumbleMix: 0.18f),
+
+            EffectSound.MissileMedium =>
+                Shell("fx_missile_medium", seed: 3002, duration: 4.4f,
+                      startHz: 74f, endHz: 22f, pitchFallSeconds: 1.4f,
+                      bodyDecay: 1.1f, crackDecay: 3.0f, crackLowPass: 0.18f,
+                      bodyMix: 1.00f, crackMix: 0.60f, rumbleMix: 0.58f),
+
+            EffectSound.MissileHeavy =>
+                Shell("fx_missile_heavy", seed: 3003, duration: 6.5f,
+                      startHz: 48f, endHz: 12f, pitchFallSeconds: 2.4f,
+                      bodyDecay: 0.62f, crackDecay: 1.9f, crackLowPass: 0.11f,
+                      bodyMix: 1.00f, crackMix: 0.48f, rumbleMix: 0.80f),
+
+            EffectSound.MissileMotor => MissileMotor(),
+            EffectSound.MissileIncoming => MissileIncoming(),
+
             _ => null
         };
+
+        /// <summary>
+        /// A Shahed-class engine: a small two-stroke, which is a completely
+        /// different sound from a quadcopter and the reason the class has a
+        /// nickname. Where <see cref="DroneBuzz"/> is a stack of clean detuned
+        /// tones, this is a harsh buzz built from a sawtooth and its harmonics,
+        /// with a slow irregular waver — a piston engine under load, not four
+        /// electric motors holding station.
+        /// </summary>
+        static AudioClip ShahedEngine()
+        {
+            const float duration = 2.0f;
+            int n = (int)(Rate * duration);
+            var data = new float[n];
+            var rng = new System.Random(136);
+            float hiss = 0f, phase = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+
+                // Firing rate wavers a couple of per cent, the way a small
+                // engine does. A rock-steady rate reads as a synthesiser.
+                float freq = 86f * (1f + 0.022f * Mathf.Sin(t * 5.1f) + 0.013f * Mathf.Sin(t * 11.7f));
+                phase += 2f * Mathf.PI * freq / Rate;
+                if (phase > Mathf.PI * 2f) phase -= Mathf.PI * 2f;
+
+                // Sawtooth from its first few harmonics: rich in the odd
+                // partials that make the sound rasp rather than hum.
+                float saw = 0f;
+                for (int h = 1; h <= 6; h++)
+                    saw += Mathf.Sin(phase * h) / h;
+                saw *= 0.55f;
+
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                hiss = Mathf.Lerp(hiss, noise, 0.22f);
+
+                data[i] = saw * 0.85f + hiss * 0.20f;
+            }
+
+            Normalise(data, 0.62f);
+            CrossfadeLoop(data);
+            return Make("fx_shahed_engine", data);
+        }
+
+        /// <summary>
+        /// A rocket motor: broadband roar with a low pulsing core, looped so it
+        /// can travel with the missile for as long as the flight lasts.
+        ///
+        /// No pitch slide, unlike <see cref="JetPass"/> — the motor is attached
+        /// to the missile and heard from it, so the changing distance is the
+        /// audio source's job rather than the clip's.
+        /// </summary>
+        static AudioClip MissileMotor()
+        {
+            const float duration = 2.4f;
+            int n = (int)(Rate * duration);
+            var data = new float[n];
+            var rng = new System.Random(5150);
+            float low = 0f, mid = 0f, phase = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                low = Mathf.Lerp(low, noise, 0.035f);
+                mid = Mathf.Lerp(mid, noise - low, 0.22f);
+
+                // Combustion roughness — a low tone under the roar, which is
+                // what separates a rocket from a waterfall.
+                phase += 2f * Mathf.PI * 41f / Rate;
+                float core = Mathf.Sin(phase) * 0.30f;
+
+                data[i] = low * 0.95f + mid * 0.42f + core;
+            }
+
+            Normalise(data, 0.72f);
+            CrossfadeLoop(data);
+            return Make("fx_missile_motor", data);
+        }
+
+        /// <summary>
+        /// The terminal descent: a rising whistle under a swelling roar, the
+        /// one-shot played as the warhead comes down.
+        ///
+        /// This is the cue that gives the player the half-second of warning that
+        /// makes an impact land emotionally rather than merely visually — you
+        /// hear it arrive before you see it hit.
+        /// </summary>
+        static AudioClip MissileIncoming()
+        {
+            const float duration = 2.6f;
+            int n = (int)(Rate * duration);
+            var data = new float[n];
+            var rng = new System.Random(911);
+            float air = 0f, phase = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float u = t / duration;
+
+                // Everything grows toward the impact; nothing decays.
+                float envelope = u * u;
+
+                float freq = Mathf.Lerp(320f, 1350f, u * u);
+                phase += 2f * Mathf.PI * freq / Rate;
+                float whistle = Mathf.Sin(phase) * 0.55f;
+
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                air = Mathf.Lerp(air, noise, 0.12f);
+
+                data[i] = (whistle + air * 0.85f) * envelope;
+            }
+
+            Normalise(data, 0.78f);
+            return Make("fx_missile_incoming", data);
+        }
 
         /// <summary>
         /// Quadcopter propellers: a stack of close, slightly detuned tones over a

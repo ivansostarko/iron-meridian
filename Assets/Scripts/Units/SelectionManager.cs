@@ -30,6 +30,13 @@ namespace IronMeridian.Units
         public System.Func<bool> BattleRunning;
         /// <summary>Raised with the unit under the cursor, or null. Drives the hover tooltip.</summary>
         public System.Action<UnitActor> HoverChanged;
+        /// <summary>
+        /// Raised with a clickable control measure that was clicked on bare
+        /// ground — currently only the automatic front line, which opens its
+        /// settings panel. Units win: a line running under a formation is
+        /// scenery compared with the formation standing on it.
+        /// </summary>
+        public System.Action<Lines.MapLine> LineClicked;
 
         const float DragThresholdPx = 6f;
 
@@ -278,6 +285,15 @@ namespace IronMeridian.Units
                 {
                     ToggleInSelection(_pendingClickUnit);
                 }
+                else if (_pendingClickUnit == null && LineUnderMouse() is Lines.MapLine line)
+                {
+                    // A click on bare ground that happens to land on a clickable
+                    // control measure. The selection is dropped first: the panel
+                    // this opens shares the right-hand edge with the unit info
+                    // panel, and two of them cannot be there at once.
+                    Select(null);
+                    LineClicked?.Invoke(line);
+                }
                 else
                 {
                     Select(_pendingClickUnit);
@@ -470,9 +486,22 @@ namespace IronMeridian.Units
                 else u.SetPosition(dLat, dLon);
             }
 
-            if (marching) Flash?.Invoke(append
-                ? $"Waypoint added for {n} units."
-                : $"{n} units marching.");
+            // The formation arrives when its slowest element does, so that is
+            // the figure quoted — an average would promise an arrival time that
+            // a third of the units cannot make.
+            if (marching)
+            {
+                UnitActor slowest = null;
+                foreach (var u in _selection)
+                    if (u != null && u.IsAlive && u.Mover.IsMoving &&
+                        (slowest == null || u.Mover.EtaGameSeconds > slowest.Mover.EtaGameSeconds))
+                        slowest = u;
+
+                string tail = slowest != null ? $" — slowest {MarchSummary(slowest)}" : "";
+                Flash?.Invoke(append
+                    ? $"Waypoint added for {n} units{tail}."
+                    : $"{n} units marching{tail}.");
+            }
         }
 
         static void Order(UnitActor unit, double lat, double lon, bool append)
@@ -485,18 +514,34 @@ namespace IronMeridian.Units
         /// Says what the route now looks like. Appending is invisible without
         /// it — the unit carries on exactly as before and the only thing that
         /// changed is a line further ahead than the eye is following.
+        ///
+        /// The distance and the arrival time are the point of the message.
+        /// Marches now run at the formation's real speed against a real-time
+        /// clock, so "go there" is a decision with a cost — a truck company and
+        /// a foot battalion given the same objective are two very different
+        /// orders, and the only way to see that before committing is to be told.
         /// </summary>
         void ReportOrder(UnitActor unit, bool append)
         {
             if (BattleRunning == null || !BattleRunning() || unit == null) return;
 
             int legs = unit.Mover.WaypointsRemaining;
+            string plan = MarchSummary(unit);
+
             if (append)
                 Flash?.Invoke(legs > 1
-                    ? $"Waypoint added — {legs} legs on the route. Shift + right-click to add more."
-                    : "Waypoint added.");
+                    ? $"Waypoint added — {legs} legs, {plan}."
+                    : $"Waypoint added — {plan}.");
             else
-                Flash?.Invoke("Marching. Shift + right-click to add waypoints.");
+                Flash?.Invoke($"Marching — {plan}. Shift + right-click to add waypoints.");
+        }
+
+        /// <summary>"12.4 km at 45 km/h · ETA 16 min" for the unit's current route.</summary>
+        static string MarchSummary(UnitActor unit)
+        {
+            double km = unit.Mover.RemainingKm;
+            float eta = unit.Mover.EtaGameSeconds;
+            return $"{km:0.#} km at {unit.Def.speedKmh:0} km/h · ETA {UnitMover.FormatDuration(eta)}";
         }
 
         void UpdateHover(bool blocked)
@@ -529,6 +574,29 @@ namespace IronMeridian.Units
                 if (actor != null && h.distance < bestDist)
                 {
                     best = actor; bestDist = h.distance;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// The nearest clickable control measure under the cursor, or null.
+        /// Uses the same buffer as the unit pick — this only runs on a release
+        /// that hit no unit, so the two never compete for it.
+        /// </summary>
+        Lines.MapLine LineUnderMouse()
+        {
+            var ray = _cam.ScreenPointToRay(Input.mousePosition);
+            int count = Physics.RaycastNonAlloc(ray, _hitBuffer, 500000f);
+            Lines.MapLine best = null;
+            float bestDist = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var h = _hitBuffer[i];
+                var line = h.collider.GetComponentInParent<Lines.MapLine>();
+                if (line != null && line.Pickable && h.distance < bestDist)
+                {
+                    best = line; bestDist = h.distance;
                 }
             }
             return best;

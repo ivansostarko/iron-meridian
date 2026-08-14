@@ -54,6 +54,8 @@ namespace IronMeridian.UI
         public System.Action<bool> FogOfWarChanged;
         /// <summary>Line-of-sight ring on the selected unit shown/hidden.</summary>
         public System.Action<bool> LineOfSightChanged;
+        /// <summary>Maximum-weapon-range ring on the selected unit shown/hidden.</summary>
+        public System.Action<bool> WeaponRangeChanged;
 
         // Tool strip.
         public System.Action SelectToolRequested;
@@ -64,7 +66,16 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Boundaries, Effects, Artillery, AirStrike, UavStrike, Weather, Map, DateTime }
+        enum Section
+        {
+            General, Units, Boundaries, Effects, Artillery, AirStrike, UavStrike,
+            /// <summary>
+            /// The odd one out: it has no section panel of its own and opens a
+            /// right-hand board instead. See <see cref="MissileSystemsRequested"/>.
+            /// </summary>
+            Missiles,
+            Weather, Map, DateTime
+        }
         enum ListMode { Available, Deployed }
 
         /// <summary>
@@ -122,8 +133,8 @@ namespace IronMeridian.UI
         /// space rather than leaving a gap where a control used to be.
         /// </summary>
         const float ListTop = -90f;
-        /// <summary>Emblem block plus the ten nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 410f;
+        /// <summary>Emblem block plus the eleven nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 446f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -155,11 +166,12 @@ namespace IronMeridian.UI
         UnitDefinition _dragging;
         Button _autoSectorBtn;
         bool _autoSectors;
-        RectTransform _fogLamp, _losLamp;
-        Text _fogLabel, _losLabel;
+        RectTransform _fogLamp, _losLamp, _weaponLamp;
+        Text _fogLabel, _losLabel, _weaponLabel;
         bool _fog;
-        /// <summary>Mirrors GameController's default — the ring is on until it is turned off.</summary>
+        /// <summary>Mirrors GameController's defaults — both rings are on until they are turned off.</summary>
         bool _lineOfSight = true;
+        bool _weaponRange = true;
 
         readonly List<(Section section, string title, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
             new List<(Section, string, Image, Image, Text, RectTransform)>();
@@ -363,9 +375,23 @@ namespace IronMeridian.UI
             return body;
         }
 
+        /// <summary>Raised by the MISSILE SYSTEMS nav row; the controller opens the right-hand board.</summary>
+        public System.Action MissileSystemsRequested;
+
         /// <summary>Opens a section, or closes the panel if that section is already showing.</summary>
         void OpenSection(Section section)
         {
+            // MISSILE SYSTEMS has no section of its own. It closes the sliding
+            // panel and hands over to the right-hand board, which is honest
+            // about where the controls actually are — leaving the left panel
+            // open on whatever was last shown would look like the click missed.
+            if (section == Section.Missiles)
+            {
+                ClosePanel();
+                MissileSystemsRequested?.Invoke();
+                return;
+            }
+
             if (_panelOpen && _section == section) { ClosePanel(); return; }
 
             _section = section;
@@ -388,12 +414,26 @@ namespace IronMeridian.UI
             PaintNav();
         }
 
+        /// <summary>True while the right-hand missile board is up; drives its nav row's highlight.</summary>
+        bool _missilesOpen;
+
+        /// <summary>
+        /// Tells the rail whether the missile board is showing. Its row cannot
+        /// use the section panel's own open state — it has no section — and a
+        /// nav row that never lights up reads as a button that did nothing.
+        /// </summary>
+        public void SetMissilePanelOpen(bool open)
+        {
+            _missilesOpen = open;
+            PaintNav();
+        }
+
         /// <summary>Which nav row reads as active — none at all while the panel is closed.</summary>
         void PaintNav()
         {
             foreach (var (s, _, fill, glyph, label, bar) in _navRows)
             {
-                bool on = _panelOpen && s == _section;
+                bool on = s == Section.Missiles ? _missilesOpen : (_panelOpen && s == _section);
                 fill.color = on ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
                 glyph.color = on ? UiTheme.Accent : UiTheme.TextFaint;
                 label.color = on ? UiTheme.Text : UiTheme.TextDim;
@@ -451,9 +491,12 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Artillery, "ARTILLERY STRIKE", UiIcons.Artillery, -188);
             AddNavRow(panel, Section.AirStrike, "AIR STRIKE", UiIcons.FlyingWing, -224);
             AddNavRow(panel, Section.UavStrike, "UAV STRIKES", UiIcons.Quadcopter, -260);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -296);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -332);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -368);
+            // Opens a panel on the *right* rather than a section in the sliding
+            // panel — see MissilePanelUI for why that one needs the width.
+            AddNavRow(panel, Section.Missiles, "MISSILE SYSTEMS", UiIcons.Interceptor, -296);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -332);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -368);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -404);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -527,7 +570,18 @@ namespace IronMeridian.UI
                 RefreshGeneralSection();
             }, out _losLabel);
 
-            _fogLamp = ToggleRow(content, "FOG OF WAR", -282, () =>
+            // Directly under LINE OF SIGHT because the two are read together:
+            // what a formation can see and what it can reach are the pair of
+            // circles a planner is comparing, and having only one of them
+            // switchable meant you could never look at either on its own.
+            _weaponLamp = ToggleRow(content, "MAX WEAPON RANGE", -282, () =>
+            {
+                _weaponRange = !_weaponRange;
+                WeaponRangeChanged?.Invoke(_weaponRange);
+                RefreshGeneralSection();
+            }, out _weaponLabel);
+
+            _fogLamp = ToggleRow(content, "FOG OF WAR", -326, () =>
             {
                 _fog = !_fog;
                 FogOfWarChanged?.Invoke(_fog);
@@ -535,15 +589,18 @@ namespace IronMeridian.UI
             }, out _fogLabel);
 
             var intelHint = UIFactory.CreateText(content,
-                "LINE OF SIGHT draws how far the selected formation can see, with the distance in metres " +
-                "on the ring. Shown in both scenario and battle mode.\n\n" +
+                "LINE OF SIGHT draws how far the selected formation can see, in red, with the distance in " +
+                "metres on the ring.\n\n" +
+                "MAX WEAPON RANGE draws how far it can shoot, in blue. Both are shown in the scenario " +
+                "editor and in battle, and either can be turned off on its own — a mortar battery's two " +
+                "circles are nothing alike, and overlaying them is only useful when you want both.\n\n" +
                 "FOG OF WAR draws enemy formations only where something of yours can see them. Lose sight " +
                 "of one and the map keeps the contact: last known position, the time it was seen, and a " +
                 "ring that grows to cover where it could have got to since. Battle mode only — the editor " +
                 "shows both sides so you can lay them out. Use the RECON orders to see past your own " +
                 "units' eyes.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(intelHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -326), new Vector2(InnerWidth, 170));
+            UIFactory.Place(intelHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -370), new Vector2(InnerWidth, 230));
 
             RefreshGeneralSection();
         }
@@ -553,11 +610,13 @@ namespace IronMeridian.UI
         /// events. RESET puts the systems back to their defaults directly, and
         /// the lamps here would otherwise keep reporting the state from before it.
         /// </summary>
-        public void SyncGeneralToggles(bool autoSectors, bool fogOfWar, bool lineOfSight)
+        public void SyncGeneralToggles(bool autoSectors, bool fogOfWar, bool lineOfSight,
+            bool weaponRange)
         {
             _autoSectors = autoSectors;
             _fog = fogOfWar;
             _lineOfSight = lineOfSight;
+            _weaponRange = weaponRange;
             RefreshAutoSectorLabel();
             RefreshGeneralSection();
         }
@@ -569,6 +628,11 @@ namespace IronMeridian.UI
             {
                 _losLamp.GetComponent<Image>().color = _lineOfSight ? UiTheme.Success : UiTheme.TextFaint;
                 _losLabel.text = _lineOfSight ? "SHOWN" : "HIDDEN";
+            }
+            if (_weaponLamp != null)
+            {
+                _weaponLamp.GetComponent<Image>().color = _weaponRange ? UiTheme.Success : UiTheme.TextFaint;
+                _weaponLabel.text = _weaponRange ? "SHOWN" : "HIDDEN";
             }
             if (_fogLamp != null)
             {
@@ -1179,7 +1243,7 @@ namespace IronMeridian.UI
         ///
         /// Fourteen natures will not fit in one column, and stacking them into a
         /// scroll would bury the choice that actually matters. They are split by
-        /// **inventory** instead — NATO or Russian — because that is the first
+        /// **inventory** instead — NATO or Enemy — because that is the first
         /// decision a player makes and it halves the list. Within a page they run
         /// mortars then guns, ascending by calibre, so the beaten zone grows
         /// monotonically down the page and the trade-off between natures is
@@ -1208,8 +1272,8 @@ namespace IronMeridian.UI
 
         void BuildOriginTabs(RectTransform content, float y)
         {
-            var origins = new[] { ArtilleryOrigin.Nato, ArtilleryOrigin.Russian };
-            var names = new[] { "NATO", "RUSSIAN" };
+            var origins = new[] { ArtilleryOrigin.Nato, ArtilleryOrigin.Enemy };
+            var names = new[] { "NATO", "ENEMY" };
             float w = (InnerWidth - 6f) / 2f;
 
             for (int i = 0; i < origins.Length; i++)

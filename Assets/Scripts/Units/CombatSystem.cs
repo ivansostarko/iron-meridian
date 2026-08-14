@@ -67,13 +67,40 @@ namespace IronMeridian.Units
 
         public void Toggle() => SetRunning(!Running);
 
+        /// <summary>
+        /// Most catch-up ticks resolved in one frame. Time can now run at a few
+        /// hundred times real speed (see <see cref="GameClock"/>), and one frame
+        /// at that rate is worth minutes of battle — resolving all of it in a
+        /// single frame would stall the game. Falling behind the clock at
+        /// extreme speeds is the better failure: the fight is still resolved in
+        /// order, just spread over more frames.
+        /// </summary>
+        const int MaxCatchUpTicks = 8;
+
         void Update()
         {
             if (!Running) return;
+
             _tickTimer += Time.deltaTime;
             if (_tickTimer < GameConfig.CombatTickSeconds) return;
-            _tickTimer = 0f;
-            Tick();
+
+            // The remainder is carried rather than thrown away. It used to be
+            // zeroed, which capped the battle at one tick per *frame* — so above
+            // about x1 the clock raced ahead while the fighting quietly ran at
+            // frame rate, and the same scenario resolved differently on a fast
+            // machine than on a slow one.
+            int ticks = 0;
+            while (_tickTimer >= GameConfig.CombatTickSeconds && ticks < MaxCatchUpTicks)
+            {
+                _tickTimer -= GameConfig.CombatTickSeconds;
+                ticks++;
+                Tick();
+            }
+
+            // Whatever could not be caught up with is dropped, not banked: a
+            // backlog would keep the game resolving ticks after the player has
+            // slowed time back down.
+            if (_tickTimer >= GameConfig.CombatTickSeconds) _tickTimer = 0f;
         }
 
         void Tick()

@@ -43,7 +43,24 @@ namespace IronMeridian.Audio
         /// <summary>Loitering-munition warhead — small and sharp, not a shell.</summary>
         UavWarhead,
         /// <summary>Quadcopter propellers — a looping buzz that travels with the drone.</summary>
-        DroneBuzz
+        DroneBuzz,
+        /// <summary>Shahed-class warhead — a heavy one-way drone, closer to a shell than to a munition.</summary>
+        ShahedWarhead,
+        /// <summary>Shahed-class engine — the moped drone. A harsh two-stroke rasp, not a quadcopter's buzz.</summary>
+        ShahedEngine,
+
+        // --- missile systems (docs/20-MISSILE-SYSTEMS.md) ---
+
+        /// <summary>Interceptor or short-range missile impact — fast, high, contained.</summary>
+        MissileLight,
+        /// <summary>Theatre missile impact — the reference heavy warhead.</summary>
+        MissileMedium,
+        /// <summary>IRBM impact — the lowest and longest detonation in the game.</summary>
+        MissileHeavy,
+        /// <summary>Rocket motor in flight — a looping roar that travels with the missile.</summary>
+        MissileMotor,
+        /// <summary>Terminal descent — the rising whistle of something arriving fast.</summary>
+        MissileIncoming
     }
 
     /// <summary>

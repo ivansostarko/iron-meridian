@@ -13,10 +13,31 @@ namespace IronMeridian.Core
     /// </summary>
     public class GameClock : MonoBehaviour
     {
-        /// <summary>Game-seconds elapsed per real second at 1x.</summary>
-        const double GameSecondsPerRealSecond = 60.0;
+        /// <summary>
+        /// Game-seconds elapsed per real second at x1. **One.** The scenario
+        /// clock runs at real time, which is what makes a formation's
+        /// <c>speedKmh</c> mean what it says: a 45 km/h armoured battalion
+        /// covers 45 km in an hour on the clock, and 12.5 m in the second you
+        /// are watching.
+        ///
+        /// This used to be 60, with <see cref="UnitMover"/> separately
+        /// multiplying march speed by its own hard-coded 60. The two agreed only
+        /// by coincidence — nothing tied them together — and the result on
+        /// screen was a battalion crossing a 20 km map in half a minute, which
+        /// reads as an arcade unit rather than as an army moving.
+        ///
+        /// Compression is now the player's decision rather than the simulation's:
+        /// <see cref="Speeds"/> reaches x300, so an hour of march is six real
+        /// seconds when you want it to be and an hour when you don't.
+        /// </summary>
+        public const double GameSecondsPerRealSecond = 1.0;
 
-        static readonly float[] Speeds = { 0f, 1f, 2f, 4f, 8f };
+        /// <summary>
+        /// Selectable rates. Wider and coarser than the old 1/2/4/8 because x1
+        /// is now real time: watching a march at real speed is the point, but
+        /// getting to the other end of one has to stay cheap.
+        /// </summary>
+        static readonly float[] Speeds = { 0f, 1f, 2f, 5f, 15f, 60f, 300f };
         /// <summary>Index of x1 — where a fresh scenario starts and where RESET puts it back.</summary>
         public const int NormalSpeed = 1;
 

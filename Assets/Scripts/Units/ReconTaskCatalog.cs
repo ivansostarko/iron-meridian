@@ -109,7 +109,14 @@ namespace IronMeridian.Units
                 scansWhileMoving = true,
                 airborne = true,
                 airborneSpeedKmh = 140f,
-                airborneEnduranceSeconds = 90f,
+                // One hour on station — a real tactical UAV sortie, and at
+                // 140 km/h that is 140 km of reach, so an objective anywhere on
+                // an operational map is inside it. It was 90 seconds back when
+                // the sensor flew at sixty times its own speed and covered 210
+                // km in that time; with movement on the scenario clock (see
+                // UnitMover) 90 seconds would have got it three kilometres out
+                // before it turned for home.
+                airborneEnduranceSeconds = 3600f,
                 arrowTint = Air
             },
 

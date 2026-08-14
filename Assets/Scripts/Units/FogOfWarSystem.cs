@@ -265,16 +265,21 @@ namespace IronMeridian.Units
 
         /// <summary>
         /// Grows the uncertainty ring. The radius is how far the formation could
-        /// have travelled since it was last seen, at the same accelerated clock
-        /// movement runs on — so the ring is a real statement about where it
-        /// could be, not a decorative pulse.
+        /// have travelled since it was last seen, on the same clock movement
+        /// runs on — so the ring is a real statement about where it could be,
+        /// not a decorative pulse.
+        ///
+        /// Elapsed time is <see cref="Time.time"/>, which is already scaled by
+        /// the chosen game speed, so a contact lost while time is running at
+        /// x60 becomes uncertain sixty times faster — which is exactly right:
+        /// sixty times as much of its march has happened.
         /// </summary>
         void RefreshContact(UnitActor enemy)
         {
             if (!_contacts.TryGetValue(enemy, out var contact) || contact.ring == null) return;
 
             float elapsed = Time.time - contact.lostAtRealtime;
-            float kmPerSecond = contact.speedKmh * GameConfig.MoveSpeedMultiplier / 3600f;
+            float kmPerSecond = contact.speedKmh * (float)GameClock.GameSecondsPerRealSecond / 3600f;
             float radius = Mathf.Clamp(MinUncertaintyKm + kmPerSecond * elapsed,
                 MinUncertaintyKm, MaxUncertaintyKm);
 

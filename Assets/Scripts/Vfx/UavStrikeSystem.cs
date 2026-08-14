@@ -84,6 +84,16 @@ namespace IronMeridian.Vfx
             if (smoke != null && VfxSystem.Active != null)
                 VfxSystem.Active.StopAfter(smoke, def.smokeSeconds);
 
+            // Wreck fire, for the types that leave one. It outlives the smoke on
+            // purpose: the smoke says something just happened here, the fire
+            // says something is still happening here.
+            if (def.wreckFireSeconds > 0f)
+            {
+                var fire = VfxSystem.Play(def.wreckFire, lat, lon, def.burstScale * 0.8f);
+                if (fire != null && VfxSystem.Active != null)
+                    VfxSystem.Active.StopAfter(fire, def.wreckFireSeconds);
+            }
+
             int destroyed = BlastDamage.Apply(lat, lon,
                 def.lethalRadiusM, def.blastRadiusM, def.maxDamage);
 

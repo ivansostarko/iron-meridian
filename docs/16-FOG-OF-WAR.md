@@ -107,12 +107,20 @@ is, and how it gets there.
 | **RECON AREA** | ×1.9 view range | yes | no — waits on the objective | The unit drives there and searches it |
 | **RECON ROUTE** | ×1.4 | yes | yes | Narrower: it is covering a line, not a box |
 | **OBSERVE** | **×2.6** | **no** | yes (it is stationary) | Furthest-seeing task. Standing still on chosen ground is the best observation there is |
-| **UAV RECON** | ×2.2 | no | the *sensor* flies | Straight over the terrain at 140 km/h, out and back, 90 s endurance |
+| **UAV RECON** | ×2.2 | no | the *sensor* flies | Straight over the terrain at 140 km/h, out and back, 1 h endurance (≈140 km of reach) |
 | **COMBAT PATROL** | ×1.5 | yes | yes | Shuttles between start and objective until cancelled; fights normally |
 
 All factors are > 1: a unit given a recon task is *looking*, rather than merely
 being somewhere. The sensor radius is floored at 1.5 km so a short-sighted unit
 still reports something.
+
+**Sorties and dwells are scenario time.** The UAV's endurance was 90 seconds and
+a patrol's dwell on the objective four, back when movement ran at sixty times a
+formation's real speed and 90 seconds bought 210 km of flight. Movement is now on
+the scenario clock (docs/13-DATE-AND-TIME.md), so those figures are what they
+say: an hour on station and three minutes on the objective. At 90 seconds the
+sensor would have got three kilometres out before turning for home. Speed the
+clock up to watch a sortie complete quickly.
 
 An **axis arrow** in the task's colour runs from the unit to the objective while
 the task is outbound, and fades on arrival — the same arrow the attack orders

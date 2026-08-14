@@ -30,21 +30,38 @@ Editor (timeless)  ──START BATTLE──▶  Battle (clock runs from H-hour)
 
 ## 3. Time rate and speed
 
-`GameClock.GameSecondsPerRealSecond = 60` — **one real second is one game minute** at 1×.
+`GameClock.GameSecondsPerRealSecond = 1` — **1× is real time.**
 
 | Speed | Multiplier | One real second is | `Time.timeScale` |
 |---|---|---|---|
 | PAUSED | 0× | nothing | 0 |
-| 1× | 1 | 1 game minute | 1 |
-| 2× | 2 | 2 game minutes | 2 |
-| 4× | 4 | 4 game minutes | 4 |
-| 8× | 8 | 8 game minutes | 8 |
+| 1× | 1 | 1 second | 1 |
+| 2× | 2 | 2 seconds | 2 |
+| 5× | 5 | 5 seconds | 5 |
+| 15× | 15 | 15 seconds | 15 |
+| 60× | 60 | 1 minute | 60 |
+| 300× | 300 | 5 minutes | 300 |
 
 Speed is changed with the **«**, **❚❚**, **»** buttons in the top-bar clock.
 
+### Why 1× is real time
+
+It used to be 60 — one real second was one game minute — and `UnitMover` separately multiplied march speed by its own hard-coded 60 so that a formation's `speedKmh` still meant something. The two agreed only by coincidence; nothing tied them together, and either could have been changed without the other. What it looked like on screen was a battalion crossing a 20 km map in half a minute.
+
+So the compression moved out of the simulation and into the player's hands:
+
+- **`speedKmh` means what it says.** A 45 km/h armoured battalion covers 45 km per hour of clock and 12.5 m in the second you are watching. Distance on the map and time on the HUD agree, which is what makes an ETA worth quoting — see `UnitMover.RemainingKm` / `EtaGameSeconds` and the MARCH block in the unit info panel.
+- **Getting somewhere is a decision, not a wait.** The speed ladder reaches 300×, so an hour of march is twelve real seconds when you want it to be.
+- **There is no `GameConfig.MoveSpeedMultiplier` any more.** `UnitMover`, `ReconOrderSystem` and `FogOfWarSystem` all read `GameClock.GameSecondsPerRealSecond` directly, so movement, UAV sorties and contact uncertainty cannot drift apart from the clock.
+
+Two things had to change to survive the wider ladder, both because one frame at 300× is worth minutes of battle:
+
+- `CombatSystem` carries the remainder of its tick accumulator instead of zeroing it, and resolves up to 8 catch-up ticks per frame. It used to discard the overflow, which quietly capped the fighting at one tick per *frame* — so above 1× the clock raced ahead of the battle, and the same scenario resolved differently on a fast machine than on a slow one.
+- `UnitMover` spends a frame's travel across as many route legs as it reaches, up to 24. It used to add the step to the current leg and throw the overshoot away, capping a routed march at one waypoint per frame.
+
 **Speed drives `Time.timeScale`, not just the readout.** Slowing time genuinely slows unit movement and combat ticks; that is the point. Two consequences follow, and both are deliberate:
 
-- The clock advances using `Time.unscaledDeltaTime × 60 × Speed`. `Time.deltaTime` is *already* scaled by `timeScale`, so using it would square the multiplier — 8× would run at 64×.
+- The clock advances using `Time.unscaledDeltaTime × GameSecondsPerRealSecond × Speed`. `Time.deltaTime` is *already* scaled by `timeScale`, so using it would square the multiplier — 300× would run at 90 000×.
 - Anything that must keep animating while paused uses **unscaled** time explicitly: range rings, the deploy burst, the placement reticle, particle culling, loading-screen fades and music fades.
 
 The pause menu also forces `timeScale` to 0. `GameClock.Update` therefore checks `Time.timeScale <= 0` as well as its own `Paused` flag, so a menu pause freezes the clock even when the player's chosen speed is above zero. `PauseMenuUI` restores `GameClock.DesiredTimeScale` on close rather than blindly resetting to 1.

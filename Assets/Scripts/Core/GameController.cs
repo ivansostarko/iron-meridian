@@ -40,12 +40,14 @@ namespace IronMeridian.Core
         ArtilleryStrikeSystem _artillery;
         AirStrikeSystem _airStrike;
         UavStrikeSystem _uavStrike;
+        MissileStrikeSystem _missiles;
 
         // Latest countdown reported by each strike system. A null title means
         // that system has nothing in the air; see RefreshStrikeBanner.
         (string title, float remaining, float total, Color colour) _artilleryBanner;
         (string title, float remaining, float total, Color colour) _airStrikeBanner;
         (string title, float remaining, float total, Color colour) _uavStrikeBanner;
+        (string title, float remaining, float total, Color colour) _missileBanner;
 
         /// <summary>
         /// Shows whichever strike is closest to landing. Ties are impossible in
@@ -55,7 +57,7 @@ namespace IronMeridian.Core
         {
             var pick = _artilleryBanner;
 
-            foreach (var other in new[] { _airStrikeBanner, _uavStrikeBanner })
+            foreach (var other in new[] { _airStrikeBanner, _uavStrikeBanner, _missileBanner })
             {
                 bool sooner = other.title != null &&
                               (pick.title == null || other.remaining < pick.remaining);
@@ -70,7 +72,10 @@ namespace IronMeridian.Core
         GameHUD _hud;
         UnitPaletteUI _palette;
         BoundaryPanelUI _boundaryPanel;
+        FrontlinePanelUI _frontlinePanel;
+        MissilePanelUI _missilePanel;
         UnitHoverTooltip _hoverTooltip;
+        UnitClusterLayer _clusters;
         ConnectivityWatcher _connectivity;
         UnitInfoPanel _infoPanel;
         GroupPanelUI _groupPanel;
@@ -88,6 +93,8 @@ namespace IronMeridian.Core
         double _rangeRingLat, _rangeRingLon;
         /// <summary>Line-of-sight ring on selection. On by default; toggled from the GENERAL panel.</summary>
         bool _showLineOfSight = true;
+        /// <summary>Max-weapon-range ring on selection. Same deal — GENERAL owns the switch.</summary>
+        bool _showWeaponRange = true;
 
         readonly System.Collections.Generic.List<UnitState> _clipboard =
             new System.Collections.Generic.List<UnitState>();
@@ -189,6 +196,10 @@ namespace IronMeridian.Core
             _uavStrike = gameObject.AddComponent<UavStrikeSystem>();
             _uavStrike.Init(_map, _rig.Cam);
 
+            // Missile systems — see docs/20-MISSILE-SYSTEMS.md.
+            _missiles = gameObject.AddComponent<MissileStrikeSystem>();
+            _missiles.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
@@ -198,6 +209,7 @@ namespace IronMeridian.Core
                                             _artillery.IsArmed ||
                                             _airStrike.IsArmed ||
                                             _uavStrike.IsArmed ||
+                                            _missiles.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -225,6 +237,7 @@ namespace IronMeridian.Core
             _artillery.Flash = _hud.Flash;
             _airStrike.Flash = _hud.Flash;
             _uavStrike.Flash = _hud.Flash;
+            _missiles.Flash = _hud.Flash;
 
             // Both strike systems report their countdown every frame, and there
             // is one banner. Left to themselves they would fight over it — the
@@ -244,6 +257,11 @@ namespace IronMeridian.Core
             _uavStrike.CountdownChanged = (title, remaining, total, colour) =>
             {
                 _uavStrikeBanner = (title, remaining, total, colour);
+                RefreshStrikeBanner();
+            };
+            _missiles.CountdownChanged = (title, remaining, total, colour) =>
+            {
+                _missileBanner = (title, remaining, total, colour);
                 RefreshStrikeBanner();
             };
 
@@ -291,7 +309,46 @@ namespace IronMeridian.Core
                 // drops the unit selection, which is what takes the info panel
                 // down — and is honest besides: you are drawing now, not
                 // inspecting a formation.
-                _boundaryPanel.Opened = () => _selection.Select(null);
+                _boundaryPanel.Opened = () =>
+                {
+                    _selection.Select(null);
+                    if (_frontlinePanel != null) _frontlinePanel.Hide();
+                    CloseMissilePanel();
+                };
+            });
+
+            // Settings for the automatic front line. Reached by clicking the
+            // line itself — see FrontlinePanelUI for why it is not a rail
+            // section like everything else.
+            BuildStep("front line options", () =>
+            {
+                _frontlinePanel = FrontlinePanelUI.Create(canvas, _frontline);
+                _frontlinePanel.Opened = () =>
+                {
+                    if (_boundaryPanel != null) _boundaryPanel.Hide();
+                    CloseMissilePanel();
+                };
+                _selection.LineClicked = line =>
+                {
+                    if (line == null || line.Data.id != FrontlineSystem.LineId) return;
+                    _frontlinePanel.Show();
+                    _hud.Flash("Front line — derived from where the formations stand.");
+                };
+            });
+
+            BuildStep("missile systems", () =>
+            {
+                _missilePanel = MissilePanelUI.Create(canvas, _missiles);
+                _missilePanel.Opened = () =>
+                {
+                    // One right-hand edge, three boards that want it. Opening
+                    // this one takes the others down and drops the selection,
+                    // which is what closes the info panel.
+                    _selection.Select(null);
+                    if (_boundaryPanel != null) _boundaryPanel.Hide();
+                    if (_frontlinePanel != null) _frontlinePanel.Hide();
+                    if (_palette != null) _palette.SetMissilePanelOpen(true);
+                };
             });
 
             BuildStep("unit palette", () =>
@@ -312,7 +369,14 @@ namespace IronMeridian.Core
                     _sectors.AutoUpdate = on;
                     if (on) GenerateSectors();
                 };
+                _palette.MissileSystemsRequested = () =>
+                {
+                    if (_missilePanel == null) return;
+                    _missilePanel.Toggle();
+                    _palette.SetMissilePanelOpen(MissilePanelUI.IsOpen);
+                };
                 _palette.LineOfSightChanged = SetLineOfSightVisible;
+                _palette.WeaponRangeChanged = SetWeaponRangeVisible;
                 _palette.FogOfWarChanged = on =>
                 {
                     _fog.SetEnabled(on);
@@ -361,6 +425,22 @@ namespace IronMeridian.Core
                     u.RemoveFromMap();
                 };
                 _infoPanel.CycleRequested = CycleSelection;
+            });
+
+            // Battle-mode only, and only once the camera is far enough out that
+            // individual counters have stopped being readable — see
+            // UnitClusterLayer for why the editor is deliberately excluded.
+            BuildStep("unit clusters", () =>
+            {
+                _clusters = gameObject.AddComponent<UnitClusterLayer>();
+                _clusters.Build(canvas, _rig.Cam, _rig, _combat);
+                _clusters.SelectRequested = members =>
+                {
+                    _selection.SetSelection(members);
+                    _hud.Flash(members.Count == 1
+                        ? "1 formation selected from the cluster."
+                        : $"{members.Count} formations selected from the cluster.");
+                };
             });
 
             BuildStep("group panel", () =>
@@ -426,6 +506,14 @@ namespace IronMeridian.Core
             _selection.SelectionChanged = sel =>
             {
                 bool infoPanelOpen = sel.Count == 1 && sel[0] != null;
+                // The info panel and the front line panel share the right-hand
+                // edge; selecting a formation is a clear statement about which
+                // of the two you now want.
+                if (infoPanelOpen)
+                {
+                    if (_frontlinePanel != null) _frontlinePanel.Hide();
+                    CloseMissilePanel();
+                }
                 if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
                 if (_groupPanel != null) _groupPanel.SetSelection(sel);
                 // The compass lives in the bottom-right corner and steps aside
@@ -712,14 +800,19 @@ namespace IronMeridian.Core
             _recon.CancelAll();
             _drawTool.CancelDrawing();
             _effects.Cancel();
+            _missiles.Cancel();
             _selection.Select(null);
+            if (_frontlinePanel != null) _frontlinePanel.Hide();
+            CloseMissilePanel();
 
             // Editor settings, and the panel lamps that report them.
             _fog.SetEnabled(false);
             _showLineOfSight = true;
+            _showWeaponRange = true;
             _sectors.AutoUpdate = false;
             _sectors.ClearAll();
-            if (_palette != null) _palette.SyncGeneralToggles(false, false, true);
+            _frontline.ResetToDefaults();
+            if (_palette != null) _palette.SyncGeneralToggles(false, false, true, true);
             UnitActor.SetLabelScale(1f);
             _clock.SetSpeed(GameClock.NormalSpeed);
             _mapControls.SetControlsVisible(true);
@@ -838,9 +931,23 @@ namespace IronMeridian.Core
             }
             else _losRing.Hide();
 
-            _weaponRing.Show(u.State.latitude, u.State.longitude, u.Def.weaponRangeKm);
+            if (_showWeaponRange)
+            {
+                float km = u.Def.weaponRangeKm;
+                _weaponRing.Show(u.State.latitude, u.State.longitude, km,
+                    $"MAX WEAPON RANGE  {km * 1000f:n0} m");
+            }
+            else _weaponRing.Hide();
+
             _rangeRingLat = u.State.latitude;
             _rangeRingLon = u.State.longitude;
+        }
+
+        /// <summary>Takes the missile board down and un-lights its nav row with it.</summary>
+        void CloseMissilePanel()
+        {
+            if (_missilePanel != null) _missilePanel.Hide();
+            if (_palette != null) _palette.SetMissilePanelOpen(false);
         }
 
         /// <summary>GENERAL → LINE OF SIGHT. Repaints the current selection immediately.</summary>
@@ -853,6 +960,18 @@ namespace IronMeridian.Core
             _hud.Flash(on
                 ? "Line of sight shown on the selected unit, with its range in metres."
                 : "Line of sight hidden.");
+        }
+
+        /// <summary>GENERAL → MAX WEAPON RANGE. The other half of the same pair.</summary>
+        void SetWeaponRangeVisible(bool on)
+        {
+            _showWeaponRange = on;
+            if (_rangeRingUnit != null && _rangeRingUnit.IsAlive) ShowRangeRingsForCurrentUnit();
+            else if (_weaponRing != null) _weaponRing.Hide();
+
+            _hud.Flash(on
+                ? "Maximum weapon range shown on the selected unit, with its reach in metres."
+                : "Maximum weapon range hidden.");
         }
     }
 }

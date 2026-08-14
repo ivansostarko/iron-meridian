@@ -56,11 +56,19 @@ namespace IronMeridian.Vfx
         public static BomberRun Launch(CesiumGeoreference geo, AircraftDef def,
             double targetLat, double targetLon, float headingDeg)
         {
-            var prefab = LoadModel(def);
-            if (prefab == null) return null;
-
             var go = new GameObject("BomberRun_" + def.label);
             go.transform.SetParent(geo.transform, false);
+
+            // Through the library, which builds a procedural model or
+            // instantiates an imported prefab as the entry requires.
+            var model = UnitModelLibrary.CreateInstance(def.modelId, go.transform);
+            if (model == null)
+            {
+                Debug.LogWarning($"[BomberRun] No usable model for '{def.modelId}' — " +
+                    "the strike will still land, but with no aircraft.");
+                Destroy(go);
+                return null;
+            }
 
             var run = go.AddComponent<BomberRun>();
             run._geo = geo;
@@ -69,7 +77,7 @@ namespace IronMeridian.Vfx
             run._anchor = go.AddComponent<CesiumGlobeAnchor>();
 
             run.PlanTrack(targetLat, targetLon);
-            run.BuildModel(prefab);
+            run.ShapeModel(model);
 
             // The pass is loud and travels with the aircraft. This is the one
             // gameplay sound not carried by a VFX row — see docs/10-AUDIO.md.
@@ -77,29 +85,6 @@ namespace IronMeridian.Vfx
                 def.wingspanMeters * 4f, go.transform);
 
             return run;
-        }
-
-        /// <summary>
-        /// Golden rule 10: model prefabs are reached through
-        /// <see cref="UnitModelLibrary"/>, never by a Resources path at a call site.
-        /// </summary>
-        static GameObject LoadModel(AircraftDef def)
-        {
-            var model = UnitModelLibrary.Get(def.modelId);
-            if (model == null)
-            {
-                Debug.LogError($"[BomberRun] No model '{def.modelId}' in UnitModelLibrary.");
-                return null;
-            }
-
-            var prefab = Resources.Load<GameObject>(model.resourcePath);
-            if (prefab == null)
-                Debug.LogWarning($"[BomberRun] Model '{model.resourcePath}' is not installed — " +
-                    "the strike will still land, but with no aircraft. Run " +
-                    "Tools > Iron Meridian > Import Bundled Packages, then Install Unit Models " +
-                    "(docs/09-3D-MODELS.md).");
-
-            return prefab;
         }
 
         /// <summary>
@@ -124,9 +109,9 @@ namespace IronMeridian.Vfx
             Place(0f);
         }
 
-        void BuildModel(GameObject prefab)
+        /// <summary>Sizes and orients an already-built model on the airframe root.</summary>
+        void ShapeModel(GameObject model)
         {
-            var model = Instantiate(prefab, transform);
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.identity;
 

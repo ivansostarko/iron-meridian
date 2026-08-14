@@ -36,6 +36,9 @@ Assets/Scripts/
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
     BoundaryPanelUI.cs   docked right panel: control-measure side/colour/width/caption
+    FrontlinePanelUI.cs  docked right panel: front-line settings, opened by clicking the line
+    MissilePanelUI.cs    docked right panel: ten missile systems (docs/20-MISSILE-SYSTEMS.md)
+    UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
     MapControlsUI.cs     on-map zoom cluster (bottom-left) + compass (bottom-right)
     UiTheme.cs           map-editor design tokens (colours, sizes)
                          LeftPanelWidth = the always-present rail; other on-map
@@ -48,7 +51,7 @@ Assets/Scripts/
                          font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
                          TaskMarker and RangeRing captions
     ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
-    MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
+    MainMenuUI.cs        left-hand command board: grouped entries + quit modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         Dev + Map East France cards
     EastFranceUI.cs      "Under development" placeholder
@@ -66,12 +69,14 @@ Assets/Scripts/
   Units/
     UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
     UnitLabel.cs         unit caption above the icon: shadowed two-pass TextMesh
+                          (attenuated with camera depth by UnitActor.LabelZoomScale)
     UnitMover.cs         routed march: legs, cornering, terrain clamp, trail
     MoveTrail.cs         travelled trail, dashed planned route + marching direction
                          arrows and head motes (battle mode only)
     HeadingArrow.cs      ground facing arrow under a selected unit
     UnitRegistry.cs      runtime unit list + change events
-    SelectionManager.cs  LMB select, RMB move order, C facing, attack targeting
+    SelectionManager.cs  LMB select, RMB move order, C facing, attack targeting,
+                          LMB on a pickable MapLine (LineClicked)
     CombatSystem.cs      tick combat: power ratio, modifiers, consumption
     AttackTaskCatalog.cs the five offensive tasks in numbers — docs/15-COMBAT-ORDERS.md
     AttackOrderSystem.cs order lifecycle: approach → engage; ordered attacks beat the auto sweep
@@ -84,13 +89,15 @@ Assets/Scripts/
     BlastDamage.cs       what a shell/bomb/warhead does to formations under it
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
-    MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions
+    MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions,
+                          optional invisible ribbon MeshCollider for click picking
     LineManager.cs       line collection <-> save data
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground
     DefenceOrderSystem.cs Defend / Hold / Guard — lines, battle position, distribution
     LineDrawTool.cs      click-to-draw boundaries & defensive lines
-    FrontlineSystem.cs   auto boundary from power-weighted unit positions
+    FrontlineSystem.cs   the front line: influence field over every formation,
+                          solved in metres and smoothed (docs/03-GAMEPLAY.md)
   Models/                3D models — see docs/09-3D-MODELS.md
     UnitModelLibrary.cs  unit definition -> model prefab, source candidates, clips
     ModelPreview.cs      renders a model into a uGUI panel (RenderTexture rig)

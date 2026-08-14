@@ -179,7 +179,10 @@ namespace IronMeridian.UI
 
             _clockSpeed = UIFactory.CreateText(_clockPanel, "", UiTheme.FontSmall, UiTheme.Accent,
                 TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Place(_clockSpeed.rectTransform, new Vector2(0f, 0.5f), new Vector2(182, 0), new Vector2(46, 20));
+            // Wide enough for "PAUSED" and for the top rate, which is now x300
+            // rather than x8 — see GameClock, where x1 became real time.
+            UIFactory.Place(_clockSpeed.rectTransform, new Vector2(0f, 0.5f), new Vector2(178, 0), new Vector2(56, 20));
+            UIFactory.Fit(_clockSpeed, 9);
 
             ClockBtn(-8, "»", _clock.Faster, "Speed up");
             _pauseBtn = ClockBtn(-36, "❚❚", _clock.TogglePause, "Pause / resume");

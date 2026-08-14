@@ -125,15 +125,19 @@ namespace IronMeridian.Models
                 return;
             }
 
-            var prefab = Resources.Load<GameObject>(def.resourcePath);
-            if (prefab == null)
+            // Through the library: a procedural model has no prefab to load, and
+            // checking for one here would report the one model that *cannot* be
+            // missing as missing.
+            _model = UnitModelLibrary.CreateInstance(def, _rig);
+            if (_model == null)
             {
-                ShowPlaceholder($"Model '{def.resourcePath}' is not installed.\n" +
-                                "Run Tools > Iron Meridian > Install Unit Models.");
+                ShowPlaceholder(def.IsProcedural
+                    ? $"Model '{def.proceduralId}' could not be built.\nSee ProceduralModels."
+                    : $"Model '{def.resourcePath}' is not installed.\n" +
+                      "Run Tools > Iron Meridian > Install Unit Models.");
                 return;
             }
 
-            _model = Instantiate(prefab, _rig);
             _model.transform.localPosition = Vector3.zero;
             _model.transform.localRotation = Quaternion.identity;
             AddRimOutline();

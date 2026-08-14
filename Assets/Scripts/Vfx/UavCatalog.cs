@@ -8,7 +8,15 @@ namespace IronMeridian.Vfx
     public enum UavType
     {
         /// <summary>Loitering munition: flies to the objective and is expended on it.</summary>
-        KamikazeDrone
+        KamikazeDrone,
+
+        /// <summary>
+        /// Long-range one-way attack drone of the Shahed class. Bigger warhead,
+        /// longer run-in and a shallower terminal dive than a tactical
+        /// loitering munition — it arrives from the operational depth rather
+        /// than from the next ridge.
+        /// </summary>
+        ShahedDrone
     }
 
     /// <summary>One unmanned type: how it flies, what it does at the end of the flight.</summary>
@@ -52,6 +60,23 @@ namespace IronMeridian.Vfx
         public VfxId smoke;
         public float smokeSeconds;
         public float burstScale;
+
+        /// <summary>
+        /// Ground fire left burning where the drone went in, or
+        /// <see cref="VfxId.Dust"/>-style "none" via <see cref="wreckFireSeconds"/>
+        /// at zero. A tactical munition leaves a scorch and nothing else; a
+        /// fifty-kilogram warhead with the airframe's fuel behind it leaves
+        /// something burning, and that is what marks the place afterwards.
+        /// </summary>
+        public VfxId wreckFire;
+        public float wreckFireSeconds;
+
+        /// <summary>
+        /// Looping engine note carried by the airframe. A quadcopter and a
+        /// two-stroke delta wing do not sound remotely alike, and the engine is
+        /// the first thing that identifies which one is coming.
+        /// </summary>
+        public Audio.EffectSound engineSound = Audio.EffectSound.DroneBuzz;
 
         // --- what the warhead does to a formation (see BlastDamage) ---
         // Small on purpose. A loitering munition carries a few kilograms, so it
@@ -112,14 +137,52 @@ namespace IronMeridian.Vfx
                 smokeSeconds = 12f,
                 burstScale = 1.0f,
                 lethalRadiusM = 18f, blastRadiusM = 70f, maxDamage = 0.30f,
+                // No rotor spec: this airframe is built in code and carries its
+                // own animation clip, which already turns the propeller. A
+                // RotorSpinner on top of that would be two things driving the
+                // same transform, and the loser would be whichever ran second.
+                markerColor = new Color(0.80f, 0.60f, 1.00f)
+            },
+
+            new UavDef
+            {
+                uav = UavType.ShahedDrone,
+                label = "SHAHED DRONE",
+                name = "Shahed drone",
+                detail = "Long-range one-way attack — deep strike, heavy warhead",
+                // Wider than the tactical munition: a 50 kg class warhead
+                // delivered by a drone with a metre or two of guidance error is
+                // an area weapon in a way a 5 kg one is not.
+                radiusMeters = 160f,
+                modelId = UnitModelLibrary.ShahedDrone,
+                spanMeters = 130f,
+                noseYawOffsetDeg = 0f,
+                // Comes in low and long. A delta-wing airframe cruising at 500 m
+                // over a 6 km run-in is the picture people recognise, and it
+                // gives the player time to see it coming.
+                cruiseAltitudeMeters = 520f,
+                approachKm = 6.0f,
+                cruiseSeconds = 8.5f,
+                diveSeconds = 3.0f,
+                // Shallower than the tactical drone's 62°: this class glides
+                // onto the target rather than tipping vertically onto it.
+                diveAngleDeg = 38f,
+                burst = VfxId.ShahedWarheadBurst,
+                smoke = VfxId.ShahedWarheadSmoke,
+                smokeSeconds = 22f,
+                burstScale = 1.9f,
+                lethalRadiusM = 45f, blastRadiusM = 170f, maxDamage = 0.62f,
+                // The PolyPack airframe is a delta wing with a nose propeller;
+                // the mesh names are matched by substring, so both spellings the
+                // pack has used are covered.
                 rotors = new[]
                 {
-                    // The Quad's two propeller meshes. They spin about the
-                    // model's own up axis; if they turn in the wrong plane, this
-                    // vector is the fix.
-                    new RotorSpinner.Spec { nameContains = "Propeller", axis = Vector3.up, rpm = 1400f }
+                    new RotorSpinner.Spec { nameContains = "Prop", axis = Vector3.forward, rpm = 2200f }
                 },
-                markerColor = new Color(0.80f, 0.60f, 1.00f)
+                wreckFire = VfxId.ShahedWreckFire,
+                wreckFireSeconds = 40f,
+                engineSound = Audio.EffectSound.ShahedEngine,
+                markerColor = new Color(1.00f, 0.52f, 0.30f)
             }
         };
 

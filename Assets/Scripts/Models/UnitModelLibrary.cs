@@ -41,6 +41,19 @@ namespace IronMeridian.Models
 
         /// <summary>Multiplier applied after automatic bounds framing — nudge only if a model sits oddly.</summary>
         public float framing = 1f;
+
+        /// <summary>
+        /// Id in <see cref="ProceduralModels"/> for a model the project builds
+        /// itself, or null for one that comes from an imported pack.
+        ///
+        /// A procedural entry has no source FBX and no prefab: the installer
+        /// skips it, and <see cref="UnitModelLibrary.CreateInstance"/> builds it
+        /// on demand. That is the point — it cannot be missing, because there is
+        /// no pack to fail to import.
+        /// </summary>
+        public string proceduralId;
+
+        public bool IsProcedural => !string.IsNullOrEmpty(proceduralId);
     }
 
     /// <summary>Names the game uses for animation states, independent of the clip's file name.</summary>
@@ -77,6 +90,7 @@ namespace IronMeridian.Models
         public const string AttackHelicopter = "attack_helicopter";
         public const string StrikeFighter = "strike_fighter";
         public const string KamikazeDrone = "kamikaze_drone";
+        public const string ShahedDrone = "shahed_drone";
 
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
         {
@@ -216,11 +230,31 @@ namespace IronMeridian.Models
                 animated = false
             },
 
+            // Built in code, not imported. The pack this used to come from was
+            // removed from the project; rather than swap in another borrowed
+            // quadcopter, the game now owns its loitering munition outright —
+            // see ProceduralModels for the geometry and the runtime clip.
             [KamikazeDrone] = new UnitModelDef
             {
-                resourcePath = "Models/KamikazeDrone",
-                sourceAsset = "Professional Assets — DronePack (Quad)",
-                sourceCandidates = new[] { "_FBX Mesh [Quad]", "FBX Mesh [Quad]", "Quad" },
+                resourcePath = null,
+                sourceAsset = "Iron Meridian — built in code (ProceduralModels)",
+                proceduralId = ProceduralModels.KamikazeDrone,
+                idleClip = ModelClips.CombatIdle,
+                animated = true
+            },
+
+            [ShahedDrone] = new UnitModelDef
+            {
+                resourcePath = "Models/ShahedDrone",
+                sourceAsset = "ALSTRA INFINITE — Kamikaze Drones PolyPack Starter",
+                sourceCandidates = new[]
+                {
+                    // The animated variant first: the pack ships a rigged one and
+                    // a static one under near-identical names, and the rigged
+                    // mesh is the one worth having in flight.
+                    "StarterAsset_KamikazeDroneV1",
+                    "StarterAsset_Static_KamikazeDroneV1"
+                },
                 idleClip = null,
                 animated = false
             }
@@ -311,6 +345,57 @@ namespace IronMeridian.Models
 
         public static UnitModelDef Get(string modelId) =>
             modelId != null && Models.TryGetValue(modelId, out var def) ? def : null;
+
+        /// <summary>
+        /// Builds a live instance of a model, whichever kind it is: a procedural
+        /// one is constructed, an imported one is instantiated from its prefab.
+        /// Returns null — having logged why — when neither is possible.
+        ///
+        /// Every flight and preview goes through here rather than calling
+        /// <c>Resources.Load</c> itself. That was already golden rule 10; it
+        /// matters more now that a model can legitimately have no prefab at all,
+        /// because a call site checking for one would decide the kamikaze drone
+        /// was missing when it is the one model that cannot be.
+        /// </summary>
+        public static GameObject CreateInstance(string modelId, Transform parent)
+        {
+            var def = Get(modelId);
+            if (def == null)
+            {
+                Debug.LogError($"[UnitModelLibrary] No model '{modelId}'.");
+                return null;
+            }
+            return CreateInstance(def, parent);
+        }
+
+        public static GameObject CreateInstance(UnitModelDef def, Transform parent)
+        {
+            if (def == null) return null;
+
+            if (def.IsProcedural)
+            {
+                var built = ProceduralModels.Build(def.proceduralId);
+                if (built == null)
+                {
+                    Debug.LogError($"[UnitModelLibrary] ProceduralModels cannot build '{def.proceduralId}'.");
+                    return null;
+                }
+                built.transform.SetParent(parent, false);
+                return built;
+            }
+
+            if (string.IsNullOrEmpty(def.resourcePath)) return null;
+
+            var prefab = Resources.Load<GameObject>(def.resourcePath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[UnitModelLibrary] Model '{def.resourcePath}' is not installed. " +
+                    "Run Tools > Iron Meridian > Install Unit Models (docs/09-3D-MODELS.md).");
+                return null;
+            }
+
+            return Object.Instantiate(prefab, parent);
+        }
 
         /// <summary>The model that represents this unit type, or null when none exists yet.</summary>
         public static UnitModelDef Resolve(UnitDefinition unit)

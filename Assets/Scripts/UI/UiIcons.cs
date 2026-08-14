@@ -390,6 +390,64 @@ namespace IronMeridian.UI
                 Mathf.Max(Rect(u, v, 0.41f, 0.12f, 0.59f, 0.86f),
                           Rect(u, v, 0.66f, 0.12f, 0.84f, 0.64f))));
 
+        /// <summary>
+        /// A plain filled circle. Not an icon so much as a shape the layout
+        /// needs — uGUI's built-in sprite is a rounded rectangle, and the unit
+        /// cluster markers have to read as counters on a map rather than as
+        /// buttons floating over it.
+        /// </summary>
+        public static Sprite Disc => Get(nameof(Disc), (u, v) => DiscAt(u, v, 0.5f, 0.5f, 0.48f));
+
+        // ---------------------------------------------------- missile systems
+        //
+        // Three glyphs for ten launchers, matching the two things a player is
+        // choosing between: what the system is *for* (defend the sky, or hit the
+        // ground) and how heavy it is. Ten bespoke pictograms would be ten
+        // pictograms nobody could tell apart at 22 px.
+
+        /// <summary>Air-defence battery: an interceptor climbing out of a launch rail.</summary>
+        public static Sprite Interceptor => Get(nameof(Interceptor), (u, v) =>
+            Mathf.Max(
+                // Body, leaning back the way a canted launcher sits.
+                Seg(u, v, 0.40f, 0.16f, 0.62f, 0.82f, 0.13f),
+                Mathf.Max(
+                    // Nose.
+                    Seg(u, v, 0.62f, 0.82f, 0.66f, 0.94f, 0.05f),
+                    // Launch rail under it.
+                    Seg(u, v, 0.16f, 0.10f, 0.52f, 0.10f, 0.07f))));
+
+        /// <summary>Surface-to-surface missile: a ballistic arc onto a ground point.</summary>
+        public static Sprite BallisticArc => Get(nameof(BallisticArc), (u, v) =>
+        {
+            // The arc itself, sampled as a chain of short segments — a real
+            // parabola through (0.08, 0.30) → (0.5, 0.88) → (0.92, 0.14).
+            float arc = 0f;
+            const int Steps = 10;
+            for (int i = 0; i < Steps; i++)
+            {
+                float t0 = i / (float)Steps, t1 = (i + 1) / (float)Steps;
+                arc = Mathf.Max(arc, Seg(u, v,
+                    ArcX(t0), ArcY(t0), ArcX(t1), ArcY(t1), 0.075f));
+            }
+            // Impact mark where it comes down.
+            return Mathf.Max(arc, DiscAt(u, v, 0.92f, 0.14f, 0.11f));
+        });
+
+        /// <summary>Heavy ballistic missile: the arc, with a second heavier warhead mark.</summary>
+        public static Sprite HeavyMissile => Get(nameof(HeavyMissile), (u, v) =>
+            Mathf.Max(
+                // Vertical body with a pointed nose — read from directly ahead,
+                // which is how a missile coming down at you looks.
+                Seg(u, v, 0.5f, 0.10f, 0.5f, 0.74f, 0.17f),
+                Mathf.Max(
+                    Seg(u, v, 0.5f, 0.74f, 0.5f, 0.94f, 0.07f),
+                    // Tail fins, splayed.
+                    Mathf.Max(Seg(u, v, 0.5f, 0.24f, 0.20f, 0.06f, 0.075f),
+                              Seg(u, v, 0.5f, 0.24f, 0.80f, 0.06f, 0.075f)))));
+
+        static float ArcX(float t) => Mathf.Lerp(0.08f, 0.92f, t);
+        static float ArcY(float t) => 0.30f + t * 1.62f - t * t * 1.78f;
+
         // ------------------------------------------------------------ shapes
 
         static float Band(float d, float radius, float thickness) =>

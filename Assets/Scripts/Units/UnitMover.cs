@@ -15,8 +15,21 @@ namespace IronMeridian.Units
     /// and the unit marches that route leg by leg — accelerating to a march
     /// speed, easing off through the bends, and braking onto the objective.
     /// Motion is strictly along the ground; the unit stays clamped to the
-    /// terrain and never hovers. Speed comes from the unit definition (km/h)
-    /// accelerated by GameConfig.MoveSpeedMultiplier.
+    /// terrain and never hovers.
+    ///
+    /// **Speed is the real thing.** Cruise comes straight from the unit
+    /// definition's <c>speedKmh</c>, converted with
+    /// <see cref="GameClock.GameSecondsPerRealSecond"/> and nothing else, so a
+    /// 45 km/h battalion covers 45 km per hour of scenario clock — you can read
+    /// the distance off the map, read the time off the HUD, and the two agree.
+    /// It used to be multiplied by a separate hard-coded 60 that happened to
+    /// match the clock's own compression; when they matched the result was
+    /// merely fast, and nothing stopped them drifting apart. A player who wants
+    /// to be at the objective sooner speeds the *clock* up, which speeds the
+    /// march, the fighting and the time of day together.
+    ///
+    /// <see cref="RemainingKm"/> and <see cref="EtaGameSeconds"/> are the other
+    /// half of that: an order is worth giving only if you know when it lands.
     ///
     /// **Game mode only.** Marching, its animation and its trail all belong to a
     /// running battle. Repositioning a unit in the scenario editor is not a move
@@ -49,6 +62,8 @@ namespace IronMeridian.Units
         /// the formation's speed. See docs/08-PARTICLE-SYSTEMS.md.
         /// </summary>
         const double DustIntervalM = 500.0;
+        /// <summary>Route legs a single frame may consume — see the march loop in <see cref="Update"/>.</summary>
+        const int MaxLegsPerFrame = 24;
 
         /// <summary>Planned route, start point first, objective last.</summary>
         readonly List<GeoPoint> _route = new List<GeoPoint>();
@@ -72,6 +87,55 @@ namespace IronMeridian.Units
 
         /// <summary>The route currently being driven — start point first. Empty when idle.</summary>
         public IReadOnlyList<GeoPoint> Route => _route;
+
+        /// <summary>
+        /// Cruising speed in metres per second of *real* time — the unit's own
+        /// km/h scaled only by how fast the scenario clock runs. Public so the
+        /// order feedback can quote the figure the march is actually being
+        /// driven at rather than a number from the catalogue that some
+        /// multiplier might have quietly changed.
+        /// </summary>
+        public static float CruiseMps(UnitDefinition def) =>
+            Mathf.Max(1f, def.speedKmh) / 3.6f * (float)GameClock.GameSecondsPerRealSecond;
+
+        /// <summary>
+        /// Ground still to cover on the ordered route, in kilometres. Measured
+        /// from where the unit stands rather than from the leg's start, so it
+        /// keeps counting down while the unit is mid-leg.
+        /// </summary>
+        public double RemainingKm
+        {
+            get
+            {
+                if (!_moving || _route.Count < 2) return 0.0;
+
+                double km = System.Math.Max(0.0, _legTotalM - _legTravelledM) / 1000.0;
+                for (int i = _leg + 1; i < _route.Count - 1; i++)
+                    km += GeoUtils.DistanceKm(_route[i].latitude, _route[i].longitude,
+                                              _route[i + 1].latitude, _route[i + 1].longitude);
+                return km;
+            }
+        }
+
+        /// <summary>
+        /// Scenario seconds until the unit is on its objective, at cruise. An
+        /// estimate and honest about it: it ignores the acceleration at each end
+        /// and the speed lost through bends, which on any march long enough to
+        /// care about is a rounding error, and on a short one is dwarfed by the
+        /// terrain the route planner had to go around.
+        /// </summary>
+        public float EtaGameSeconds =>
+            !_moving || _cruiseMps <= 0f ? 0f : (float)(RemainingKm * 1000.0) / _cruiseMps;
+
+        /// <summary>"4 h 12 min" / "38 min" / "45 s" — an ETA a player can act on.</summary>
+        public static string FormatDuration(float seconds)
+        {
+            if (seconds < 90f) return $"{Mathf.CeilToInt(seconds)} s";
+            if (seconds < 5400f) return $"{Mathf.RoundToInt(seconds / 60f)} min";
+            int h = Mathf.FloorToInt(seconds / 3600f);
+            int m = Mathf.RoundToInt((seconds - h * 3600f) / 60f);
+            return m == 0 ? $"{h} h" : $"{h} h {m} min";
+        }
 
         public void Init(UnitActor actor, CesiumGeoreference geo, CesiumGlobeAnchor anchor)
         {
@@ -105,7 +169,7 @@ namespace IronMeridian.Units
             _leg = 0;
             _faceOnArrival = faceOnArrival;
 
-            _cruiseMps = Mathf.Max(1f, _actor.Def.speedKmh) * GameConfig.MoveSpeedMultiplier / 3.6f;
+            _cruiseMps = CruiseMps(_actor.Def);
             _speedMps = 0f;
             _moving = true;
             _sampleTimer = 0f;                 // sample the ground on the first frame
@@ -272,9 +336,41 @@ namespace IronMeridian.Units
                 : 1f;
 
             double stepM = _speedMps * turnPenalty * dt;
-            _legTravelledM += stepM;
             _travelledTotalM += stepM;
-            if (_legTravelledM > _legTotalM) _legTravelledM = _legTotalM;
+
+            // The step is spent across as many legs as it reaches. It used to be
+            // added to the current leg and the overshoot thrown away, which
+            // capped a routed march at one waypoint per *frame* — invisible at
+            // x1, but at x60 a column with a dog-leg route through a town simply
+            // stopped keeping up with the clock, and the faster the machine the
+            // further it got. Distance is distance; where the waypoints happen
+            // to fall is not the unit's problem.
+            bool arrived = false;
+            int legsThisFrame = 0;
+            while (stepM > 0.0 || _legTotalM - _legTravelledM <= 0.0)
+            {
+                double roomM = _legTotalM - _legTravelledM;
+                if (stepM < roomM)
+                {
+                    _legTravelledM += stepM;
+                    break;
+                }
+
+                stepM -= System.Math.Max(0.0, roomM);
+                _legTravelledM = _legTotalM;
+
+                if (_leg >= _route.Count - 2) { arrived = true; break; }
+
+                _leg++;
+                BeginLeg();
+                // The dashed thread ahead now shows only what is left to drive.
+                if (_trail != null) _trail.SetRoute(_route.GetRange(_leg, _route.Count - _leg));
+
+                // Ceiling on catch-up, matching CombatSystem's: at extreme time
+                // compression a frame can be worth a whole route, and walking
+                // all of it in one frame would stall the game.
+                if (++legsThisFrame >= MaxLegsPerFrame) break;
+            }
 
             // Follow the great circle: a leg's start point plus its initial
             // bearing defines it, so stepping the travelled distance along that
@@ -305,24 +401,15 @@ namespace IronMeridian.Units
 
             if (_trail != null) _trail.Track(lat, lon);
 
-            // Leg used up (or the unit has stalled on the doorstep, which a pure
-            // speed test would never resolve).
-            bool legDone = _legTravelledM >= _legTotalM - 0.01 ||
-                           (_speedMps <= 0.01f && remainingM < 1.0);
-            if (!legDone) return;
+            // A unit that has run out of speed within a metre of its objective
+            // would never satisfy a pure distance test, so it is landed here.
+            if (!arrived && _speedMps <= 0.01f && _legTotalM - _legTravelledM < 1.0 &&
+                _leg >= _route.Count - 2)
+                arrived = true;
+            if (!arrived) return;
 
             s.latitude = _legToLat;
             s.longitude = _legToLon;
-
-            if (_leg < _route.Count - 2)
-            {
-                _leg++;
-                BeginLeg();
-                // The dashed thread ahead now shows only what is left to drive.
-                if (_trail != null) _trail.SetRoute(_route.GetRange(_leg, _route.Count - _leg));
-                return;
-            }
-
             Arrive(s);
         }
 

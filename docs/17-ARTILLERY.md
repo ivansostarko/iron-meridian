@@ -18,18 +18,18 @@ Rows live in `Assets/Scripts/Vfx/ArtilleryCatalog.cs`. The panel, the target mar
 | NATO | Gun | **105 mm** | M119 / L118 | 140 m | light | 0.30 s |
 | NATO | Gun | **155 mm** | M777 / PzH 2000 | 190 m | medium | 0.55 s |
 | NATO | Gun | **203 mm** | M110 | 260 m | heavy | 0.85 s |
-| Russian | Mortar | **82 mm** | 2B14 Podnos | 105 m | mortar | 0.28 s |
-| Russian | Mortar | **120 mm** | 2B11 Sani | 135 m | mortar | 0.42 s |
-| Russian | Mortar | **160 mm** | M-160 | 185 m | heavy | 0.60 s |
-| Russian | Mortar | **240 mm** | 2S4 Tyulpan | 300 m | heavy | 1.10 s |
-| Russian | Gun | **122 mm** | D-30 / 2S1 Gvozdika | 150 m | medium | 0.35 s |
-| Russian | Gun | **130 mm** | M-46 | 175 m | medium | 0.45 s |
-| Russian | Gun | **152 mm** | 2S3 / 2S19 Msta-S | 200 m | heavy | 0.55 s |
-| Russian | Gun | **203 mm** | 2S7 Pion | 285 m | heavy | 0.95 s |
+| Enemy | Mortar | **82 mm** | 2B14 Podnos | 105 m | mortar | 0.28 s |
+| Enemy | Mortar | **120 mm** | 2B11 Sani | 135 m | mortar | 0.42 s |
+| Enemy | Mortar | **160 mm** | M-160 | 185 m | heavy | 0.60 s |
+| Enemy | Mortar | **240 mm** | 2S4 Tyulpan | 300 m | heavy | 1.10 s |
+| Enemy | Gun | **122 mm** | D-30 / 2S1 Gvozdika | 150 m | medium | 0.35 s |
+| Enemy | Gun | **130 mm** | M-46 | 175 m | medium | 0.45 s |
+| Enemy | Gun | **152 mm** | 2S3 / 2S19 Msta-S | 200 m | heavy | 0.55 s |
+| Enemy | Gun | **203 mm** | 2S7 Pion | 285 m | heavy | 0.95 s |
 
 **Fourteen natures, four burst signatures.** Each nature does *not* get its own effect. What separates a 122 mm shell from a 152 mm one on a map three kilometres wide is how big the hole is, not what the flash looks like — so natures map onto four signatures (light burst, mortar soil column, standard HE burst, heavy blast) and are told apart by **beaten zone, burst scale and rate of fire**, all of which are real differences the player can see and use. Inventing fourteen near-identical particle effects would be fourteen things to keep in step for no gain. The same applies to the reports: four, mapped the same way.
 
-**Mortars are not just small guns.** A mortar bomb arrives almost vertically and throws far more soil than fire, which is a genuinely different event on the map — hence `ArtilleryKind` and the separate `ArtilleryDirtColumn` signature. The two heaviest Russian mortars are exceptions that use the heavy blast: at 160 mm and 240 mm the round is a siege weapon and reads as one.
+**Mortars are not just small guns.** A mortar bomb arrives almost vertically and throws far more soil than fire, which is a genuinely different event on the map — hence `ArtilleryKind` and the separate `ArtilleryDirtColumn` signature. The two heaviest enemy-pattern mortars are exceptions that use the heavy blast: at 160 mm and 240 mm the round is a siege weapon and reads as one.
 
 Shared constants, also in `ArtilleryCatalog`:
 
@@ -38,7 +38,7 @@ Shared constants, also in `ArtilleryCatalog`:
 | `CountdownSeconds` | 10 | Time between the call for fire and the first round |
 | `ShellsPerMission` | 5 | Rounds in one mission |
 
-**Split by inventory, then ordered by calibre.** Fourteen natures will not fit in one column, and a scroll would bury the choice that matters, so the panel has **NATO / RUSSIAN** tabs — the first decision a player makes, and it halves the list. Within a page the natures run mortars then guns, ascending by calibre, so the beaten zone grows monotonically down the page and the trade-off is legible without reading a word.
+**Split by inventory, then ordered by calibre.** Fourteen natures will not fit in one column, and a scroll would bury the choice that matters, so the panel has **NATO / ENEMY** tabs — the first decision a player makes, and it halves the list. Within a page the natures run mortars then guns, ascending by calibre, so the beaten zone grows monotonically down the page and the trade-off is legible without reading a word.
 
 **Why four signatures rather than one scaled explosion.** The four events genuinely do not look alike from a map camera: a light round is a bright crack with a flat shrapnel disc, a mortar bomb is a narrow column of soil, and a heavy shell is a fireball with a ground shock ring and arcing debris. One effect scaled four ways would make every nature the same event at four sizes. Within a signature, scale and rate of fire do the rest of the work — which is exactly what separates a 152 mm from a 203 mm.
 

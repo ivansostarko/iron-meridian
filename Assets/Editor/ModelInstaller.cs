@@ -55,9 +55,18 @@ namespace IronMeridian.EditorTools
             var missing = new List<string>();
             bool reimported = false;
 
+            var procedural = new List<string>();
+
             foreach (var entry in UnitModelLibrary.Entries)
             {
                 var def = entry.Value;
+
+                // A model the project builds itself has no source mesh and no
+                // prefab — it is constructed on demand at runtime. Reporting it
+                // as "missing" would send someone hunting for a pack that was
+                // deliberately removed.
+                if (def.IsProcedural) { procedural.Add(entry.Key); continue; }
+
                 string modelPath = FindFirst(def.sourceCandidates);
 
                 if (modelPath == null)
@@ -72,7 +81,7 @@ namespace IronMeridian.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Report(installed, missing, reimported);
+            Report(installed, missing, procedural, reimported);
         }
 
         /// <summary>Builds one prefab. Returns false if the source could not be instantiated.</summary>
@@ -145,12 +154,17 @@ namespace IronMeridian.EditorTools
             }
         }
 
-        static void Report(List<string> installed, List<string> missing, bool reimported)
+        static void Report(List<string> installed, List<string> missing, List<string> procedural,
+            bool reimported)
         {
             var sb = new StringBuilder();
             sb.Append($"[ModelInstaller] Installed {installed.Count} model prefab(s)");
             if (installed.Count > 0) sb.Append(": ").Append(string.Join(", ", installed));
             sb.Append('.');
+
+            if (procedural.Count > 0)
+                sb.AppendLine().Append($"{procedural.Count} model(s) are built in code and need no prefab: ")
+                  .Append(string.Join(", ", procedural)).Append('.');
 
             if (missing.Count > 0)
             {

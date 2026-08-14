@@ -10,20 +10,54 @@ Unmanned strikes in the map editor: pick a type, place an objective, and ten sec
 
 Rows live in `Assets/Scripts/Vfx/UavCatalog.cs`.
 
-| Type | Target radius | Model | Burst | Smoke | Sounds |
-|---|---|---|---|---|---|
-| **Kamikaze drone** | 90 m | `kamikaze_drone` | `UavWarheadBurst` | `UavWarheadSmoke` (12 s) | `UavWarhead`, `DroneBuzz` |
+| Type | Target radius | Model | Burst | Smoke | Fire | Sounds |
+|---|---|---|---|---|---|---|
+| **Kamikaze drone** | 90 m | `kamikaze_drone` (built in code) | `UavWarheadBurst` | `UavWarheadSmoke` (12 s) | — | `UavWarhead`, `DroneBuzz` |
+| **Shahed drone** | 160 m | `shahed_drone` | `ShahedWarheadBurst` | `ShahedWarheadSmoke` (22 s) | `ShahedWreckFire` (40 s) | `ShahedWarhead`, `ShahedEngine` |
 
-### Flight profile
+### Flight profiles
 
-| Setting | Value | Meaning |
-|---|---|---|
-| `spanMeters` | 90 | Drawn size — exaggerated, as every aircraft here is |
-| `cruiseAltitudeMeters` | 420 | Height of the level run-in |
-| `approachKm` | 1.8 | Ground covered from launch point to objective |
-| `cruiseSeconds` / `diveSeconds` | 5.5 / 2.2 | ~7.7 s of drone on screen |
-| `diveAngleDeg` | 62 | Nose-down attitude through the terminal dive |
-| `CountdownSeconds` | 10 | Tasking to launch |
+| Setting | Kamikaze | Shahed | Meaning |
+|---|---|---|---|
+| `spanMeters` | 90 | 130 | Drawn size — exaggerated, as every aircraft here is |
+| `cruiseAltitudeMeters` | 420 | 520 | Height of the level run-in |
+| `approachKm` | 1.8 | 6.0 | Ground covered from launch point to objective |
+| `cruiseSeconds` / `diveSeconds` | 5.5 / 2.2 | 8.5 / 3.0 | Seconds of drone on screen |
+| `diveAngleDeg` | 62 | 38 | Nose-down attitude through the terminal dive |
+| `CountdownSeconds` | 10 | 10 | Tasking to launch |
+
+### Why the two are not one type at two sizes
+
+They are opposite instruments. The kamikaze drone is **tactical**: it comes over
+the next ridge on a 1.8 km run-in, tips almost vertically onto one target, and
+carries a warhead smaller than a 60 mm mortar bomb. The Shahed is **operational**:
+it arrives from six kilometres out on a shallow glide, covers a 160 m circle, and
+leaves the ground burning for forty seconds afterwards.
+
+That difference shows in three places on screen, and each one is deliberate:
+
+- **The engine.** `DroneBuzz` is a stack of clean detuned tones — four electric
+  motors holding station. `ShahedEngine` is a sawtooth with a wavering firing
+  rate — a small two-stroke under load, which is the sound the class is named
+  for. It is the first cue telling you which one is coming.
+- **The dive.** 62° is a munition tipping onto a point; 38° is an airframe
+  gliding onto a target.
+- **What is left behind.** The tactical drone leaves a scorch. The Shahed leaves
+  a fire, because fifty-odd kilograms of warhead with the airframe's fuel behind
+  it does. `UavDef.wreckFire` / `wreckFireSeconds`; set `wreckFireSeconds = 0`
+  for a type that leaves nothing.
+
+### The kamikaze drone's model is built in code
+
+Its source pack was removed from the project, and rather than borrow another
+quadcopter the game now owns its loitering munition outright:
+`ProceduralModels.BuildKamikazeDrone` builds a delta body, a warhead nose, swept
+wings, twin fins and a pusher propeller, with a runtime `AnimationClip` that
+turns the propeller and rocks the airframe. See docs/09-3D-MODELS.md.
+
+It carries **no `rotors` spec**, unlike the Shahed: the clip already turns the
+propeller, and a `RotorSpinner` on top of that would be two things driving one
+transform with the loser decided by script execution order.
 
 ---
 
@@ -111,7 +145,11 @@ it a precision instrument rather than cheap artillery.
 - **Nothing can shoot it down**, and no air-defence unit interacts with it.
 - **No stock, cooldown or operator unit** — tasking is unlimited.
 - **Not saved.** A strike in the air is lost on save/load.
-- **`noseYawOffsetDeg` and the rotor axis are unverified.** Both are 0 / `Vector3.up`; if the drone flies sideways or its propellers spin in the wrong plane, those two fields on the catalogue row are the fix.
+- **`noseYawOffsetDeg` and the Shahed's rotor axis are unverified.** The
+  procedural drone is authored nose-along-`+Z` so its offset is correct by
+  construction, but the Shahed's comes from an imported FBX: if it flies sideways
+  or its propeller spins in the wrong plane, `noseYawOffsetDeg` and
+  `rotors[0].axis` on its catalogue row are the fix.
 
 ---
 

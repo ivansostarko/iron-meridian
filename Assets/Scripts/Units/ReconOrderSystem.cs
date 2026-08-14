@@ -36,8 +36,14 @@ namespace IronMeridian.Units
     {
         /// <summary>How close counts as "arrived", km.</summary>
         const double ArrivalKm = 0.25;
-        /// <summary>Seconds an arrived unit dwells on the objective before a patrol turns around.</summary>
-        const float DwellSeconds = 4f;
+        /// <summary>
+        /// Scenario seconds an arrived unit dwells on the objective before a
+        /// patrol turns around. Three minutes: long enough to be a look at the
+        /// ground rather than a touch of the waypoint, short enough that a
+        /// patrol keeps patrolling. It was four seconds when the clock ran at
+        /// sixty times real speed and four seconds meant four minutes.
+        /// </summary>
+        const float DwellSeconds = 180f;
         /// <summary>Sensor radius floor, so a short-sighted unit still reports something.</summary>
         const float MinSensorKm = 1.5f;
 
@@ -255,7 +261,12 @@ namespace IronMeridian.Units
             double targetLon = order.leg == Leg.Inbound ? order.homeLon : order.objLon;
 
             double remainingKm = GeoUtils.DistanceKm(order.droneLat, order.droneLon, targetLat, targetLon);
-            double stepKm = order.def.airborneSpeedKmh * Core.GameConfig.MoveSpeedMultiplier / 3600.0 * Time.deltaTime;
+            // Same rule as a ground march: the airframe's own km/h against the
+            // scenario clock, so a UAV sortie takes as long as the airframe says
+            // it does and speeding time up speeds the sortie up with everything
+            // else. See UnitMover.
+            double stepKm = order.def.airborneSpeedKmh * Core.GameClock.GameSecondsPerRealSecond
+                            / 3600.0 * Time.deltaTime;
 
             if (remainingKm <= stepKm)
             {
