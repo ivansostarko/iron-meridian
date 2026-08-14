@@ -15,8 +15,11 @@ Assets/Scripts/Vfx/
   VfxCatalog.cs     VfxId enum + the catalogue row for each effect (prefab, scale, life, priority)
   VfxSystem.cs      the only entry point: resolve → anchor → scale → budget
   VfxInstance.cs    handle for a live effect; owns screen-size culling
-  ProceduralVfx.cs  code-built fire/smoke/explosion/impact/dust fallbacks
+  ProceduralVfx.cs  code-built fire/smoke/explosion/impact/dust/artillery fallbacks
   EffectPlacementTool.cs  arm an effect, click the terrain to place it
+  ArtilleryCatalog.cs     the four artillery natures — see docs/17-ARTILLERY.md
+  ArtilleryStrikeSystem.cs  call for fire: countdown, then a five-round salvo
+  TargetAreaMarker.cs     the 3D target-area volume a strike is placed with
 Assets/Editor/
   VfxInstaller.cs   Tools > Iron Meridian > Install VFX Prefabs
 ```
@@ -47,6 +50,23 @@ VfxSystem.PlayWreck(lat, lon, severity01);
 | **Never hard-code particle values at the call site.** | The catalogue is the single source of truth; tuning happens in one file. |
 | **Fallback always exists.** | The project ships no binary prefabs of its own; the game must look correct with zero asset dependencies. |
 
+### Procedural fallback builders
+
+`VfxFallback` picks which builder in `ProceduralVfx` stands in when no prefab is available.
+
+| Fallback | Shape | Used by |
+|---|---|---|
+| `Explosion` | Flash, fireball, smoke column, ground dust ring | `Explosion` |
+| `Impact` | Small one-shot puff | `ImpactBurst`, `WeaponFire` |
+| `Fire` | Flame cone with a noise field, plus a smoke crown | all `Fire*`, `GroundFire` |
+| `Smoke` | Rising, churning column | `SmokePlume`, `SmokeScreen`, all artillery smoke |
+| `Dust` | Flat ring across the ground plane | `Dust` |
+| `ArtilleryAirBurst` | White-hot flash, **flat fast shrapnel disc**, small core | `ArtilleryLightBurst` |
+| `ArtilleryDirtColumn` | **Narrow vertical soil column** under gravity, small flash, low skirt | `ArtilleryMortarBurst` |
+| `ArtilleryHeavyBlast` | Fireball, **ground shock ring**, arcing debris, dust | `ArtilleryMediumBurst`, `ArtilleryHeavyBurst` |
+
+The three artillery builders exist because the events do not look alike from a map camera — what separates them is the *shape of the throw*, not the size. 155 mm and 203 mm deliberately share `ArtilleryHeavyBlast` and differ only by their rows' scale and lifetime, because that genuinely is the difference between them.
+
 ---
 
 ## 2. Effect catalogue
@@ -65,6 +85,18 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `SmokePlume` | Column of smoke off a wreck or fire | 300 m | loops | 50 | procedural |
 | `SmokeScreen` | Deliberate obscuration (artillery / smoke generators) | 620 m | loops | 65 | procedural |
 | `Dust` | Kicked up by movement or a deployment drop | 140 m | 1.5 s | 10 | procedural |
+| `ArtilleryLightBurst` | 105 mm round landing — sharp, bright, little soil | 210 m | 2.2 s | 120 | procedural |
+| `ArtilleryMortarBurst` | 120 mm mortar bomb landing — narrow column of earth | 190 m | 2.8 s | 120 | procedural |
+| `ArtilleryMediumBurst` | 155 mm round landing — standard HE burst | 300 m | 3.0 s | 125 | procedural |
+| `ArtilleryHeavyBurst` | 203 mm round landing — heavy fireball with debris | 430 m | 3.6 s | 130 | procedural |
+| `ArtilleryLightSmoke` | Thin pale smoke off a 105 mm burst | 180 m | loops | 45 | procedural |
+| `ArtilleryMortarSmoke` | Brown soil haze off a mortar bomb | 200 m | loops | 45 | procedural |
+| `ArtilleryMediumSmoke` | Grey-black smoke off a 155 mm burst | 280 m | loops | 48 | procedural |
+| `ArtilleryHeavySmoke` | Heavy oily column off a 203 mm burst | 380 m | loops | 52 | procedural |
+
+The eight artillery rows are the calibre register of **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
+
+Artillery smoke loops and is dispersed explicitly by `ArtilleryStrikeSystem` via `VfxSystem.StopAfter` — the same pattern `PlayWreck` uses to burn a wreck out. A finite `lifeSeconds` would cut the particles off mid-air rather than letting them thin out.
 
 Each row also carries a **sound** (`VfxDef.sound`), played as 3D positional audio parented to the effect — so a burning unit takes its crackle with it. Fire effects loop `EffectSound.Fire`, `Explosion` fires a one-shot, the smoke effects loop `EffectSound.Smoke`, and `ImpactBurst` fires `EffectSound.Impact`. `WeaponFire` and `Dust` are deliberately silent: at one puff per firing formation they would turn a front line into a rattle. Clips come from `Resources/Audio/effects/` when present and are otherwise synthesised — full table in `docs/10-AUDIO.md` §2.3.
 
@@ -105,6 +137,17 @@ Throttling matters: combat ticks once a second against **every** opposing unit i
 | Player places smoke | `SmokePlume` | **EFFECTS** panel → SMOKE armed, then click | `EffectPlacementTool` |
 
 The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium streams terrain in, and a click over tiles that have not arrived has no ground to sit on. Those clicks are refused with a message rather than burying the effect inside the globe. A reticle tracks the real ground point while armed, so what you see is where it lands; the tool stays armed so a line of fires can be laid in one go, and right-click or Esc puts it away. Works in both editor and battle mode.
+
+### Artillery strikes
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Round lands (105 mm) | `ArtilleryLightBurst` + `ArtilleryLightSmoke` | ×5 per mission, 0.30 s apart | `ArtilleryStrikeSystem.RunSalvo` |
+| Round lands (120 mm) | `ArtilleryMortarBurst` + `ArtilleryMortarSmoke` | ×5 per mission, 0.42 s apart | `ArtilleryStrikeSystem.RunSalvo` |
+| Round lands (155 mm) | `ArtilleryMediumBurst` + `ArtilleryMediumSmoke` | ×5 per mission, 0.55 s apart | `ArtilleryStrikeSystem.RunSalvo` |
+| Round lands (203 mm) | `ArtilleryHeavyBurst` + `ArtilleryHeavySmoke` | ×5 per mission, 0.85 s apart | `ArtilleryStrikeSystem.RunSalvo` |
+
+**ARTILLERY STRIKE** panel → pick a nature → click the terrain → a 10 s countdown runs in the HUD → five rounds land scattered across the target area. Ground-checked exactly like hand placement above, and a refused click leaves the tube armed. Full detail in **docs/17-ARTILLERY.md**.
 
 ### Deployment
 

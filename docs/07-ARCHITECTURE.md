@@ -51,6 +51,8 @@ Assets/Scripts/
     UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence (+ submenus)
+                         (the left rail's ARTILLERY STRIKE section lives in
+                          UnitPaletteUI.BuildArtillerySection — docs/17-ARTILLERY.md)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
     CameraRig.cs         3D orbit & 2D top-down strategy camera
@@ -92,6 +94,9 @@ Assets/Scripts/
     VfxInstance.cs       handle for a live effect; screen-size culling
     ProceduralVfx.cs     code-built fallbacks (no asset dependency)
     EffectPlacementTool.cs  hand-place fire/explosion/smoke on the terrain
+    ArtilleryCatalog.cs  the four artillery natures — see docs/17-ARTILLERY.md
+    ArtilleryStrikeSystem.cs  call for fire: countdown, then a five-round salvo
+    TargetAreaMarker.cs  3D target-area volume (procedural mesh, vertex colours)
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs

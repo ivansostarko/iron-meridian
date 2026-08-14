@@ -14,7 +14,22 @@ namespace IronMeridian.Audio
         /// <summary>Looping low hiss for a smoke column or screen.</summary>
         Smoke,
         /// <summary>Short one-shot thud for rounds landing.</summary>
-        Impact
+        Impact,
+
+        // --- artillery (docs/17-ARTILLERY.md) ---
+        // One report per nature. Calibre is audible in real life — a 105 mm
+        // round cracks, a 203 mm round is felt before it is heard — so a fire
+        // mission that sounds the same whatever was called for wastes the one
+        // cue that tells the player which battery answered.
+
+        /// <summary>105 mm round landing — sharp, high crack with a short tail.</summary>
+        ArtilleryLight,
+        /// <summary>120 mm mortar bomb — a duller thump, more earth than air.</summary>
+        ArtilleryMortar,
+        /// <summary>155 mm round — the reference report: deep body, long tail.</summary>
+        ArtilleryMedium,
+        /// <summary>203 mm round — very low, slow to decay, with a rolling echo.</summary>
+        ArtilleryHeavy
     }
 
     /// <summary>
@@ -125,7 +140,11 @@ namespace IronMeridian.Audio
             [EffectSound.Fire] = "Audio/effects/fire",
             [EffectSound.Explosion] = "Audio/effects/explosion",
             [EffectSound.Smoke] = "Audio/effects/smoke",
-            [EffectSound.Impact] = "Audio/effects/impact"
+            [EffectSound.Impact] = "Audio/effects/impact",
+            [EffectSound.ArtilleryLight] = "Audio/effects/artillery_105",
+            [EffectSound.ArtilleryMortar] = "Audio/effects/artillery_120",
+            [EffectSound.ArtilleryMedium] = "Audio/effects/artillery_155",
+            [EffectSound.ArtilleryHeavy] = "Audio/effects/artillery_203"
         };
 
         static AudioClip Resolve(EffectSound sound)

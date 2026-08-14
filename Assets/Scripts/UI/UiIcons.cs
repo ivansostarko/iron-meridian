@@ -164,6 +164,75 @@ namespace IronMeridian.UI
                         Mathf.Max(DiscAt(u, v, 0.56f, 0.26f, 0.13f),
                                   Rect(u, v, 0.30f, 0.06f, 0.70f, 0.12f))))));
 
+        // ------------------------------------------------- artillery strike
+        //
+        // The four natures are told apart by silhouette, not by size: at 24 px
+        // a "big shell" and a "small shell" are the same picture. So the mortar
+        // bomb gets fins, the light gun gets a plain slim round, the medium a
+        // banded round, and the heavy a squat round with a driving band and a
+        // blunt nose — each recognisable on its own.
+
+        /// <summary>ARTILLERY STRIKE section: a field gun in profile.</summary>
+        public static Sprite Artillery => Get(nameof(Artillery), (u, v) =>
+            // Barrel raised to the right, a breech block, trail leg and wheel.
+            Mathf.Max(Seg(u, v, 0.30f, 0.42f, 0.88f, 0.76f, 0.10f),
+                Mathf.Max(DiscAt(u, v, 0.30f, 0.40f, 0.13f),
+                    Mathf.Max(Seg(u, v, 0.28f, 0.36f, 0.08f, 0.18f, 0.075f),
+                              RingAt(u, v, 0.34f, 0.22f, 0.13f, 0.075f)))));
+
+        /// <summary>105 mm: a slim round with a pointed nose.</summary>
+        public static Sprite ShellLight => Get(nameof(ShellLight), (u, v) =>
+            Mathf.Max(Shell(u, v, halfWidth: 0.105f, baseV: 0.16f, shoulderV: 0.60f, tipV: 0.88f),
+                      Rect(u, v, 0.5f - 0.135f, 0.13f, 0.5f + 0.135f, 0.19f)));
+
+        /// <summary>120 mm mortar bomb: teardrop body on a finned tail.</summary>
+        public static Sprite MortarBomb => Get(nameof(MortarBomb), (u, v) =>
+            Mathf.Max(Shell(u, v, halfWidth: 0.135f, baseV: 0.34f, shoulderV: 0.62f, tipV: 0.90f),
+                // Tail boom plus three fins — the whole point of the silhouette.
+                Mathf.Max(Rect(u, v, 0.5f - 0.045f, 0.10f, 0.5f + 0.045f, 0.38f),
+                    Mathf.Max(Seg(u, v, 0.5f, 0.30f, 0.28f, 0.11f, 0.055f),
+                        Mathf.Max(Seg(u, v, 0.5f, 0.30f, 0.72f, 0.11f, 0.055f),
+                                  Seg(u, v, 0.5f, 0.30f, 0.5f, 0.08f, 0.055f))))));
+
+        /// <summary>155 mm: a banded round — the reference nature.</summary>
+        public static Sprite ShellMedium => Get(nameof(ShellMedium), (u, v) =>
+            Mathf.Clamp01(
+                Mathf.Max(Shell(u, v, halfWidth: 0.155f, baseV: 0.12f, shoulderV: 0.56f, tipV: 0.90f),
+                          Rect(u, v, 0.5f - 0.19f, 0.09f, 0.5f + 0.19f, 0.16f))
+                // Driving band bitten out of the body, which is what makes it
+                // read as a different round rather than a bigger one.
+                - Rect(u, v, 0.5f - 0.16f, 0.30f, 0.5f + 0.16f, 0.36f)));
+
+        /// <summary>203 mm: squat, blunt-nosed, with a heavy driving band.</summary>
+        public static Sprite ShellHeavy => Get(nameof(ShellHeavy), (u, v) =>
+            Mathf.Clamp01(
+                Mathf.Max(Shell(u, v, halfWidth: 0.215f, baseV: 0.12f, shoulderV: 0.52f, tipV: 0.80f),
+                          Rect(u, v, 0.5f - 0.25f, 0.08f, 0.5f + 0.25f, 0.17f))
+                - Mathf.Max(Rect(u, v, 0.5f - 0.225f, 0.26f, 0.5f + 0.225f, 0.33f),
+                            Rect(u, v, 0.5f - 0.225f, 0.38f, 0.5f + 0.225f, 0.43f))));
+
+        /// <summary>
+        /// A shell body: a parallel-sided case up to <paramref name="shoulderV"/>,
+        /// then an ogive tapering to a nose at <paramref name="tipV"/>. Shared by
+        /// every nature so they are unmistakably the same family of object.
+        /// </summary>
+        static float Shell(float u, float v, float halfWidth, float baseV, float shoulderV, float tipV)
+        {
+            if (v < baseV || v > tipV) return 0f;
+
+            float w = halfWidth;
+            if (v > shoulderV)
+            {
+                // Ogive rather than a straight cone: squared falloff gives the
+                // curved shoulder that reads as a shell instead of a crayon.
+                float k = (v - shoulderV) / Mathf.Max(1e-5f, tipV - shoulderV);
+                w = halfWidth * Mathf.Sqrt(Mathf.Max(0f, 1f - k * k));
+            }
+
+            return Cov(Mathf.Min(w - Mathf.Abs(u - 0.5f),
+                                 Mathf.Min(v - baseV, tipV - v)));
+        }
+
         /// <summary>Weather conditions section.</summary>
         public static Sprite Cloud => Get(nameof(Cloud), (u, v) =>
             Mathf.Max(DiscAt(u, v, 0.34f, 0.48f, 0.20f),

@@ -99,8 +99,14 @@ Every effect in `VfxCatalog` can carry a sound; it is a field on the catalogue r
 | Explosion | **Synthesised** (`ProceduralAudio.Explosion`) — or `Audio/effects/explosion.*` | `Explosion` | No | 90 Hz body falling to 28 Hz under a rolled-off noise crack, with a click transient and a 2.4 s tail. The pitch drop is what makes it read as a large blast rather than a pop. |
 | Smoke | **Synthesised** (`ProceduralAudio.SmokeLoop`) — or `Audio/effects/smoke.*` | `SmokePlume`, `SmokeScreen` | Yes | Slow low hiss with a gentle swell. Deliberately near sub-audible. |
 | Impact | **Synthesised** (`ProceduralAudio.Impact`) — or `Audio/effects/impact.*` | `ImpactBurst` | No | Short filtered thud for rounds landing. |
+| Artillery 105 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_105.*` | `ArtilleryLightBurst` | No | Sharp high crack, short tail. Body 170 → 62 Hz, open crack filter. |
+| Artillery 120 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_120.*` | `ArtilleryMortarBurst` | No | Dull thump — more earth than air. Body 120 → 46 Hz, closed crack filter, heavy rumble. |
+| Artillery 155 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_155.*` | `ArtilleryMediumBurst` | No | The reference report: deep body, long tail. 92 → 30 Hz over 0.85 s. |
+| Artillery 203 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_203.*` | `ArtilleryHeavyBurst` | No | Very low and slow to decay, with a rolling echo. 66 → 19 Hz over 1.35 s, 4.2 s clip. |
 
-Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact`. `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle.
+Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact` / `.ArtilleryLight` / `.ArtilleryMortar` / `.ArtilleryMedium` / `.ArtilleryHeavy`. `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle. Artillery *smoke* carries no sound of its own for the two lighter natures either; the heavier two reuse the smoke hiss.
+
+**Why four artillery reports rather than one.** Calibre is audible in real life — a 105 mm round cracks, a 203 mm round is felt before it is heard — so a fire mission that sounds the same whatever was called for throws away the one cue that tells the player which battery answered. All four come from a single parameterised synthesiser, `ProceduralAudio.Shell`, layering a pitch-falling **body**, a filtered noise **crack** and a slow **rumble** bed; opening the crack filter and raising the body gives a light gun, closing it and dropping the body gives a heavy one. Each calibre uses a fixed seed, so a nature always sounds like itself between runs. See docs/17-ARTILLERY.md.
 
 **Ordered attacks are the loudest thing on the map**, and all three of their sounds arrive through the effects above rather than through anything new — see [15-COMBAT-ORDERS.md §4](15-COMBAT-ORDERS.md):
 
@@ -115,6 +121,8 @@ The throttle is an audio decision as much as a visual one: unthrottled, a divisi
 **Files beat synthesis.** `EffectAudio` looks in `Resources/Audio/effects/<name>` first and only synthesises when nothing is there, so dropping in recorded audio needs no code change. The synthesis exists so the game is audible with no audio assets at all — the same rule `ProceduralVfx` follows for the visuals.
 
 **Voice budget:** 14 concurrent effect sources; past that the oldest is recycled. A corps-scale battle can have dozens of fires burning, and without the cap the mix turns to mud.
+
+An artillery mission is the densest thing that hits this budget: five reports inside about two seconds, plus the smoke voices behind them. The round spacing in `ArtilleryCatalog` is what keeps it a salvo rather than a single mush — and it is why the heavier natures, whose reports are the longest, are also the most widely spaced.
 
 ### 2.4 Other gameplay sound effects
 

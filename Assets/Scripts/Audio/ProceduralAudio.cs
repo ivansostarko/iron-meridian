@@ -22,8 +22,91 @@ namespace IronMeridian.Audio
             EffectSound.Fire => FireLoop(),
             EffectSound.Smoke => SmokeLoop(),
             EffectSound.Impact => Impact(),
+
+            // Artillery: one shared model, four sets of numbers. See Shell().
+            EffectSound.ArtilleryLight =>
+                Shell("fx_arty_105", seed: 105, duration: 2.0f,
+                      startHz: 170f, endHz: 62f, pitchFallSeconds: 0.45f,
+                      bodyDecay: 3.4f, crackDecay: 7.5f, crackLowPass: 0.34f,
+                      bodyMix: 0.55f, crackMix: 0.70f, rumbleMix: 0.10f),
+
+            EffectSound.ArtilleryMortar =>
+                Shell("fx_arty_120", seed: 120, duration: 2.2f,
+                      startHz: 120f, endHz: 46f, pitchFallSeconds: 0.30f,
+                      bodyDecay: 4.2f, crackDecay: 9.0f, crackLowPass: 0.10f,
+                      bodyMix: 0.62f, crackMix: 0.40f, rumbleMix: 0.34f),
+
+            EffectSound.ArtilleryMedium =>
+                Shell("fx_arty_155", seed: 155, duration: 3.0f,
+                      startHz: 92f, endHz: 30f, pitchFallSeconds: 0.85f,
+                      bodyDecay: 2.0f, crackDecay: 5.0f, crackLowPass: 0.20f,
+                      bodyMix: 0.80f, crackMix: 0.58f, rumbleMix: 0.30f),
+
+            EffectSound.ArtilleryHeavy =>
+                Shell("fx_arty_203", seed: 203, duration: 4.2f,
+                      startHz: 66f, endHz: 19f, pitchFallSeconds: 1.35f,
+                      bodyDecay: 1.15f, crackDecay: 3.2f, crackLowPass: 0.13f,
+                      bodyMix: 1.00f, crackMix: 0.50f, rumbleMix: 0.52f),
+
             _ => null
         };
+
+        /// <summary>
+        /// One artillery report, parameterised by calibre.
+        ///
+        /// Three layers, which is what separates the natures by ear:
+        /// **body** — a sine whose pitch falls away after the detonation; the
+        /// lower it starts and the slower it decays, the bigger the tube reads.
+        /// **crack** — filtered noise for the shock front; open the filter and
+        /// it is a sharp 105 mm snap, close it and it is a mortar's dull thump.
+        /// **rumble** — a slow noise bed under everything, which is the ground
+        /// shaking and is what makes the heavy calibres feel heavy rather than
+        /// merely quiet.
+        ///
+        /// Every calibre also gets a deterministic seed, so a given nature
+        /// always sounds like itself between runs.
+        /// </summary>
+        static AudioClip Shell(string name, int seed, float duration,
+            float startHz, float endHz, float pitchFallSeconds,
+            float bodyDecay, float crackDecay, float crackLowPass,
+            float bodyMix, float crackMix, float rumbleMix)
+        {
+            int n = (int)(Rate * duration);
+            var data = new float[n];
+            var rng = new System.Random(seed);
+            float crackFilter = 0f, rumbleFilter = 0f;
+
+            // Integrated phase rather than sin(2*pi*f(t)*t): with a sweeping
+            // frequency the naive form makes the phase run backwards and the
+            // "boom" turns into a warble.
+            float phase = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+
+                float freq = Mathf.Lerp(startHz, endHz, Mathf.Clamp01(t / pitchFallSeconds));
+                phase += 2f * Mathf.PI * freq / Rate;
+                float body = Mathf.Sin(phase) * Mathf.Exp(-t * bodyDecay);
+
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+
+                crackFilter = Mathf.Lerp(crackFilter, noise, crackLowPass);
+                float crack = crackFilter * Mathf.Exp(-t * crackDecay);
+
+                rumbleFilter = Mathf.Lerp(rumbleFilter, noise, 0.012f);
+                float rumble = rumbleFilter * Mathf.Exp(-t * (bodyDecay * 0.55f));
+
+                // Leading transient: without it the round fades in rather than
+                // arriving, which robs every calibre of its impact.
+                float click = Mathf.Exp(-t * 260f) * (float)(rng.NextDouble() * 2.0 - 1.0);
+
+                data[i] = body * bodyMix + crack * crackMix + rumble * rumbleMix + click * 0.30f;
+            }
+
+            Normalise(data, 0.92f);
+            return Make(name, data);
+        }
 
         /// <summary>
         /// Detonation: a low body that drops in pitch under a wide noise crack,

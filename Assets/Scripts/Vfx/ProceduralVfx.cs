@@ -42,6 +42,9 @@ namespace IronMeridian.Vfx
                 case VfxFallback.Fire:      BuildFire(root, def.tint);      break;
                 case VfxFallback.Smoke:     BuildSmoke(root, def.tint);     break;
                 case VfxFallback.Dust:      BuildDust(root, def.tint);      break;
+                case VfxFallback.ArtilleryAirBurst:   BuildArtilleryAirBurst(root, def.tint);   break;
+                case VfxFallback.ArtilleryDirtColumn: BuildArtilleryDirtColumn(root, def.tint); break;
+                case VfxFallback.ArtilleryHeavyBlast: BuildArtilleryHeavyBlast(root, def.tint); break;
             }
         }
 
@@ -343,6 +346,288 @@ namespace IronMeridian.Vfx
             drag.dampen = 0.55f;
 
             ps.Play();
+        }
+
+        // -------------------------------------------------- artillery bursts
+        //
+        // Three signatures rather than one scaled explosion, because the three
+        // events do not look alike from a map camera. What separates them is
+        // the *shape* of the throw: flat and wide for a high-order airburst,
+        // narrow and vertical for a mortar bomb, and a broad fireball with
+        // arcing debris for a heavy shell. See docs/17-ARTILLERY.md.
+
+        /// <summary>
+        /// 105 mm: a bright crack. Almost all of the energy goes sideways in a
+        /// flat shrapnel disc, there is very little soil, and it is over fast —
+        /// which is what makes it read as light next to the heavier natures.
+        /// </summary>
+        static void BuildArtilleryAirBurst(GameObject root, Color tint)
+        {
+            // Flash: brief and white-hot, brighter than a general explosion's.
+            var flash = NewSystem(root, "Flash", loop: false);
+            var fm = flash.main;
+            fm.duration = 0.2f;
+            fm.startLifetime = 0.16f;
+            fm.startSpeed = 0f;
+            fm.startSize = 2.0f;
+            fm.maxParticles = 4;
+            flash.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+            SetColourRamp(flash, new[]
+            {
+                (0.00f, new Color(1.00f, 1.00f, 0.95f), 1.00f),
+                (0.45f, new Color(1.00f, 0.90f, 0.55f), 0.70f),
+                (1.00f, tint,                            0.00f)
+            });
+            var flashSize = flash.sizeOverLifetime;
+            flashSize.enabled = true;
+            flashSize.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.3f, 1f, 1.5f));
+            flash.Play();
+
+            // Shrapnel disc: emitted across the ground plane at high speed with
+            // little drag, so it whips outward and stops. This flat, fast ring
+            // is the signature of the nature.
+            var frag = NewSystem(root, "Shrapnel", loop: false);
+            frag.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            var gm = frag.main;
+            gm.duration = 0.3f;
+            gm.startLifetime = new ParticleSystem.MinMaxCurve(0.30f, 0.55f);
+            gm.startSpeed = new ParticleSystem.MinMaxCurve(4.0f, 7.5f);
+            gm.startSize = new ParticleSystem.MinMaxCurve(0.16f, 0.34f);
+            gm.gravityModifier = 0.05f;
+            gm.maxParticles = 60;
+            frag.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 34) });
+            var gs = frag.shape;
+            gs.shapeType = ParticleSystemShapeType.Circle;
+            gs.radius = 0.12f;
+            gs.radiusThickness = 1f;
+            SetColourRamp(frag, new[]
+            {
+                (0.00f, new Color(1.00f, 0.96f, 0.78f), 0.95f),
+                (0.40f, tint,                            0.65f),
+                (1.00f, new Color(0.55f, 0.45f, 0.35f), 0.00f)
+            });
+            var gd = frag.limitVelocityOverLifetime;
+            gd.enabled = true;
+            gd.dampen = 0.30f;
+            frag.Play();
+
+            // A small, quick core. Deliberately not a rolling fireball.
+            var core = NewSystem(root, "Core", loop: false);
+            var cm = core.main;
+            cm.duration = 0.3f;
+            cm.startLifetime = new ParticleSystem.MinMaxCurve(0.30f, 0.55f);
+            cm.startSpeed = new ParticleSystem.MinMaxCurve(1.0f, 2.2f);
+            cm.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+            cm.gravityModifier = -0.10f;
+            cm.maxParticles = 24;
+            core.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 12) });
+            var cs = core.shape;
+            cs.shapeType = ParticleSystemShapeType.Sphere;
+            cs.radius = 0.16f;
+            SetColourRamp(core, new[]
+            {
+                (0.00f, new Color(1.00f, 0.95f, 0.72f), 1.00f),
+                (0.50f, tint,                            0.75f),
+                (1.00f, new Color(0.35f, 0.22f, 0.12f), 0.00f)
+            });
+            core.Play();
+
+            BuildDust(root, new Color(0.70f, 0.66f, 0.58f));
+        }
+
+        /// <summary>
+        /// 120 mm mortar: a bomb arriving almost vertically. Nearly everything
+        /// thrown up goes *up* — a narrow column of earth that rises and falls
+        /// back — with only a small flash. More soil than fire, which is what a
+        /// mortar impact actually looks like.
+        /// </summary>
+        static void BuildArtilleryDirtColumn(GameObject root, Color tint)
+        {
+            // Soil column: a tight cone straight up, with real gravity so the
+            // ejecta arcs over and falls back rather than drifting away.
+            var soil = NewSystem(root, "SoilColumn", loop: false);
+            var sm = soil.main;
+            sm.duration = 0.35f;
+            sm.startLifetime = new ParticleSystem.MinMaxCurve(1.1f, 1.9f);
+            sm.startSpeed = new ParticleSystem.MinMaxCurve(4.5f, 8.0f);
+            sm.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.75f);
+            sm.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            sm.gravityModifier = 1.15f;
+            sm.maxParticles = 70;
+            soil.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 42) });
+            var ss = soil.shape;
+            ss.shapeType = ParticleSystemShapeType.Cone;
+            ss.angle = 11f;                    // narrow: this is the whole look
+            ss.radius = 0.12f;
+            SetColourRamp(soil, new[]
+            {
+                (0.00f, Color.Lerp(tint, Color.white, 0.35f), 0.95f),
+                (0.35f, tint,                                 0.85f),
+                (1.00f, Color.Lerp(tint, Color.black, 0.35f), 0.00f)
+            });
+            var soilSize = soil.sizeOverLifetime;
+            soilSize.enabled = true;
+            soilSize.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.8f, 1f, 1.5f));
+            soil.Play();
+
+            // Small muzzle-bright flash at the base, gone almost immediately.
+            var flash = NewSystem(root, "Flash", loop: false);
+            var fm = flash.main;
+            fm.duration = 0.18f;
+            fm.startLifetime = 0.14f;
+            fm.startSpeed = 0f;
+            fm.startSize = 1.1f;
+            fm.maxParticles = 3;
+            flash.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+            SetColourRamp(flash, new[]
+            {
+                (0.00f, new Color(1.00f, 0.92f, 0.68f), 0.85f),
+                (1.00f, new Color(0.85f, 0.55f, 0.25f), 0.00f)
+            });
+            flash.Play();
+
+            // Skirt of earth thrown out along the ground at the base of the column.
+            var skirt = NewSystem(root, "Skirt", loop: false);
+            skirt.transform.localRotation = Quaternion.Euler(-70f, 0f, 0f);
+            var km = skirt.main;
+            km.duration = 0.35f;
+            km.startLifetime = new ParticleSystem.MinMaxCurve(0.7f, 1.2f);
+            km.startSpeed = new ParticleSystem.MinMaxCurve(1.4f, 2.8f);
+            km.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.95f);
+            km.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            km.gravityModifier = 0.45f;
+            km.maxParticles = 40;
+            skirt.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 20) });
+            var ks = skirt.shape;
+            ks.shapeType = ParticleSystemShapeType.Cone;
+            ks.angle = 55f;
+            ks.radius = 0.2f;
+            SetColourRamp(skirt, new[]
+            {
+                (0.00f, tint,                                 0.00f),
+                (0.15f, tint,                                 0.80f),
+                (1.00f, Color.Lerp(tint, Color.grey, 0.5f),   0.00f)
+            });
+            skirt.Play();
+        }
+
+        /// <summary>
+        /// 155 mm and 203 mm: a proper high-explosive shell. Fireball, a ground
+        /// shock ring racing out along the terrain, and heavy debris arcing up
+        /// and falling back. The two calibres share this signature and differ by
+        /// the scale and lifetime on their catalogue rows, because that *is* the
+        /// difference between them — same event, twice the size.
+        /// </summary>
+        static void BuildArtilleryHeavyBlast(GameObject root, Color tint)
+        {
+            // Flash.
+            var flash = NewSystem(root, "Flash", loop: false);
+            var fm = flash.main;
+            fm.duration = 0.3f;
+            fm.startLifetime = 0.26f;
+            fm.startSpeed = 0f;
+            fm.startSize = 3.0f;
+            fm.maxParticles = 4;
+            flash.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+            SetColourRamp(flash, new[]
+            {
+                (0.00f, new Color(1.00f, 0.98f, 0.88f), 1.00f),
+                (0.40f, new Color(1.00f, 0.78f, 0.35f), 0.80f),
+                (1.00f, new Color(1.00f, 0.45f, 0.12f), 0.00f)
+            });
+            var flashSize = flash.sizeOverLifetime;
+            flashSize.enabled = true;
+            flashSize.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.35f, 1f, 1.9f));
+            flash.Play();
+
+            // Fireball: slower and heavier than the general-purpose explosion,
+            // and it climbs — the start of a mushroom rather than a puff.
+            var fire = NewSystem(root, "Fireball", loop: false);
+            var bm = fire.main;
+            bm.duration = 0.6f;
+            bm.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 1.5f);
+            bm.startSpeed = new ParticleSystem.MinMaxCurve(1.8f, 3.8f);
+            bm.startSize = new ParticleSystem.MinMaxCurve(0.9f, 1.7f);
+            bm.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            bm.gravityModifier = -0.28f;
+            bm.maxParticles = 70;
+            fire.emission.SetBursts(new[]
+            {
+                new ParticleSystem.Burst(0f, 26),
+                new ParticleSystem.Burst(0.12f, 12)
+            });
+            var bs = fire.shape;
+            bs.shapeType = ParticleSystemShapeType.Sphere;
+            bs.radius = 0.3f;
+            SetColourRamp(fire, new[]
+            {
+                (0.00f, new Color(1.00f, 0.95f, 0.70f), 1.00f),
+                (0.28f, tint,                            0.95f),
+                (0.68f, new Color(0.45f, 0.15f, 0.05f), 0.60f),
+                (1.00f, new Color(0.12f, 0.09f, 0.08f), 0.00f)
+            });
+            var drag = fire.limitVelocityOverLifetime;
+            drag.enabled = true;
+            drag.dampen = 0.45f;
+            var fireSize = fire.sizeOverLifetime;
+            fireSize.enabled = true;
+            fireSize.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.6f, 1f, 1.8f));
+            fire.Play();
+
+            // Shock ring: hugging the ground and moving fast. This is what makes
+            // the blast sit *on* the terrain instead of hanging above it.
+            var ring = NewSystem(root, "ShockRing", loop: false);
+            ring.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            var rm = ring.main;
+            rm.duration = 0.3f;
+            rm.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.75f);
+            rm.startSpeed = new ParticleSystem.MinMaxCurve(5.5f, 8.0f);
+            rm.startSize = new ParticleSystem.MinMaxCurve(0.8f, 1.4f);
+            rm.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            rm.maxParticles = 44;
+            ring.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 26) });
+            var rs = ring.shape;
+            rs.shapeType = ParticleSystemShapeType.Circle;
+            rs.radius = 0.2f;
+            rs.radiusThickness = 0f;          // emit from the rim: a ring, not a disc
+            SetColourRamp(ring, new[]
+            {
+                (0.00f, new Color(0.86f, 0.80f, 0.70f), 0.85f),
+                (0.55f, new Color(0.62f, 0.56f, 0.48f), 0.45f),
+                (1.00f, new Color(0.50f, 0.46f, 0.42f), 0.00f)
+            });
+            var ringSize = ring.sizeOverLifetime;
+            ringSize.enabled = true;
+            ringSize.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.5f, 1f, 2.2f));
+            var ringDrag = ring.limitVelocityOverLifetime;
+            ringDrag.enabled = true;
+            ringDrag.dampen = 0.55f;
+            ring.Play();
+
+            // Debris: heavy, gravity-bound, arcing up and falling back. Small
+            // and sparse on purpose — it is punctuation, not the main event.
+            var debris = NewSystem(root, "Debris", loop: false);
+            var dm = debris.main;
+            dm.duration = 0.3f;
+            dm.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.1f);
+            dm.startSpeed = new ParticleSystem.MinMaxCurve(5.0f, 9.0f);
+            dm.startSize = new ParticleSystem.MinMaxCurve(0.14f, 0.30f);
+            dm.gravityModifier = 1.3f;
+            dm.maxParticles = 40;
+            debris.emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 24) });
+            var ds = debris.shape;
+            ds.shapeType = ParticleSystemShapeType.Cone;
+            ds.angle = 42f;
+            ds.radius = 0.15f;
+            SetColourRamp(debris, new[]
+            {
+                (0.00f, new Color(0.55f, 0.44f, 0.32f), 0.95f),
+                (0.75f, new Color(0.40f, 0.33f, 0.26f), 0.75f),
+                (1.00f, new Color(0.32f, 0.28f, 0.24f), 0.00f)
+            });
+            debris.Play();
+
+            BuildDust(root, new Color(0.60f, 0.54f, 0.46f));
         }
 
         // ------------------------------------------------------- helpers

@@ -63,6 +63,8 @@ namespace IronMeridian.UI
             UIFactory.Place(_status.rectTransform, new Vector2(0.5f, 1f),
                 new Vector2(0, -UiTheme.TopBarHeight - 14), new Vector2(900, 24));
 
+            BuildCountdown(canvas);
+
             var help = UIFactory.CreateText(canvas.transform,
                 "LMB select   •   RMB place / move   •   C face   •   Ctrl+C/V copy-paste   •   Ctrl+Z undo   •   WASD pan   •   Wheel zoom   •   Q/E rotate   •   Esc/P pause",
                 UiTheme.FontSmall, UiTheme.TextFaint);
@@ -232,5 +234,103 @@ namespace IronMeridian.UI
         }
 
         public void Flash(string message) => _status.text = message;
+
+        // ------------------------------------------------------- fire mission
+
+        RectTransform _countdown;
+        Image _countdownFill, _countdownBar;
+        Text _countdownTitle, _countdownSeconds, _countdownCaption;
+
+        /// <summary>Width of the countdown banner's depleting bar.</summary>
+        const float CountdownBarWidth = 300f;
+
+        /// <summary>
+        /// The fire-mission countdown, hidden until something is in the air.
+        ///
+        /// It sits below the flash line rather than replacing it: the flash says
+        /// what was just ordered, this says how long until it arrives, and
+        /// during a fire mission the player wants both. Centred over the map
+        /// because it is the one thing on screen that cannot be acted on — there
+        /// is no button here, only a clock running down.
+        /// </summary>
+        void BuildCountdown(Canvas canvas)
+        {
+            _countdown = UIFactory.CreateBorderedPanel(canvas.transform, "FireMission",
+                UiTheme.Chrome, UiTheme.BorderStrong);
+            UIFactory.Place(_countdown, new Vector2(0.5f, 1f),
+                new Vector2(0, -UiTheme.TopBarHeight - 44), new Vector2(340, 84));
+            _countdownFill = _countdown.Find("Fill").GetComponent<Image>();
+
+            _countdownCaption = UIFactory.CreateText(_countdown, "FIRE MISSION", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_countdownCaption.rectTransform, new Vector2(0f, 1f),
+                new Vector2(14, -10), new Vector2(200, 14));
+
+            _countdownTitle = UIFactory.CreateText(_countdown, "", UiTheme.FontBody,
+                UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_countdownTitle.rectTransform, new Vector2(0f, 1f),
+                new Vector2(14, -28), new Vector2(232, 20));
+
+            // The seconds are the point of the banner, so they are the largest
+            // thing in it and sit on their own on the right.
+            _countdownSeconds = UIFactory.CreateText(_countdown, "", 34,
+                UiTheme.Text, TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_countdownSeconds.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-14, -22), new Vector2(80, 40));
+
+            // Depleting bar: the same information again as a shape, which is
+            // what the eye reads at a glance while it is busy watching the map.
+            var track = UIFactory.CreatePanel(_countdown, "Track", UiTheme.Surface);
+            UIFactory.Place(track, new Vector2(0.5f, 0f), new Vector2(0, 16),
+                new Vector2(CountdownBarWidth, 6));
+
+            _countdownBar = UIFactory.CreatePanel(track, "Bar", UiTheme.Accent).GetComponent<Image>();
+            var barRect = (RectTransform)_countdownBar.transform;
+            barRect.anchorMin = new Vector2(0, 0); barRect.anchorMax = new Vector2(0, 1);
+            barRect.pivot = new Vector2(0, 0.5f);
+            barRect.anchoredPosition = Vector2.zero;
+            barRect.sizeDelta = new Vector2(CountdownBarWidth, 0);
+
+            _countdown.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Drives the countdown banner. Passing a null <paramref name="title"/>
+        /// hides it — the caller does not have to track whether it is showing.
+        /// </summary>
+        public void SetFireMission(string title, float remaining, float total, Color accent)
+        {
+            if (_countdown == null) return;
+
+            if (string.IsNullOrEmpty(title) || total <= 0f)
+            {
+                if (_countdown.gameObject.activeSelf) _countdown.gameObject.SetActive(false);
+                return;
+            }
+
+            if (!_countdown.gameObject.activeSelf) _countdown.gameObject.SetActive(true);
+
+            float t01 = Mathf.Clamp01(remaining / total);
+            _countdownTitle.text = title;
+            // Ceiling, so the banner reads "01" for the whole final second and
+            // only ever shows "00" when the rounds are actually landing.
+            _countdownSeconds.text = Mathf.CeilToInt(Mathf.Max(0f, remaining)).ToString("00");
+
+            ((RectTransform)_countdownBar.transform).sizeDelta =
+                new Vector2(CountdownBarWidth * t01, 0);
+
+            // Everything heats toward danger as the clock runs out, matching the
+            // target marker on the map so the two read as one event.
+            var hot = Color.Lerp(accent, UiTheme.Hostile, 1f - t01);
+            _countdownBar.color = hot;
+            _countdownSeconds.color = hot;
+            _countdownCaption.color = Color.Lerp(UiTheme.TextFaint, hot, 1f - t01);
+
+            // A slow pulse on the panel itself in the last three seconds.
+            float urgency = remaining <= 3f
+                ? (Mathf.Sin(Time.unscaledTime * 9f) + 1f) * 0.5f
+                : 0f;
+            _countdownFill.color = Color.Lerp(UiTheme.Chrome, new Color(0.35f, 0.09f, 0.07f, 0.98f), urgency * 0.8f);
+        }
     }
 }

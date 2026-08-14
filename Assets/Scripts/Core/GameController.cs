@@ -37,6 +37,7 @@ namespace IronMeridian.Core
         VfxSystem _vfx;
         WeatherSystem _weather;
         EffectPlacementTool _effects;
+        ArtilleryStrikeSystem _artillery;
         MapControlsUI _mapControls;
         GameClock _clock;
         GameHUD _hud;
@@ -146,12 +147,17 @@ namespace IronMeridian.Core
             _effects = gameObject.AddComponent<EffectPlacementTool>();
             _effects.Init(_map, _rig.Cam);
 
+            // Called fire missions — see docs/17-ARTILLERY.md.
+            _artillery = gameObject.AddComponent<ArtilleryStrikeSystem>();
+            _artillery.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
             _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                             BoundaryOptionsDialog.IsOpen || ConfirmDialog.IsOpen ||
                                             _effects.IsArmed ||
+                                            _artillery.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -170,6 +176,12 @@ namespace IronMeridian.Core
             _hud.Build(canvas, _combat, _clock);
             _selection.Flash = _hud.Flash;
             _effects.Flash = _hud.Flash;
+            _artillery.Flash = _hud.Flash;
+            // The strike system reports its countdown every frame; the HUD hides
+            // the banner on its own when there is nothing in the air.
+            _artillery.CountdownChanged = (def, remaining, total) =>
+                _hud.SetFireMission(def?.name, remaining, total,
+                    def?.markerColor ?? UiTheme.Accent);
 
             _defence.Flash = _hud.Flash;
             _attacks.Flash = _hud.Flash;
@@ -192,7 +204,7 @@ namespace IronMeridian.Core
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _mapControls, _drawTool);
+                    _artillery, _mapControls, _drawTool);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;

@@ -31,11 +31,49 @@ namespace IronMeridian.Vfx
         /// <summary>Deliberate obscuration laid by artillery/smoke generators — looping.</summary>
         SmokeScreen,
         /// <summary>Dust kicked up by movement or a deployment drop — one-shot.</summary>
-        Dust
+        Dust,
+
+        // --- artillery (see docs/17-ARTILLERY.md) ---
+        // One burst and one smoke per nature. They are separate ids rather than
+        // one scaled effect because the natures genuinely do not look alike: a
+        // 105 mm round is a bright crack, a 120 mm mortar bomb is a column of
+        // soil, and a 203 mm shell is a fireball. Scaling one effect four ways
+        // would make them all the same event at four sizes.
+
+        /// <summary>105 mm round landing — sharp, bright, little soil.</summary>
+        ArtilleryLightBurst,
+        /// <summary>120 mm mortar bomb landing — steep, narrow column of earth.</summary>
+        ArtilleryMortarBurst,
+        /// <summary>155 mm round landing — the standard HE burst.</summary>
+        ArtilleryMediumBurst,
+        /// <summary>203 mm round landing — heavy fireball with a debris throw.</summary>
+        ArtilleryHeavyBurst,
+
+        /// <summary>Thin pale smoke off a 105 mm burst — looping until dispersed.</summary>
+        ArtilleryLightSmoke,
+        /// <summary>Brown soil haze off a mortar bomb — looping until dispersed.</summary>
+        ArtilleryMortarSmoke,
+        /// <summary>Grey-black smoke off a 155 mm burst — looping until dispersed.</summary>
+        ArtilleryMediumSmoke,
+        /// <summary>Heavy oily column off a 203 mm burst — looping until dispersed.</summary>
+        ArtilleryHeavySmoke
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
-    public enum VfxFallback { Explosion, Impact, Fire, Smoke, Dust }
+    public enum VfxFallback
+    {
+        Explosion,
+        Impact,
+        Fire,
+        Smoke,
+        Dust,
+        /// <summary>High-order round: white-hot flash, flat shrapnel ring, minimal soil.</summary>
+        ArtilleryAirBurst,
+        /// <summary>Mortar bomb: narrow near-vertical column of earth, small flash.</summary>
+        ArtilleryDirtColumn,
+        /// <summary>Heavy shell: fireball, ground shock ring and arcing debris.</summary>
+        ArtilleryHeavyBlast
+    }
 
     /// <summary>One catalogue row: what to spawn, how big, and for how long.</summary>
     public class VfxDef
@@ -138,7 +176,56 @@ namespace IronMeridian.Vfx
 
             new VfxDef { id = VfxId.Dust,        prefabPath = null,
                          fallback = VfxFallback.Dust,      scaleMeters = 140f, lifeSeconds = 1.5f,
-                         tint = new Color(0.68f, 0.62f, 0.52f), priority = 10 }
+                         tint = new Color(0.68f, 0.62f, 0.52f), priority = 10 },
+
+            // --- artillery bursts (docs/17-ARTILLERY.md) ---
+            // Priority above a plain explosion: a called fire mission is the
+            // thing the player is watching, and must never be the effect the
+            // concurrency budget throws away.
+            new VfxDef { id = VfxId.ArtilleryLightBurst,  prefabPath = null,
+                         fallback = VfxFallback.ArtilleryAirBurst,   scaleMeters = 210f, lifeSeconds = 2.2f,
+                         tint = new Color(1.00f, 0.88f, 0.52f), priority = 120,
+                         sound = EffectSound.ArtilleryLight },
+
+            new VfxDef { id = VfxId.ArtilleryMortarBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryDirtColumn, scaleMeters = 190f, lifeSeconds = 2.8f,
+                         tint = new Color(0.62f, 0.50f, 0.34f), priority = 120,
+                         sound = EffectSound.ArtilleryMortar },
+
+            new VfxDef { id = VfxId.ArtilleryMediumBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryHeavyBlast, scaleMeters = 300f, lifeSeconds = 3.0f,
+                         tint = new Color(1.00f, 0.58f, 0.18f), priority = 125,
+                         sound = EffectSound.ArtilleryMedium },
+
+            new VfxDef { id = VfxId.ArtilleryHeavyBurst,  prefabPath = null,
+                         fallback = VfxFallback.ArtilleryHeavyBlast, scaleMeters = 430f, lifeSeconds = 3.6f,
+                         tint = new Color(1.00f, 0.44f, 0.12f), priority = 130,
+                         sound = EffectSound.ArtilleryHeavy },
+
+            // --- artillery smoke ---
+            // All loop (lifeSeconds = 0) and are dispersed explicitly by
+            // ArtilleryStrikeSystem, the same way PlayWreck burns a wreck out.
+            // Lower priority than the bursts: if the budget has to give, it
+            // should give up lingering smoke rather than a round landing.
+            new VfxDef { id = VfxId.ArtilleryLightSmoke,  prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 180f, lifeSeconds = 0f,
+                         tint = new Color(0.78f, 0.78f, 0.76f), priority = 45,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.ArtilleryMortarSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 200f, lifeSeconds = 0f,
+                         tint = new Color(0.55f, 0.45f, 0.32f), priority = 45,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.ArtilleryMediumSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 280f, lifeSeconds = 0f,
+                         tint = new Color(0.32f, 0.31f, 0.30f), priority = 48,
+                         sound = EffectSound.Smoke },
+
+            new VfxDef { id = VfxId.ArtilleryHeavySmoke,  prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 380f, lifeSeconds = 0f,
+                         tint = new Color(0.16f, 0.15f, 0.15f), priority = 52,
+                         sound = EffectSound.Smoke }
         };
 
         static Dictionary<VfxId, VfxDef> _byId;
