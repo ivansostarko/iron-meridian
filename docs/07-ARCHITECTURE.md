@@ -39,6 +39,9 @@ Assets/Scripts/
                          chrome measures from it, never from the section panel
     UiIcons.cs           HUD icon set, drawn procedurally
     UiTooltip.cs         hover captions for icon-only controls
+    MapFont.cs           the one typeface for world-space map text (condensed OS
+                         font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
+                         TaskMarker and RangeRing captions
     ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
     MainMenuUI.cs        Testing/Settings/Quit + confirmation modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
@@ -55,6 +58,7 @@ Assets/Scripts/
     RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)
   Units/
     UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
+    UnitLabel.cs         unit caption above the icon: shadowed two-pass TextMesh
     UnitMover.cs         routed march: legs, cornering, terrain clamp, trail
     MoveTrail.cs         travelled trail + dashed planned route (battle mode only)
     HeadingArrow.cs      ground facing arrow under a selected unit
@@ -92,7 +96,37 @@ Assets/Scripts/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs
     ModelInstaller.cs    Tools > Iron Meridian > Install Unit Models
+
+Assets/Resources/Shaders/
+  IconOutline.shader     unit-icon material: alpha-traced selection/hover outline
 ```
+
+## Map selection feedback
+
+Clicking a unit marks it three ways, all driven from `UnitActor`:
+
+| Cue | Where | Notes |
+|---|---|---|
+| Icon outline | `IconOutline.shader` via `RuntimeMaterials.IconWithOutline` | Traces the icon's own alpha; pulses in time with the ring. Hover uses a thinner white one, and selection always wins over hover. |
+| Ground ring | `UnitActor._ring` | Team-coloured, pulsing |
+| Heading arrow | `HeadingArrow` | Shows which way the counter points |
+
+**Why the outline is a shader and not QuickOutline.** The imported
+[QuickOutline](https://assetstore.unity.com/packages/p/quick-outline-115488)
+asset extrudes geometry along vertex normals. A unit icon is a single
+camera-facing quad, so every normal points at the viewer and the extrusion
+collapses into a depth offset — it draws nothing at all. A geometric outline
+would also trace the quad's rectangle rather than the shape of the APP-6 symbol
+on it. `IconOutline.shader` dilates the icon texture's alpha instead, so the
+outline hugs the friendly rectangle, the hostile diamond and the echelon pips.
+
+QuickOutline *is* the right tool for real meshes, and is used on the 3D model in
+`ModelPreview` — see docs/09-3D-MODELS.md.
+
+The shader reserves a transparent margin (`GameConfig.IconOutlinePadding`) inside
+the icon quad for the outline to grow into, and `UnitActor` enlarges the quad by
+the matching factor so the icon's apparent size is unchanged. Change one and you
+must change the other.
 
 ## Flow
 

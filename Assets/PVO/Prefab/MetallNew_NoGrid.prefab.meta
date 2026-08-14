@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: efc65d783176616468370a1e350ed56d
+timeCreated: 1505054981
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 100032
+  packageName: Anti-air defense radar
+  packageVersion: 1.0
+  assetPath: Assets/PVO/Prefab/MetallNew_NoGrid.prefab
+  uploadId: 200376

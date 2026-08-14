@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: df1dea26b8503004d92d621e88aa9421
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/ThirdParties/NaughtyAttributes/Scripts/Test/NaughtyAttributes.Test.asmdef
+  uploadId: 695538

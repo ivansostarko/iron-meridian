@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 7ec61520dd2f0454493433846f5ca3d0
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 282085
+  packageName: Projectile Factory for Sci-Fi Effects by FORGE3D
+  packageVersion: 1.0.15
+  assetPath: Assets/Magic Pig Games (Infinity PBR)/FORGE3D - Sci-Fi Effects/Data
+    Objects/Generic Behavior/Spawn Plasma Gun x10.asset
+  uploadId: 932216

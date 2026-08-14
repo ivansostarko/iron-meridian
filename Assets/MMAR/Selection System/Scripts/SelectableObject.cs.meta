@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: a500fe11b4eeb85479031a41b2b7aa6c
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/Scripts/SelectableObject.cs
+  uploadId: 695538

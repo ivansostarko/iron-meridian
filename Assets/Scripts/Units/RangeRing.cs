@@ -75,8 +75,10 @@ namespace IronMeridian.Units
             _caption = anchor.AddComponent<TextMesh>();
             _caption.anchor = TextAnchor.LowerCenter;
             _caption.alignment = TextAlignment.Center;
-            _caption.characterSize = 8;
-            _caption.fontSize = 44;
+            // characterSize absorbs MapFont's fixed rasterisation size, so the
+            // caption keeps the size it had while sharing the map's font atlas.
+            _caption.characterSize = 8f * 44f / UI.MapFont.FontSize;
+            UI.MapFont.Apply(_caption);
             _caption.color = color;
             _caption.text = "";
         }

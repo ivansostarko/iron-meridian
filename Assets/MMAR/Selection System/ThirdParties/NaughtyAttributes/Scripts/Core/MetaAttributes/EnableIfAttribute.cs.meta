@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: a616ae826c8ebae45a89d6a8cb68a843
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/ThirdParties/NaughtyAttributes/Scripts/Core/MetaAttributes/EnableIfAttribute.cs
+  uploadId: 695538

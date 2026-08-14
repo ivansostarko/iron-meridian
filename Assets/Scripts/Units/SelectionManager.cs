@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using IronMeridian.Data;
 using IronMeridian.Map;
+using IronMeridian.UI;
 
 namespace IronMeridian.Units
 {
@@ -489,14 +490,36 @@ namespace IronMeridian.Units
             Vector2 min = Vector2.Min(a, b), max = Vector2.Max(a, b);
             var result = new List<UnitActor>();
             foreach (var u in UnitRegistry.All)
-            {
-                if (u == null || !u.IsAlive || u.State.TeamEnum != team) continue;
-                Vector3 sp = _cam.WorldToScreenPoint(u.transform.position);
-                if (sp.z < 0) continue;
-                if (sp.x >= min.x && sp.x <= max.x && sp.y >= min.y && sp.y <= max.y)
-                    result.Add(u);
-            }
+                if (InScreenRect(u, team, min, max)) result.Add(u);
             return result;
+        }
+
+        /// <summary>
+        /// How many units the marquee currently covers. Separate from
+        /// <see cref="UnitsInScreenRect"/> because the readout runs every frame
+        /// of a drag and the list does not — allocating one per frame to
+        /// immediately throw it away is the kind of thing that shows up as
+        /// stutter with a full order of battle deployed.
+        /// </summary>
+        int CountUnitsInScreenRect(Vector2 a, Vector2 b, Team team)
+        {
+            Vector2 min = Vector2.Min(a, b), max = Vector2.Max(a, b);
+            int n = 0;
+            foreach (var u in UnitRegistry.All)
+                if (InScreenRect(u, team, min, max)) n++;
+            return n;
+        }
+
+        bool InScreenRect(UnitActor u, Team team, Vector2 min, Vector2 max)
+        {
+            if (u == null || !u.IsAlive || u.State.TeamEnum != team) return false;
+            // A formation the player cannot see is not one they can rubber-band
+            // select — the fog withholds the position, so it must withhold the
+            // click target too.
+            if (u.HiddenByFog) return false;
+            Vector3 sp = _cam.WorldToScreenPoint(u.transform.position);
+            if (sp.z < 0) return false;
+            return sp.x >= min.x && sp.x <= max.x && sp.y >= min.y && sp.y <= max.y;
         }
 
         // ------------------------------------------------------- selection
@@ -542,16 +565,59 @@ namespace IronMeridian.Units
         }
 
         // ------------------------------------------------------- box visual
+
+        /// <summary>Edge thickness of the marquee, in canvas units.</summary>
+        const float BoxBorderPx = 2f;
+        static readonly Color BoxFill = new Color(0.95f, 0.85f, 0.35f, 0.12f);
+        static readonly Color BoxEdge = new Color(1.00f, 0.93f, 0.55f, 0.95f);
+
+        Text _boxCount;
+
         void EnsureBoxVisual()
         {
             if (_boxImage != null) return;
             var go = new GameObject("SelectionBox", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(_canvas.transform, false);
             _boxImage = go.GetComponent<Image>();
-            _boxImage.color = new Color(0.95f, 0.85f, 0.35f, 0.15f);
+            _boxImage.color = BoxFill;
             _boxImage.raycastTarget = false;
             _boxRect = (RectTransform)go.transform;
+
+            // A translucent wash alone is hard to place precisely against
+            // photographic terrain — the eye needs an edge to aim with. Four
+            // stretched strips rather than a sprite so there is still no image
+            // asset to ship.
+            BoxEdgeStrip("Top", new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1f), new Vector2(0, BoxBorderPx));
+            BoxEdgeStrip("Bottom", new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0f), new Vector2(0, BoxBorderPx));
+            BoxEdgeStrip("Left", new Vector2(0, 0), new Vector2(0, 1), new Vector2(0f, 0.5f), new Vector2(BoxBorderPx, 0));
+            BoxEdgeStrip("Right", new Vector2(1, 0), new Vector2(1, 1), new Vector2(1f, 0.5f), new Vector2(BoxBorderPx, 0));
+
+            // Running count, so the player knows what the marquee has caught
+            // before releasing rather than after.
+            _boxCount = UIFactory.CreateText(_boxRect, "", 14, BoxEdge, TextAnchor.LowerLeft, FontStyle.Bold);
+            _boxCount.raycastTarget = false;
+            var countRect = _boxCount.rectTransform;
+            countRect.anchorMin = countRect.anchorMax = new Vector2(0, 1);
+            countRect.pivot = new Vector2(0, 0);
+            countRect.anchoredPosition = new Vector2(2f, 4f);
+            countRect.sizeDelta = new Vector2(160f, 20f);
+
             go.SetActive(false);
+        }
+
+        void BoxEdgeStrip(string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(_boxRect, false);
+            var image = go.GetComponent<Image>();
+            image.color = BoxEdge;
+            image.raycastTarget = false;
+            var rect = (RectTransform)go.transform;
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.pivot = pivot;
+            rect.sizeDelta = size;
+            rect.anchoredPosition = Vector2.zero;
         }
 
         void UpdateBoxVisual(Vector2 startScreen, Vector2 curScreen)
@@ -565,6 +631,11 @@ namespace IronMeridian.Units
             _boxRect.anchoredPosition = (min + max) * 0.5f;
             _boxRect.sizeDelta = max - min;
             _boxImage.gameObject.SetActive(true);
+
+            // Preview the catch. Hovering every boxed unit as well would fight
+            // the cursor's own hover highlight, so the count states it instead.
+            int n = CountUnitsInScreenRect(startScreen, curScreen, Team.User);
+            _boxCount.text = n == 0 ? "" : (n == 1 ? "1 unit" : $"{n} units");
         }
 
         void HideBoxVisual()

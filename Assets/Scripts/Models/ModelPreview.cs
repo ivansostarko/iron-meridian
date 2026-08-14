@@ -136,6 +136,7 @@ namespace IronMeridian.Models
             _model = Instantiate(prefab, _rig);
             _model.transform.localPosition = Vector3.zero;
             _model.transform.localRotation = Quaternion.identity;
+            AddRimOutline();
 
             Frame(def.framing);
             PlayIdle(def);
@@ -143,6 +144,36 @@ namespace IronMeridian.Models
             _placeholder.gameObject.SetActive(false);
             _image.enabled = true;
             _cam.enabled = true;
+        }
+
+        /// <summary>
+        /// Traces the model's silhouette so it separates from the panel behind
+        /// it. A dark vehicle against a dark background otherwise reads as a
+        /// hole rather than an object, and no amount of relighting fixes that
+        /// from every orbit angle.
+        ///
+        /// This is the one place QuickOutline is the right tool: it extrudes
+        /// geometry along vertex normals, which needs an actual mesh with
+        /// varying normals. It cannot outline the map's unit icons — those are
+        /// single camera-facing quads whose normals all point at the viewer, so
+        /// the extrusion collapses to a depth offset and draws nothing. The map
+        /// icons trace their own alpha instead; see IconOutline.shader.
+        ///
+        /// OutlineVisible rather than OutlineAll, so the outline does not show
+        /// through the model's near side and turn a solid figure into a wireframe.
+        ///
+        /// Note this is a hard compile-time dependency on the QuickOutline
+        /// import (<c>Assets/QuickOutline/</c>) — the global <c>Outline</c> type.
+        /// Deleting that package means deleting this method with it.
+        /// </summary>
+        void AddRimOutline()
+        {
+            if (_model == null) return;
+
+            var outline = _model.AddComponent<Outline>();
+            outline.OutlineMode = Outline.Mode.OutlineVisible;
+            outline.OutlineColor = GameConfig.UiAccent;
+            outline.OutlineWidth = 3.5f;
         }
 
         /// <summary>

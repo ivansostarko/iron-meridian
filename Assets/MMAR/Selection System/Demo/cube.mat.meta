@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b919534315401a14aa06e29f8b5635c5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/Demo/cube.mat
+  uploadId: 695538

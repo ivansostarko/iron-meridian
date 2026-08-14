@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 079cac2561adb05449da65e13e726d15
+timeCreated: 1505054865
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 100032
+  packageName: Anti-air defense radar
+  packageVersion: 1.0
+  assetPath: Assets/PVO/Prefab/PVO_Metall_Tired.prefab
+  uploadId: 200376

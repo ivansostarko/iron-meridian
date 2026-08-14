@@ -10,6 +10,7 @@
   ],
   "dependencies": {
     "com.cesium.unity": "1.24.0",
+    "com.unity.ai.navigation": "2.0.13",
     "com.unity.ugui": "2.0.0",
     "com.unity.modules.accessibility": "1.0.0",
     "com.unity.modules.animation": "1.0.0",

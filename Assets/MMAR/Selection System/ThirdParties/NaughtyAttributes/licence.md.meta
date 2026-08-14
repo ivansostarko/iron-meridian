@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 05e05c0c35dc8874b9d78f4608dbd56a
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/ThirdParties/NaughtyAttributes/licence.md
+  uploadId: 695538

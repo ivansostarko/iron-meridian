@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: afd1d6323740c734893fa8397c53113b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/ThirdParties/NaughtyAttributes/Scripts/Core/DrawerAttributes/InfoBoxAttribute.cs
+  uploadId: 695538

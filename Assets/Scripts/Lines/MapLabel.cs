@@ -42,8 +42,12 @@ namespace IronMeridian.Lines
             label._text = go.AddComponent<TextMesh>();
             label._text.anchor = TextAnchor.MiddleCenter;
             label._text.alignment = TextAlignment.Center;
-            label._text.characterSize = 8;
-            label._text.fontSize = 40;
+            // Same condensed face as the unit captions — two fonts on one map
+            // reads as a mistake. MapFont owns the rasterisation size too (one
+            // size means one shared glyph atlas), so characterSize absorbs the
+            // difference and this caption renders exactly as large as before.
+            label._text.characterSize = 8f * 40f / UI.MapFont.FontSize;
+            UI.MapFont.Apply(label._text);
             return label;
         }
 

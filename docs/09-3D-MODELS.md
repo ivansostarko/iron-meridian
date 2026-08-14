@@ -109,8 +109,17 @@ uGUI cannot draw a mesh, so the model is rendered offscreen and displayed as a t
 3. It renders to a `RenderTexture` at 1.5× the panel size, shown by a `RawImage`.
 4. Framing is computed from the model's combined renderer **bounds**, not per-model magic numbers, so a new model drops in correctly sized. `UnitModelDef.framing` is a nudge for the rare model that sits oddly.
 5. The camera is disabled whenever no model is shown, so an empty panel costs nothing.
+6. A **silhouette outline** is added to the instantiated model (`ModelPreview.AddRimOutline`). A dark vehicle on a dark panel otherwise reads as a hole rather than an object, and no amount of relighting fixes that from every orbit angle.
 
 Degradation is explicit at every step: no model for this unit, prefab not installed, or no legacy clip each produce a specific on-screen or console message — never a blank box.
+
+### The outline (QuickOutline)
+
+The rim uses the imported [QuickOutline](https://assetstore.unity.com/packages/p/quick-outline-115488) asset (`Assets/QuickOutline/`) in `OutlineVisible` mode — `OutlineAll` would show the outline through the model's near side and turn a solid figure into a wireframe.
+
+This is a **hard compile-time dependency**: `ModelPreview.AddRimOutline` names the global `Outline` type directly, so removing the package means removing that method with it.
+
+QuickOutline works here and only here. It extrudes geometry along vertex normals, which needs a real mesh with varying normals — it cannot outline the map's unit icons, which are single camera-facing quads whose normals all point at the viewer. Those trace their own texture alpha instead; see `Assets/Resources/Shaders/IconOutline.shader` and docs/07-ARCHITECTURE.md.
 
 ---
 

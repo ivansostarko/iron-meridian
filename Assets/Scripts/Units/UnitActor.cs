@@ -27,10 +27,13 @@ namespace IronMeridian.Units
         MeshRenderer _iconRenderer;
         Transform _ring;
         Transform _bar;
-        TextMesh _label;
+        UnitLabel _label;
         HeadingArrow _arrow;
         float _baseScale;
         bool _selected;
+        bool _hovered;
+        /// <summary>True when the icon material can draw an alpha-traced outline.</summary>
+        bool _canOutline;
 
         // --- terrain clamping ---
         /// <summary>Seconds between ground samples while the terrain under the unit is still unknown.</summary>
@@ -62,11 +65,19 @@ namespace IronMeridian.Units
         void ApplyLabelScale()
         {
             if (_label == null) return;
-            _label.transform.localScale = Vector3.one * (BaseLabelScale * LabelScale);
+            _label.SetScale(BaseLabelScale * LabelScale);
         }
 
-        /// <summary>Authored label scale, before the player's multiplier.</summary>
-        const float BaseLabelScale = 0.02f;
+        /// <summary>
+        /// Authored label scale, before the player's multiplier. Deliberately
+        /// small: the icon is the thing being read on an operational map and the
+        /// name is a caption on it, so at the default a screen full of units
+        /// stays a picture of the front rather than a wall of text. The drop
+        /// shadow in <see cref="UnitLabel"/> is what makes text this size legible
+        /// over terrain, and the Label Size slider still reaches 2.5x for anyone
+        /// who wants the old weight back.
+        /// </summary>
+        const float BaseLabelScale = 0.013f;
 
         // --- battle damage effects (see docs/08-PARTICLE-SYSTEMS.md) ---
         VfxInstance _burning;
@@ -116,6 +127,20 @@ namespace IronMeridian.Units
 
             _iconRenderer = bb.GetComponent<MeshRenderer>();
             _iconRenderer.material = IconMaterial(state.TeamEnum == Team.User ? "Friendly" : "Enemy", def.id);
+            _canOutline = RuntimeMaterials.SupportsOutline(_iconRenderer.material);
+
+            // The outline shader insets the artwork to leave room for the
+            // outline; enlarging the quad by the matching factor cancels that,
+            // so the icon reads at exactly the size it did without an outline.
+            // The collider rides on the same transform, so shrink it by the same
+            // factor — the click target should follow the artwork, not the
+            // transparent margin that was only added to hold an outline.
+            if (_canOutline)
+            {
+                float pad = RuntimeMaterials.IconOutlinePaddingScale;
+                _iconVisual.localScale = Vector3.one * pad;
+                box.size = new Vector3(1f / pad, 1f / pad, 0.2f / pad);
+            }
 
             // --- selection ring (flat on ground) ---
             var ring = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -143,17 +168,10 @@ namespace IronMeridian.Units
             _bar = bar.transform;
 
             // --- echelon + name label ---
-            var lbl = new GameObject("Label");
-            lbl.transform.SetParent(_billboard, false);
-            lbl.transform.localPosition = new Vector3(0, 0.85f, 0);
-            lbl.transform.localScale = Vector3.one * (BaseLabelScale * LabelScale);
-            _label = lbl.AddComponent<TextMesh>();
-            _label.anchor = TextAnchor.LowerCenter;
-            _label.alignment = TextAlignment.Center;
-            _label.characterSize = 8;
-            _label.fontSize = 48;
-            _label.color = state.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam;
-            _label.text = $"{EchelonInfo.Indicator(state.EchelonEnum)}\n{ShortName()}";
+            _label = UnitLabel.Create(_billboard, new Vector3(0, 0.85f, 0),
+                BaseLabelScale * LabelScale);
+            _label.Color = state.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam;
+            _label.Text = $"{EchelonInfo.Indicator(state.EchelonEnum)}\n{ShortName()}";
 
             // Facing arrow on the ground; shown only while the unit is selected.
             _arrow = HeadingArrow.Create(_geo, this,
@@ -269,6 +287,17 @@ namespace IronMeridian.Units
                 _ring.localScale = Vector3.one * _baseScale * s * pulse;
             }
 
+            // Breathe the selection outline in time with the ring. A static
+            // outline reads as part of the icon's artwork; a moving one reads as
+            // a state the player put the unit into.
+            if (_selected && _canOutline && !HiddenByFog)
+            {
+                float t = (Mathf.Sin(Time.time * 4f) + 1f) * 0.5f;
+                _iconRenderer.material.SetFloat(RuntimeMaterials.OutlineWidthId,
+                    Mathf.Lerp(GameConfig.IconOutlineSelectedMin,
+                               GameConfig.IconOutlineSelectedMax, t));
+            }
+
             // Strength bar colour/scale
             float str = Mathf.Clamp01(State.strength);
             _bar.localScale = new Vector3(0.9f * str, 0.07f, 1f);
@@ -330,6 +359,7 @@ namespace IronMeridian.Units
             if (_billboard != null) _billboard.gameObject.SetActive(!hidden);
             if (_ring != null) _ring.gameObject.SetActive(!hidden && _selected);
             if (_arrow != null) _arrow.SetVisible(!hidden && _selected);
+            ApplyOutline();
 
             // A burning formation would otherwise give itself away through the
             // fire attached to it.
@@ -344,6 +374,37 @@ namespace IronMeridian.Units
             // much as in battle, because knowing which way a counter points is
             // what the editor is for.
             if (_arrow != null) _arrow.SetVisible(sel && !HiddenByFog);
+            ApplyOutline();
+        }
+
+        /// <summary>
+        /// Puts the right outline on the icon for its current state. Selection
+        /// wins over hover, so moving the cursor across an already-selected unit
+        /// does not weaken the marking that says it is selected.
+        ///
+        /// The width is what the shader branches on: zero means it skips the
+        /// dilation loop entirely, so the great majority of units on the map
+        /// cost exactly what they did before this existed.
+        /// </summary>
+        void ApplyOutline()
+        {
+            if (!_canOutline || _iconRenderer == null) return;
+
+            var mat = _iconRenderer.material;
+            if (_selected && !HiddenByFog)
+            {
+                mat.SetColor(RuntimeMaterials.OutlineColorId, GameConfig.SelectionOutline);
+                mat.SetFloat(RuntimeMaterials.OutlineWidthId, GameConfig.IconOutlineSelectedMin);
+            }
+            else if (_hovered && !HiddenByFog)
+            {
+                mat.SetColor(RuntimeMaterials.OutlineColorId, GameConfig.HoverOutline);
+                mat.SetFloat(RuntimeMaterials.OutlineWidthId, GameConfig.IconOutlineHover);
+            }
+            else
+            {
+                mat.SetFloat(RuntimeMaterials.OutlineWidthId, 0f);
+            }
         }
 
         /// <summary>
@@ -357,8 +418,20 @@ namespace IronMeridian.Units
 
         public void SetHover(bool hover)
         {
+            _hovered = hover;
+
+            // Brightening the icon is the whole highlight when the outline
+            // shader is unavailable, and a light lift underneath it when it is.
+            // Alpha is left untouched: a unit hovered as it dies must not be
+            // yanked back to full opacity mid-fade.
             if (_iconRenderer != null)
-                _iconRenderer.material.color = hover ? new Color(1.2f, 1.2f, 1.2f, 1f) : Color.white;
+            {
+                var c = _iconRenderer.material.color;
+                float v = hover ? 1.2f : 1f;
+                _iconRenderer.material.color = new Color(v, v, v, c.a);
+            }
+
+            ApplyOutline();
         }
 
         public float CurrentPower() => Def.PowerAt(State.EchelonEnum, State.strength);
@@ -448,6 +521,14 @@ namespace IronMeridian.Units
         {
             State.status = UnitStatus.Destroyed.ToString();
 
+            // Drop the selection outline before the fade starts. It is a marker
+            // for a formation the player is commanding, and this one has just
+            // stopped being one — leaving it on would tint the wreck as it
+            // dissolves and read as though the order still stood.
+            _selected = false;
+            _hovered = false;
+            ApplyOutline();
+
             // Cut the attached fire immediately — the wreck effect below takes
             // over, and it is world-anchored so it outlives this GameObject.
             if (_burning != null) { _burning.Stop(true); _burning = null; }
@@ -476,12 +557,12 @@ namespace IronMeridian.Units
 
         static Material IconMaterial(string team, string unitId)
         {
-            // Unlit + transparent, and exposes _Color for hover highlight and
-            // death fade.
+            // Unlit + transparent, exposes _Color for the death fade, and can
+            // draw a selection/hover outline traced around the icon's own alpha.
             var tex = Resources.Load<Texture2D>($"Icons/{team}/{unitId}");
             if (tex == null)
                 Debug.LogWarning($"[UnitActor] Missing icon texture: Resources/Icons/{team}/{unitId}");
-            return RuntimeMaterials.UnlitTexture(tex);
+            return RuntimeMaterials.IconWithOutline(tex);
         }
 
         /// <summary>Refresh saved state (e.g. before serialising the map).</summary>

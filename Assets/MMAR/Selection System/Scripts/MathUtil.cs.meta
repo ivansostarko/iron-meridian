@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: cb0abd8c004ad4344a0379ed8d901508
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/Scripts/MathUtil.cs
+  uploadId: 695538

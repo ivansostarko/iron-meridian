@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 149474eb879a6a641b560ca17d48712f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/ThirdParties/NaughtyAttributes/Samples/DemoScene/TestAssets/TestScriptableObjectA.asset
+  uploadId: 695538

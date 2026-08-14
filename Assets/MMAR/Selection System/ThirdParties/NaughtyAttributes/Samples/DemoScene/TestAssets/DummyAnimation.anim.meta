@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 31fbd6c92d19aaa48910857627a54a25
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295674
+  packageName: Unit Selection System
+  packageVersion: 1.0
+  assetPath: Assets/MMAR/Selection System/ThirdParties/NaughtyAttributes/Samples/DemoScene/TestAssets/DummyAnimation.anim
+  uploadId: 695538

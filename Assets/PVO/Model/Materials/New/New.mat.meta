@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4b02f91bf62be65469c6efeef9e11a03
+timeCreated: 1504995677
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 100032
+  packageName: Anti-air defense radar
+  packageVersion: 1.0
+  assetPath: Assets/PVO/Model/Materials/New/New.mat
+  uploadId: 200376

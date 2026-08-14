@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 85b3fc45655c1e74585450dd5b3479a3
+timeCreated: 1505054517
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 100032
+  packageName: Anti-air defense radar
+  packageVersion: 1.0
+  assetPath: Assets/PVO/Prefab/PVO_New.prefab
+  uploadId: 200376
