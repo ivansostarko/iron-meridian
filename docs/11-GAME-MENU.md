@@ -91,6 +91,7 @@ Map terrain and imagery are streamed by Cesium, not shipped as textures — see 
 | Screen | Scene | Background | Scrim | Notes |
 |---|---|---|---|---|
 | Main Menu | `MainMenu` | Default | 0.42 | Artwork behind the command board. The scrim is lighter than a working screen's because the board carries its own darker field down the left-hand edge, so the artwork on the right stays close to how it was authored. The board's entries now sit in a **scroll view** between the masthead and the footer, so the list can outgrow a short window instead of running off the bottom of it — see §3.1. |
+| Single Player | `SinglePlayer` | Single Player | 0.62 | Behind the campaign board and the mission board — two pages of one scene. See docs/22-MISSIONS.md. |
 | Settings | `Settings` | Default | 0.62 | Behind the Video/Audio tab panels. |
 | Testing | `Testing` | Default | 0.62 | Behind the scenario cards. |
 | Units List | `UnitsList` | Default | **0.86** | Dense table and stat panel — legibility beats atmosphere. |

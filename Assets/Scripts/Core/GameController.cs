@@ -19,7 +19,23 @@ namespace IronMeridian.Core
     /// </summary>
     public class GameController : MonoBehaviour
     {
+        /// <summary>
+        /// The scenario this scene opens. Overridden by the mission the player
+        /// picked, if there is one — see <see cref="_mission"/>.
+        /// </summary>
         public string mapFileName = "lyon_dev.json";
+
+        /// <summary>
+        /// The mission being played or edited, or null in the plain map editor.
+        ///
+        /// The Game scene is one scene doing two jobs: it is the map editor
+        /// reached from Testing, and it is what a single-player mission is
+        /// played in. That is deliberate — a mission *is* a map with an order of
+        /// battle on it, and a second scene would be the same systems wired the
+        /// same way with a different name. What the mission changes is where the
+        /// map opens, what it is called, and where BACK goes.
+        /// </summary>
+        MissionDefinition _mission;
 
         MapManager _map;
         CameraRig _rig;
@@ -41,6 +57,7 @@ namespace IronMeridian.Core
         AirStrikeSystem _airStrike;
         UavStrikeSystem _uavStrike;
         MissileStrikeSystem _missiles;
+        NavalStrikeSystem _naval;
         StrikeAftermath _aftermath;
 
         // Latest countdown reported by each strike system. A null title means
@@ -49,6 +66,7 @@ namespace IronMeridian.Core
         (string title, float remaining, float total, Color colour) _airStrikeBanner;
         (string title, float remaining, float total, Color colour) _uavStrikeBanner;
         (string title, float remaining, float total, Color colour) _missileBanner;
+        (string title, float remaining, float total, Color colour) _navalBanner;
 
         /// <summary>
         /// Shows whichever strike is closest to landing. Ties are impossible in
@@ -58,7 +76,7 @@ namespace IronMeridian.Core
         {
             var pick = _artilleryBanner;
 
-            foreach (var other in new[] { _airStrikeBanner, _uavStrikeBanner, _missileBanner })
+            foreach (var other in new[] { _airStrikeBanner, _uavStrikeBanner, _missileBanner, _navalBanner })
             {
                 bool sooner = other.title != null &&
                               (pick.title == null || other.remaining < pick.remaining);
@@ -114,12 +132,22 @@ namespace IronMeridian.Core
             // the HUD built below while Cesium streams the terrain in.
             _loading = LoadingScreenUI.Show(GameConfig.GameName, "Preparing the operational map");
 
-            _save = SaveSystem.LoadMap(mapFileName) ?? new MapSaveData
+            // A mission picked from SINGLE PLAYER decides the scenario; without
+            // one this is the map editor on its dev map.
+            _mission = MissionLibrary.Selected;
+            if (_mission != null)
             {
-                mapName = "Lyon Dev",
-                centerLatitude = GameConfig.LyonLatitude,
-                centerLongitude = GameConfig.LyonLongitude
-            };
+                mapFileName = _mission.ResolvedMapFile;
+                _loading.SetStatus($"Preparing {_mission.name}");
+            }
+
+            _save = (_mission != null ? MissionLibrary.LoadMap(_mission) : SaveSystem.LoadMap(mapFileName))
+                ?? new MapSaveData
+                {
+                    mapName = "Lyon Dev",
+                    centerLatitude = GameConfig.LyonLatitude,
+                    centerLongitude = GameConfig.LyonLongitude
+                };
 
             // --- world ---
             _map = gameObject.AddComponent<MapManager>();
@@ -209,6 +237,10 @@ namespace IronMeridian.Core
             _missiles = gameObject.AddComponent<MissileStrikeSystem>();
             _missiles.Init(_map, _rig.Cam);
 
+            // Naval gunfire support — see docs/21-NAVAL-GUNFIRE.md.
+            _naval = gameObject.AddComponent<NavalStrikeSystem>();
+            _naval.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
@@ -219,6 +251,7 @@ namespace IronMeridian.Core
                                             _airStrike.IsArmed ||
                                             _uavStrike.IsArmed ||
                                             _missiles.IsArmed ||
+                                            _naval.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -235,11 +268,20 @@ namespace IronMeridian.Core
 
             _hud = gameObject.AddComponent<GameHUD>();
             _hud.Build(canvas, _combat, _clock);
+            // The bar says which of its two jobs this scene is doing, and its
+            // home button leaves the way the player came in.
+            if (_mission != null)
+            {
+                _hud.SetTitle(_mission.name.ToUpperInvariant());
+                _hud.HomeScene = GameConfig.SceneSinglePlayer;
+            }
 
             // Identifying a counter should not cost a click. Built after the HUD
             // so it draws over it, and shown in both modes — the information is
             // as useful when laying a scenario out as when fighting it.
-            _hoverTooltip = UnitHoverTooltip.Create(canvas);
+            // The world camera is what puts the card beside the counter rather
+            // than beside the cursor — see UnitHoverTooltip.
+            _hoverTooltip = UnitHoverTooltip.Create(canvas, _rig.Cam);
             _selection.HoverChanged = u => _hoverTooltip.Show(u);
             _selection.Flash = _hud.Flash;
             _effects.Flash = _hud.Flash;
@@ -247,6 +289,7 @@ namespace IronMeridian.Core
             _airStrike.Flash = _hud.Flash;
             _uavStrike.Flash = _hud.Flash;
             _missiles.Flash = _hud.Flash;
+            _naval.Flash = _hud.Flash;
 
             // Both strike systems report their countdown every frame, and there
             // is one banner. Left to themselves they would fight over it — the
@@ -271,6 +314,11 @@ namespace IronMeridian.Core
             _missiles.CountdownChanged = (title, remaining, total, colour) =>
             {
                 _missileBanner = (title, remaining, total, colour);
+                RefreshStrikeBanner();
+            };
+            _naval.CountdownChanged = (title, remaining, total, colour) =>
+            {
+                _navalBanner = (title, remaining, total, colour);
                 RefreshStrikeBanner();
             };
 
@@ -373,7 +421,7 @@ namespace IronMeridian.Core
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _artillery, _airStrike, _uavStrike, _mapControls, _drawTool);
+                    _artillery, _airStrike, _uavStrike, _naval, _mapControls, _drawTool);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -421,6 +469,13 @@ namespace IronMeridian.Core
                 {
                     if (mode == LineDrawTool.Mode.None) _palette.ResetToolToSelect();
                 };
+
+                // MISSIONS section — the single-player campaign, edited here.
+                _palette.MissionOpenRequested = OpenMission;
+                _palette.MissionSaveRequested = SaveMission;
+                _palette.MissionCreateRequested = CreateMissionHere;
+                _palette.MissionDeleteRequested = DeleteMission;
+                if (_mission != null) _palette.ShowMission(_mission);
 
                 // DEPLOYED list.
                 _palette.SelectUnitRequested = u => _selection.Select(u);
@@ -548,6 +603,10 @@ namespace IronMeridian.Core
                 _pauseMenu.BlockOpen = () => _drawTool.Current != LineDrawTool.Mode.None || _selection.Selected != null;
                 _pauseMenu.SaveRequested = SaveMap;
                 _pauseMenu.LoadRequested = LoadMap;
+                // EXIT goes back where the player came in from. Dropping a
+                // mission player at the main menu would make them walk the
+                // campaign browser again to retry the mission they just left.
+                if (_mission != null) _pauseMenu.ExitScene = GameConfig.SceneSinglePlayer;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
                 _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                           ConfirmDialog.IsOpen ||
@@ -570,6 +629,15 @@ namespace IronMeridian.Core
                 _map.SetViewMode(_save.viewMode == "Mode2D" ? ViewMode.Mode2D : ViewMode.Mode3D);
                 _map.SetMapStyle(System.Enum.TryParse(_save.mapStyle, out MapStyle style) ? style : MapStyle.Satellite);
                 _map.SetBuildingsVisible(_save.showBuildings);
+
+                // A mission is a fight rather than a layout exercise, so it gets
+                // to arm the fog for the player. The editor never does.
+                if (_mission != null)
+                {
+                    _fog.SetEnabled(_mission.fogOfWar);
+                    if (_palette != null)
+                        _palette.SyncGeneralToggles(false, _mission.fogOfWar, _showLineOfSight, _showWeaponRange);
+                }
             });
 
             // Everything is built; what remains is Cesium streaming tiles for
@@ -766,8 +834,167 @@ namespace IronMeridian.Core
             EditHistory.Push($"remove {name}", () => UnitActor.Spawn(_map.Georeference, snapshot));
         }
 
+        // ------------------------------------------------------- missions
+
+        /// <summary>
+        /// Opens a mission in the editor: its map, its settings, and its start
+        /// point. Everything currently on the map is replaced — this is the same
+        /// operation as loading a scenario, which is what a mission is.
+        /// </summary>
+        void OpenMission(MissionDefinition mission)
+        {
+            if (mission == null) return;
+
+            var data = MissionLibrary.LoadMap(mission);
+            if (data == null)
+            {
+                _hud.Flash($"Could not open '{mission.name}'.");
+                return;
+            }
+
+            _mission = mission;
+            MissionLibrary.Select(mission);
+            mapFileName = mission.ResolvedMapFile;
+            _save = data;
+
+            ClearMapContents();
+            ApplySave(_save);
+
+            _map.SetViewMode(_save.viewMode == "Mode2D" ? ViewMode.Mode2D : ViewMode.Mode3D);
+            _map.SetMapStyle(System.Enum.TryParse(_save.mapStyle, out MapStyle style) ? style : MapStyle.Satellite);
+            _map.SetBuildingsVisible(_save.showBuildings);
+            _fog.SetEnabled(mission.fogOfWar);
+            if (_palette != null) _palette.SyncGeneralToggles(false, mission.fogOfWar,
+                _showLineOfSight, _showWeaponRange);
+
+            FlyTo(mission.latitude, mission.longitude, (float)mission.startAltitudeMeters);
+
+            _hud.SetTitle(mission.name.ToUpperInvariant());
+            _hud.Flash($"Opened mission '{mission.name}' — {mission.location}");
+            if (_palette != null) _palette.SetMissionStatus($"Opened {mission.id}.");
+        }
+
+        /// <summary>
+        /// Writes the mission: the record **and** the map under it.
+        ///
+        /// Both, always. A mission is its record plus its scenario, and saving
+        /// only one of them is the failure mode this whole feature exists to
+        /// avoid — a designer who moves a battalion, presses save, and finds the
+        /// player still fighting the old one.
+        /// </summary>
+        void SaveMission(MissionDefinition mission)
+        {
+            if (mission == null) return;
+
+            // The live editor state is the truth for everything the map owns.
+            CollectSave();
+            // …and for the view and weather settings the mission carries a copy
+            // of, so a designer does not have to restate them in the panel.
+            MissionLibrary.ReadBackFrom(mission, _save);
+            // The mission's own fields then win, so the start point stays the
+            // one that was typed rather than wherever the camera drifted to.
+            MissionLibrary.ApplyTo(mission, _save);
+
+            string mapPath = SaveSystem.SaveMap(_save, mission.ResolvedMapFile);
+            MissionLibrary.SaveBook();
+
+            mapFileName = mission.ResolvedMapFile;
+            _mission = mission;
+            _hud.SetTitle(mission.name.ToUpperInvariant());
+            _hud.Flash($"Saved mission '{mission.name}' -> {mapPath}");
+            if (_palette != null)
+                _palette.SetMissionStatus($"Saved {mission.id} · {_save.units.Count} unit(s).");
+        }
+
+        /// <summary>
+        /// Starts a mission at the point the camera is looking at, in the
+        /// campaign the panel has chosen. "Here" rather than at a default,
+        /// because the designer has already flown to the ground they want.
+        /// </summary>
+        void CreateMissionHere(Data.Campaign campaign, string name)
+        {
+            GeoUtils.UnityToGeo(_map.Georeference, _rig.Focus, out double lat, out double lon, out _);
+
+            var mission = MissionLibrary.Create(campaign, name, lat, lon);
+            mission.startAltitudeMeters = Mathf.Clamp(_rig.Distance, 300f, 120000f);
+            MissionLibrary.ReadBackFrom(mission, _save);
+            MissionLibrary.SaveBook();
+
+            _mission = mission;
+            MissionLibrary.Select(mission);
+            mapFileName = mission.ResolvedMapFile;
+
+            _hud.SetTitle(mission.name.ToUpperInvariant());
+            _hud.Flash($"Created mission '{mission.name}' in {Data.CampaignInfo.DisplayName(campaign)}. " +
+                       "Lay it out, then SAVE MISSION + MAP.");
+            if (_palette != null)
+            {
+                _palette.ShowMission(mission);
+                _palette.SetMissionStatus($"Created {mission.id}. Nothing saved to its map yet.");
+            }
+        }
+
+        void DeleteMission(MissionDefinition mission)
+        {
+            if (mission == null) return;
+
+            ConfirmDialog.Open(_canvas, "DELETE MISSION",
+                $"Remove '{mission.name}' from the {Data.CampaignInfo.DisplayName(mission.CampaignEnum)} " +
+                "campaign?\n\nIts map file is left on disk, so the scenario itself is not lost — but the " +
+                "mission stops appearing in SINGLE PLAYER.",
+                "DELETE MISSION", () =>
+                {
+                    string name = mission.name;
+                    if (!MissionLibrary.Delete(mission))
+                    {
+                        _hud.Flash($"Could not delete '{name}'.");
+                        return;
+                    }
+                    if (_mission == mission) { _mission = null; _hud.SetTitle("MAP EDITOR"); }
+                    _hud.Flash($"Deleted mission '{name}'.");
+                    if (_palette != null)
+                    {
+                        _palette.RefreshMissionList();
+                        _palette.SetMissionStatus($"Deleted {name}. Its map file was kept.");
+                    }
+                });
+        }
+
+        /// <summary>Puts the camera over a geodetic point at a given standoff.</summary>
+        void FlyTo(double lat, double lon, float altitudeMeters)
+        {
+            _rig.ResetNorth();
+            _rig.ResetTilt();
+            _rig.JumpTo(GeoUtils.GeoToUnity(_map.Georeference, lat, lon, 300));
+            _rig.SetDistance(altitudeMeters);
+        }
+
+        /// <summary>Takes every unit, effect and undo step off the map, ready for a fresh load.</summary>
+        void ClearMapContents()
+        {
+            _combat.SetRunning(false);
+            _attacks.CancelAll();
+            _recon.CancelAll();
+            _selection.Select(null);
+
+            foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
+                if (a != null) Destroy(a.gameObject);
+            UnitRegistry.Clear();
+
+            if (_vfx != null) _vfx.StopAll();
+            if (_aftermath != null) _aftermath.ClearAll();
+            _sectors.ClearAll();
+            EditHistory.Clear();
+        }
+
         // ------------------------------------------------------- save/load
-        void SaveMap()
+
+        /// <summary>
+        /// Copies the live editor state into <see cref="_save"/>. Shared by the
+        /// map save and the mission save, so the two can never disagree about
+        /// what "the current state of the map" means.
+        /// </summary>
+        void CollectSave()
         {
             _save.units.Clear();
             foreach (var a in UnitRegistry.All)
@@ -781,6 +1008,21 @@ namespace IronMeridian.Core
             _save.skyPhase = _weather.ManualPhase.ToString();
             _save.weatherCondition = _weather.Condition.ToString();
             _save.autoDayNight = _weather.AutoDayNight;
+        }
+
+        void SaveMap()
+        {
+            CollectSave();
+
+            // A mission's map save is also a mission save: the record carries a
+            // copy of the view and weather, and leaving it stale would mean the
+            // player entering on settings the designer changed and saved.
+            if (_mission != null)
+            {
+                MissionLibrary.ReadBackFrom(_mission, _save);
+                MissionLibrary.SaveBook();
+            }
+
             string path = SaveSystem.SaveMap(_save, mapFileName);
             _hud.Flash($"Saved -> {path}");
         }
@@ -817,6 +1059,10 @@ namespace IronMeridian.Core
             _drawTool.CancelDrawing();
             _effects.Cancel();
             _missiles.Cancel();
+            _naval.Cancel();
+            _artillery.Cancel();
+            _airStrike.Cancel();
+            _uavStrike.Cancel();
             _selection.Select(null);
             if (_frontlinePanel != null) _frontlinePanel.Hide();
             CloseMissilePanel();
@@ -834,10 +1080,16 @@ namespace IronMeridian.Core
             _mapControls.SetControlsVisible(true);
             _mapControls.SetCompassVisible(false);
 
-            var shipped = SaveSystem.LoadShippedMap(mapFileName);
+            // In a mission, "reset" means the mission as it is on disk — its own
+            // saved scenario. Falling through to LoadShippedMap would look for a
+            // StreamingAssets file a player-authored mission has never had.
+            var shipped = _mission != null
+                ? MissionLibrary.LoadMap(_mission)
+                : SaveSystem.LoadShippedMap(mapFileName);
+
             if (shipped == null)
             {
-                _hud.Flash("Reset failed — the shipped scenario could not be read.");
+                _hud.Flash("Reset failed — the scenario could not be read.");
                 return;
             }
 

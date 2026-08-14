@@ -427,6 +427,10 @@ namespace IronMeridian.UI
                 new Vector2(20f, 20f));
 
             var caption = CreateText(frame, label, 20, UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            // Named so SetBackButtonLabel can find it. A search by type would
+            // find the hidden caption CreateButton makes first — it is deeper in
+            // the hierarchy but earlier in the depth-first walk.
+            caption.gameObject.name = BackLabelName;
             PlaceTopLeft(caption.rectTransform, 56f, (s.y - 24f) * 0.5f, s.x - 72f, 24f);
             Fit(caption, 11);
 
@@ -437,6 +441,23 @@ namespace IronMeridian.UI
             PaintBack(fill, strip, glyph, caption, false);
 
             return btn;
+        }
+
+        const string BackLabelName = "BackLabel";
+
+        /// <summary>
+        /// Re-captions a back button made by <see cref="CreateBackButton"/>.
+        /// Screens with more than one page back out to different places from
+        /// each — a control that says BACK TO MAIN MENU while it goes to the
+        /// campaign list is worse than one with no label at all.
+        /// </summary>
+        public static void SetBackButtonLabel(Button back, string label)
+        {
+            if (back == null || back.transform.parent == null) return;
+            var caption = back.transform.parent.Find(BackLabelName);
+            if (caption == null) return;
+            var text = caption.GetComponent<Text>();
+            if (text != null) text.text = label;
         }
 
         static void PaintBack(Image fill, RectTransform strip, Image glyph, Text caption, bool hover)

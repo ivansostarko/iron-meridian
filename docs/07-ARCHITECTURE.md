@@ -16,13 +16,20 @@ Assets/Scripts/
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
     ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
+    SceneLoader.cs       async scene load behind the loading overlay
+                          (docs/12-LOADERS.md §3.1)
   Data/
     Enums.cs             Team, Echelon(+multipliers), UnitCategory/UnitBranch(+info),
                           UnitStatus, ViewMode, AttackTask, ReconTask
     UnitDefinition.cs    unit type stats + Category/Branch/HoldsGround + UnitDatabase
                           (units.json loader) — docs/04-UNITS.md
     MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData, MapMarkerData
-  Save/SaveSystem.cs     JSON load/save; user saves shadow shipped maps
+    MissionData.cs       Campaign, CampaignInfo, MissionDefinition, MissionBook
+                          — the single-player campaign (docs/22-MISSIONS.md)
+  Save/
+    SaveSystem.cs        JSON load/save; user saves shadow shipped maps
+    MissionLibrary.cs    the mission list, read by the campaign screens and
+                          written by the editor's MISSIONS panel
   Audio/                 sound — see docs/10-AUDIO.md
     AudioManager.cs      master volume (AudioListener) + procedural UI click
     AudioCatalog.cs      music tracks: resource path, level, loop
@@ -46,8 +53,14 @@ Assets/Scripts/
                          chrome measures from it, never from the section panel
     UiIcons.cs           HUD icon set, drawn procedurally
     UiTooltip.cs         hover captions for icon-only controls
-    UnitHoverTooltip.cs  map-unit hover card: side, strength, status, ranges
-    PlaceholderScreenUI.cs  shared "under development" page + the three menu screens
+    UnitHoverTooltip.cs  map-unit hover card: side, strength, status, ranges.
+                          Anchored to the ICON's projected screen position, not
+                          to the cursor — a card hung off the pointer covers the
+                          counter it is describing and slides about under a hand
+                          that is holding still
+    PlaceholderScreenUI.cs  shared "under development" page + the menu screens
+                          that have nothing behind them yet
+    SinglePlayerUI.cs    campaign board + mission board (docs/22-MISSIONS.md)
     MapFont.cs           the one typeface for world-space map text (condensed OS
                          font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
                          TaskMarker and RangeRing captions
@@ -87,7 +100,9 @@ Assets/Scripts/
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
     RangeRing.cs         range volumes: line of sight, weapon range, fog contacts
-    BlastDamage.cs       what a shell/bomb/warhead does to formations under it
+    BlastDamage.cs       what a shell/bomb/warhead does to formations under it.
+                          Range is measured to the formation's FOOTPRINT, not to
+                          its map pin — see docs/17-ARTILLERY.md § Damage
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
     MapLine.cs           LineRenderer polyline, terrain DRAPING (segments are
@@ -120,6 +135,8 @@ Assets/Scripts/
     AirStrikeSystem.cs   tasked strike: countdown, then a bombing run
     BomberRun.cs         the flying aircraft and its bomb release (code-animated)
     RotorSpinner.cs      spins rotors/propellers on unrigged models by mesh name
+    NavalCatalog.cs      the naval guns — see docs/21-NAVAL-GUNFIRE.md
+    NavalStrikeSystem.cs naval gunfire: countdown, then a fast wide mission
     UavCatalog.cs        the unmanned types — see docs/19-UAV-STRIKES.md
     UavStrikeSystem.cs   tasked UAV sortie: a one-way attack, or a recon orbit
     DroneRun.cs          the drone's cruise, nose-over and terminal dive

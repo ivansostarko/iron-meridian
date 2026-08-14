@@ -71,16 +71,9 @@ namespace IronMeridian.UI
         }
     }
 
-    /// <summary>Single-player campaign. Bootstrapped into the SinglePlayer scene.</summary>
-    public class SinglePlayerUI : PlaceholderScreenUI
-    {
-        protected override string Title => "SINGLE PLAYER";
-        protected override string Promise =>
-            "Campaign and skirmish against the computer will be available in a future build. " +
-            "The map editor under TESTING is playable now.";
-        protected override BackgroundId Background => BackgroundId.SinglePlayer;
-        protected override MusicTrack Track => MusicTrack.SinglePlayerTheme;
-    }
+    // SinglePlayerUI is no longer one of these. It is a real screen now — the
+    // campaign and mission browser in SinglePlayerUI.cs — and it is the one
+    // page reached from the main menu that leads somewhere playable.
 
     /// <summary>Multiplayer lobby. Bootstrapped into the Multiplayer scene.</summary>
     public class MultiplayerUI : PlaceholderScreenUI

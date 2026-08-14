@@ -67,7 +67,7 @@ Left rail → AIR STRIKE            UnitPaletteUI.BuildAirStrikeSection
 
 Everything up to the moment something lands is identical between a fire mission and an air strike — arming, the marker tracking the cursor, the ground checks, the countdown, the escalating marker, the HUD banner. That lives in `CalledStrikeSystem<TKey>`; `ArtilleryStrikeSystem` and `AirStrikeSystem` are its two subclasses and supply only their own numbers and their own `RunStrike`. See docs/17-ARTILLERY.md.
 
-**One banner, three systems.** Artillery, air and UAV strikes all report a countdown every frame and there is one HUD banner, so left alone an idle system would blank it a frame after a busy one filled it. `GameController.RefreshStrikeBanner` gives each a slot and shows whichever strike is nearest to landing.
+**One banner, five systems.** Artillery, naval gunfire, air, UAV and missile strikes all report a countdown every frame and there is one HUD banner, so left alone an idle system would blank it a frame after a busy one filled it. `GameController.RefreshStrikeBanner` gives each a slot and shows whichever strike is nearest to landing.
 
 ### The strike allowance
 
@@ -114,9 +114,13 @@ Reports are ordinary `EffectSound` values — see **docs/10-AUDIO.md**. The burs
 
 ## Damage
 
-Strikes are no longer visual only. Every round, weapon and warhead is resolved
-through `Units/BlastDamage`, which is shared by all three strike types so they
-answer the question the same way.
+Every round, weapon and warhead is resolved through `Units/BlastDamage`, which
+is shared by all five strike types — artillery, naval gunfire, air, UAV and
+missile — so they all answer the question the same way. **The canonical
+description of the model is docs/17-ARTILLERY.md § Damage**, including the
+formation-footprint rule that decides whether a strike hits at all and the
+`BlastResult` a mission reports. What follows is the part specific to this
+delivery means.
 
 Two radii, because a blast is not a switch:
 

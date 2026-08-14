@@ -26,6 +26,14 @@ namespace IronMeridian.UI
         /// </summary>
         public System.Func<float> ResumeTimeScale;
 
+        /// <summary>
+        /// Where EXIT goes. The main menu from the map editor; the campaign
+        /// browser from a mission, so leaving one drops the player back at the
+        /// board they picked it from rather than making them walk the whole menu
+        /// again to retry it.
+        /// </summary>
+        public string ExitScene = GameConfig.SceneMainMenu;
+
         GameObject _root;
         GameObject _quitModal;
         Text _status;
@@ -48,7 +56,7 @@ namespace IronMeridian.UI
             MenuButton(box, "RESUME GAME", 0, Resume);
             MenuButton(box, "SAVE", 1, DoSave);
             MenuButton(box, "LOAD", 2, DoLoad);
-            MenuButton(box, "EXIT TO MAIN MENU", 3, ExitToMainMenu);
+            MenuButton(box, "EXIT", 3, ExitToMainMenu);
             MenuButton(box, "EXIT TO WINDOWS", 4, ShowQuitModal);
 
             // Sits just below the last button (index 4 ends at -130-4*76-62 = -516).
@@ -128,7 +136,7 @@ namespace IronMeridian.UI
         void ExitToMainMenu()
         {
             Time.timeScale = 1f;
-            SceneManager.LoadScene(GameConfig.SceneMainMenu);
+            SceneManager.LoadScene(ExitScene);
         }
 
         void ExitToWindows()

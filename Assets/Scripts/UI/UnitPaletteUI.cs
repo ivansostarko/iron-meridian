@@ -7,6 +7,7 @@ using IronMeridian.Core;
 using IronMeridian.Data;
 using IronMeridian.Lines;
 using IronMeridian.Map;
+using IronMeridian.Save;
 using IronMeridian.Units;
 using IronMeridian.Vfx;
 using IronMeridian.Weather;
@@ -71,9 +72,12 @@ namespace IronMeridian.UI
             General, Units, Boundaries, Effects, Artillery, AirStrike, UavStrike,
             /// <summary>
             /// The odd one out: it has no section panel of its own and opens a
-            /// right-hand board instead. See <see cref="MissileSystemsRequested"/>.
+            /// board docked in the section panel's place. See
+            /// <see cref="MissileSystemsRequested"/>.
             /// </summary>
             Missiles,
+            NavalStrike,
+            Missions,
             Weather, Map, DateTime
         }
         enum ListMode { Available, Deployed }
@@ -141,8 +145,8 @@ namespace IronMeridian.UI
         /// space rather than leaving a gap where a control used to be.
         /// </summary>
         const float ListTop = -90f;
-        /// <summary>Emblem block plus the eleven nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 446f;
+        /// <summary>Emblem block plus the thirteen nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 518f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -238,7 +242,8 @@ namespace IronMeridian.UI
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
             GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
             ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
-            UavStrikeSystem uavStrike, MapControlsUI mapControls, LineDrawTool drawTool)
+            UavStrikeSystem uavStrike, NavalStrikeSystem naval,
+            MapControlsUI mapControls, LineDrawTool drawTool)
         {
             _canvas = canvas;
             _map = map;
@@ -250,6 +255,7 @@ namespace IronMeridian.UI
             _artillery = artillery;
             _airStrike = airStrike;
             _uavStrike = uavStrike;
+            _naval = naval;
             _mapControls = mapControls;
             _drawTool = drawTool;
 
@@ -280,6 +286,8 @@ namespace IronMeridian.UI
             _sectionContent[Section.Artillery] = MakeSectionContent(body, "Artillery");
             _sectionContent[Section.AirStrike] = MakeSectionContent(body, "AirStrike");
             _sectionContent[Section.UavStrike] = MakeSectionContent(body, "UavStrike");
+            _sectionContent[Section.NavalStrike] = MakeSectionContent(body, "NavalStrike");
+            _sectionContent[Section.Missions] = MakeSectionContent(body, "Missions");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
@@ -291,6 +299,8 @@ namespace IronMeridian.UI
             BuildArtillerySection(_sectionContent[Section.Artillery]);
             BuildAirStrikeSection(_sectionContent[Section.AirStrike]);
             BuildUavStrikeSection(_sectionContent[Section.UavStrike]);
+            BuildNavalStrikeSection(_sectionContent[Section.NavalStrike]);
+            BuildMissionsSection(_sectionContent[Section.Missions]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
@@ -328,8 +338,9 @@ namespace IronMeridian.UI
             if (_artillery != null) _artillery.ArmedChanged += RefreshArtillery;
             if (_airStrike != null) _airStrike.ArmedChanged += RefreshAirStrike;
             if (_uavStrike != null) _uavStrike.ArmedChanged += RefreshUavStrike;
+            if (_naval != null) _naval.ArmedChanged += RefreshNavalStrike;
 
-            // One allowance behind three menus — see StrikeBudget.
+            // One allowance behind four menus — see StrikeBudget.
             StrikeBudget.Changed += RefreshStrikeBudget;
             RefreshStrikeBudget();
         }
@@ -525,9 +536,15 @@ namespace IronMeridian.UI
             // Opens a panel on the *right* rather than a section in the sliding
             // panel — see MissilePanelUI for why that one needs the width.
             AddNavRow(panel, Section.Missiles, "MISSILE SYSTEMS", UiIcons.Interceptor, -296);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -332);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -368);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -404);
+            // Last of the five fire menus, so all the ways of putting explosives
+            // on a piece of ground sit together in the rail.
+            AddNavRow(panel, Section.NavalStrike, "NAVY STRIKE", UiIcons.Warship, -332);
+            // The single-player campaign's missions, edited here and played from
+            // the main menu — see docs/22-MISSIONS.md.
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -368);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -404);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -440);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -476);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -1614,6 +1631,479 @@ namespace IronMeridian.UI
             }
         }
 
+        // -------------------------------------------------- navy strike section
+
+        NavalStrikeSystem _naval;
+        readonly List<(NavalGun gun, Image fill, Text label)> _navalButtons =
+            new List<(NavalGun, Image, Text)>();
+        readonly Dictionary<NavalOrigin, RectTransform> _navalPages =
+            new Dictionary<NavalOrigin, RectTransform>();
+        readonly List<(NavalOrigin origin, Image fill, Text label)> _navalTabs =
+            new List<(NavalOrigin, Image, Text)>();
+        NavalOrigin _navalOrigin = NavalOrigin.Nato;
+
+        /// <summary>
+        /// Glyph per gun. Chosen by weight, exactly as the artillery menu does:
+        /// nine bespoke pictograms would be nine pictograms nobody could tell
+        /// apart at 22 px, and what the player is choosing between is how heavy
+        /// the shell is.
+        /// </summary>
+        static Sprite NavalGlyph(NavalGunDef def)
+        {
+            if (def.calibreMm <= 76) return UiIcons.ShellLight;
+            if (def.calibreMm >= 127) return UiIcons.ShellHeavy;
+            return UiIcons.ShellMedium;
+        }
+
+        /// <summary>
+        /// Naval gunfire support, driven entirely from <see cref="NavalCatalog"/>.
+        ///
+        /// Same shape as the artillery menu — inventory tabs over a list of
+        /// calibres — because it is the same decision made about a different
+        /// kind of gun, and two fire menus that behaved differently would be two
+        /// things to learn instead of one. The **fleets** split the list the way
+        /// the artillery menu's inventories do: it is the first choice a player
+        /// makes and it halves what they have to read.
+        /// </summary>
+        void BuildNavalStrikeSection(RectTransform content)
+        {
+            SectionLabel(content, "CALL FOR NAVAL GUNFIRE", -8);
+            StrikeBudgetRow(content, -28f);
+
+            BuildNavalTabs(content, -64f);
+
+            foreach (NavalOrigin origin in System.Enum.GetValues(typeof(NavalOrigin)))
+            {
+                var page = UIFactory.CreateGroup(content, "NavyPage_" + origin);
+                page.anchorMin = new Vector2(0, 0); page.anchorMax = new Vector2(1, 1);
+                page.offsetMin = Vector2.zero; page.offsetMax = Vector2.zero;
+                _navalPages[origin] = page;
+                BuildNavalPage(page, origin);
+            }
+
+            ShowNavalOrigin(_navalOrigin);
+            RefreshNavalStrike();
+        }
+
+        void BuildNavalTabs(RectTransform content, float y)
+        {
+            var origins = new[] { NavalOrigin.Nato, NavalOrigin.Enemy };
+            var names = new[] { "NATO NAVY", "ENEMY NAVY" };
+            float w = (InnerWidth - 6f) / 2f;
+
+            for (int i = 0; i < origins.Length; i++)
+            {
+                var origin = origins[i];
+                var frame = UIFactory.CreateBorderedPanel(content, "NavyOrigin_" + names[i],
+                    UiTheme.Surface, UiTheme.Border);
+                UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad + i * (w + 6f), y),
+                    new Vector2(w, 30));
+
+                var btn = UIFactory.CreateButton(frame, names[i], () => ShowNavalOrigin(origin),
+                    new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+                UIFactory.Stretch((RectTransform)btn.transform);
+
+                _navalTabs.Add((origin, frame.Find("Fill").GetComponent<Image>(),
+                    btn.GetComponentInChildren<Text>()));
+            }
+        }
+
+        void BuildNavalPage(RectTransform page, NavalOrigin origin)
+        {
+            float y = -102f;
+
+            foreach (var def in NavalCatalog.OfOrigin(origin))
+            {
+                NavalButton(page, def, y);
+                y -= 50f;
+            }
+
+            var stop = UIFactory.CreateBorderedPanel(page, "CheckFire", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 30));
+            var stopBtn = UIFactory.CreateButton(stop, "CHECK FIRE",
+                () => { if (_naval != null) _naval.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)stopBtn.transform);
+
+            var hint = UIFactory.CreateText(page,
+                "Pick a gun, then click the map to place the target area. The ring under the cursor is that " +
+                "gun's beaten zone — it is wider than a land gun's of the same calibre, because the rounds " +
+                "come from a moving ship at extreme range. A ten second countdown runs in the HUD, then the " +
+                "mission lands: every round is resolved where it actually falls, and each leaves its own " +
+                "burst, smoke and report.\n\n" +
+                "Naval mountings are automatic, so a mission is more rounds, faster, than a battery's five. " +
+                "The number on each button is the beaten zone; the round count is on the line beneath it.\n\n" +
+                "A mission cannot be recalled once away — CHECK FIRE only stands the gun down. Every mission " +
+                "spends one of the scenario's 99 strikes.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 44f),
+                new Vector2(InnerWidth, 250));
+        }
+
+        void ShowNavalOrigin(NavalOrigin origin)
+        {
+            _navalOrigin = origin;
+            foreach (var kv in _navalPages) kv.Value.gameObject.SetActive(kv.Key == origin);
+
+            foreach (var (o, fill, label) in _navalTabs)
+            {
+                bool on = o == origin;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                if (label != null) label.color = on ? UiTheme.Accent : UiTheme.TextDim;
+            }
+        }
+
+        void NavalButton(RectTransform content, NavalGunDef def, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Navy_" + def.gun,
+                UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 46));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_naval != null) _naval.Toggle(def.gun); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, NavalGlyph(def), "Glyph");
+            icon.color = def.markerColor;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(10, 0),
+                new Vector2(22, 22));
+
+            var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
+                40f, InnerWidth - 88f, topInset: 6f);
+
+            // Beaten zone over round count: the two numbers that decide which
+            // gun to call for, and the pair that says what "naval" means here.
+            var figures = UIFactory.CreateText(frame,
+                $"{def.radiusMeters:0} m\n{def.roundsPerMission} rds",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
+            figures.raycastTarget = false;
+            UIFactory.Place(figures.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
+                new Vector2(52, 30));
+
+            _navalButtons.Add((def.gun, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>Repaints from the system's state — it owns what is armed, not the panel.</summary>
+        void RefreshNavalStrike()
+        {
+            if (_naval == null) return;
+            foreach (var (gun, fill, label) in _navalButtons)
+            {
+                bool on = _naval.Armed.HasValue && _naval.Armed.Value == gun;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
+        // ---------------------------------------------------- missions section
+
+        /// <summary>Open this mission in the editor: load its map and settings.</summary>
+        public System.Action<MissionDefinition> MissionOpenRequested;
+        /// <summary>Write the mission record **and** the current map to its file.</summary>
+        public System.Action<MissionDefinition> MissionSaveRequested;
+        /// <summary>Create a mission here, in this campaign, with this name.</summary>
+        public System.Action<Campaign, string> MissionCreateRequested;
+        /// <summary>Remove the mission from the campaign list.</summary>
+        public System.Action<MissionDefinition> MissionDeleteRequested;
+
+        Dropdown _campaignDropdown, _missionDropdown;
+        InputField _missionName, _missionLocation, _missionBriefing;
+        InputField _missionLat, _missionLon, _missionAltitude;
+        RectTransform _missionFogLamp;
+        Text _missionFogLabel, _missionStatus;
+        Campaign _missionCampaign = Campaign.WestEurope;
+        MissionDefinition _mission;
+        List<MissionDefinition> _missionsShown = new List<MissionDefinition>();
+        /// <summary>True while the panel is writing its own controls, so their events are not edits.</summary>
+        bool _missionSyncing;
+
+        /// <summary>
+        /// The single-player mission editor.
+        ///
+        /// **Why the campaign browser lives in the map editor at all.** A mission
+        /// is a piece of ground with an order of battle on it, and the editor is
+        /// the only place that ground can be laid out. Putting the mission's own
+        /// fields anywhere else would mean editing the scenario in one screen and
+        /// its name and start point in another, with a step in between to keep
+        /// them together — and that step is exactly what goes wrong. Here, SAVE
+        /// writes both files the game reads, so there is nothing to keep in sync.
+        ///
+        /// **Two dropdowns rather than one long list.** Campaign first, then its
+        /// missions, because the campaign is what the player's own screens are
+        /// organised by: a flat list of every mission in the game would let you
+        /// pick one without noticing which board it will appear on.
+        ///
+        /// See docs/22-MISSIONS.md.
+        /// </summary>
+        void BuildMissionsSection(RectTransform content)
+        {
+            SectionLabel(content, "CAMPAIGN", -8);
+
+            _campaignDropdown = UIFactory.CreateDropdown(content, CampaignNames(), 0, OnCampaignPicked);
+            StyleDropdown(_campaignDropdown, -28);
+
+            SectionLabel(content, "MISSION", -74);
+
+            _missionDropdown = UIFactory.CreateDropdown(content, new List<string> { "—" }, 0, OnMissionPicked);
+            StyleDropdown(_missionDropdown, -94);
+
+            // OPEN is separate from picking one in the dropdown on purpose:
+            // choosing a mission to edit its fields is cheap, and loading its
+            // map throws away whatever is on the editor's map right now.
+            var open = UIFactory.CreateBorderedPanel(content, "OpenMission", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(open, new Vector2(0f, 1f), new Vector2(Pad, -134), new Vector2(InnerWidth, 32));
+            var openBtn = UIFactory.CreateButton(open, "OPEN IN EDITOR",
+                () => { if (_mission != null) MissionOpenRequested?.Invoke(_mission); },
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)openBtn.transform);
+
+            // --- fields ---
+            SectionLabel(content, "MISSION NAME", -178);
+            _missionName = MissionField(content, "e.g. Berlin", -198);
+
+            SectionLabel(content, "LOCATION", -238);
+            _missionLocation = MissionField(content, "e.g. Berlin, Germany", -258);
+
+            SectionLabel(content, "BRIEFING", -298);
+            _missionBriefing = MissionField(content, "One line on what this is about", -318);
+
+            SectionLabel(content, "START POINT", -358);
+            float half = (InnerWidth - 6f) / 2f;
+            _missionLat = MissionField(content, "latitude", -378, Pad, half);
+            _missionLon = MissionField(content, "longitude", -378, Pad + half + 6f, half);
+
+            SectionLabel(content, "START ALTITUDE (M)", -418);
+            _missionAltitude = MissionField(content, "12000", -438);
+
+            _missionFogLamp = ToggleRow(content, "FOG OF WAR", -482, () =>
+            {
+                if (_mission == null) return;
+                _mission.fogOfWar = !_mission.fogOfWar;
+                RefreshMissionFields();
+            }, out _missionFogLabel);
+
+            // --- actions ---
+            var save = UIFactory.CreateBorderedPanel(content, "SaveMission", UiTheme.Success, UiTheme.Success);
+            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -530), new Vector2(InnerWidth, 36));
+            var saveBtn = UIFactory.CreateButton(save, "SAVE MISSION + MAP", CommitMission,
+                new Color(0, 0, 0, 0), Color.white, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)saveBtn.transform);
+
+            MissionActionButton(content, "NEW MISSION HERE", -574, UiTheme.Surface, UiTheme.Text, () =>
+            {
+                string name = _missionName != null && !string.IsNullOrWhiteSpace(_missionName.text)
+                    ? _missionName.text.Trim()
+                    : "New mission";
+                MissionCreateRequested?.Invoke(_missionCampaign, name);
+            });
+
+            MissionActionButton(content, "DELETE MISSION", -614, UiTheme.Danger, Color.white, () =>
+            {
+                if (_mission != null) MissionDeleteRequested?.Invoke(_mission);
+            });
+
+            _missionStatus = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.Accent,
+                TextAnchor.UpperLeft);
+            UIFactory.Place(_missionStatus.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, -656), new Vector2(InnerWidth, 34));
+
+            var hint = UIFactory.CreateText(content,
+                "A mission is this record plus its map file, and SAVE writes both — so whatever is on the " +
+                "editor's map right now (units, control measures, weather, H-hour, view) becomes what the " +
+                "player gets from SINGLE PLAYER. There is no separate publish step.\n\n" +
+                "NEW MISSION HERE starts one at the point the camera is looking at, in the campaign chosen " +
+                "above. DELETE removes it from the campaign board but leaves its map file on disk — a " +
+                "scenario takes an evening to lay out and this button is one mis-click.\n\n" +
+                "Missions are saved to your own copy of the list, which shadows the shipped one. Delete " +
+                "missions.json from the save folder to go back to the missions the game ships with.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -694),
+                new Vector2(InnerWidth, 260));
+
+            RefreshMissionList();
+        }
+
+        InputField MissionField(RectTransform content, string placeholder, float y,
+            float x = Pad, float width = InnerWidth)
+        {
+            var field = UIFactory.CreateInputField(content, placeholder, UiTheme.FontSmall);
+            UIFactory.Place((RectTransform)field.transform, new Vector2(0f, 1f),
+                new Vector2(x, y), new Vector2(width, 32));
+            field.GetComponent<Image>().color = UiTheme.Surface;
+            field.onEndEdit.AddListener(_ => ReadMissionFields());
+            return field;
+        }
+
+        void MissionActionButton(RectTransform content, string label, float y,
+            Color fill, Color text, UnityEngine.Events.UnityAction action)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Mission_" + label, fill, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 32));
+            var btn = UIFactory.CreateButton(frame, label, action, new Color(0, 0, 0, 0), text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)btn.transform);
+        }
+
+        static List<string> CampaignNames()
+        {
+            var names = new List<string>(CampaignInfo.All.Length);
+            foreach (var c in CampaignInfo.All) names.Add(CampaignInfo.DisplayName(c));
+            return names;
+        }
+
+        void OnCampaignPicked(int index)
+        {
+            if (_missionSyncing) return;
+            _missionCampaign = CampaignInfo.All[Mathf.Clamp(index, 0, CampaignInfo.All.Length - 1)];
+            RefreshMissionList();
+        }
+
+        void OnMissionPicked(int index)
+        {
+            if (_missionSyncing) return;
+            _mission = index >= 0 && index < _missionsShown.Count ? _missionsShown[index] : null;
+            RefreshMissionFields();
+        }
+
+        /// <summary>
+        /// Repopulates the mission dropdown for the chosen campaign, keeping the
+        /// current selection if it survived. Public because the controller calls
+        /// it after creating or deleting one — the library is the source of
+        /// truth and the panel is a view of it.
+        /// </summary>
+        public void RefreshMissionList()
+        {
+            if (_missionDropdown == null) return;
+
+            _missionsShown = MissionLibrary.OfCampaign(_missionCampaign, includeHidden: true);
+
+            var names = new List<string>(_missionsShown.Count);
+            foreach (var m in _missionsShown)
+                names.Add(m.available ? m.name : m.name + "  (hidden)");
+            if (names.Count == 0) names.Add("— no missions —");
+
+            int index = _mission == null ? 0 : Mathf.Max(0, _missionsShown.IndexOf(_mission));
+            _mission = _missionsShown.Count > 0
+                ? _missionsShown[Mathf.Clamp(index, 0, _missionsShown.Count - 1)]
+                : null;
+
+            _missionSyncing = true;
+            _missionDropdown.ClearOptions();
+            _missionDropdown.AddOptions(names);
+            _missionDropdown.SetValueWithoutNotify(Mathf.Clamp(index, 0, names.Count - 1));
+            _missionDropdown.RefreshShownValue();
+            _missionSyncing = false;
+
+            RefreshMissionFields();
+        }
+
+        /// <summary>Selects a mission in the panel — used when the editor opens one.</summary>
+        public void ShowMission(MissionDefinition mission)
+        {
+            if (mission == null) return;
+            _mission = mission;
+            _missionCampaign = mission.CampaignEnum;
+
+            if (_campaignDropdown != null)
+            {
+                _missionSyncing = true;
+                _campaignDropdown.SetValueWithoutNotify(
+                    Mathf.Max(0, System.Array.IndexOf(CampaignInfo.All, _missionCampaign)));
+                _campaignDropdown.RefreshShownValue();
+                _missionSyncing = false;
+            }
+            RefreshMissionList();
+        }
+
+        /// <summary>Writes the panel's controls from the selected mission.</summary>
+        void RefreshMissionFields()
+        {
+            if (_missionName == null) return;
+
+            _missionSyncing = true;
+            var m = _mission;
+
+            _missionName.text = m?.name ?? "";
+            _missionLocation.text = m?.location ?? "";
+            _missionBriefing.text = m?.briefing ?? "";
+            _missionLat.text = m == null ? "" : m.latitude.ToString("0.#####",
+                System.Globalization.CultureInfo.InvariantCulture);
+            _missionLon.text = m == null ? "" : m.longitude.ToString("0.#####",
+                System.Globalization.CultureInfo.InvariantCulture);
+            _missionAltitude.text = m == null ? "" : m.startAltitudeMeters.ToString("0");
+
+            _missionSyncing = false;
+
+            bool fog = m != null && m.fogOfWar;
+            if (_missionFogLamp != null)
+            {
+                _missionFogLamp.GetComponent<Image>().color = fog ? UiTheme.Success : UiTheme.TextFaint;
+                _missionFogLabel.text = m == null ? "—" : fog ? "ON" : "OFF";
+            }
+
+            if (_missionStatus != null)
+                _missionStatus.text = m == null
+                    ? "No mission selected."
+                    : $"{m.id}  ·  map: {m.ResolvedMapFile}";
+        }
+
+        /// <summary>
+        /// Reads the panel's controls back into the selected mission.
+        ///
+        /// Run on every field's end-edit rather than only on save, so the record
+        /// in memory always matches what is on screen — otherwise typing a new
+        /// latitude and then pressing OPEN would fly to the old one.
+        /// **Nothing is written to disk here**; that is SAVE's job.
+        /// </summary>
+        void ReadMissionFields()
+        {
+            if (_missionSyncing || _mission == null) return;
+
+            var invariant = System.Globalization.CultureInfo.InvariantCulture;
+
+            if (!string.IsNullOrWhiteSpace(_missionName.text)) _mission.name = _missionName.text.Trim();
+            _mission.location = _missionLocation.text.Trim();
+            _mission.briefing = _missionBriefing.text.Trim();
+
+            // A malformed number leaves the value alone rather than zeroing it —
+            // half-typed input is not an instruction to move the mission to the
+            // Gulf of Guinea.
+            if (double.TryParse(_missionLat.text, System.Globalization.NumberStyles.Float,
+                    invariant, out double lat) && lat >= -90.0 && lat <= 90.0)
+                _mission.latitude = lat;
+
+            if (double.TryParse(_missionLon.text, System.Globalization.NumberStyles.Float,
+                    invariant, out double lon) && lon >= -180.0 && lon <= 180.0)
+                _mission.longitude = lon;
+
+            if (double.TryParse(_missionAltitude.text, System.Globalization.NumberStyles.Float,
+                    invariant, out double alt))
+                _mission.startAltitudeMeters = Mathf.Clamp((float)alt, 300f, 120000f);
+
+            RefreshMissionFields();
+        }
+
+        void CommitMission()
+        {
+            if (_mission == null)
+            {
+                _missionStatus.text = "Nothing selected — create a mission first.";
+                return;
+            }
+            ReadMissionFields();
+            MissionSaveRequested?.Invoke(_mission);
+            RefreshMissionList();
+        }
+
+        /// <summary>Shows the result of a save/create/delete in the panel's own status line.</summary>
+        public void SetMissionStatus(string message)
+        {
+            if (_missionStatus != null) _missionStatus.text = message;
+        }
+
         // ----------------------------------------------------- weather section
 
         /// <summary>
@@ -2177,6 +2667,7 @@ namespace IronMeridian.UI
             if (_artillery != null) _artillery.ArmedChanged -= RefreshArtillery;
             if (_airStrike != null) _airStrike.ArmedChanged -= RefreshAirStrike;
             if (_uavStrike != null) _uavStrike.ArmedChanged -= RefreshUavStrike;
+            if (_naval != null) _naval.ArmedChanged -= RefreshNavalStrike;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

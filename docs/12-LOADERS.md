@@ -14,6 +14,8 @@ Assets/Scripts/UI/
   BackgroundCatalog.cs   loader artwork + its scrim level (BackgroundCatalog.LoaderScrim)
 Assets/Scripts/Map/
   MapManager.cs          TerrainLoadProgress01 — the Cesium streaming signal
+Assets/Scripts/Core/
+  SceneLoader.cs         async scene load behind the overlay (§3.1)
 ```
 
 A loading screen is created, given a progress source, and forgotten:
@@ -59,9 +61,14 @@ Full-screen overlays that cover a screen until it is ready.
 
 | Loader | Screen | Scene | Waits for | Progress source | Dismisses when | Background |
 |---|---|---|---|---|---|---|
+| **Mission entry** | Single player → a mission | outgoing scene, survives into `Game` | Unity building the `Game` scene | `AsyncOperation.progress / 0.9` | The scene is activated and `isDone`, **or** 25 s timeout, **or** the scene is not in the build settings | `default_background.png`, scrim 0.48 |
 | **Map load** | Map editor / game | `Game` | Cesium World Terrain streaming the opening view | `MapManager.TerrainLoadProgress01` (`Cesium3DTileset.ComputeLoadProgress()`) | Terrain ≥ 99.9 %, **or** 30 s timeout, **or** `MapManager.LoadError` fires | `default_background.png`, scrim 0.48 |
 
-Implementation: `LoadingScreenUI` + `GameController.Start`.
+Implementation: `Core/SceneLoader.cs` and `LoadingScreenUI` + `GameController.Start`.
+
+**These two are consecutive stages of one wait**, and the player sees them as a single overlay. `SceneLoader` covers building the scene and is marked `DontDestroyOnLoad` so it survives the load it is driving; it sits one sorting order *above* the standard loader so that for the frames both exist, the outgoing one is reliably on top rather than losing a coin toss to instantiation order. It dismisses only after activation, which is what stops a frame of empty map showing between the two.
+
+Splitting them is the point. `GameController.Start` builds every system and every panel before it yields, and a synchronous `SceneManager.LoadScene` spends all of that on the player's last frame — the click reads as a hang. Async with an overlay in the outgoing scene acknowledges the click immediately and puts a moving bar over the work. Entering the map editor from Testing still uses the synchronous path (§3.2); it is the same build, but nobody arrives there expecting a mission to start.
 
 ### 3.2 Scene transitions — no loader
 
@@ -71,6 +78,7 @@ All navigation uses synchronous `SceneManager.LoadScene`. Menu scenes build thei
 |---|---|---|
 | Main Menu → Testing / Settings | Menu buttons | Runtime-built uGUI only |
 | Testing → Game | "Dev" card | The `Game` scene shows its own loader (§3.1) once it starts |
+| Single player ↔ campaign / mission boards | Row clicks, Escape | Two pages of one scene — nothing is loaded between them |
 | Testing → East France / Units List | Cards | Runtime-built uGUI only |
 | Any → previous screen | Back buttons, Escape | Runtime-built uGUI only |
 
@@ -94,7 +102,8 @@ Fast enough to be invisible. Listed so the inventory is complete and so anything
 | What | Path | Loaded by | When |
 |---|---|---|---|
 | Unit catalogue | `Assets/StreamingAssets/Data/units.json` | `UnitDatabase` | First access, cached for the session |
-| Map save | `Assets/StreamingAssets/Maps/*.json` | `SaveSystem.LoadMap` | `Game` scene start, F9 |
+| Map save | `Assets/StreamingAssets/Maps/*.json` | `SaveSystem.LoadMap` | `Game` scene start, F9, opening a mission |
+| Mission list | `Assets/StreamingAssets/Data/missions.json` | `MissionLibrary` | Campaign screen, editor MISSIONS panel; cached for the session |
 | Unit icons | `Assets/Resources/Icons/**` | `UIFactory.LoadSprite` | On demand, cached by path |
 | Screen backgrounds | `Assets/Resources/Backgrounds/**` | `UIFactory.LoadSprite` | On demand, cached by path |
 | Unit 3D model | `Assets/Resources/Models/**` | `ModelPreview` | Units List row selection |

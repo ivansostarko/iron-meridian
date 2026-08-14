@@ -279,6 +279,43 @@ namespace IronMeridian.Data
             _ => 1f
         };
 
+        /// <summary>
+        /// How much ground a formation of this size actually occupies, as a
+        /// radius in metres.
+        ///
+        /// **Why this has to exist.** A unit is stored as a single lat/lon and
+        /// drawn as one counter, but a battalion is not a point — it is a
+        /// kilometre or so of dispersed sub-units, vehicles and positions. Any
+        /// code that asks "did this shell land on that formation" by measuring
+        /// to the stored coordinate is asking whether it landed on the
+        /// formation's *centre*, which is a far harder question and the wrong
+        /// one. A 155 mm round has a blast radius of about 130 m; against a
+        /// point that means you have to drop it within 130 m of one specific
+        /// spot, and a fire mission that visibly straddles a brigade does
+        /// nothing at all. See <see cref="Units.BlastDamage"/>.
+        ///
+        /// The figures are deliberately conservative — a real deployed
+        /// battalion frontage is wider than 550 m — because the counter is what
+        /// the player is aiming at and the footprint must not stretch so far
+        /// beyond the symbol that damage arrives from somewhere they can see is
+        /// clear of it.
+        /// </summary>
+        public static float FootprintRadiusMeters(Echelon e) => e switch
+        {
+            Echelon.Team      => 25f,
+            Echelon.Squad     => 40f,
+            Echelon.Section   => 55f,
+            Echelon.Platoon   => 110f,
+            Echelon.Company   => 220f,
+            Echelon.Battalion => 550f,
+            Echelon.Regiment  => 900f,
+            Echelon.Brigade   => 1300f,
+            Echelon.Division  => 2400f,
+            Echelon.Corps     => 4200f,
+            Echelon.Army      => 7000f,
+            _ => 220f
+        };
+
         /// <summary>APP-6 echelon indicator drawn above the unit frame.</summary>
         public static string Indicator(Echelon e) => e switch
         {

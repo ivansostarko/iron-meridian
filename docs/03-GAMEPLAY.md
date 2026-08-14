@@ -3,28 +3,39 @@
 ## Screen flow
 
 ```
-Main Menu ── SINGLE PLAYER ..... "Under development"
+Main Menu ── SINGLE PLAYER ──┬── WEST EUROPE ...... Berlin, Oslo
+    │                        ├── EAST EUROPE ...... Zagreb, Bjelovar, Budapest
+    │                        └── NORTH AMERICA .... Denver, New York
+    │                              └── a mission ── loader ── game screen
     ├── MULTIPLAYER ....... "Under development"
     ├── EXTRAS ............ "Under development"
-    ├── TESTING ──┬── DEV ................ game screen (Lyon)
+    ├── TESTING ──┬── DEV ................ map editor (Lyon)
+    │             ├── UNITS LIST ......... unit catalogue
     │             └── MAP EAST FRANCE .... "Under development"
     ├── SETTINGS ──┬── VIDEO SETTINGS (resolution, window mode, v-sync)
     │              └── AUDIO SETTINGS (master volume for the whole game)
     └── QUIT ...... confirmation modal
+```
 
-**Play modes first, tools second.** SINGLE PLAYER, MULTIPLAYER and EXTRAS are
-placeholders — each is a real screen with its own background and music entry, a
-plain "under development" statement and a way back — but they sit above TESTING
-because that is the order the menu will read in when they are built, and moving
-them later would retrain the player for nothing. QUIT stays last, where it cannot
-be hit by accident.
+**Play modes first, tools second.** SINGLE PLAYER is the campaign browser — three
+campaign boards, each holding missions authored in the map editor
+(docs/22-MISSIONS.md). MULTIPLAYER and EXTRAS are still placeholders: each is a
+real screen with its own background and music entry, a plain "under development"
+statement and a way back. They sit above TESTING because that is the order the
+menu reads in, and moving them later would retrain the player for nothing. QUIT
+stays last, where it cannot be hit by accident.
 
 Each placeholder **names its own artwork and its own track** in
 `BackgroundCatalog` / `AudioCatalog`, and falls back to the shared menu image and
 bed until those files exist. Dropping a file in at the path the catalogue row
 names is the whole of the work — no code change. See docs/11-GAME-MENU.md and
 docs/10-AUDIO.md.
-```
+
+**A mission and the map editor are the same scene.** A mission is a map with an
+order of battle on it, so playing one opens the `Game` scene with the mission's
+map, start point and settings; the HUD's identity block carries the mission's
+name instead of MAP EDITOR, and BACK and the pause menu's EXIT return to the
+campaign board rather than the main menu.
 
 ## The game screen (DEV)
 
@@ -49,7 +60,7 @@ The map opens over **Lyon, France** on real Cesium 3D terrain with the default s
 
 The editor's left chrome is in two pieces:
 
-- The **rail** is always there: the emblem, the section nav, and the tool strip along the bottom. (There is no "ORDER OF BATTLE" caption — ten labelled nav rows already say what the rail is, and the heading cost a row of vertical space the sections needed more.)
+- The **rail** is always there: the emblem, the section nav, and the tool strip along the bottom. (There is no "ORDER OF BATTLE" caption — the labelled nav rows already say what the rail is, and the heading cost a row of vertical space the sections needed more.)
 - The **section panel** slides out from behind the rail carrying that section's controls.
 
 | Nav row | What the panel shows |
@@ -61,7 +72,9 @@ The editor's left chrome is in two pieces:
 | **ARTILLERY STRIKE** | Call for fire — NATO / Enemy tabs, 14 natures. See docs/17-ARTILLERY.md |
 | **AIR STRIKE** | Task an airframe — bomber, fighter or helicopter. See docs/18-AIR-STRIKES.md |
 | **UAV STRIKES** | Task a loitering munition or a Shahed-class one-way drone — see docs/19-UAV-STRIKES.md |
-| **MISSILE SYSTEMS** | Ten launchers, NATO and enemy. Opens a board on the **right** rather than a section here — see docs/20-MISSILE-SYSTEMS.md |
+| **MISSILE SYSTEMS** | Ten launchers, NATO and enemy. Opens a board docked in the section panel's place rather than a section here — see docs/20-MISSILE-SYSTEMS.md |
+| **NAVY STRIKE** | Naval gunfire support — NATO NAVY / ENEMY NAVY tabs, nine mountings. See docs/21-NAVAL-GUNFIRE.md |
+| **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
 | **MAP** | Tile style, 2D/3D, layers, unit-label size |
 | **DATE AND TIME** | Scenario H-hour and presets |

@@ -65,25 +65,25 @@ Left rail → ARTILLERY STRIKE      UnitPaletteUI.BuildArtillerySection
 | `UI/GameHUD.cs` | `SetFireMission` — the countdown banner |
 | `Core/GameController.cs` | Builds the system and wires it to the HUD and palette |
 
-### Shared with air and UAV strikes
+### Shared with naval, air, UAV and missile strikes
 
-Everything up to the moment something lands is identical across all three, and lives in `CalledStrikeSystem<TKey>`. `ArtilleryStrikeSystem` supplies the natures and the salvo; `AirStrikeSystem` supplies the airframes and the bombing run; `UavStrikeSystem` supplies the drone and its dive. All three share `TargetAreaMarker` and the HUD banner — `GameController.RefreshStrikeBanner` shows whichever of the three is nearest to landing. See docs/18-AIR-STRIKES.md and docs/19-UAV-STRIKES.md.
+Everything up to the moment something lands is identical across all five, and lives in `CalledStrikeSystem<TKey>`. `ArtilleryStrikeSystem` supplies the natures and the salvo; `NavalStrikeSystem` the ships' guns and their faster, wider missions; `AirStrikeSystem` the airframes and the bombing run; `UavStrikeSystem` the drone and its dive (or its reconnaissance orbit); `MissileStrikeSystem` the launchers and the ballistic arc. All five share `TargetAreaMarker`, the strike allowance and the HUD banner — `GameController.RefreshStrikeBanner` shows whichever is nearest to landing. See docs/18-AIR-STRIKES.md, docs/19-UAV-STRIKES.md, docs/20-MISSILE-SYSTEMS.md and docs/21-NAVAL-GUNFIRE.md.
 
 ### The strike allowance
 
-A scenario has **99 called strikes**, and artillery, air strikes, UAV sorties and
-missile systems all spend from the same pool. It lives in `Vfx/StrikeBudget.cs`,
-is consumed by `CalledStrikeSystem.Launch`, and is shown as a "STRIKES REMAINING"
-readout at the head of all four menus.
+A scenario has **99 called strikes**, and artillery, naval gunfire, air strikes,
+UAV sorties and missile systems all spend from the same pool. It lives in
+`Vfx/StrikeBudget.cs`, is consumed by `CalledStrikeSystem.Launch`, and is shown
+as a "STRIKES REMAINING" readout at the head of all five menus.
 
-**Why one pool rather than four.** Every one of these menus asks the same
+**Why one pool rather than five.** Every one of these menus asks the same
 question — commit a piece of ground and something lands on it. With unlimited
 missions the answer is always yes, and the choice between a 105 mm fire mission
 and an Iskander stops being a choice at all: you call both. A single shared
 allowance makes every strike cost the same thing, which is *the next strike*, and
-that is what turns four menus into one decision. Four separate pools would have
-said the opposite — that artillery is free once air is spent — and would have
-needed four counters on screen to explain it.
+that is what turns five menus into one decision. Separate pools would have said
+the opposite — that artillery is free once air is spent — and would have needed
+five counters on screen to explain it.
 
 **Ninety-nine, and it is a hard stop.** Deliberately larger than any scenario
 needs, so it never gets in the way of laying one out; it is there to stop the map
@@ -132,9 +132,11 @@ Placement is ground-checked exactly like `EffectPlacementTool`: Cesium streams t
 
 ## Damage
 
-Strikes are no longer visual only. Every round, weapon and warhead is resolved
-through `Units/BlastDamage`, which is shared by all three strike types so they
-answer the question the same way.
+Strikes are not visual only. Every round, weapon and warhead is resolved through
+`Units/BlastDamage`, which is shared by **all five** strike types — artillery,
+naval gunfire, air, UAV and missile — so they answer the question the same way.
+This section is the canonical description of that model; the other strike docs
+point here rather than repeating it.
 
 Two radii, because a blast is not a switch:
 
@@ -146,6 +148,55 @@ Two radii, because a blast is not a switch:
 Square falloff rather than linear because blast overpressure does. Linear makes
 the rim of the circle as dangerous as the middle, which turns artillery into a
 stamp-shaped area-denial tool instead of a weapon you have to aim.
+
+### Range is measured to the formation, not to its map pin
+
+This is what made strikes actually land, and it is the single most important
+thing in this section.
+
+A unit is stored as one lat/lon and drawn as one counter — but a battalion is
+not a point, it is a kilometre or so of dispersed sub-units, vehicles and
+positions. Measuring the range to the stored coordinate was asking whether the
+round hit the formation's exact **centre**, which is a much harder question and
+the wrong one. With a 155 mm blast radius of 132 m against a battalion, a fire
+mission whose rounds visibly straddled the counter routinely did *nothing
+whatever*. That was the model being wrong, not the player aiming badly.
+
+Each formation now has a ground **footprint** by echelon
+(`EchelonInfo.FootprintRadiusMeters`), and two thirds of it
+(`BlastDamage.FootprintShare`) is subtracted from the measured range:
+
+| Echelon | Footprint | Counted |
+|---|---|---|
+| Platoon | 110 m | 73 m |
+| Company | 220 m | 145 m |
+| Battalion | 550 m | 363 m |
+| Brigade | 1300 m | 858 m |
+| Division | 2400 m | 1584 m |
+
+Not the whole footprint, because a formation is dispersed across its frontage: a
+shell landing at the far edge of a brigade's ground is nowhere near most of the
+brigade, and crediting the full radius would make a single 57 mm round on the
+corner of a division a hit on the division. Two thirds is close to the ground the
+fighting elements actually occupy and far enough short of the full extent that a
+big formation is not a magnet.
+
+The falloff is unchanged — a **direct hit still has to fall inside the lethal
+radius measured from the edge of that footprint**, i.e. genuinely among the
+sub-units, and damage still decays with the square of how far past it lands.
+What changed is that the beaten zone the player is shown and the ground the
+shells actually affect are now the same ground.
+
+### What a mission reports
+
+`BlastDamage.Apply` returns a `BlastResult` — formations hit, formations
+destroyed, and total strength removed — and results add, so a caller accumulates
+a salvo and reports the *mission* rather than its last round. A count of the dead
+was not enough: most strikes destroy nothing and hurt several things, and
+"0 formations destroyed" reads as *nothing happened*, which was both the
+complaint and untrue.
+
+> Rounds complete — 155 mm howitzer, 5 rounds. 3 formation(s) hit, 1 destroyed — 180 % combat strength lost.
 
 Surviving formations also take **shock** — morale and organisation — at 55× the
 strength damage, so being shelled and living through it still costs a formation

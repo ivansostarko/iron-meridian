@@ -95,6 +95,29 @@ namespace IronMeridian.Map
 
         public void JumpTo(Vector3 focus) { _focus = focus; Apply(); }
 
+        /// <summary>
+        /// The ground point the camera is looking at, in Unity world space.
+        /// Exposed so a caller can ask "where am I?" in geodetic terms via
+        /// <see cref="GeoUtils.UnityToGeo"/> — which is what the map editor's
+        /// MISSIONS panel uses to start a new mission here rather than at a
+        /// hard-coded default.
+        /// </summary>
+        public Vector3 Focus => _focus;
+
+        /// <summary>How far the camera is standing off that point, metres.</summary>
+        public float Distance => _distance;
+
+        /// <summary>
+        /// Sets the standoff, clamped to the rig's own limits. A mission opens
+        /// at its authored altitude, and asking for one outside the limits should
+        /// give the nearest legal view rather than nothing.
+        /// </summary>
+        public void SetDistance(float metres)
+        {
+            _distance = Mathf.Clamp(metres, MinDistance, MaxDistance);
+            Apply();
+        }
+
         // ------------------------------------------------- on-map map controls
 
         /// <summary>Compass heading the view is facing, degrees clockwise from north.</summary>

@@ -222,11 +222,10 @@ namespace IronMeridian.Vfx
                     VfxSystem.Active.StopAfter(fire, def.wreckFireSeconds);
             }
 
-            int destroyed = BlastDamage.Apply(lat, lon,
+            var result = BlastDamage.Apply(lat, lon,
                 def.lethalRadiusM, def.blastRadiusM, def.maxDamage);
 
-            if (destroyed > 0)
-                Flash?.Invoke($"{def.name} — direct hit, {destroyed} formation(s) destroyed.");
+            if (result.hit > 0) Flash?.Invoke($"{def.name} — {result.Report()}");
         }
     }
 }

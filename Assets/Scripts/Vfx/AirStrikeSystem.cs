@@ -55,7 +55,7 @@ namespace IronMeridian.Vfx
         {
             var def = AirStrikeCatalog.Get(key);
 
-            _destroyed = 0;
+            _result = default;
             if (marker != null) marker.SetAlarm(1f);
 
             // A random attack heading, so repeated strikes on the same ground do
@@ -88,9 +88,8 @@ namespace IronMeridian.Vfx
 
             if (marker != null) Destroy(marker.gameObject);
 
-            Flash?.Invoke(_destroyed > 0
-                ? $"Strike complete — {def.name}. {_destroyed} formation(s) destroyed."
-                : $"Strike complete — {def.name}, {AirStrikeCatalog.BombsPerStrike} weapons released.");
+            Flash?.Invoke($"Strike complete — {def.name}, " +
+                          $"{AirStrikeCatalog.BombsPerStrike} weapons. {_result.Report()}");
         }
 
         /// <summary>One weapon on the ground: burst, lingering smoke, report and damage.</summary>
@@ -102,16 +101,16 @@ namespace IronMeridian.Vfx
             if (smoke != null && VfxSystem.Active != null)
                 VfxSystem.Active.StopAfter(smoke, def.smokeSeconds);
 
-            _destroyed += BlastDamage.Apply(lat, lon,
+            _result += BlastDamage.Apply(lat, lon,
                 def.lethalRadiusM, def.blastRadiusM, def.maxDamage);
         }
 
         /// <summary>
-        /// Formations destroyed by the run in progress. A field rather than a
+        /// What the run in progress has done so far. A field rather than a
         /// return value because the weapons detonate from the aircraft's own
         /// callbacks, long after RunStrike has stopped being able to see them.
         /// </summary>
-        int _destroyed;
+        BlastResult _result;
 
         /// <summary>
         /// The stick as it would have fallen, without an aircraft to drop it.

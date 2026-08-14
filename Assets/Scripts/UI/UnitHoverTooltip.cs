@@ -25,19 +25,37 @@ namespace IronMeridian.UI
     /// <see cref="UiTooltip"/> is the equivalent for icon-only UI controls; this
     /// is its counterpart for things on the map, and is separate because the
     /// content is structured rather than a line of text.
+    ///
+    /// **The card is placed against the icon, not against the cursor.** It used
+    /// to follow the mouse, which was wrong twice over. A counter is a small
+    /// target and the pointer is somewhere inside it, so a card hung off the
+    /// cursor sits *on top of* the thing it is describing — you cannot see the
+    /// symbol you are asking about. And the cursor keeps moving while the same
+    /// unit stays hovered, so the card slid around under a hand that was holding
+    /// still. Anchoring to <see cref="UnitActor.IconWorldPosition"/> projected to
+    /// screen puts the card beside the counter, clear of it, and holds it there.
     /// </summary>
     public class UnitHoverTooltip : MonoBehaviour
     {
         const float Width = 268f;
         const float Height = 132f;
-        /// <summary>Gap between the cursor and the card's corner, in canvas units.</summary>
-        const float CursorGap = 20f;
+        /// <summary>
+        /// Clear space between the icon and the card's near edge, in canvas
+        /// units — on top of the icon's own drawn half-width, which is measured
+        /// per frame because counters hold a constant apparent size but the
+        /// canvas is scaled.
+        /// </summary>
+        const float IconGap = 14f;
         /// <summary>Seconds the card takes to fade in. Short: a tooltip that lags feels broken.</summary>
         const float FadeSeconds = 0.10f;
+        /// <summary>Keep the card this far inside the canvas edges.</summary>
+        const float ScreenMargin = 8f;
 
+        RectTransform _root;
         RectTransform _panel;
         CanvasGroup _group;
         Canvas _canvas;
+        Camera _worldCam;
 
         Image _sideStripe, _strengthBar;
         Text _name, _type, _status, _strengthText, _stats;
@@ -45,22 +63,38 @@ namespace IronMeridian.UI
         UnitActor _unit;
         float _shown;
 
-        public static UnitHoverTooltip Create(Canvas canvas)
+        /// <summary>
+        /// <paramref name="worldCam"/> is what projects the counter to screen.
+        /// Without it the card has nothing to sit beside and falls back to the
+        /// cursor.
+        /// </summary>
+        public static UnitHoverTooltip Create(Canvas canvas, Camera worldCam = null)
         {
-            var go = new GameObject("UnitHoverTooltip");
+            // A RectTransform, not a bare Transform. This was the positioning
+            // bug: a RectTransform child of a plain Transform has no parent rect
+            // to anchor against, so the card's (0,0) anchor resolved to the
+            // canvas *centre* instead of its bottom-left corner and every
+            // position computed below landed half a screen away from the unit.
+            var go = new GameObject("UnitHoverTooltip", typeof(RectTransform));
             go.transform.SetParent(canvas.transform, false);
+
             var tip = go.AddComponent<UnitHoverTooltip>();
             tip._canvas = canvas;
+            tip._worldCam = worldCam;
+            tip._root = (RectTransform)go.transform;
+            UIFactory.Stretch(tip._root);
             tip.Build();
             return tip;
         }
 
         void Build()
         {
-            _panel = UIFactory.CreateBorderedPanel(transform, "Card", UiTheme.Chrome, UiTheme.BorderStrong);
+            _panel = UIFactory.CreateBorderedPanel(_root, "Card", UiTheme.Chrome, UiTheme.BorderStrong);
             _panel.sizeDelta = new Vector2(Width, Height);
-            // Pivot at the top-left so the card hangs down and right of the
-            // cursor, which is where the eye already is.
+            // Anchored to the root's bottom-left corner, which is the canvas's,
+            // so the positions computed in LateUpdate are plain canvas pixels.
+            // Pivot at the top-left so the card hangs down and to the right of
+            // wherever it is placed.
             _panel.anchorMin = _panel.anchorMax = new Vector2(0, 0);
             _panel.pivot = new Vector2(0, 1);
 
@@ -139,6 +173,10 @@ namespace IronMeridian.UI
 
             Fill(unit);
             _panel.gameObject.SetActive(true);
+            // Placed now rather than waiting for LateUpdate: the card is
+            // switched on this frame, and one frame at wherever the last unit
+            // was reads as a flicker across the screen.
+            Place();
         }
 
         public void Hide()
@@ -192,22 +230,97 @@ namespace IronMeridian.UI
         {
             if (_unit == null) return;
 
+            // The unit can die or be hidden between the hover event and this
+            // frame; keeping the card up over nothing is worse than a flicker.
+            if (!_unit.IsAlive || _unit.HiddenByFog) { Hide(); return; }
+
             _shown = Mathf.Min(_shown + Time.unscaledDeltaTime, FadeSeconds);
             _group.alpha = _shown / FadeSeconds;
 
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                (RectTransform)_canvas.transform, Input.mousePosition, _canvas.worldCamera,
-                out Vector2 local);
+            Place();
+        }
 
-            // Flip the card back over the cursor near the right or bottom edge,
-            // so it is never half off screen.
-            var canvasRect = ((RectTransform)_canvas.transform).rect;
-            float x = local.x + CursorGap;
-            float y = local.y - CursorGap;
-            if (x + Width > canvasRect.xMax) x = local.x - CursorGap - Width;
-            if (y - Height < canvasRect.yMin) y = local.y + CursorGap + Height;
+        /// <summary>
+        /// Puts the card beside the hovered counter.
+        ///
+        /// The anchor is the icon's own screen position, offset clear of its
+        /// drawn half-width so the card never covers the symbol being asked
+        /// about. It prefers the right of the icon and flips to the left near
+        /// the right-hand edge; vertically it is centred on the icon and then
+        /// clamped inside the canvas, which keeps it whole on screen without
+        /// letting it jump between corners as the camera moves.
+        /// </summary>
+        void Place()
+        {
+            var canvasRect = _root.rect;
+            float width = canvasRect.width;
+            float height = canvasRect.height;
 
-            _panel.anchoredPosition = new Vector2(x - canvasRect.xMin, y - canvasRect.yMin);
+            if (!TryIconCanvasPoint(out Vector2 icon, out float iconHalfWidth))
+            {
+                // No usable projection — the unit is behind the camera, or there
+                // is no world camera. Fall back to the cursor so the card is at
+                // least somewhere sensible rather than frozen at the last spot.
+                if (!TryCanvasPoint(Input.mousePosition, out icon)) return;
+                iconHalfWidth = 0f;
+            }
+
+            float gap = iconHalfWidth + IconGap;
+
+            // Right of the icon by default; left when that would run off.
+            float x = icon.x + gap;
+            if (x + Width > width - ScreenMargin) x = icon.x - gap - Width;
+            x = Mathf.Clamp(x, ScreenMargin, Mathf.Max(ScreenMargin, width - Width - ScreenMargin));
+
+            // Vertically centred on the icon (the pivot is the card's top edge),
+            // then clamped so neither end leaves the canvas.
+            float y = icon.y + Height * 0.5f;
+            y = Mathf.Clamp(y, Height + ScreenMargin, Mathf.Max(Height + ScreenMargin, height - ScreenMargin));
+
+            _panel.anchoredPosition = new Vector2(x, y);
+        }
+
+        /// <summary>
+        /// The hovered icon's position in canvas pixels, measured from the
+        /// canvas's bottom-left corner, plus its drawn half-width in the same
+        /// units. False when the counter is not in front of the camera.
+        /// </summary>
+        bool TryIconCanvasPoint(out Vector2 point, out float halfWidth)
+        {
+            point = default;
+            halfWidth = 0f;
+            if (_worldCam == null || _unit == null) return false;
+
+            Vector3 world = _unit.IconWorldPosition;
+            Vector3 screen = _worldCam.WorldToScreenPoint(world);
+            if (screen.z <= 0f) return false;              // behind the camera
+
+            if (!TryCanvasPoint(screen, out point)) return false;
+
+            // Measure the icon's width by projecting a second point one radius
+            // to the camera's right: the counter holds a constant *apparent*
+            // size, so its canvas width cannot be derived from its world size
+            // without going through the camera.
+            float radius = _unit.IconWorldRadius;
+            if (radius > 0f)
+            {
+                Vector3 edge = _worldCam.WorldToScreenPoint(world + _worldCam.transform.right * radius);
+                if (edge.z > 0f && TryCanvasPoint(edge, out Vector2 edgePoint))
+                    halfWidth = Mathf.Abs(edgePoint.x - point.x);
+            }
+            return true;
+        }
+
+        /// <summary>Screen pixels to canvas pixels measured from the bottom-left corner.</summary>
+        bool TryCanvasPoint(Vector3 screen, out Vector2 point)
+        {
+            point = default;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    _root, screen, _canvas.worldCamera, out Vector2 local)) return false;
+
+            var rect = _root.rect;
+            point = new Vector2(local.x - rect.xMin, local.y - rect.yMin);
+            return true;
         }
     }
 }

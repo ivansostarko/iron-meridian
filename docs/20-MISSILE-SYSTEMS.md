@@ -85,7 +85,7 @@ Ten systems, five per side. Radius is the ring drawn on the map.
 
 ### Blast
 
-`BlastDamage.Apply(lat, lon, lethalRadiusM, blastRadiusM, maxDamage)` — the same function artillery, air and UAV strikes use. Inside the lethal radius a formation is destroyed; beyond it damage falls off with the square of distance to the blast radius.
+`BlastDamage.Apply(lat, lon, lethalRadiusM, blastRadiusM, maxDamage)` — the same function artillery, naval gunfire, air and UAV strikes use. Inside the lethal radius a formation is destroyed; beyond it damage falls off with the square of distance to the blast radius, and the range is measured to the formation's **footprint** rather than to its map pin. The canonical description of the model is **docs/17-ARTILLERY.md § Damage**.
 
 The heaviest surface-to-surface systems reach `maxDamage = 1.0` (DF-26) and 220 m lethal — one of these lands on a battalion and there is no battalion. That is the intended difference between calling for fire and calling for a missile.
 

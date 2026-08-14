@@ -164,7 +164,7 @@ The nose tips down over the last quarter of the cruise so the dive is *entered* 
 | `UI/UnitPaletteUI.cs` | `BuildUavStrikeSection` |
 | `Core/GameController.cs` | Builds the system and arbitrates the HUD banner |
 
-**Three systems, one banner.** Artillery, air and UAV strikes all report a countdown every frame; `GameController.RefreshStrikeBanner` shows whichever is nearest to landing.
+**Five systems, one banner.** Artillery, naval gunfire, air, UAV and missile strikes all report a countdown every frame; `GameController.RefreshStrikeBanner` shows whichever is nearest to landing.
 
 ### Degradation
 
@@ -186,9 +186,13 @@ options is not a choice — it is a button you press first, every time.
 
 ## Damage
 
-Strikes are no longer visual only. Every round, weapon and warhead is resolved
-through `Units/BlastDamage`, which is shared by all three strike types so they
-answer the question the same way.
+Every round, weapon and warhead is resolved through `Units/BlastDamage`, which
+is shared by all five strike types — artillery, naval gunfire, air, UAV and
+missile — so they all answer the question the same way. **The canonical
+description of the model is docs/17-ARTILLERY.md § Damage**, including the
+formation-footprint rule that decides whether a strike hits at all and the
+`BlastResult` a mission reports. What follows is the part specific to this
+delivery means.
 
 Two radii, because a blast is not a switch:
 

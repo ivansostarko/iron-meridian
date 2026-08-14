@@ -552,6 +552,25 @@ namespace IronMeridian.Units
         public float FormationScale01 =>
             (int)State.EchelonEnum / (float)(int)Echelon.Army;
 
+        /// <summary>
+        /// Where the counter is actually drawn, in world space.
+        ///
+        /// Not <c>transform.position</c>: that is the ground point the formation
+        /// stands on, and the icon is a billboard lifted above it by an offset
+        /// that scales with zoom. Anything that has to sit *beside the icon* on
+        /// screen — the hover card — needs the icon, not the ground.
+        /// Falls back to the ground point before the billboard exists.
+        /// </summary>
+        public Vector3 IconWorldPosition =>
+            _billboard != null ? _billboard.position : transform.position;
+
+        /// <summary>
+        /// Roughly half the icon's drawn width in world units, so a caller can
+        /// stand clear of the counter rather than overlapping it.
+        /// </summary>
+        public float IconWorldRadius =>
+            _billboard != null ? _billboard.lossyScale.x * 0.5f : 0f;
+
         public void ApplyDamage(float dmg)
         {
             State.strength = Mathf.Max(0f, State.strength - dmg);

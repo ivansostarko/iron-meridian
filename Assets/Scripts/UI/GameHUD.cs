@@ -32,6 +32,26 @@ namespace IronMeridian.UI
         RectTransform _clockPanel;
         Text _clockDate, _clockTime, _clockSpeed;
 
+        /// <summary>
+        /// What the bar's identity block says. "MAP EDITOR" by default; a
+        /// mission replaces it with its own name, because the same scene does
+        /// both jobs and the bar is where the player finds out which.
+        /// </summary>
+        Text _title;
+
+        /// <summary>
+        /// Where the emblem block goes. The main menu from the editor, and the
+        /// campaign browser from a mission — a player who came in through
+        /// SINGLE PLAYER should come out there.
+        /// </summary>
+        public string HomeScene = GameConfig.SceneMainMenu;
+
+        /// <summary>Renames the identity block. Safe before or after Build.</summary>
+        public void SetTitle(string title)
+        {
+            if (_title != null) _title.text = title;
+        }
+
         public void Build(Canvas canvas, CombatSystem combat, GameClock clock)
         {
             _combat = combat;
@@ -82,13 +102,14 @@ namespace IronMeridian.UI
                 new Vector2(18, 0), new Vector2(30, 30));
             ((RectTransform)emblem.transform).pivot = new Vector2(0, 0.5f);
 
-            var title = UIFactory.CreateText(bar, "MAP EDITOR", UiTheme.FontTitle, UiTheme.Text,
+            _title = UIFactory.CreateText(bar, "MAP EDITOR", UiTheme.FontTitle, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(58, 0), new Vector2(210, 34));
+            UIFactory.Place(_title.rectTransform, new Vector2(0f, 0.5f), new Vector2(58, 0), new Vector2(210, 34));
+            UIFactory.Fit(_title, 12);
 
             // Clicking the emblem block leaves the editor — the same affordance
             // as a logo in a web app, and it frees bar space for real controls.
-            var home = UIFactory.CreateButton(bar, "", () => SceneManager.LoadScene(GameConfig.SceneMainMenu),
+            var home = UIFactory.CreateButton(bar, "", () => SceneManager.LoadScene(HomeScene),
                 new Color(0, 0, 0, 0), UiTheme.Text, 1);
             UIFactory.Place((RectTransform)home.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(250, 44));
             ((RectTransform)home.transform).pivot = new Vector2(0, 0.5f);

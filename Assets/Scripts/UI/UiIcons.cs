@@ -472,6 +472,33 @@ namespace IronMeridian.UI
                     Mathf.Max(Seg(u, v, 0.5f, 0.24f, 0.20f, 0.06f, 0.075f),
                               Seg(u, v, 0.5f, 0.24f, 0.80f, 0.06f, 0.075f)))));
 
+        // ------------------------------------------------------ naval gunfire
+
+        /// <summary>
+        /// Naval gunfire support: a hull seen from the side with a gun mounting
+        /// forward. The hull's flared sheer is what makes it read as a ship at
+        /// 16 px rather than as a wedge — the gun alone would be another shell
+        /// glyph, and the whole point of the row is that the rounds come from
+        /// the sea.
+        /// </summary>
+        public static Sprite Warship => Get(nameof(Warship), (u, v) =>
+        {
+            // Hull: a shallow trapezium, wider at the deck than at the keel.
+            float hull = InPoly(u, v, new[]
+            {
+                0.06f, 0.40f, 0.94f, 0.40f, 0.82f, 0.16f, 0.20f, 0.16f
+            });
+            // Superstructure block amidships.
+            float bridge = Rect(u, v, 0.44f, 0.40f, 0.68f, 0.62f);
+            // Mast over it.
+            float mast = Rect(u, v, 0.545f, 0.62f, 0.585f, 0.86f);
+            // Gun mounting forward, barrel raised.
+            float mount = Rect(u, v, 0.20f, 0.40f, 0.36f, 0.54f);
+            float barrel = Seg(u, v, 0.28f, 0.52f, 0.10f, 0.72f, 0.055f);
+
+            return Mathf.Max(hull, Mathf.Max(bridge, Mathf.Max(mast, Mathf.Max(mount, barrel))));
+        });
+
         static float ArcX(float t) => Mathf.Lerp(0.08f, 0.92f, t);
         static float ArcY(float t) => 0.30f + t * 1.62f - t * t * 1.78f;
 

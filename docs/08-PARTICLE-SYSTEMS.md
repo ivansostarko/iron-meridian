@@ -20,6 +20,8 @@ Assets/Scripts/Vfx/
   CalledStrikeSystem.cs   shared arm/aim/countdown behind all three strike types
   ArtilleryCatalog.cs     the fourteen artillery natures — see docs/17-ARTILLERY.md
   ArtilleryStrikeSystem.cs  call for fire: countdown, then a five-round salvo
+  NavalCatalog.cs         the nine naval guns — see docs/21-NAVAL-GUNFIRE.md
+  NavalStrikeSystem.cs    naval gunfire: countdown, then a fast, wide mission
   AirStrikeCatalog.cs     the three strike airframes — see docs/18-AIR-STRIKES.md
   AirStrikeSystem.cs      tasked air strike; BomberRun.cs flies the aircraft
   UavCatalog.cs           the unmanned types — see docs/19-UAV-STRIKES.md
@@ -190,6 +192,16 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 
 **ARTILLERY STRIKE** panel → pick a nature → click the terrain → a 10 s countdown runs in the HUD → five rounds land scattered across the target area. Ground-checked exactly like hand placement above, and a refused click leaves the tube armed. Full detail in **docs/17-ARTILLERY.md**.
 
+### Naval gunfire
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Round lands (57 / 76 mm) | `ArtilleryLightBurst` + `ArtilleryLightSmoke` | ×10–12 per mission, 0.16–0.22 s apart | `NavalStrikeSystem.RunStrike` |
+| Round lands (100 / 127 mm) | `ArtilleryMediumBurst` + `ArtilleryMediumSmoke` | ×8–9 per mission, 0.30–0.38 s apart | `NavalStrikeSystem.RunStrike` |
+| Round lands (130 / 155 mm) | `ArtilleryHeavyBurst` + `ArtilleryHeavySmoke` | ×6–10 per mission, 0.30–0.62 s apart | `NavalStrikeSystem.RunStrike` |
+
+**NAVY STRIKE** panel → NATO NAVY / ENEMY NAVY → pick a gun → click the terrain → a 10 s countdown → the mission lands. It **deliberately reuses the calibre-matched artillery effects**: a 127 mm shell landing is a 127 mm shell landing whoever fired it, and nine near-identical particle effects would be nine more rows to keep in step for a difference nobody could see. What makes it read as naval is the mission — more rounds, much faster, over a wider beaten zone. Full detail in **docs/21-NAVAL-GUNFIRE.md**.
+
 ### Air strikes
 
 | Case | Effect | Trigger | File |
@@ -213,6 +225,7 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Case | Effect | Trigger | File |
 |---|---|---|---|
 | Any artillery fire mission completes | `StrikeAftermathFire` → `StrikeAftermathSmoke` at the aim point | Once per mission, when the salvo ends | `ArtilleryStrikeSystem.RunStrike` |
+| Any naval gunfire mission completes | as above, at the aim point | Once per mission | `NavalStrikeSystem.RunStrike` |
 | Any air strike completes | as above, at the target area | Once per pass | `AirStrikeSystem.RunStrike` |
 | Any UAV attack completes | as above, at the objective | Once per sortie; the recon type leaves nothing | `UavStrikeSystem.RunAttack` |
 | Any missile impacts | as above, at the aim point | Once per mission | `MissileStrikeSystem.RunStrike` |
