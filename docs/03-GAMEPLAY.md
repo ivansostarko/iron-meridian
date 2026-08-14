@@ -84,9 +84,9 @@ Click a row to open it; click the **same** row again, or the **✕** in the pane
 
 ### Deploying units (drag & drop)
 
-Open **UNITS** in the left rail — the panel lists all 37 unit types with their icons.
+Open **UNITS** in the left rail — the panel lists all 117 unit types with their icons, grouped under a heading per arm of service (Infantry, Armour, Mechanised, Artillery, Anti-Aircraft, Air, Navy, Logistics, Other).
 
-**There is no echelon picker.** Units deploy at **battalion**, which is the echelon an operational map is actually drawn at — brigades are too coarse to manoeuvre and companies too many to command. A dropdown listing every size from section to army, sitting above a list of 37 types, made deploying one unit a two-control operation and put the rarely-wanted choice in front of the always-wanted one; a formation's size is changed after the fact from the info panel, where the rest of its details are edited anyway.
+**There is no echelon picker.** Units deploy at **battalion**, which is the echelon an operational map is actually drawn at — brigades are too coarse to manoeuvre and companies too many to command. A dropdown listing every size from section to army, sitting above a list of 117 types, made deploying one unit a two-control operation and put the rarely-wanted choice in front of the always-wanted one; a formation's size is changed after the fact from the info panel, where the rest of its details are edited anyway.
 
 
 1. Pick the team tab (**FRIENDLY** / **ENEMY**). Affiliation follows from it — friendly units are Friendly, enemy units Hostile — so there is no separate picker to contradict the tab.

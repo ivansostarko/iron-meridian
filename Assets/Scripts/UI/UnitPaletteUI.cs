@@ -744,18 +744,51 @@ namespace IronMeridian.UI
             if (_listCount != null) _listCount.text = count.ToString();
         }
 
+        /// <summary>
+        /// The draggable catalogue, grouped under a heading per
+        /// <see cref="UnitBranch"/>.
+        ///
+        /// Flat, this list is 117 cards deep and finding the mortar in it means
+        /// scrolling past the ships. Walking the branches in declaration order
+        /// puts manoeuvre first and the tail last, which is the order an order
+        /// of battle is written in — and an empty branch prints no heading, so a
+        /// search never leaves a bare label behind.
+        /// </summary>
         int PopulateAvailable()
         {
             string folder = _team == Team.User ? "Friendly" : "Enemy";
             int count = 0;
-            foreach (var def in UnitDatabase.All)
+
+            foreach (var branch in UnitBranchInfo.All)
             {
-                if (!Matches(def.name, def.id, def.ammoType)) continue;
-                CreateAvailableCard(def, folder);
-                count++;
+                bool headed = false;
+                foreach (var def in UnitDatabase.All)
+                {
+                    if (def.Branch != branch) continue;
+                    if (!Matches(def.name, def.id, def.ammoType)) continue;
+
+                    if (!headed)
+                    {
+                        BranchHeader(UnitBranchInfo.DisplayName(branch));
+                        headed = true;
+                    }
+                    CreateAvailableCard(def, folder);
+                    count++;
+                }
             }
+
             if (count == 0) EmptyRow("No unit type matches that search.");
             return count;
+        }
+
+        /// <summary>Divider row naming the arm the cards under it belong to.</summary>
+        void BranchHeader(string label)
+        {
+            var row = UIFactory.CreateGroup(_listContent, "Branch_" + label);
+            row.sizeDelta = new Vector2(0, 24);
+
+            var text = UIFactory.CreateSectionHeader(row, label.ToUpperInvariant(), UiTheme.Accent);
+            UIFactory.PlaceTopLeft(text.rectTransform, CardIconX, 8f, CardTextWidth + CardIconSize, 14f);
         }
 
         int PopulateDeployed()

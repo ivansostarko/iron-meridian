@@ -14,7 +14,8 @@ namespace IronMeridian.Data
     {
         public string id;               // stable slug, also the icon file name
         public string name;             // display name
-        public string category;         // "CoreGround" | "Drone"
+        public string category;         // "CoreGround" | "Drone" | "Air" | "Naval" — behaviour
+        public string branch;           // "Infantry" | "Armour" | ... — arm of service, display only
         public string description;
 
         // Combat
@@ -48,8 +49,46 @@ namespace IronMeridian.Data
         public bool canCounterUas;
         public bool isSupport;          // support units fight poorly alone
 
-        public UnitCategory Category =>
-            category == "Drone" ? UnitCategory.Drone : UnitCategory.CoreGround;
+        /// <summary>
+        /// How this type behaves. Anything unrecognised falls back to
+        /// CoreGround — a unit that stands on the map and can be shot at is the
+        /// safe reading of a typo, where treating it as an aircraft would make
+        /// it invisible to half the game.
+        /// </summary>
+        public UnitCategory Category => category switch
+        {
+            "Drone" => UnitCategory.Drone,
+            "Air" => UnitCategory.Air,
+            "Naval" => UnitCategory.Naval,
+            _ => UnitCategory.CoreGround
+        };
+
+        /// <summary>
+        /// Arm of service. Display only — see <see cref="UnitBranch"/>. Unknown
+        /// or absent values read as Other, which is what an uncategorised unit
+        /// honestly is.
+        /// </summary>
+        /// <remarks>
+        /// Parsed once and kept. The palette walks all 117 definitions once per
+        /// branch to group its list, so a property that re-parsed the string
+        /// would do four figures of <c>Enum.TryParse</c> on every keystroke in
+        /// the search box. Definitions are shared singletons owned by
+        /// <see cref="UnitDatabase"/> and the game is single-threaded, so the
+        /// cache is safe; <c>NonSerialized</c> keeps it out of JsonUtility's way.
+        /// </remarks>
+        [NonSerialized] UnitBranch? _branch;
+
+        public UnitBranch Branch
+        {
+            get
+            {
+                _branch ??= Enum.TryParse(branch, out UnitBranch b) ? b : UnitBranch.Other;
+                return _branch.Value;
+            }
+        }
+
+        /// <summary>True for types that stand on the ground and can take terrain.</summary>
+        public bool HoldsGround => Category == UnitCategory.CoreGround;
 
         /// <summary>Composite combat power at a given echelon and strength (0..1).</summary>
         public float PowerAt(Echelon echelon, float strength01)

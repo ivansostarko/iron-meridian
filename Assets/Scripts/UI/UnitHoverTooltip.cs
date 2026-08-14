@@ -161,7 +161,11 @@ namespace IronMeridian.UI
             _sideStripe.color = friendly ? GameConfig.BlueTeam : GameConfig.RedTeam;
 
             _name.text = string.IsNullOrEmpty(s.customName) ? def.name : s.customName;
-            _type.text = $"{s.EchelonEnum}  ·  {def.Category}  ·  {(friendly ? "FRIENDLY" : "HOSTILE")}";
+            // Branch rather than category: on the map, what arm a formation
+            // belongs to is what a commander reads off a counter. Whether it is
+            // modelled as ground or air is an implementation detail.
+            _type.text = $"{s.EchelonEnum}  ·  {UnitBranchInfo.DisplayName(def.Branch)}  ·  " +
+                         (friendly ? "FRIENDLY" : "HOSTILE");
 
             float strength = Mathf.Clamp01(s.strength);
             ((RectTransform)_strengthBar.transform).sizeDelta =

@@ -15,7 +15,7 @@ Repository: `github.com/ivansostark/iron-meridian`
 - **Main menu** with Testing, Settings (Video + Audio tabs) and Quit (with confirmation modal)
 - **Cesium 3D world**: real terrain + satellite imagery + OSM buildings, default map centred on **Lyon, France**
 - **2D / 3D switch** for both the game view and drawn lines
-- **37 unit types** — 25 core ground units and 12 drone-relevant units — each with manpower, training, morale, combat power, ammunition type & stocks, fuel and food
+- **117 unit types** — organised into nine arms of service (Infantry, Armour, Mechanised, Artillery, Anti-Aircraft, Air, Navy, Logistics, Other) — each with manpower, training, morale, combat power, ammunition type & stocks, fuel and food
 - **Two teams** (User = Blue, Enemy = Red) with APP-6 style **custom icons** for every unit of both teams, plus Friendly / Hostile / Neutral / Unknown affiliations
 - **Full echelon ladder**: Team → Squad → Section → Platoon → Company → Battalion → Regiment → Brigade → Division → Corps → Army
 - **Drag & drop deployment** from the left-side order-of-battle palette for both teams
@@ -59,7 +59,7 @@ Assets/
   Resources/Icons/      Generated APP-6 icons (Friendly, Enemy, Affiliations)
   Scripts/              All C# gameplay code (runtime-built UI, no binary scenes)
   StreamingAssets/
-    Data/units.json     Unit catalogue (37 types, both teams)
+    Data/units.json     Unit catalogue (117 types, both teams)
     Maps/lyon_dev.json  Default Lyon scenario
     cesium-token.txt    <- YOUR CESIUM ION TOKEN GOES HERE
 docs/                   Documentation

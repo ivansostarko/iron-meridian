@@ -31,14 +31,18 @@ namespace IronMeridian.UI
         /// <summary>Detail panel width. The one fixed dimension — its stat rows need a stable column split.</summary>
         const float PanelW = 560f;
         /// <summary>Top of the table and of the detail panel, measured from the top of the screen.</summary>
-        const float TableY = -256f, PanelY = -170f;
+        /// <remarks>
+        /// The table starts lower than it used to: the branch filter needs a row
+        /// of its own. Ten arms will not sit beside the search box and the
+        /// affiliation tabs at any window width worth supporting.
+        /// </remarks>
+        const float TableY = -308f, PanelY = -170f;
         /// <summary>Bottom margin under both, so neither runs off a short window.</summary>
         const float BottomMargin = 44f;
         const float RowPad = 8f;      // CreateScrollView's content padding
 
-        enum SortKey { Name, Category, Attack, Defence, Armour, Range, Speed, Manpower }
+        enum SortKey { Name, Branch, Attack, Defence, Armour, Range, Speed, Manpower }
         enum TeamView { Both, Friendly, Enemy }
-        enum CategoryView { All, Ground, Drone }
 
         /// <summary>
         /// A table column, sized as a **share of the table width** rather than in
@@ -65,7 +69,7 @@ namespace IronMeridian.UI
             // share that is not text.
             new Column("ICON",     1.20f),
             new Column("NAME",     3.10f, SortKey.Name),
-            new Column("CATEGORY", 1.25f, SortKey.Category),
+            new Column("BRANCH",   1.25f, SortKey.Branch),
             new Column("ATK",      0.70f, SortKey.Attack),
             new Column("DEF",      0.70f, SortKey.Defence),
             new Column("ARM",      0.70f, SortKey.Armour),
@@ -97,12 +101,15 @@ namespace IronMeridian.UI
         SortKey _sortKey = SortKey.Name;
         bool _sortAscending = true;
         TeamView _team = TeamView.Both;
-        CategoryView _category = CategoryView.All;
+        /// <summary>Arm of service filter; null shows every branch.</summary>
+        UnitBranch? _branch;
         string _search = "";
         UnitDefinition _selected;
 
         RectTransform _header, _rowsContent;
         Text _resultCount;
+        /// <summary>Explains the current filter: either how the screen works, or what the chosen branch is.</summary>
+        Text _hint;
         InputField _searchField;
         readonly Dictionary<string, Image> _rowImages = new Dictionary<string, Image>();
         /// <summary>Toolbar controls that repaint themselves from filter state on every rebuild.</summary>
@@ -165,40 +172,99 @@ namespace IronMeridian.UI
                 Rebuild();
             });
 
-            Segmented(bar, 340f, new[] { "BOTH", "FRIENDLY", "ENEMY" }, () => (int)_team,
+            Segmented(bar, 340f, 106f, new[] { "BOTH", "FRIENDLY", "ENEMY" }, () => (int)_team,
                 i => { _team = (TeamView)i; Rebuild(); });
-
-            Segmented(bar, 660f, new[] { "ALL", "GROUND", "DRONE" }, () => (int)_category,
-                i => { _category = (CategoryView)i; Rebuild(); });
 
             var reset = UIFactory.CreateButton(bar, "RESET", () =>
             {
-                _team = TeamView.Both; _category = CategoryView.All; _search = "";
+                _team = TeamView.Both; _branch = null; _search = "";
                 _sortKey = SortKey.Name; _sortAscending = true;
                 // Clearing the field fires onValueChanged, which rebuilds — but
                 // only if the text was non-empty, so rebuild unconditionally after.
                 if (_searchField != null) _searchField.text = "";
                 Rebuild();
             }, GameConfig.UiPanelLight, GameConfig.UiTextDim, 16);
-            UIFactory.Place((RectTransform)reset.transform, new Vector2(0f, 1f), new Vector2(984, 0), new Vector2(110, 46));
+            UIFactory.Place((RectTransform)reset.transform, new Vector2(0f, 1f), new Vector2(672, 0), new Vector2(110, 46));
+
+            BuildBranchFilter(parent);
 
             // Both sides field the same catalogue, so say what the filter does
-            // rather than letting it look like it is dropping unit types.
-            var hint = UIFactory.CreateText(parent,
-                "Both teams field the same catalogue — the affiliation filter switches which icon set is shown. " +
-                "Click a column heading to sort; click a row for its 3D model.",
-                15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            StretchToTableWidth(hint.rectTransform, -228f, 22f);
+            // rather than letting it look like it is dropping unit types. Picking
+            // a branch replaces this with what that branch actually is.
+            _hint = UIFactory.CreateText(parent, "", 15, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
+            StretchToTableWidth(_hint.rectTransform, -280f, 22f);
+        }
+
+        const string AllBranchesHint =
+            "Both teams field the same catalogue — the affiliation filter switches which icon set is shown. " +
+            "Click a column heading to sort; click a row for its 3D model.";
+
+        /// <summary>
+        /// The arm-of-service filter: ALL plus one button per
+        /// <see cref="UnitBranch"/>, each carrying how many types it holds.
+        ///
+        /// A row of its own rather than a segment beside the affiliation tabs —
+        /// ten arms is too many to squeeze in next to anything, and the count on
+        /// each button is the fastest read of the catalogue's shape there is.
+        /// The counts are of the whole catalogue, not of the current search:
+        /// a number that moved while typing would be reporting on the search box
+        /// rather than on the branch.
+        /// </summary>
+        void BuildBranchFilter(Transform parent)
+        {
+            var row = UIFactory.CreateGroup(parent, "BranchFilter");
+            StretchToTableWidth(row, -226f, 46f);
+
+            var counts = new Dictionary<UnitBranch, int>();
+            foreach (var def in UnitDatabase.All)
+            {
+                counts.TryGetValue(def.Branch, out int n);
+                counts[def.Branch] = n + 1;
+            }
+
+            const float segW = 96f;
+            var buttons = new List<(Button button, UnitBranch? branch)>();
+
+            void Add(string label, UnitBranch? branch, int index)
+            {
+                var btn = UIFactory.CreateButton(row, label, () => { _branch = branch; Rebuild(); },
+                    GameConfig.UiPanelLight, GameConfig.UiText, 14);
+                UIFactory.Place((RectTransform)btn.transform, new Vector2(0f, 1f),
+                    new Vector2(index * (segW + 2f), 0), new Vector2(segW, 42));
+                // Long labels ("ARTILLERY 13") shrink rather than overflow their button.
+                UIFactory.Fit(btn.GetComponentInChildren<Text>(), 10);
+                buttons.Add((btn, branch));
+            }
+
+            Add($"ALL {UnitDatabase.All.Count}", null, 0);
+            for (int i = 0; i < UnitBranchInfo.All.Length; i++)
+            {
+                var b = UnitBranchInfo.All[i];
+                counts.TryGetValue(b, out int n);
+                Add($"{UnitBranchInfo.ShortName(b)} {n}", b, i + 1);
+            }
+
+            _repaints.Add(() =>
+            {
+                foreach (var (button, branch) in buttons)
+                {
+                    bool on = branch == _branch;
+                    button.GetComponent<Image>().color = on ? GameConfig.UiAccent : GameConfig.UiPanelLight;
+                    var txt = button.GetComponentInChildren<Text>();
+                    if (txt == null) continue;
+                    txt.color = on ? GameConfig.UiBackground : GameConfig.UiText;
+                    txt.fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
+                }
+            });
         }
 
         /// <summary>
         /// A row of mutually exclusive buttons. The active one is repainted on
         /// every rebuild, so the control always reflects the real filter state.
         /// </summary>
-        void Segmented(Transform parent, float x, string[] labels,
+        void Segmented(Transform parent, float x, float segW, string[] labels,
             System.Func<int> current, System.Action<int> onPick)
         {
-            const float segW = 106f;
             var buttons = new Button[labels.Length];
 
             for (int i = 0; i < labels.Length; i++)
@@ -328,8 +394,7 @@ namespace IronMeridian.UI
             var list = new List<UnitDefinition>();
             foreach (var def in UnitDatabase.All)
             {
-                if (_category == CategoryView.Ground && def.Category != UnitCategory.CoreGround) continue;
-                if (_category == CategoryView.Drone && def.Category != UnitCategory.Drone) continue;
+                if (_branch.HasValue && def.Branch != _branch.Value) continue;
                 if (!MatchesSearch(def)) continue;
                 list.Add(def);
             }
@@ -357,7 +422,10 @@ namespace IronMeridian.UI
         int Compare(UnitDefinition a, UnitDefinition b) => _sortKey switch
         {
             SortKey.Name => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase),
-            SortKey.Category => string.Compare(a.category, b.category, System.StringComparison.OrdinalIgnoreCase),
+            // By the branch's declaration order rather than alphabetically, so
+            // sorting on it groups the catalogue the way the Units doc reads:
+            // manoeuvre, then fires, then air, then the tail.
+            SortKey.Branch => ((int)a.Branch).CompareTo((int)b.Branch),
             SortKey.Attack => a.attack.CompareTo(b.attack),
             SortKey.Defence => a.defence.CompareTo(b.defence),
             SortKey.Armour => a.armour.CompareTo(b.armour),
@@ -381,8 +449,13 @@ namespace IronMeridian.UI
             foreach (var def in units) CreateRow(_rowsContent, def);
 
             _resultCount.text = units.Count == UnitDatabase.All.Count
-                ? $"{units.Count} unit types"
+                ? $"{units.Count} unit types in {UnitBranchInfo.All.Length} branches"
                 : $"{units.Count} of {UnitDatabase.All.Count} unit types";
+
+            if (_hint != null)
+                _hint.text = _branch.HasValue
+                    ? $"{UnitBranchInfo.DisplayName(_branch.Value).ToUpperInvariant()} — {UnitBranchInfo.Blurb(_branch.Value)}"
+                    : AllBranchesHint;
 
             if (units.Count == 0)
             {
@@ -420,8 +493,7 @@ namespace IronMeridian.UI
             if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", def.id, iconX, Columns[0]);
 
             Cell(row, def.name, Columns[1], 17, GameConfig.UiText);
-            Cell(row, def.Category == UnitCategory.Drone ? "Drone" : "Core Ground",
-                Columns[2], 14, GameConfig.UiTextDim);
+            Cell(row, UnitBranchInfo.DisplayName(def.Branch), Columns[2], 14, GameConfig.UiTextDim);
             Cell(row, $"{def.attack:0}", Columns[3], 15, GameConfig.UiText);
             Cell(row, $"{def.defence:0}", Columns[4], 15, GameConfig.UiText);
             Cell(row, $"{def.armour:0}", Columns[5], 15, GameConfig.UiText);
@@ -553,7 +625,7 @@ namespace IronMeridian.UI
             _detailName.text = def == null ? "—" : def.name.ToUpperInvariant();
             _detailSub.text = def == null
                 ? "No unit selected"
-                : $"{(def.Category == UnitCategory.Drone ? "Drone" : "Core Ground")}  ·  id: {def.id}";
+                : $"{UnitBranchInfo.DisplayName(def.Branch)}  ·  {UnitCategoryInfo.DisplayName(def.Category)}  ·  id: {def.id}";
 
             ClearChildren(_detailIcons);
             if (def != null)
@@ -582,6 +654,11 @@ namespace IronMeridian.UI
                     ContentSizeFitter.FitMode.PreferredSize;
                 ((RectTransform)d.transform).sizeDelta = new Vector2(0, 54);
             }
+
+            Section("CLASSIFICATION");
+            Stat("Branch", UnitBranchInfo.DisplayName(def.Branch));
+            Stat("Category", UnitCategoryInfo.DisplayName(def.Category));
+            Stat("Holds ground", def.HoldsGround ? "Yes" : "No");
 
             Section("COMBAT");
             Stat("Attack", $"{def.attack:0}");

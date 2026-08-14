@@ -124,7 +124,11 @@ namespace IronMeridian.Units
             // Weapon vs target modifiers
             float mod = 1f;
             if (d.armour > 40f) mod *= Mathf.Lerp(0.25f, 1.6f, a.hardAttack / 100f);
-            if (d.Category == UnitCategory.Drone) mod *= Mathf.Lerp(0.5f, 2.2f, a.antiAir / 100f);
+            // Anything in the air is fought with anti-air, whether it is crewed
+            // or not: a rifle company is nearly useless against a helicopter for
+            // the same reason it is useless against a drone.
+            if (d.Category == UnitCategory.Drone || d.Category == UnitCategory.Air)
+                mod *= Mathf.Lerp(0.5f, 2.2f, a.antiAir / 100f);
             if (a.isSupport) mod *= 0.4f;
             if (s.ammo <= 0) mod *= 0.25f;
 

@@ -32,10 +32,109 @@ namespace IronMeridian.Data
         Army
     }
 
+    /// <summary>
+    /// How a unit type BEHAVES — the one thing gameplay code branches on.
+    ///
+    /// This is deliberately not the player-facing taxonomy: that is
+    /// <see cref="UnitBranch"/>. A MANPADS team and a fighter squadron are both
+    /// air defence to a planner, but only one of them stands on the ground, and
+    /// this enum is about the standing.
+    /// </summary>
     public enum UnitCategory
     {
+        /// <summary>Formations of people and vehicles on the ground. They hold terrain and get a ground model.</summary>
         CoreGround,
-        Drone
+        /// <summary>Unmanned air systems. No terrain, and no model — a rifleman would misrepresent them.</summary>
+        Drone,
+        /// <summary>Crewed aircraft and helicopters. No terrain, no ground model.</summary>
+        Air,
+        /// <summary>Vessels. No terrain, no ground model.</summary>
+        Naval
+    }
+
+    public static class UnitCategoryInfo
+    {
+        public static string DisplayName(UnitCategory c) => c switch
+        {
+            UnitCategory.CoreGround => "Core Ground",
+            UnitCategory.Drone => "Drone",
+            UnitCategory.Air => "Air",
+            UnitCategory.Naval => "Naval",
+            _ => c.ToString()
+        };
+    }
+
+    /// <summary>
+    /// Which arm of service a unit type belongs to — the taxonomy the player
+    /// sees and filters by on the Units screen. Purely descriptive: nothing in
+    /// the combat or movement code reads it.
+    ///
+    /// <see cref="Other"/> is the deliberate catch-all for combat support that
+    /// belongs to no single arm (engineers, signals, ISR, cyber, influence).
+    /// Forcing those into one of the eight would say something false about them.
+    /// </summary>
+    public enum UnitBranch
+    {
+        Infantry,
+        Armour,
+        Mechanised,
+        Artillery,
+        AntiAircraft,
+        Air,
+        Navy,
+        Logistics,
+        Other
+    }
+
+    public static class UnitBranchInfo
+    {
+        /// <summary>Every branch in the order the Units screen lists them.</summary>
+        public static readonly UnitBranch[] All =
+        {
+            UnitBranch.Infantry, UnitBranch.Armour, UnitBranch.Mechanised,
+            UnitBranch.Artillery, UnitBranch.AntiAircraft, UnitBranch.Air,
+            UnitBranch.Navy, UnitBranch.Logistics, UnitBranch.Other
+        };
+
+        /// <summary>Display name. Only the two-word ones differ from the enum name.</summary>
+        public static string DisplayName(UnitBranch b) => b switch
+        {
+            UnitBranch.AntiAircraft => "Anti-Aircraft",
+            _ => b.ToString()
+        };
+
+        /// <summary>
+        /// Short form for the Units screen's filter buttons, which carry a count
+        /// beside the label in 96 px. "ARTILLERY 13" does not fit; "ARTY 13" does.
+        /// </summary>
+        public static string ShortName(UnitBranch b) => b switch
+        {
+            UnitBranch.Infantry => "INF",
+            UnitBranch.Armour => "ARMR",
+            UnitBranch.Mechanised => "MECH",
+            UnitBranch.Artillery => "ARTY",
+            UnitBranch.AntiAircraft => "AA",
+            UnitBranch.Air => "AIR",
+            UnitBranch.Navy => "NAVY",
+            UnitBranch.Logistics => "LOG",
+            UnitBranch.Other => "OTHER",
+            _ => b.ToString().ToUpperInvariant()
+        };
+
+        /// <summary>What the branch is, one line, for the Units screen.</summary>
+        public static string Blurb(UnitBranch b) => b switch
+        {
+            UnitBranch.Infantry => "Dismounted manoeuvre formations. They fight on their feet and hold the worst ground.",
+            UnitBranch.Armour => "Tanks, cavalry and the anti-armour arm that exists to kill them.",
+            UnitBranch.Mechanised => "Infantry that rides to the fight. Armour and speed come from the vehicle.",
+            UnitBranch.Artillery => "Everything that shoots at what it cannot see, and the observers that aim it.",
+            UnitBranch.AntiAircraft => "Ground-based air and missile defence, with the radars and C2 that make it a system.",
+            UnitBranch.Air => "Crewed aviation and unmanned systems. Neither holds ground.",
+            UnitBranch.Navy => "Vessels. Weeks of fuel and rations, and no terrain to take.",
+            UnitBranch.Logistics => "Sustainment. What the rest of the order of battle is fighting to protect.",
+            UnitBranch.Other => "Combat support belonging to no single arm: engineers, signals, ISR, influence, cyber.",
+            _ => ""
+        };
     }
 
     /// <summary>High level status of a deployed unit.</summary>

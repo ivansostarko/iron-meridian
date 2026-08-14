@@ -11,24 +11,24 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | Model id | Prefab (Resources) | Source asset | Animations | Used for |
 |---|---|---|---|---|
 | `soldier_rifleman` | `Models/Soldier_Rifleman` | [Low Poly Soldiers Demo](https://assetstore.unity.com/packages/3d/characters/low-poly-soldiers-demo-73611) — `Soldier_demo.FBX` | `combat_idle`, `combat_run`, `combat_shoot` | Fallback for every Core Ground type with no equipment of its own |
-| `air_defence_radar` | `Models/AirDefenceRadar` | [Anti-Air Defense Radar](https://assetstore.unity.com/packages/3d/environments/anti-air-defense-radar-100032) | static | `ad_radar`, `air_defence` |
-| `field_artillery` | `Models/FieldArtillery` | [Military Prop Pack: Defense](https://assetstore.unity.com/packages/3d/props/weapons/military-prop-pack-defense-321415) | static | `artillery`, `rocket_artillery` |
-| `sam_launcher` | `Models/SamLauncher` | [Homing Missile](https://assetstore.unity.com/packages/tools/behavior-ai/homing-missile-307255) | static | `sam` |
-| `military_truck` | `Models/MilitaryTruck` | [ZIL-130 Military Truck](https://assetstore.unity.com/packages/3d/vehicles/land/zil-130-military-truck-208991) | static | `transport`, `logistics`, `supply` |
-| `main_battle_tank` | `Models/Leopard2` | [Tank Leopard 2](https://assetstore.unity.com/packages/3d/vehicles/land/tank-leopard2-264329) | static | `armour` |
-| `scout_car` | `Models/ScoutCar` | [M3A1 Scout Car](https://assetstore.unity.com/packages/3d/vehicles/land/m3a1-scout-car-53149) | static | `recon` |
-| `attack_helicopter` | `Models/AttackHelicopter` | [RTS Modern Combat Vehicle Pack Free](https://assetstore.unity.com/packages/3d/vehicles/rts-modern-combat-vehicle-pack-free-281758) — `MSH_N2_LE.fbx` | static; rotors spun by `RotorSpinner` | **Not a unit** — flown by `AirStrikeSystem` |
-| `strike_fighter` | `Models/StrikeFighter` | RTS Modern Combat Vehicle Pack Free — `FA_N26_LE.fbx` | static | **Not a unit** — flown by `AirStrikeSystem` |
-| `kamikaze_drone` | `Models/KamikazeDrone` | [Professional Assets DronePack](https://assetstore.unity.com/packages/p/free-pack-117641) — `_FBX Mesh [Quad].FBX` | static; propellers spun by `RotorSpinner` | **Not a unit** — flown by `UavStrikeSystem`; see docs/19-UAV-STRIKES.md |
+| `air_defence_radar` | `Models/AirDefenceRadar` | [Anti-Air Defense Radar](https://assetstore.unity.com/packages/3d/environments/anti-air-defense-radar-100032) | static | `ad_radar`, `air_defence`, `air_surveillance_radar`, `surveillance_radar`, `counter_battery_radar`, `target_acquisition` |
+| `field_artillery` | `Models/FieldArtillery` | [Military Prop Pack: Defense](https://assetstore.unity.com/packages/3d/props/weapons/military-prop-pack-defense-321415) | static | `artillery`, `self_propelled_artillery`, `towed_artillery`, `rocket_artillery`, `mortar`, `spaag` |
+| `sam_launcher` | `Models/SamLauncher` | [Homing Missile](https://assetstore.unity.com/packages/tools/behavior-ai/homing-missile-307255) | static | `sam`, `mrad`, `lrad`, `missile_defence`, `shorad`, `surface_to_surface_missile`, `deep_precision_strike`, `coastal_defence_missile` |
+| `military_truck` | `Models/MilitaryTruck` | [ZIL-130 Military Truck](https://assetstore.unity.com/packages/3d/vehicles/land/zil-130-military-truck-208991) | static | `transport`, `logistics`, `supply`, `ammunition`, `fuel_pol`, `water_supply`, `recovery`, `medevac`, `bridging`, `movement_control` |
+| `main_battle_tank` | `Models/Leopard2` | [Tank Leopard 2](https://assetstore.unity.com/packages/3d/vehicles/land/tank-leopard2-264329) | static | `armour`, `combined_arms` |
+| `scout_car` | `Models/ScoutCar` | [M3A1 Scout Car](https://assetstore.unity.com/packages/3d/vehicles/land/m3a1-scout-car-53149) | static | `recon`, `armoured_recon` |
+| `attack_helicopter` | `Models/AttackHelicopter` | [RTS Modern Combat Vehicle Pack Free](https://assetstore.unity.com/packages/3d/vehicles/rts-modern-combat-vehicle-pack-free-281758) — `MSH_N2_LE.fbx` | static; rotors spun by `RotorSpinner` | Flown by `AirStrikeSystem`; also the whole rotary-wing branch: `attack_helicopter`, `recon_helicopter`, `transport_helicopter`, `utility_helicopter`, `medevac_helicopter` |
+| `strike_fighter` | `Models/StrikeFighter` | RTS Modern Combat Vehicle Pack Free — `FA_N26_LE.fbx` | static | Flown by `AirStrikeSystem`; also the fixed-wing branch: `cas_aircraft`, `strike_aircraft`, `fighter_aircraft`, `isr_aircraft`, `aewc`, `transport_aircraft`, `aerial_refuelling`, `ew_aircraft` |
+| `kamikaze_drone` | `Models/KamikazeDrone` | [Professional Assets DronePack](https://assetstore.unity.com/packages/p/free-pack-117641) — `_FBX Mesh [Quad].FBX` | static; propellers spun by `RotorSpinner` | Flown by `UavStrikeSystem` (docs/19-UAV-STRIKES.md); also the quad-shaped UAS types: `fpv_attack_uas`, `loitering_munition`, `interceptor_uas`, `cargo_uas`, `decoy_uas` |
 | `stealth_bomber` | `Models/StealthBomber` | [Hessburg — Stealth Bomber](https://assetstore.unity.com/packages/package/56765) — `Stealth_Bomber.fbx` | static | **Not a unit** — flown by `AirStrikeSystem`; see docs/18-AIR-STRIKES.md |
 
-**Four models are aircraft rather than units.** `stealth_bomber`, `strike_fighter`, `attack_helicopter` and `kamikaze_drone` have no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns them — no formation is represented by a B-2 or a quadcopter. They are in the library because it is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds their prefabs from that list.
+**One model is an aircraft rather than a unit.** `stealth_bomber` has no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns it — no formation is represented by a B-2, and the strike airframes are picked from `AirStrikeCatalog` rather than from the unit catalogue. It is in the library because it is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds its prefab from that list. `BomberRun.LoadModel` fetches it by id.
+
+The other three airframes now serve double duty: the strike systems fly them, and the Air/Drone unit types in the catalogue are represented by them. A helicopter reads as a helicopter at map scale, which is the whole test — one airframe standing in for a branch is right in a way that a rifleman standing in for a helicopter never was.
 
 **Rotors without a rig.** The helicopter and the drone ship their rotors as separate named meshes (`3_Screw_Main`, `3_Screw_Back`, `Quad Propeller 1/2`), which `RotorSpinner` finds by name substring and turns. No skeleton, no clip, no Animator — which is what makes it possible at all under the project's runtime-only constraints.
 
-**Original note on `stealth_bomber`:** It has no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns it — no formation is represented by a B-2. It is in the library anyway because the library is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds its prefab from that list. `BomberRun.LoadModel` fetches it by id.
-
-**Not yet modelled:** every `Drone` category unit. `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message rather than a misleading infantryman.
+**Not yet modelled:** the `Naval` category outright, and the `Drone` types that are not quadcopter-shaped (`recon_uas`, `armed_uas`, `deep_strike_uas`, `ew_uas`, `relay_uas`). `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message. Handing a MALE drone the quadcopter would be the same mistake as handing a drone the infantryman — the point was never "show something", it was "do not show a lie".
 
 **Static vs animated.** Only the rifleman has a rig. The vehicles and props are static meshes, which is what they should be — the preview's turntable is their motion. `idleClip` is `null` and `animated` is `false` for them, so the installer skips the Legacy-rig conversion (forcing a rig type onto a mesh with no skeleton reimports the pack for nothing) and `ModelPreview` does not warn about a clip that was never meant to exist.
 
@@ -110,7 +110,7 @@ Assets/Editor/
 UnitModelDef model = UnitModelLibrary.Resolve(unitDefinition);   // null when none exists
 ```
 
-Assignment order: an explicit per-unit-id entry in `Overrides` wins; otherwise `DefaultFor` applies the category rule above. As real models arrive, add them to `Models` and list them in `Overrides` — **no call site changes**.
+Assignment order: an explicit per-unit-id entry in `Overrides` wins; otherwise `DefaultFor` applies the category rule — `CoreGround` gets the stand-in rifleman, and `Drone`, `Air` and `Naval` get **nothing**, because none of them is standing on the ground and an infantryman would misrepresent all three. As real models arrive, add them to `Models` and list them in `Overrides` — **no call site changes**.
 
 ### Why Legacy animation
 

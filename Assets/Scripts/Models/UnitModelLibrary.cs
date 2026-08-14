@@ -173,11 +173,12 @@ namespace IronMeridian.Models
                 animated = false
             },
 
-            // Not a unit: this one is flown by AirStrikeSystem rather than
-            // deployed, so it has no entry in Overrides below and Resolve()
-            // never returns it. It is here because the library is the only
-            // sanctioned way to reach a model prefab (golden rule 10), and
-            // because the installer builds its prefab from this list.
+            // Flown by AirStrikeSystem rather than deployed. It has no entry in
+            // Overrides below because no unit type is a B-2 — the strike
+            // airframes are picked from AirStrikeCatalog, not from the
+            // catalogue. It is here because the library is the only sanctioned
+            // way to reach a model prefab (golden rule 10), and because the
+            // installer builds its prefab from this list.
             [StealthBomber] = new UnitModelDef
             {
                 resourcePath = "Models/StealthBomber",
@@ -192,10 +193,11 @@ namespace IronMeridian.Models
                 animated = false
             },
 
-            // The three below are also aircraft rather than units — see the note
-            // on stealth_bomber. The helicopter and the drone have their rotors
-            // as separate meshes in the source FBX, which is what lets
-            // RotorSpinner turn them without any rig or clip.
+            // The three below serve double duty: AirStrikeSystem and
+            // UavStrikeSystem fly them, and the Air/Drone unit types in the
+            // catalogue are represented by them. The helicopter and the drone
+            // have their rotors as separate meshes in the source FBX, which is
+            // what lets RotorSpinner turn them without any rig or clip.
             [AttackHelicopter] = new UnitModelDef
             {
                 resourcePath = "Models/AttackHelicopter",
@@ -231,21 +233,80 @@ namespace IronMeridian.Models
         /// </summary>
         static readonly Dictionary<string, string> Overrides = new Dictionary<string, string>
         {
+            // --- sensors ---
             ["ad_radar"] = AirDefenceRadar,
             ["air_defence"] = AirDefenceRadar,
+            ["air_surveillance_radar"] = AirDefenceRadar,
+            ["surveillance_radar"] = AirDefenceRadar,
+            ["counter_battery_radar"] = AirDefenceRadar,
+            ["target_acquisition"] = AirDefenceRadar,
 
+            // --- guns ---
             ["artillery"] = FieldArtillery,
+            ["self_propelled_artillery"] = FieldArtillery,
+            ["towed_artillery"] = FieldArtillery,
             ["rocket_artillery"] = FieldArtillery,
+            ["mortar"] = FieldArtillery,
+            ["spaag"] = FieldArtillery,
 
+            // --- missiles on launchers ---
             ["sam"] = SurfaceToAirMissile,
+            ["mrad"] = SurfaceToAirMissile,
+            ["lrad"] = SurfaceToAirMissile,
+            ["missile_defence"] = SurfaceToAirMissile,
+            ["shorad"] = SurfaceToAirMissile,
+            ["surface_to_surface_missile"] = SurfaceToAirMissile,
+            ["deep_precision_strike"] = SurfaceToAirMissile,
+            ["coastal_defence_missile"] = SurfaceToAirMissile,
 
+            // --- wheels ---
             ["transport"] = MilitaryTruck,
             ["logistics"] = MilitaryTruck,
             ["supply"] = MilitaryTruck,
+            ["ammunition"] = MilitaryTruck,
+            ["fuel_pol"] = MilitaryTruck,
+            ["water_supply"] = MilitaryTruck,
+            ["recovery"] = MilitaryTruck,
+            ["medevac"] = MilitaryTruck,
+            ["bridging"] = MilitaryTruck,
+            ["movement_control"] = MilitaryTruck,
 
+            // --- tracks ---
             ["armour"] = MainBattleTank,
+            ["combined_arms"] = MainBattleTank,
 
-            ["recon"] = ScoutCar
+            ["recon"] = ScoutCar,
+            ["armoured_recon"] = ScoutCar,
+
+            // --- aviation ---
+            // These are Category=Air, so without an override they would resolve
+            // to nothing at all rather than to the stand-in rifleman. The three
+            // airframes the strike systems already ship cover the whole branch
+            // at map scale — a helicopter reads as a helicopter.
+            ["attack_helicopter"] = AttackHelicopter,
+            ["recon_helicopter"] = AttackHelicopter,
+            ["transport_helicopter"] = AttackHelicopter,
+            ["utility_helicopter"] = AttackHelicopter,
+            ["medevac_helicopter"] = AttackHelicopter,
+
+            ["cas_aircraft"] = StrikeFighter,
+            ["strike_aircraft"] = StrikeFighter,
+            ["fighter_aircraft"] = StrikeFighter,
+            ["isr_aircraft"] = StrikeFighter,
+            ["aewc"] = StrikeFighter,
+            ["transport_aircraft"] = StrikeFighter,
+            ["aerial_refuelling"] = StrikeFighter,
+            ["ew_aircraft"] = StrikeFighter,
+
+            // --- unmanned ---
+            // Only the quadcopter-shaped ones. A MALE drone or a long-range
+            // one-way airframe is not a quad, and showing one would be the same
+            // mistake as showing a rifleman for a drone.
+            ["fpv_attack_uas"] = KamikazeDrone,
+            ["loitering_munition"] = KamikazeDrone,
+            ["interceptor_uas"] = KamikazeDrone,
+            ["cargo_uas"] = KamikazeDrone,
+            ["decoy_uas"] = KamikazeDrone
         };
 
         public static UnitModelDef Get(string modelId) =>
@@ -261,11 +322,12 @@ namespace IronMeridian.Models
 
         /// <summary>
         /// Fallback assignment for the unit types with no equipment of their own
-        /// imported yet: a soldier stands in for any ground formation. Drones get
-        /// nothing rather than a misleading infantryman.
+        /// imported yet: a soldier stands in for any ground formation. Anything
+        /// that is not on the ground — drones, aircraft, ships — gets nothing
+        /// rather than a misleading infantryman.
         /// </summary>
         static string DefaultFor(UnitDefinition unit) =>
-            unit.Category == UnitCategory.Drone ? null : SoldierRifleman;
+            unit.Category == UnitCategory.CoreGround ? SoldierRifleman : null;
 
         /// <summary>Every model in the library — used by the installer and the docs check.</summary>
         public static IEnumerable<UnitModelDef> All => Models.Values;

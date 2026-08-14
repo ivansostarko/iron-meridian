@@ -360,7 +360,8 @@ namespace IronMeridian.UI
             Section("GENERAL");
             Row("Unit Type", d.name);
             Row("Affiliation", s.affiliation);
-            Row("Category", d.Category == UnitCategory.Drone ? "Drone" : "Core Ground");
+            Row("Branch", UnitBranchInfo.DisplayName(d.Branch));
+            Row("Category", UnitCategoryInfo.DisplayName(d.Category));
             Row("Size", s.echelon);
             int manpower = Mathf.RoundToInt(d.manpower *
                 EchelonInfo.ManpowerMultiplier(s.EchelonEnum) * Mathf.Clamp01(s.strength));
