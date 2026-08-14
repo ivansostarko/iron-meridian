@@ -66,6 +66,13 @@ namespace IronMeridian.Units
         GameClock _clock;
         float _timer;
 
+        /// <summary>
+        /// The dark over unobserved ground. Hiding the enemy's counters while
+        /// leaving every road and ridge in plain view is not intelligence, so the
+        /// terrain itself goes dark outside what the player is covering.
+        /// </summary>
+        FogBlanket _blanket;
+
         readonly List<Sensor> _sensors = new List<Sensor>();
         readonly Dictionary<UnitActor, Contact> _contacts = new Dictionary<UnitActor, Contact>();
 
@@ -86,6 +93,7 @@ namespace IronMeridian.Units
         {
             _geo = geo;
             _clock = clock;
+            _blanket = FogBlanket.Create(geo);
             Active = this;
         }
 
@@ -140,6 +148,7 @@ namespace IronMeridian.Units
                 // Covers both "fog off" and "battle stopped" without either
                 // caller having to remember to clean up.
                 if (_contacts.Count > 0 || AnyHidden()) RevealAll();
+                if (_blanket != null) _blanket.SetWanted(false);
                 return;
             }
 
@@ -149,6 +158,8 @@ namespace IronMeridian.Units
         void Sweep()
         {
             var watchers = new List<UnitActor>(UnitRegistry.OfTeam(Team.User));
+
+            UpdateBlanket(watchers);
 
             foreach (var enemy in new List<UnitActor>(UnitRegistry.OfTeam(Team.Enemy)))
             {
@@ -178,6 +189,36 @@ namespace IronMeridian.Units
             // the last thing the player actually knew, until it is looked at.
             PruneDeadContacts();
         }
+
+        /// <summary>
+        /// Keeps the terrain blanket laid over the right ground and repaints it
+        /// from the same watchers the unit sweep uses, so what the map shows and
+        /// what the counters show can never disagree.
+        /// </summary>
+        void UpdateBlanket(List<UnitActor> watchers)
+        {
+            if (_blanket == null) return;
+
+            _blanket.SetWanted(true);
+
+            // Lay the grid on the first sweep of a battle, and re-lay it if the
+            // advance has carried a formation out toward the edge of it.
+            bool refit = !_blanketLaid;
+            if (!refit)
+                foreach (var w in watchers)
+                    if (_blanket.NeedsRefit(w)) { refit = true; break; }
+
+            if (refit)
+            {
+                _blanket.Fit(UnitRegistry.All);
+                _blanketLaid = true;
+            }
+
+            _blanket.Refresh(watchers, _sensors);
+        }
+
+        /// <summary>False until the blanket has been laid over this battle's ground.</summary>
+        bool _blanketLaid;
 
         /// <summary>
         /// Whether anything of the player's can see this formation.
@@ -217,7 +258,7 @@ namespace IronMeridian.Units
                 speedKmh = Mathf.Max(1f, enemy.Def.speedKmh),
                 designation = string.IsNullOrEmpty(enemy.State.customName)
                     ? enemy.Def.name : enemy.State.customName,
-                ring = RangeRing.Create(_geo, _geo.transform, GameConfig.RedTeam, 14f, "CONTACT")
+                ring = RangeRing.Create(_geo, _geo.transform, GameConfig.RedTeam, "CONTACT")
             };
             _contacts[enemy] = contact;
         }
@@ -284,6 +325,15 @@ namespace IronMeridian.Units
             foreach (var kv in _contacts)
                 if (kv.Value.ring != null) Destroy(kv.Value.ring.gameObject);
             _contacts.Clear();
+
+            // The blanket fades itself out; what has to go is the memory of
+            // where the player has been, so the next battle starts blind.
+            if (_blanket != null)
+            {
+                _blanket.SetWanted(false);
+                _blanket.ResetExploration();
+            }
+            _blanketLaid = false;
         }
     }
 }

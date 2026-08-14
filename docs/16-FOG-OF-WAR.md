@@ -23,6 +23,31 @@ range ring is independent and always shown for the selected unit.
 This is the same range the fog's detection sweep uses, so with fog on the ring is
 literally the edge of what that formation can reveal.
 
+### Why the rings are volumes and not lines
+
+They were dashed `LineRenderer` circles twelve metres wide, and were effectively
+invisible: twelve metres on a circle kilometres across, seen from a camera
+kilometres up, is well under a pixel — and being depth-tested against the terrain
+they followed, whatever survived was chopped up by every fold of ground it passed
+behind. Widening a line does not fix that; a line thick enough to see from
+altitude is a smear up close.
+
+A range is now drawn as a **fence of light standing on the terrain**: a
+translucent wall rising out of the ground along the whole circumference, fading
+with height, over a bright band where it meets the ground, with motes drifting up
+off the rim. The wall's base is sunk 90 m below the sampled terrain, so the fence
+always cuts the surface and can neither float nor be buried however rough the
+ground. From overhead the band reads as a circle; from a shallow angle the wall
+reads as a boundary standing in the landscape.
+
+The radius itself is never animated — it states a real distance. Only brightness
+breathes.
+
+Geometry is built in the anchor's **local east-north-up frame** with heights
+relative to the centre, which is what makes a ring affordable on a marching unit:
+it follows by moving its anchor, and the 128 terrain samples are only re-taken
+once the centre has moved 4% of the radius.
+
 ---
 
 ## 1. What it does
@@ -99,11 +124,46 @@ fog.
 
 ---
 
+## 2a. The terrain blanket
+
+Hiding the enemy's counters while leaving every road, ridge and town in plain
+view is not intelligence. So with fog in effect the **map itself** goes dark
+outside what the player is covering: an unscouted valley is a blank rather than a
+photograph with the enemy politely removed from it.
+
+`FogBlanket` lays a grid over the operational area, clamps it to the terrain a
+few tens of metres above the surface, and gives each vertex an alpha recomputed
+on the fog's own sweep — from the same watchers and sensors the unit sweep uses,
+so what the map shows and what the counters show can never disagree.
+
+| Tier | Opacity | Meaning |
+|---|---|---|
+| Watched | clear | Something of the player's can see this ground now |
+| Explored | 0.52 | They have been here, but are not looking now |
+| Unexplored | 0.94 | Never observed this battle |
+
+**Two tiers, not one.** Terrain does not move: a commander who has been somewhere
+still knows the shape of it. Blacking ground out again the moment the patrol
+leaves would make the map unnavigable without adding any uncertainty that hiding
+the enemy does not already provide.
+
+**Implementation notes.** Vertex colours rather than a projected texture, because
+the project builds every material from code and this needs no shader of its own.
+Heights are sampled a few hundred vertices per frame rather than all at once —
+the grid is thousands of physics raycasts, and Cesium streams the terrain in
+anyway, so a blanket that settles over the first second is both cheaper and more
+correct than one that samples everything the instant the battle starts. Vertices
+are only re-uploaded when a sample actually moved one. The grid is re-laid if an
+advance carries a formation out toward its edge, and exploration is forgotten by
+`RevealAll`, so the next battle starts blind.
+
+---
+
 ## 3. Known leaks
 
-Fog hides the **units**. Several things are still computed from the truth rather
-than from what the player has seen, and will report enemy positions the player
-has not earned:
+Fog hides the **units**, and now the **ground**. Several derived graphics are
+still computed from the truth rather than from what the player has seen, and will
+report enemy positions the player has not earned:
 
 | Leak | Why |
 |---|---|
@@ -131,7 +191,8 @@ than the fog itself, and is deliberately not in this one.
 | `Assets/Scripts/Units/ReconOrderSystem.cs` | Task lifecycle: outbound, on station, patrol, UAV flight |
 | `Assets/Scripts/Units/AxisArrow.cs` | The objective arrow (shared with attack orders) |
 | `Assets/Scripts/Units/UnitActor.cs` | `HiddenByFog`, `SetHiddenByFog` |
-| `Assets/Scripts/Units/RangeRing.cs` | The contact ring, with its caption override |
+| `Assets/Scripts/Units/RangeRing.cs` | Range volumes — line of sight, weapon range, contact rings |
+| `Assets/Scripts/Units/FogBlanket.cs` | The dark over unobserved ground (§2a) |
 | `Assets/Scripts/UI/UnitPaletteUI.cs` | **GENERAL → INTELLIGENCE** toggles (line of sight, fog) |
 | `Assets/Scripts/Core/GameController.cs` | `SetLineOfSightVisible`, ring captions |
 | `Assets/Scripts/UI/UnitActionBarUI.cs` | The RECON button and its submenu |

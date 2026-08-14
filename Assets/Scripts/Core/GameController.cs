@@ -64,6 +64,7 @@ namespace IronMeridian.Core
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
+        BoundaryPanelUI _boundaryPanel;
         UnitInfoPanel _infoPanel;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -181,7 +182,7 @@ namespace IronMeridian.Core
 
             _selection = gameObject.AddComponent<SelectionManager>();
             _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
-                                            BoundaryOptionsDialog.IsOpen || ConfirmDialog.IsOpen ||
+                                            ConfirmDialog.IsOpen ||
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
                                             _airStrike.IsArmed ||
@@ -239,6 +240,21 @@ namespace IronMeridian.Core
             // runtime, so an exception in one builder used to abort the rest of
             // Start() — silently leaving the info panel, range rings, selection
             // wiring and pause menu unbuilt with no clue as to why.
+            // Built before the palette: the palette's CONTROL MEASURES section
+            // opens it, and wiring that up needs it to already exist.
+            BuildStep("control measure options", () =>
+            {
+                _boundaryPanel = BoundaryPanelUI.Create(canvas, _drawTool, () =>
+                {
+                    if (_palette != null) _palette.MarkBoundaryToolActive();
+                });
+                // Two panels cannot share the right-hand edge. Opening this one
+                // drops the unit selection, which is what takes the info panel
+                // down — and is honest besides: you are drawing now, not
+                // inspecting a formation.
+                _boundaryPanel.Opened = () => _selection.Select(null);
+            });
+
             BuildStep("unit palette", () =>
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
@@ -267,6 +283,14 @@ namespace IronMeridian.Core
                 };
 
                 // Bottom tool strip.
+                // CONTROL MEASURES section → the docked options panel on the right.
+                _palette.ControlMeasureRequested = kind =>
+                {
+                    if (_boundaryPanel == null) return;
+                    _drawTool.PendingKind = kind;
+                    _boundaryPanel.Show(kind);
+                };
+
                 _palette.SelectToolRequested = () => _drawTool.CancelDrawing();
                 _palette.BoundaryToolRequested = () => _drawTool.StartDrawing(LineDrawTool.Mode.Boundary);
                 _palette.DefensiveLineToolRequested = () => _drawTool.StartDrawing(LineDrawTool.Mode.DefensiveLine);
@@ -326,9 +350,9 @@ namespace IronMeridian.Core
                 // the ground, and "4 500 m" is the number that is being judged —
                 // kilometres to one decimal reads as an approximation.
                 _losRing = RangeRing.Create(_map.Georeference, _map.Georeference.transform,
-                    GameConfig.ViewRangeColor, 12f, "LINE OF SIGHT");
+                    GameConfig.ViewRangeColor, "LINE OF SIGHT");
                 _weaponRing = RangeRing.Create(_map.Georeference, _map.Georeference.transform,
-                    GameConfig.WeaponRangeColor, 12f, "Max weapon range");
+                    GameConfig.WeaponRangeColor, "Max weapon range");
             });
 
             BuildStep("unit action bar", () =>
@@ -383,7 +407,7 @@ namespace IronMeridian.Core
                 _pauseMenu.LoadRequested = LoadMap;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
                 _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
-                                          BoundaryOptionsDialog.IsOpen || ConfirmDialog.IsOpen ||
+                                          ConfirmDialog.IsOpen ||
                                           _pauseMenu.IsOpen;
             });
 

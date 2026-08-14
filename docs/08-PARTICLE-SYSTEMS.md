@@ -163,10 +163,20 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 
 | Case | Effect | Trigger | File |
 |---|---|---|---|
-| Unit dragged from the palette onto the map | Shockwave ring + dust | `GameController.OnPaletteDrop` | `DeployEffect` |
-| Units pasted (Ctrl+V) | Shockwave ring + dust | `GameController.PasteClipboard` | `DeployEffect` |
+| Unit dragged from the palette onto the map | 3D ring wall + ground disc + marker column + dust and embers | `GameController.OnPaletteDrop` | `DeployEffect` |
+| Units pasted (Ctrl+V) | as above | `GameController.PasteClipboard` | `DeployEffect` |
 
-`DeployEffect` predates `VfxSystem` and owns its own shockwave ring, which the catalogue has no equivalent for. It is a migration candidate, not a second effects system — do not add new effects to it.
+`DeployEffect` predates `VfxSystem` and owns its own meshes, which the catalogue has no equivalent for. It is a migration candidate, not a second effects system — do not add new effects to it.
+
+It has four layers because a flat expanding ring disappears the moment the camera tilts, which is most of the time in 3D: a **ring wall** (a cylinder of light standing on the ground, expanding and flattening as it spreads — the part that reads at any angle), a **ground disc** under it (what reads from directly overhead), a **marker column** at the exact drop point (so the eye is told *where*, not merely *near here*), and **particles** — dust thrown outward along the ground plus team-coloured embers rising through the column.
+
+`DeployEffect.Play` **refuses and returns false** if the terrain at the drop point cannot be sampled. The palette has already refused the drop in that case, and an effect floating at a guessed height would be the only thing on screen suggesting it worked.
+
+### Movement
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Motes off the head of a marching unit's trail | Team-coloured motes, world-simulated so they stay where they were shed | Continuous while the order stands | `MoveTrail` |
 
 ### Ordered attacks
 

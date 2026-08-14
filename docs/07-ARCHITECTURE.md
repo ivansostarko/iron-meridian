@@ -32,7 +32,7 @@ Assets/Scripts/
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
-    BoundaryOptionsDialog.cs  control-measure type/side/colour before drawing
+    BoundaryPanelUI.cs   docked right panel: control-measure side/colour/width/caption
     MapControlsUI.cs     on-map zoom cluster (bottom-left) + compass (bottom-right)
     UiTheme.cs           map-editor design tokens (colours, sizes)
                          LeftPanelWidth = the always-present rail; other on-map
@@ -62,7 +62,8 @@ Assets/Scripts/
     UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
     UnitLabel.cs         unit caption above the icon: shadowed two-pass TextMesh
     UnitMover.cs         routed march: legs, cornering, terrain clamp, trail
-    MoveTrail.cs         travelled trail + dashed planned route (battle mode only)
+    MoveTrail.cs         travelled trail, dashed planned route + marching direction
+                         arrows and head motes (battle mode only)
     HeadingArrow.cs      ground facing arrow under a selected unit
     UnitRegistry.cs      runtime unit list + change events
     SelectionManager.cs  LMB select, RMB move order, C facing, attack targeting
@@ -73,6 +74,8 @@ Assets/Scripts/
     ReconTaskCatalog.cs  the five recon tasks in numbers - docs/16-FOG-OF-WAR.md
     ReconOrderSystem.cs  recon lifecycle + the sensors the fog reads
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
+    FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
+    RangeRing.cs         range volumes: line of sight, weapon range, fog contacts
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
     MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions

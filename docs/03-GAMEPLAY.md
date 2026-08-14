@@ -40,10 +40,28 @@ The editor's left chrome is in two pieces:
 |---|---|
 | **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight** and **fog of war** |
 | **UNITS** | Team, echelon, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
+| **CONTROL MEASURES** | The five kinds of line that can be drawn by hand — picking one opens its options on the right |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
+| **ARTILLERY STRIKE** | Call for fire — see docs/17-ARTILLERY.md |
+| **AIR STRIKE** | Task an airframe — see docs/18-AIR-STRIKES.md |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
-| **MAP** | Tile style, 2D/3D, layers, unit-label size, boundary options |
+| **MAP** | Tile style, 2D/3D, layers, unit-label size |
 | **DATE AND TIME** | Scenario H-hour and presets |
+
+**Control measures are set up in two places on purpose.** The *kind* is chosen in
+the rail, because it changes how the line should be laid on the ground — a rear
+boundary runs parallel to the front, a lateral one runs into it — so it is
+decided first and then left alone. The *styling* (side, colour, width, planned or
+actual, caption) lives in a **docked panel on the right**, because those are
+fiddled with until they look right against the terrain.
+
+That panel used to be a modal dialog, which was the wrong shape twice over: it
+blocked the map while collecting settings that are all about *where* the line
+will go, and it had to be dismissed before drawing, so changing your mind about a
+colour meant cancelling the line and starting again. Docked, the terrain stays
+visible and clickable behind it, and a change applies to the next line without a
+round trip. Opening it drops the unit selection, since two panels cannot share
+the right-hand edge — and you are drawing now, not inspecting a formation.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
 
@@ -65,6 +83,7 @@ reach the units past the fold.
 |---|---|
 | **Left-click** a unit icon | Select it — pulsing team-colour ring, **ground arrow showing its heading**, and full data panel on the right |
 | **Right-click** terrain | Reposition (scenario mode) or march order (battle mode) — see *Movement* below |
+| **Shift + right-click** terrain | **Adds a waypoint** to the end of the current march instead of replacing it (battle mode) |
 | `C` | Aim the selection's facing: move the mouse to swing every selected unit onto a bearing. The heading arrows brighten and the status line reads the live bearing. LMB/Enter confirms, `Esc` cancels |
 | `Esc` | Deselect |
 
@@ -82,6 +101,15 @@ top bar says which set of rules is in force.
 | **Scenario** | Places the counter instantly at the clicked point | None — an edit is not a march |
 | **Battle** | Orders a march along a planned route | Accelerate, corner, brake; trail behind |
 
+**Waypoints.** `Shift` + right-click adds an objective to the end of the route
+rather than replacing it, so a column can be sent up a valley, along a ridge and
+into a town in one order. Each waypoint is planned over the terrain **from the
+previous one**, not from where the unit currently stands — which is what stops
+the second leg driving through the hill the first leg went around. Fuel is
+charged for the added ground as it is ordered. In scenario mode `Shift` does
+nothing to a right-click: there is no march to extend, so it is just a
+reposition.
+
 **Routing.** A march is not a straight line. `RoutePlanner` lays a corridor
 between start and objective, samples the terrain across it, and picks the
 cheapest way through — punishing gradient hard and refusing anything steeper
@@ -98,10 +126,22 @@ bends rather than stopping at them*, and brakes onto the objective. Fuel is
 charged against the route actually driven, so going around the high ground costs
 more than the straight-line distance would.
 
-**Trail.** While marching, the unit leaves a solid team-coloured trail over the
-ground it has covered and a faint dashed thread over the route still ahead. Both
-are clamped to the terrain. The trail fades out a few seconds after the unit
-arrives, and exists only in battle mode.
+**Trail.** While marching, the unit leaves a fine team-coloured trail over the
+ground it has covered and a faint dashed thread over the route still ahead, both
+clamped to the terrain, with **arrowheads marching forward along the thread** so
+the direction of travel is stated rather than inferred — and each arrow points
+the way the unit will actually be travelling when it gets there, so a route that
+bends has arrows that bend with it. Motes lift off the head of the trail while
+the order stands.
+
+The lines are deliberately thin. They were three times this width, which on a
+corps-scale advance turned the map into a bundle of ribbons wide enough to hide
+the ground being fought over — and a route line's job is to be followed, not to
+dominate. What was lost in presence is given back by the arrows and the motes,
+which read at a glance without covering any terrain.
+
+The trail fades out a few seconds after the unit arrives, and exists only in
+battle mode.
 
 Stopping the battle abandons any march in progress and leaves every unit standing
 where it actually is, handing the map back to the editor.

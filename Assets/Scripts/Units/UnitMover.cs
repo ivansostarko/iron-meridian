@@ -134,6 +134,50 @@ namespace IronMeridian.Units
             return true;
         }
 
+        /// <summary>
+        /// Extends the current march with another objective, planned from the
+        /// end of what is already ordered rather than from where the unit stands.
+        ///
+        /// This is what makes a route an order rather than a click: a column can
+        /// be sent up a valley, along a ridge line and into a town without ever
+        /// driving through the hill in between, because each waypoint is planned
+        /// over the terrain from the last. Falls back to a fresh order when the
+        /// unit is not already moving, so the caller does not have to check.
+        ///
+        /// Fuel is charged for the added ground as it is ordered, matching
+        /// <see cref="MoveTo"/> — a route is paid for when it is committed to,
+        /// not as it is driven.
+        /// </summary>
+        public bool AddWaypoint(double lat, double lon)
+        {
+            if (!CombatSystem.BattleRunning) return false;
+            if (!_moving || _route.Count == 0) return MoveTo(lat, lon);
+
+            var last = _route[_route.Count - 1];
+            var leg = RoutePlanner.Plan(_geo, last.latitude, last.longitude, lat, lon);
+            if (leg.Count < 2) return false;
+
+            // leg[0] is the join and already in the route.
+            for (int i = 1; i < leg.Count; i++) _route.Add(leg[i]);
+
+            if (_actor.Def.fuelUsePerKm > 0)
+            {
+                double addedKm = RoutePlanner.LengthKm(leg);
+                _actor.State.fuel = Mathf.Max(0,
+                    _actor.State.fuel - (float)addedKm * _actor.Def.fuelUsePerKm);
+            }
+
+            // The unit is mid-leg, so only the part not yet driven is re-shown.
+            if (_trail != null) _trail.SetRoute(_route.GetRange(_leg, _route.Count - _leg));
+
+            // The destination marker belongs on the *final* objective.
+            SpawnMarker(lat, lon);
+            return true;
+        }
+
+        /// <summary>Objectives still ahead of the unit, final one last. Empty when idle.</summary>
+        public int WaypointsRemaining => _moving ? Mathf.Max(0, _route.Count - 1 - _leg) : 0;
+
         void BeginLeg()
         {
             var a = _route[_leg];

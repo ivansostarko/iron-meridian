@@ -64,7 +64,7 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Effects, Artillery, AirStrike, Weather, Map, DateTime }
+        enum Section { General, Units, Boundaries, Effects, Artillery, AirStrike, Weather, Map, DateTime }
         enum ListMode { Available, Deployed }
 
         /// <summary>
@@ -109,8 +109,8 @@ namespace IronMeridian.UI
         const float DeployedCardHeight = 66f;
         /// <summary>Y of the list's tab row, measured from the section's top edge.</summary>
         const float ListTop = -130f;
-        /// <summary>Emblem block plus the eight nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 338f;
+        /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 374f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -235,6 +235,7 @@ namespace IronMeridian.UI
 
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
+            _sectionContent[Section.Boundaries] = MakeSectionContent(body, "Boundaries");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Artillery] = MakeSectionContent(body, "Artillery");
             _sectionContent[Section.AirStrike] = MakeSectionContent(body, "AirStrike");
@@ -244,6 +245,7 @@ namespace IronMeridian.UI
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
+            BuildBoundariesSection(_sectionContent[Section.Boundaries]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildArtillerySection(_sectionContent[Section.Artillery]);
             BuildAirStrikeSection(_sectionContent[Section.AirStrike]);
@@ -423,12 +425,13 @@ namespace IronMeridian.UI
 
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -116);
-            AddNavRow(panel, Section.Artillery, "ARTILLERY STRIKE", UiIcons.Artillery, -152);
-            AddNavRow(panel, Section.AirStrike, "AIR STRIKE", UiIcons.FlyingWing, -188);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -224);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -260);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -296);
+            AddNavRow(panel, Section.Boundaries, "CONTROL MEASURES", UiIcons.Square, -116);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -152);
+            AddNavRow(panel, Section.Artillery, "ARTILLERY STRIKE", UiIcons.Artillery, -188);
+            AddNavRow(panel, Section.AirStrike, "AIR STRIKE", UiIcons.FlyingWing, -224);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -260);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -296);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -332);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -950,6 +953,68 @@ namespace IronMeridian.UI
 
         /// <summary>Called by the controller when the draw tool exits on its own.</summary>
         public void ResetToolToSelect() => SetActiveTool(0);
+
+        // -------------------------------------------------- boundaries section
+
+        /// <summary>Raised with the kind to draw; the controller opens the options panel.</summary>
+        public System.Action<LineKind> ControlMeasureRequested;
+
+        /// <summary>
+        /// The kinds of control measure that can be drawn by hand.
+        ///
+        /// Picking a kind is a separate decision from styling it, which is why
+        /// this is a section in the rail and the options are a panel on the
+        /// right: kind changes how the line should be laid on the ground — a
+        /// rear boundary runs parallel to the front, a lateral one runs into it
+        /// — so it is chosen before anything else and then left alone, while
+        /// colour and width are fiddled with until they look right.
+        /// </summary>
+        void BuildBoundariesSection(RectTransform content)
+        {
+            SectionLabel(content, "DRAW A CONTROL MEASURE", -8);
+
+            float y = -30f;
+            foreach (var (kind, name, detail) in BoundaryPanelUI.Kinds)
+            {
+                ControlMeasureButton(content, kind, name, detail, y);
+                y -= 58f;
+            }
+
+            var stop = UIFactory.CreateBorderedPanel(content, "StopDrawing", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 32));
+            var stopBtn = UIFactory.CreateButton(stop, "STOP DRAWING",
+                () => { SelectToolRequested?.Invoke(); ResetToolToSelect(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)stopBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                "Pick a kind, set it up in the panel on the right, then click the map to place each vertex. " +
+                "Enter or double-click finishes the line; Esc abandons it. The style carries over, so a run of " +
+                "phase lines only needs setting up once.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
+                new Vector2(InnerWidth, 110));
+        }
+
+        void ControlMeasureButton(RectTransform content, LineKind kind, string name, string detail, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Kind_" + name, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => ControlMeasureRequested?.Invoke(kind),
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, UiIcons.Square, "Glyph");
+            icon.color = UiTheme.Accent;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(20, 20));
+
+            UIFactory.CreateStackedLabels(frame, name, detail, 42f, InnerWidth - 54f, topInset: 9f);
+        }
 
         // ----------------------------------------------------- effects section
 
@@ -1477,24 +1542,10 @@ namespace IronMeridian.UI
             UIFactory.Place((RectTransform)slider.transform, new Vector2(0f, 1f),
                 new Vector2(Pad, -352), new Vector2(InnerWidth, 30));
 
-            SectionLabel(content, "CONTROL MEASURES", -394);
-
-            var boundaryFrame = UIFactory.CreateBorderedPanel(content, "BoundaryOptions", UiTheme.Surface, UiTheme.BorderStrong);
-            UIFactory.Place(boundaryFrame, new Vector2(0f, 1f), new Vector2(Pad, -416), new Vector2(InnerWidth, 46));
-
-            var bBtn = UIFactory.CreateButton(boundaryFrame, "", OpenBoundaryOptions,
-                new Color(0, 0, 0, 0), UiTheme.Text, 1);
-            UIFactory.Stretch((RectTransform)bBtn.transform);
-            var bCaption = bBtn.GetComponentInChildren<Text>(true);
-            if (bCaption != null) bCaption.gameObject.SetActive(false);
-
-            var bIcon = UIFactory.CreateImage(boundaryFrame, UiIcons.Square, "Glyph");
-            bIcon.color = UiTheme.Accent;
-            bIcon.raycastTarget = false;
-            UIFactory.Place((RectTransform)bIcon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(18, 18));
-
-            UIFactory.CreateStackedLabels(boundaryFrame, "BOUNDARY OPTIONS",
-                "Type, side, colour, width, caption", 40f, InnerWidth - 52f, topInset: 6f);
+            // Control measures used to be set up from here. They have their own
+            // section in the rail now, with the options docked on the right:
+            // choosing what to draw has nothing to do with which imagery is
+            // under it, and the two had no business sharing a panel.
 
             RefreshMapSection();
         }
@@ -1552,13 +1603,11 @@ namespace IronMeridian.UI
         static float LabelScaleTo01(float scale) => Mathf.InverseLerp(0.5f, 2.5f, scale);
         static float LabelScaleFrom01(float v) => Mathf.Lerp(0.5f, 2.5f, v);
 
-        void OpenBoundaryOptions()
-        {
-            if (_drawTool == null || _canvas == null) return;
-            // Latch the tool strip's boundary button so the armed state is
-            // visible in both places once drawing starts.
-            BoundaryOptionsDialog.Open(_canvas, _drawTool, () => SetActiveTool(2));
-        }
+        /// <summary>
+        /// Latches the tool strip's boundary button, so an armed draw tool reads
+        /// the same in the rail as it does in the options panel that armed it.
+        /// </summary>
+        public void MarkBoundaryToolActive() => SetActiveTool(2);
 
         /// <summary>Repaints every toggle and readout from the systems that own the state.</summary>
         void RefreshMapSection()
@@ -1641,12 +1690,28 @@ namespace IronMeridian.UI
             if (_lastDropValid)
             {
                 GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out _);
+
+                // Two separate questions, and both must answer yes. The raycast
+                // above says the cursor is over *something*; this says the
+                // ground under that point can actually be measured. They come
+                // apart at a tile seam, where the ray clips the edge of a tile
+                // that is streaming out — and a unit deployed there is left at
+                // the fallback height, floating over a valley or buried in a
+                // ridge. Refusing costs one more click; the alternative is a
+                // formation nobody can find.
+                if (!GeoUtils.TrySampleTerrainHeight(_map.Georeference, lat, lon, out double ground))
+                {
+                    _lastDropValid = false;
+                    _groundMarker.SetActive(false);
+                    return;
+                }
+
                 // Remember exactly where the ring is sitting: the deploy uses
                 // this point rather than re-raycasting on release, so the unit
                 // cannot land somewhere the preview never showed.
                 _dropLat = lat; _dropLon = lon;
-                double h = GeoUtils.SampleTerrainHeight(_map.Georeference, lat, lon, 250) + 3.0;
-                _groundMarkerAnchor.longitudeLatitudeHeight = new Unity.Mathematics.double3(lon, lat, h);
+                _groundMarkerAnchor.longitudeLatitudeHeight =
+                    new Unity.Mathematics.double3(lon, lat, ground + 3.0);
                 _groundMarker.SetActive(true);
             }
             else
@@ -1673,7 +1738,7 @@ namespace IronMeridian.UI
 
             if (!_lastDropValid)
             {
-                DropRejected?.Invoke("Terrain not loaded here yet — try again in a moment.");
+                DropRejected?.Invoke("No solid ground there yet — the terrain is still streaming in.");
                 _dragging = null;
                 return;
             }

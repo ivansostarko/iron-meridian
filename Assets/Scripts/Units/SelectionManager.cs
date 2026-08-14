@@ -285,7 +285,10 @@ namespace IronMeridian.Units
                 _pendingClickUnit = null;
             }
 
-            if (Input.GetMouseButtonDown(1)) HandleMoveOrder();
+            // Shift + right-click extends the march instead of replacing it, the
+            // convention every RTS uses. Shift is free on this button — it is
+            // left-click that already means "add to selection".
+            if (Input.GetMouseButtonDown(1)) HandleMoveOrder(append: shift);
 
             if (Input.GetKeyDown(KeyCode.Escape)) Select(null);
         }
@@ -407,7 +410,13 @@ namespace IronMeridian.Units
             Flash?.Invoke("Facing cancelled.");
         }
 
-        void HandleMoveOrder()
+        /// <summary>
+        /// Right-click. Outside a battle this repositions counters; inside one it
+        /// is a march order. <paramref name="append"/> adds the point to the end
+        /// of the existing route instead of replacing it, which is how a route
+        /// with several legs gets built.
+        /// </summary>
+        void HandleMoveOrder(bool append = false)
         {
             if (_selection.Count == 0)
             {
@@ -425,14 +434,23 @@ namespace IronMeridian.Units
             // is repositioned instantly; once the battle is running the same
             // right-click is a march order and the unit travels there.
             bool marching = BattleRunning != null && BattleRunning();
-            if (!marching) RecordPositionUndo();
+
+            // Appending only means anything to a unit that is marching. In the
+            // editor a shift-right-click is just a reposition, which is the
+            // least surprising thing it could do.
+            if (!marching)
+            {
+                append = false;
+                RecordPositionUndo();
+            }
 
             if (_selection.Count == 1)
             {
                 var only = _selection[0];
                 if (only == null || !only.IsAlive) return;
-                if (marching) only.Mover.MoveTo(lat, lon);
+                if (marching) Order(only, lat, lon, append);
                 else only.SetPosition(lat, lon);
+                ReportOrder(only, append);
                 return;
             }
 
@@ -446,9 +464,37 @@ namespace IronMeridian.Units
                 if (u == null || !u.IsAlive) continue;
                 double bearing = i * 360.0 / n;
                 GeoUtils.Destination(lat, lon, bearing, radiusKm, out double dLat, out double dLon);
-                if (marching) u.Mover.MoveTo(dLat, dLon);
+                if (marching) Order(u, dLat, dLon, append);
                 else u.SetPosition(dLat, dLon);
             }
+
+            if (marching) Flash?.Invoke(append
+                ? $"Waypoint added for {n} units."
+                : $"{n} units marching.");
+        }
+
+        static void Order(UnitActor unit, double lat, double lon, bool append)
+        {
+            if (append) unit.Mover.AddWaypoint(lat, lon);
+            else unit.Mover.MoveTo(lat, lon);
+        }
+
+        /// <summary>
+        /// Says what the route now looks like. Appending is invisible without
+        /// it — the unit carries on exactly as before and the only thing that
+        /// changed is a line further ahead than the eye is following.
+        /// </summary>
+        void ReportOrder(UnitActor unit, bool append)
+        {
+            if (BattleRunning == null || !BattleRunning() || unit == null) return;
+
+            int legs = unit.Mover.WaypointsRemaining;
+            if (append)
+                Flash?.Invoke(legs > 1
+                    ? $"Waypoint added — {legs} legs on the route. Shift + right-click to add more."
+                    : "Waypoint added.");
+            else
+                Flash?.Invoke("Marching. Shift + right-click to add waypoints.");
         }
 
         void UpdateHover(bool blocked)
