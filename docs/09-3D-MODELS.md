@@ -17,6 +17,9 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | `military_truck` | `Models/MilitaryTruck` | [ZIL-130 Military Truck](https://assetstore.unity.com/packages/3d/vehicles/land/zil-130-military-truck-208991) | static | `transport`, `logistics`, `supply` |
 | `main_battle_tank` | `Models/Leopard2` | [Tank Leopard 2](https://assetstore.unity.com/packages/3d/vehicles/land/tank-leopard2-264329) | static | `armour` |
 | `scout_car` | `Models/ScoutCar` | [M3A1 Scout Car](https://assetstore.unity.com/packages/3d/vehicles/land/m3a1-scout-car-53149) | static | `recon` |
+| `stealth_bomber` | `Models/StealthBomber` | [Hessburg — Stealth Bomber](https://assetstore.unity.com/packages/package/56765) — `Stealth_Bomber.fbx` | static | **Not a unit** — flown by `AirStrikeSystem`; see docs/18-AIR-STRIKES.md |
+
+**`stealth_bomber` is the first model that is not a unit.** It has no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns it — no formation is represented by a B-2. It is in the library anyway because the library is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds its prefab from that list. `BomberRun.LoadModel` fetches it by id.
 
 **Not yet modelled:** every `Drone` category unit. `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message rather than a misleading infantryman.
 
@@ -33,6 +36,13 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | ZIL-130 Military Truck | anywhere under `Assets/` | *Not in the project yet* |
 | Tank Leopard 2 | anywhere under `Assets/` | *Not in the project yet* |
 | M3A1 Scout Car | anywhere under `Assets/` | *Not in the project yet* |
+| Hessburg — Stealth Bomber | `Assets/Hessburg - Stealth Bomber/` | **Downloaded, needs one extra step** — ships as nested `.unitypackage` archives; see below |
+
+> **This table needs an audit.** Several of the packs listed above as absent now
+> have folders under `Assets/` (`Kucher/`, `M3A1 Scout Car/`, `ZIL130_MilitaryTruck/`,
+> `Radar/`, `PVO/`, `Defensive_props/`). Their statuses here were written before
+> those imports and have not been re-checked. Run `Install Unit Models` and update
+> this table from what it reports.
 
 The six packs above are **registered but not present** — the entries, the unit
 assignments and the installer support are all in place, and each will build its

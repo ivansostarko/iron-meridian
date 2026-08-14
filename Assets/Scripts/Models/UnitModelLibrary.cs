@@ -73,6 +73,7 @@ namespace IronMeridian.Models
         public const string MilitaryTruck = "military_truck";
         public const string MainBattleTank = "main_battle_tank";
         public const string ScoutCar = "scout_car";
+        public const string StealthBomber = "stealth_bomber";
 
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
         {
@@ -157,6 +158,25 @@ namespace IronMeridian.Models
                     "M3A1", "M3A1_Scout_Car", "M3A1ScoutCar", "ScoutCar"
                 },
                 idleClip = null,
+                animated = false
+            },
+
+            // Not a unit: this one is flown by AirStrikeSystem rather than
+            // deployed, so it has no entry in Overrides below and Resolve()
+            // never returns it. It is here because the library is the only
+            // sanctioned way to reach a model prefab (golden rule 10), and
+            // because the installer builds its prefab from this list.
+            [StealthBomber] = new UnitModelDef
+            {
+                resourcePath = "Models/StealthBomber",
+                sourceAsset = "Hessburg — Stealth Bomber (Built-In)",
+                sourceCandidates = new[]
+                {
+                    "Stealth_Bomber", "StealthBomber", "Stealth Bomber", "B2", "B-2"
+                },
+                idleClip = null,
+                // A flying wing with no moving surfaces. Its flight is animated
+                // in code by BomberRun, not by a clip.
                 animated = false
             }
         };

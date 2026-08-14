@@ -64,7 +64,7 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Effects, Artillery, Weather, Map, DateTime }
+        enum Section { General, Units, Effects, Artillery, AirStrike, Weather, Map, DateTime }
         enum ListMode { Available, Deployed }
 
         /// <summary>
@@ -109,8 +109,8 @@ namespace IronMeridian.UI
         const float DeployedCardHeight = 66f;
         /// <summary>Y of the list's tab row, measured from the section's top edge.</summary>
         const float ListTop = -130f;
-        /// <summary>Emblem block plus the seven nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 302f;
+        /// <summary>Emblem block plus the eight nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 338f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -198,7 +198,8 @@ namespace IronMeridian.UI
 
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
             GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
-            ArtilleryStrikeSystem artillery, MapControlsUI mapControls, LineDrawTool drawTool)
+            ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
+            MapControlsUI mapControls, LineDrawTool drawTool)
         {
             _canvas = canvas;
             _map = map;
@@ -208,6 +209,7 @@ namespace IronMeridian.UI
             _weather = weather;
             _effects = effects;
             _artillery = artillery;
+            _airStrike = airStrike;
             _mapControls = mapControls;
             _drawTool = drawTool;
 
@@ -235,6 +237,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Artillery] = MakeSectionContent(body, "Artillery");
+            _sectionContent[Section.AirStrike] = MakeSectionContent(body, "AirStrike");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
@@ -243,6 +246,7 @@ namespace IronMeridian.UI
             BuildUnitsSection(_sectionContent[Section.Units]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildArtillerySection(_sectionContent[Section.Artillery]);
+            BuildAirStrikeSection(_sectionContent[Section.AirStrike]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
@@ -278,6 +282,7 @@ namespace IronMeridian.UI
             if (_weather != null) _weather.Changed += RefreshWeather;
             if (_effects != null) _effects.ArmedChanged += RefreshEffects;
             if (_artillery != null) _artillery.ArmedChanged += RefreshArtillery;
+            if (_airStrike != null) _airStrike.ArmedChanged += RefreshAirStrike;
         }
 
         static RectTransform MakeSectionContent(RectTransform body, string name)
@@ -420,9 +425,10 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
             AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -116);
             AddNavRow(panel, Section.Artillery, "ARTILLERY STRIKE", UiIcons.Artillery, -152);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -188);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -224);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -260);
+            AddNavRow(panel, Section.AirStrike, "AIR STRIKE", UiIcons.FlyingWing, -188);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -224);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -260);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -296);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -1114,6 +1120,89 @@ namespace IronMeridian.UI
             }
         }
 
+        // --------------------------------------------------- air strike section
+
+        AirStrikeSystem _airStrike;
+        readonly List<(StrikeAircraft aircraft, Image fill, Text label)> _airStrikeButtons =
+            new List<(StrikeAircraft, Image, Text)>();
+
+        /// <summary>
+        /// The air-tasking menu. Same shape as the artillery panel because it is
+        /// the same decision — pick a delivery means, then commit a piece of
+        /// ground — and driven entirely from <see cref="AirStrikeCatalog"/>.
+        /// </summary>
+        void BuildAirStrikeSection(RectTransform content)
+        {
+            SectionLabel(content, "TASK AN AIRFRAME", -8);
+
+            float y = -30f;
+            foreach (var def in AirStrikeCatalog.All)
+            {
+                AirStrikeButton(content, def, y);
+                y -= 58f;
+            }
+
+            var abort = UIFactory.CreateBorderedPanel(content, "Abort", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(abort, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 32));
+            var abortBtn = UIFactory.CreateButton(abort, "ABORT TASKING",
+                () => { if (_airStrike != null) _airStrike.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)abortBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                $"Pick an airframe, then click the map to place the target area. A " +
+                $"{AirStrikeCatalog.CountdownSeconds:0} second countdown runs in the HUD, then the aircraft " +
+                $"runs in and releases {AirStrikeCatalog.BombsPerStrike} weapons in one pass. The stick walks " +
+                "along its track, so the blasts follow the aeroplane rather than landing in a heap. The attack " +
+                "heading is different every time. A tasked strike cannot be recalled — abort only clears the " +
+                "airframe before it is sent.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
+                new Vector2(InnerWidth, 160));
+
+            RefreshAirStrike();
+        }
+
+        void AirStrikeButton(RectTransform content, AircraftDef def, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Air_" + def.label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_airStrike != null) _airStrike.Toggle(def.aircraft); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, UiIcons.FlyingWing, "Glyph");
+            icon.color = def.markerColor;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
+
+            var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
+                46f, InnerWidth - 92f, topInset: 9f);
+
+            var radius = UIFactory.CreateText(frame, $"{def.radiusMeters:0} m", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight);
+            radius.raycastTarget = false;
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+
+            _airStrikeButtons.Add((def.aircraft, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>Repaints from the system's state — it owns what is armed, not the panel.</summary>
+        void RefreshAirStrike()
+        {
+            if (_airStrike == null) return;
+            foreach (var (aircraft, fill, label) in _airStrikeButtons)
+            {
+                bool on = _airStrike.Armed.HasValue && _airStrike.Armed.Value == aircraft;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
         // ----------------------------------------------------- weather section
 
         /// <summary>
@@ -1662,6 +1751,7 @@ namespace IronMeridian.UI
             if (_weather != null) _weather.Changed -= RefreshWeather;
             if (_effects != null) _effects.ArmedChanged -= RefreshEffects;
             if (_artillery != null) _artillery.ArmedChanged -= RefreshArtillery;
+            if (_airStrike != null) _airStrike.ArmedChanged -= RefreshAirStrike;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

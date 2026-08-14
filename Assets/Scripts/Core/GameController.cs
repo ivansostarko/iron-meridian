@@ -38,6 +38,28 @@ namespace IronMeridian.Core
         WeatherSystem _weather;
         EffectPlacementTool _effects;
         ArtilleryStrikeSystem _artillery;
+        AirStrikeSystem _airStrike;
+
+        // Latest countdown reported by each strike system. A null title means
+        // that system has nothing in the air; see RefreshStrikeBanner.
+        (string title, float remaining, float total, Color colour) _artilleryBanner;
+        (string title, float remaining, float total, Color colour) _airStrikeBanner;
+
+        /// <summary>
+        /// Shows whichever strike is closest to landing. Ties are impossible in
+        /// practice and harmless if they happen — either is the right answer.
+        /// </summary>
+        void RefreshStrikeBanner()
+        {
+            var pick = _artilleryBanner;
+
+            bool airIsSooner = _airStrikeBanner.title != null &&
+                               (pick.title == null || _airStrikeBanner.remaining < pick.remaining);
+            if (airIsSooner) pick = _airStrikeBanner;
+
+            _hud.SetFireMission(pick.title, pick.remaining, pick.total,
+                pick.title == null ? UiTheme.Accent : pick.colour);
+        }
         MapControlsUI _mapControls;
         GameClock _clock;
         GameHUD _hud;
@@ -151,6 +173,10 @@ namespace IronMeridian.Core
             _artillery = gameObject.AddComponent<ArtilleryStrikeSystem>();
             _artillery.Init(_map, _rig.Cam);
 
+            // Tasked air strikes — see docs/18-AIR-STRIKES.md.
+            _airStrike = gameObject.AddComponent<AirStrikeSystem>();
+            _airStrike.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
@@ -158,6 +184,7 @@ namespace IronMeridian.Core
                                             BoundaryOptionsDialog.IsOpen || ConfirmDialog.IsOpen ||
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
+                                            _airStrike.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -177,11 +204,23 @@ namespace IronMeridian.Core
             _selection.Flash = _hud.Flash;
             _effects.Flash = _hud.Flash;
             _artillery.Flash = _hud.Flash;
-            // The strike system reports its countdown every frame; the HUD hides
-            // the banner on its own when there is nothing in the air.
-            _artillery.CountdownChanged = (def, remaining, total) =>
-                _hud.SetFireMission(def?.name, remaining, total,
-                    def?.markerColor ?? UiTheme.Accent);
+            _airStrike.Flash = _hud.Flash;
+
+            // Both strike systems report their countdown every frame, and there
+            // is one banner. Left to themselves they would fight over it — the
+            // idle one would blank it a frame after the busy one filled it — so
+            // each writes to its own slot and the banner shows whichever is
+            // nearest to landing.
+            _artillery.CountdownChanged = (title, remaining, total, colour) =>
+            {
+                _artilleryBanner = (title, remaining, total, colour);
+                RefreshStrikeBanner();
+            };
+            _airStrike.CountdownChanged = (title, remaining, total, colour) =>
+            {
+                _airStrikeBanner = (title, remaining, total, colour);
+                RefreshStrikeBanner();
+            };
 
             _defence.Flash = _hud.Flash;
             _attacks.Flash = _hud.Flash;
@@ -204,7 +243,7 @@ namespace IronMeridian.Core
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _artillery, _mapControls, _drawTool);
+                    _artillery, _airStrike, _mapControls, _drawTool);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;

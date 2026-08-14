@@ -29,7 +29,14 @@ namespace IronMeridian.Audio
         /// <summary>155 mm round — the reference report: deep body, long tail.</summary>
         ArtilleryMedium,
         /// <summary>203 mm round — very low, slow to decay, with a rolling echo.</summary>
-        ArtilleryHeavy
+        ArtilleryHeavy,
+
+        // --- air strikes (docs/18-AIR-STRIKES.md) ---
+
+        /// <summary>Air-dropped weapon — the deepest, longest detonation in the game.</summary>
+        AerialBomb,
+        /// <summary>Jet passing overhead — a swelling roar that travels with the aircraft.</summary>
+        JetPass
     }
 
     /// <summary>
@@ -144,7 +151,9 @@ namespace IronMeridian.Audio
             [EffectSound.ArtilleryLight] = "Audio/effects/artillery_105",
             [EffectSound.ArtilleryMortar] = "Audio/effects/artillery_120",
             [EffectSound.ArtilleryMedium] = "Audio/effects/artillery_155",
-            [EffectSound.ArtilleryHeavy] = "Audio/effects/artillery_203"
+            [EffectSound.ArtilleryHeavy] = "Audio/effects/artillery_203",
+            [EffectSound.AerialBomb] = "Audio/effects/aerial_bomb",
+            [EffectSound.JetPass] = "Audio/effects/jet_pass"
         };
 
         static AudioClip Resolve(EffectSound sound)

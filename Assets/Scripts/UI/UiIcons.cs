@@ -233,6 +233,39 @@ namespace IronMeridian.UI
                                  Mathf.Min(v - baseV, tipV - v)));
         }
 
+        // ------------------------------------------------------- air strike
+
+        /// <summary>
+        /// AIR STRIKE section and the B-2 button: a flying wing seen from above,
+        /// nose up.
+        ///
+        /// Drawn as a swept delta with a notched trailing edge, which is the one
+        /// silhouette nobody mistakes for anything else — and is why a B-2 is
+        /// recognisable in a photograph at any size.
+        /// </summary>
+        public static Sprite FlyingWing => Get(nameof(FlyingWing), (u, v) =>
+        {
+            float x = Mathf.Abs(u - 0.5f);
+
+            // Swept leading edges running back from the nose at (0.5, 0.92).
+            float leading = Cov((0.92f - v) * 0.62f - x);
+            // Trailing edge, cutting the delta off at the bottom.
+            float trailing = Cov(v - 0.24f);
+            float body = Mathf.Min(leading, trailing);
+
+            // The double-W notch along the trailing edge. Two bites taken out,
+            // which is what turns a plain delta into this aircraft.
+            float notch = Mathf.Max(
+                Rect(u, v, 0.5f - 0.13f, 0.06f, 0.5f + 0.13f, 0.30f - Mathf.Abs(u - 0.5f) * 0.35f),
+                Mathf.Max(Rect(u, v, 0.12f, 0.06f, 0.27f, 0.34f),
+                          Rect(u, v, 0.73f, 0.06f, 0.88f, 0.34f)));
+
+            // Cockpit blister, so the nose end is unambiguous.
+            float canopy = DiscAt(u, v, 0.5f, 0.72f, 0.055f);
+
+            return Mathf.Clamp01(Mathf.Max(Mathf.Clamp01(body - notch), canopy));
+        });
+
         /// <summary>Weather conditions section.</summary>
         public static Sprite Cloud => Get(nameof(Cloud), (u, v) =>
             Mathf.Max(DiscAt(u, v, 0.34f, 0.48f, 0.20f),

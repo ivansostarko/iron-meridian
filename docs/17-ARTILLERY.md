@@ -43,12 +43,17 @@ Left rail → ARTILLERY STRIKE      UnitPaletteUI.BuildArtillerySection
 
 | Script | Role |
 |---|---|
+| `Vfx/CalledStrikeSystem.cs` | **Shared** arming, placement, countdown and HUD reporting |
 | `Vfx/ArtilleryCatalog.cs` | The natures in numbers — the single source of truth |
-| `Vfx/ArtilleryStrikeSystem.cs` | Arming, placement, countdown, impact sequence |
+| `Vfx/ArtilleryStrikeSystem.cs` | The natures and the salvo |
 | `Vfx/TargetAreaMarker.cs` | The 3D target-area volume |
 | `UI/UnitPaletteUI.cs` | `BuildArtillerySection` — the four buttons |
 | `UI/GameHUD.cs` | `SetFireMission` — the countdown banner |
 | `Core/GameController.cs` | Builds the system and wires it to the HUD and palette |
+
+### Shared with air strikes
+
+Everything up to the moment something lands is identical between a fire mission and an air strike, and lives in `CalledStrikeSystem<TKey>`. `ArtilleryStrikeSystem` supplies the natures and the salvo; `AirStrikeSystem` supplies the airframes and the bombing run. Both also share `TargetAreaMarker` and the HUD banner — `GameController.RefreshStrikeBanner` decides which of the two the single banner shows. See docs/18-AIR-STRIKES.md.
 
 ### The countdown is the feature
 

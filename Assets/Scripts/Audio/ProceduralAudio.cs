@@ -48,8 +48,61 @@ namespace IronMeridian.Audio
                       bodyDecay: 1.15f, crackDecay: 3.2f, crackLowPass: 0.13f,
                       bodyMix: 1.00f, crackMix: 0.50f, rumbleMix: 0.52f),
 
+            // Heavier and longer than any tube: a big air-dropped weapon.
+            EffectSound.AerialBomb =>
+                Shell("fx_aerial_bomb", seed: 2077, duration: 5.0f,
+                      startHz: 58f, endHz: 15f, pitchFallSeconds: 1.7f,
+                      bodyDecay: 0.95f, crackDecay: 2.6f, crackLowPass: 0.16f,
+                      bodyMix: 1.00f, crackMix: 0.55f, rumbleMix: 0.62f),
+
+            EffectSound.JetPass => JetPass(),
+
             _ => null
         };
+
+        /// <summary>
+        /// A jet passing overhead: broadband noise that swells and fades, over a
+        /// low turbine tone that slides down as it goes by.
+        ///
+        /// The Doppler slide is done here rather than left to Unity's Doppler
+        /// because the effect sources run with `dopplerLevel = 0` — this map is
+        /// kilometres across and the camera is not a listener in motion, so the
+        /// engine's Doppler produces nothing useful. Baking the slide into the
+        /// clip gives the pass its sense of speed regardless.
+        /// </summary>
+        static AudioClip JetPass()
+        {
+            const float duration = 6.0f;
+            int n = (int)(Rate * duration);
+            var data = new float[n];
+            var rng = new System.Random(747);
+            float low = 0f, band = 0f;
+            float phase = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float u = t / duration;
+
+                // Approach and recede: loudest at the midpoint of the pass.
+                float envelope = Mathf.Sin(u * Mathf.PI);
+                envelope *= envelope;
+
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                low = Mathf.Lerp(low, noise, 0.05f);          // the roar
+                band = Mathf.Lerp(band, noise - low, 0.30f);  // the air
+
+                // Turbine tone, sliding down through the pass.
+                float freq = Mathf.Lerp(115f, 62f, u);
+                phase += 2f * Mathf.PI * freq / Rate;
+                float tone = Mathf.Sin(phase);
+
+                data[i] = (low * 0.70f + band * 0.20f + tone * 0.35f) * envelope;
+            }
+
+            Normalise(data, 0.80f);
+            return Make("fx_jet_pass", data);
+        }
 
         /// <summary>
         /// One artillery report, parameterised by calibre.

@@ -63,7 +63,7 @@ VfxSystem.PlayWreck(lat, lon, severity01);
 | `Dust` | Flat ring across the ground plane | `Dust` |
 | `ArtilleryAirBurst` | White-hot flash, **flat fast shrapnel disc**, small core | `ArtilleryLightBurst` |
 | `ArtilleryDirtColumn` | **Narrow vertical soil column** under gravity, small flash, low skirt | `ArtilleryMortarBurst` |
-| `ArtilleryHeavyBlast` | Fireball, **ground shock ring**, arcing debris, dust | `ArtilleryMediumBurst`, `ArtilleryHeavyBurst` |
+| `ArtilleryHeavyBlast` | Fireball, **ground shock ring**, arcing debris, dust | `ArtilleryMediumBurst`, `ArtilleryHeavyBurst`, `AerialBombBurst` |
 
 The three artillery builders exist because the events do not look alike from a map camera — what separates them is the *shape of the throw*, not the size. 155 mm and 203 mm deliberately share `ArtilleryHeavyBlast` and differ only by their rows' scale and lifetime, because that genuinely is the difference between them.
 
@@ -93,6 +93,8 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `ArtilleryMortarSmoke` | Brown soil haze off a mortar bomb | 200 m | loops | 45 | procedural |
 | `ArtilleryMediumSmoke` | Grey-black smoke off a 155 mm burst | 280 m | loops | 48 | procedural |
 | `ArtilleryHeavySmoke` | Heavy oily column off a 203 mm burst | 380 m | loops | 52 | procedural |
+| `AerialBombBurst` | Air-dropped weapon landing — the largest blast in the game | 560 m | 4.2 s | 140 | procedural |
+| `AerialBombSmoke` | Black column off an air-dropped weapon | 460 m | loops | 56 | procedural |
 
 The eight artillery rows are the calibre register of **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -148,6 +150,14 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Round lands (203 mm) | `ArtilleryHeavyBurst` + `ArtilleryHeavySmoke` | ×5 per mission, 0.85 s apart | `ArtilleryStrikeSystem.RunSalvo` |
 
 **ARTILLERY STRIKE** panel → pick a nature → click the terrain → a 10 s countdown runs in the HUD → five rounds land scattered across the target area. Ground-checked exactly like hand placement above, and a refused click leaves the tube armed. Full detail in **docs/17-ARTILLERY.md**.
+
+### Air strikes
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Weapon lands | `AerialBombBurst` + `AerialBombSmoke` | ×5 per pass, released 0.34 s apart along the aircraft's track | `BomberRun.ReleaseOne` → `AirStrikeSystem.Detonate` |
+
+**AIR STRIKE** panel → pick an airframe → click the terrain → a 10 s countdown → the aircraft runs in and walks a stick of five through the target. The blasts follow the aeroplane rather than landing in a heap, because a released weapon keeps the aircraft's forward speed as it falls. If the aircraft model is not installed the weapons still land, on the same attack heading, with no aeroplane. Full detail in **docs/18-AIR-STRIKES.md**.
 
 ### Deployment
 

@@ -56,7 +56,14 @@ namespace IronMeridian.Vfx
         /// <summary>Grey-black smoke off a 155 mm burst — looping until dispersed.</summary>
         ArtilleryMediumSmoke,
         /// <summary>Heavy oily column off a 203 mm burst — looping until dispersed.</summary>
-        ArtilleryHeavySmoke
+        ArtilleryHeavySmoke,
+
+        // --- air strikes (see docs/18-AIR-STRIKES.md) ---
+
+        /// <summary>Air-dropped weapon landing — the largest blast in the game.</summary>
+        AerialBombBurst,
+        /// <summary>Black column off an air-dropped weapon — looping until dispersed.</summary>
+        AerialBombSmoke
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -225,6 +232,20 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.ArtilleryHeavySmoke,  prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 380f, lifeSeconds = 0f,
                          tint = new Color(0.16f, 0.15f, 0.15f), priority = 52,
+                         sound = EffectSound.Smoke },
+
+            // --- air strike (docs/18-AIR-STRIKES.md) ---
+            // The heaviest blast in the game, and the highest priority: an air
+            // strike is a scheduled, watched event and must never be the thing
+            // the concurrency budget discards.
+            new VfxDef { id = VfxId.AerialBombBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryHeavyBlast, scaleMeters = 560f, lifeSeconds = 4.2f,
+                         tint = new Color(1.00f, 0.50f, 0.14f), priority = 140,
+                         sound = EffectSound.AerialBomb },
+
+            new VfxDef { id = VfxId.AerialBombSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 460f, lifeSeconds = 0f,
+                         tint = new Color(0.12f, 0.11f, 0.11f), priority = 56,
                          sound = EffectSound.Smoke }
         };
 

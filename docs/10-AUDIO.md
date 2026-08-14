@@ -103,8 +103,9 @@ Every effect in `VfxCatalog` can carry a sound; it is a field on the catalogue r
 | Artillery 120 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_120.*` | `ArtilleryMortarBurst` | No | Dull thump — more earth than air. Body 120 → 46 Hz, closed crack filter, heavy rumble. |
 | Artillery 155 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_155.*` | `ArtilleryMediumBurst` | No | The reference report: deep body, long tail. 92 → 30 Hz over 0.85 s. |
 | Artillery 203 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_203.*` | `ArtilleryHeavyBurst` | No | Very low and slow to decay, with a rolling echo. 66 → 19 Hz over 1.35 s, 4.2 s clip. |
+| Aerial bomb | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/aerial_bomb.*` | `AerialBombBurst` | No | Deeper and longer than any tube: 58 → 15 Hz over 1.7 s, 5 s clip. The heaviest detonation in the game. |
 
-Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact` / `.ArtilleryLight` / `.ArtilleryMortar` / `.ArtilleryMedium` / `.ArtilleryHeavy`. `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle. Artillery *smoke* carries no sound of its own for the two lighter natures either; the heavier two reuse the smoke hiss.
+Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact` / `.ArtilleryLight` / `.ArtilleryMortar` / `.ArtilleryMedium` / `.ArtilleryHeavy` / `.AerialBomb` (and `.JetPass`, which is not carried by an effect — see §2.4). `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle. Artillery *smoke* carries no sound of its own for the two lighter natures either; the heavier two reuse the smoke hiss.
 
 **Why four artillery reports rather than one.** Calibre is audible in real life — a 105 mm round cracks, a 203 mm round is felt before it is heard — so a fire mission that sounds the same whatever was called for throws away the one cue that tells the player which battery answered. All four come from a single parameterised synthesiser, `ProceduralAudio.Shell`, layering a pitch-falling **body**, a filtered noise **crack** and a slow **rumble** bed; opening the crack filter and raising the body gives a light gun, closing it and dropping the body gives a heavy one. Each calibre uses a fixed seed, so a nature always sounds like itself between runs. See docs/17-ARTILLERY.md.
 
@@ -126,7 +127,17 @@ An artillery mission is the densest thing that hits this budget: five reports in
 
 ### 2.4 Other gameplay sound effects
 
-*None yet.* Movement and unit orders are still silent.
+Sounds played directly rather than carried by a particle effect's catalogue row.
+
+| Sound | Source | Played by | Loops | Description |
+|---|---|---|---|---|
+| Jet pass | **Synthesised** (`ProceduralAudio.JetPass`) — or `Assets/Resources/Audio/effects/jet_pass.*` | `BomberRun.Launch`, parented to the aircraft | No | Broadband roar swelling and fading over a turbine tone that slides 115 → 62 Hz. 6 s. |
+
+`EffectSound.JetPass` is the first sound in the project **not** attached to a `VfxId`, because the thing making it is an aircraft rather than an effect. It is played with `EffectAudio.PlayAt(..., parent: aircraft)` so it travels with the aeroplane and is loudest as it passes overhead.
+
+**The Doppler slide is baked into the clip**, not left to Unity. Effect sources run with `dopplerLevel = 0` — this map is kilometres across and the camera is not a listener in motion, so engine Doppler produces nothing useful — and without a slide a fast-moving aircraft sounds stationary.
+
+Movement and unit orders are still silent.
 
 ### 2.5 Imported but not used
 

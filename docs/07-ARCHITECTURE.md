@@ -94,13 +94,19 @@ Assets/Scripts/
     VfxInstance.cs       handle for a live effect; screen-size culling
     ProceduralVfx.cs     code-built fallbacks (no asset dependency)
     EffectPlacementTool.cs  hand-place fire/explosion/smoke on the terrain
+    CalledStrikeSystem.cs  shared arm/aim/countdown behind artillery + air strikes
     ArtilleryCatalog.cs  the four artillery natures — see docs/17-ARTILLERY.md
     ArtilleryStrikeSystem.cs  call for fire: countdown, then a five-round salvo
+    AirStrikeCatalog.cs  the strike airframes — see docs/18-AIR-STRIKES.md
+    AirStrikeSystem.cs   tasked strike: countdown, then a bombing run
+    BomberRun.cs         the flying aircraft and its bomb release (code-animated)
     TargetAreaMarker.cs  3D target-area volume (procedural mesh, vertex colours)
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs
     ModelInstaller.cs    Tools > Iron Meridian > Install Unit Models
+    PackageImporter.cs   Tools > Iron Meridian > Import Bundled Packages
+                         (packs that ship as a nested .unitypackage)
 
 Assets/Resources/Shaders/
   IconOutline.shader     unit-icon material: alpha-traced selection/hover outline
