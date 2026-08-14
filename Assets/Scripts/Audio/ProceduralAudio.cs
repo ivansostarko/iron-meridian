@@ -57,8 +57,60 @@ namespace IronMeridian.Audio
 
             EffectSound.JetPass => JetPass(),
 
+            // A few kilograms of warhead, not a shell: high, sharp, and gone.
+            EffectSound.UavWarhead =>
+                Shell("fx_uav_warhead", seed: 9001, duration: 1.4f,
+                      startHz: 240f, endHz: 95f, pitchFallSeconds: 0.28f,
+                      bodyDecay: 5.5f, crackDecay: 11f, crackLowPass: 0.45f,
+                      bodyMix: 0.45f, crackMix: 0.85f, rumbleMix: 0.06f),
+
+            EffectSound.DroneBuzz => DroneBuzz(),
+
             _ => null
         };
+
+        /// <summary>
+        /// Quadcopter propellers: a stack of close, slightly detuned tones over a
+        /// thin airy hiss.
+        ///
+        /// The detuning is the whole trick. Four propellers never turn at exactly
+        /// the same rate, and the slow beating between them is what the ear
+        /// recognises as a multirotor rather than as a wasp or a lawnmower. A
+        /// single clean tone at the same pitch sounds synthetic immediately.
+        /// </summary>
+        static AudioClip DroneBuzz()
+        {
+            const float duration = 2.0f;
+            int n = (int)(Rate * duration);
+            var data = new float[n];
+            var rng = new System.Random(4);
+            float hiss = 0f;
+
+            // Blade-pass frequencies, deliberately not harmonically related.
+            float[] freqs = { 118f, 121.5f, 176f, 181f, 237f };
+            float[] gains = { 1.00f, 0.85f, 0.42f, 0.36f, 0.18f };
+            var phase = new float[freqs.Length];
+
+            for (int i = 0; i < n; i++)
+            {
+                float sample = 0f;
+                for (int k = 0; k < freqs.Length; k++)
+                {
+                    phase[k] += 2f * Mathf.PI * freqs[k] / Rate;
+                    sample += Mathf.Sin(phase[k]) * gains[k];
+                }
+                sample /= 3f;
+
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                hiss = Mathf.Lerp(hiss, noise, 0.35f);
+
+                data[i] = sample * 0.8f + hiss * 0.12f;
+            }
+
+            Normalise(data, 0.60f);
+            CrossfadeLoop(data);
+            return Make("fx_drone_buzz", data);
+        }
 
         /// <summary>
         /// A jet passing overhead: broadband noise that swells and fades, over a

@@ -10,7 +10,13 @@ namespace IronMeridian.UI
         /// <summary>No image — the flat UI colour only.</summary>
         None,
         /// <summary>The shared menu//screen artwork.</summary>
-        Default
+        Default,
+        /// <summary>Single-player campaign screen.</summary>
+        SinglePlayer,
+        /// <summary>Multiplayer lobby screen.</summary>
+        Multiplayer,
+        /// <summary>Extras screen.</summary>
+        Extras
     }
 
     /// <summary>One background: where to load it and how far to knock it back.</summary>
@@ -30,6 +36,17 @@ namespace IronMeridian.UI
 
         /// <summary>What this background is for — mirrored in docs/11-GAME-MENU.md.</summary>
         public string description;
+
+        /// <summary>
+        /// Background to fall back to when this one has no image file yet.
+        ///
+        /// A screen is entitled to its own artwork, and naming it here is how
+        /// that artwork gets picked up the moment somebody drops the file in —
+        /// but a screen with no art at all is a flat colour, which looks broken
+        /// rather than unfinished. The fallback keeps the shared artwork on
+        /// screen until the real thing arrives, with no code change at either end.
+        /// </summary>
+        public BackgroundId fallback = BackgroundId.None;
     }
 
     /// <summary>
@@ -55,7 +72,35 @@ namespace IronMeridian.UI
                 resourcePath = "Backgrounds/default_background",
                 scrimAlpha = 0.62f,
                 description = "Shared artwork behind every menu screen: main menu, settings, " +
-                              "testing, units list and the East France placeholder."
+                              "testing, units list and the placeholder pages."
+            },
+
+            // The three below have no artwork of their own yet and fall back to
+            // the shared image. Drop a file at the path named here and it is
+            // used automatically — see docs/11-GAME-MENU.md.
+            new BackgroundDef
+            {
+                id = BackgroundId.SinglePlayer,
+                resourcePath = "Backgrounds/single_player",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "Single-player campaign screen. Awaiting artwork."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.Multiplayer,
+                resourcePath = "Backgrounds/multiplayer",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "Multiplayer lobby screen. Awaiting artwork."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.Extras,
+                resourcePath = "Backgrounds/extras",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "Extras screen. Awaiting artwork."
             }
         };
 

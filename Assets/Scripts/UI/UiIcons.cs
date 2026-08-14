@@ -266,6 +266,79 @@ namespace IronMeridian.UI
             return Mathf.Clamp01(Mathf.Max(Mathf.Clamp01(body - notch), canopy));
         });
 
+        /// <summary>
+        /// UAV STRIKES section and the kamikaze drone button: a quadcopter seen
+        /// from above — four rotor discs on an X frame around a body.
+        ///
+        /// Read from overhead rather than in profile because that is the only
+        /// angle at which a multirotor is unmistakable; from the side it is a box.
+        /// </summary>
+        public static Sprite Quadcopter => Get(nameof(Quadcopter), (u, v) =>
+        {
+            // Four arms out to the corners.
+            float arms = Mathf.Max(
+                Seg(u, v, 0.28f, 0.28f, 0.72f, 0.72f, 0.075f),
+                Seg(u, v, 0.28f, 0.72f, 0.72f, 0.28f, 0.075f));
+
+            // Rotor discs at the ends, drawn as rings so the frame reads through.
+            float rotors = 0f;
+            float[] cx = { 0.24f, 0.76f, 0.24f, 0.76f };
+            float[] cy = { 0.24f, 0.24f, 0.76f, 0.76f };
+            for (int i = 0; i < 4; i++)
+                rotors = Mathf.Max(rotors, RingAt(u, v, cx[i], cy[i], 0.155f, 0.055f));
+
+            // Body: a solid centre so it is not just an empty cross.
+            float body = DiscAt(u, v, 0.5f, 0.5f, 0.115f);
+
+            return Mathf.Clamp01(Mathf.Max(arms, Mathf.Max(rotors, body)));
+        });
+
+        /// <summary>
+        /// Attack helicopter, seen from above: a slim fuselage with a tail boom
+        /// under a rotor disc. The disc is what carries the identity — a
+        /// helicopter without one is just a fish.
+        /// </summary>
+        public static Sprite Helicopter => Get(nameof(Helicopter), (u, v) =>
+        {
+            // Fuselage forward of centre, tail boom running back.
+            float body = Mathf.Max(
+                DiscAt(u, v, 0.5f, 0.66f, 0.115f),
+                Rect(u, v, 0.5f - 0.055f, 0.20f, 0.5f + 0.055f, 0.70f));
+            // Tail plane.
+            float tail = Rect(u, v, 0.5f - 0.14f, 0.20f, 0.5f + 0.14f, 0.26f);
+            // Rotor disc: two long blades crossed over the fuselage.
+            float rotor = Mathf.Max(
+                Seg(u, v, 0.08f, 0.78f, 0.92f, 0.78f, 0.055f),
+                Seg(u, v, 0.28f, 0.95f, 0.72f, 0.61f, 0.048f));
+
+            return Mathf.Clamp01(Mathf.Max(Mathf.Max(body, tail), rotor));
+        });
+
+        /// <summary>
+        /// Strike fighter, seen from above: a swept delta with a pointed nose,
+        /// tailplanes and a fin. Narrower and sharper than the flying wing, so
+        /// the two are not confused in the same list.
+        /// </summary>
+        public static Sprite Jet => Get(nameof(Jet), (u, v) =>
+        {
+            float x = Mathf.Abs(u - 0.5f);
+
+            // Fuselage: a long spine from tail to nose.
+            float fuselage = Cov(Mathf.Min(0.058f - x, Mathf.Min(v - 0.10f, 0.95f - v)));
+
+            // Main wings: swept back from mid-body.
+            float wings = v > 0.30f && v < 0.62f
+                ? Cov(Mathf.Min((0.62f - v) * 1.35f - x + 0.06f, v - 0.30f))
+                : 0f;
+
+            // Tailplanes at the back, and a fin along the spine.
+            float tail = v > 0.12f && v < 0.26f
+                ? Cov(Mathf.Min((0.26f - v) * 1.5f - x + 0.03f, v - 0.12f))
+                : 0f;
+
+            return Mathf.Clamp01(Mathf.Max(fuselage, Mathf.Max(wings, tail)));
+        });
+
         /// <summary>Weather conditions section.</summary>
         public static Sprite Cloud => Get(nameof(Cloud), (u, v) =>
             Mathf.Max(DiscAt(u, v, 0.34f, 0.48f, 0.20f),

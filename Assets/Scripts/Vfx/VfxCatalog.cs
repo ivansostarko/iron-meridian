@@ -63,7 +63,14 @@ namespace IronMeridian.Vfx
         /// <summary>Air-dropped weapon landing — the largest blast in the game.</summary>
         AerialBombBurst,
         /// <summary>Black column off an air-dropped weapon — looping until dispersed.</summary>
-        AerialBombSmoke
+        AerialBombSmoke,
+
+        // --- UAV strikes (see docs/19-UAV-STRIKES.md) ---
+
+        /// <summary>Loitering-munition warhead — small, sharp, precise.</summary>
+        UavWarheadBurst,
+        /// <summary>Thin smoke off a drone warhead — looping until dispersed.</summary>
+        UavWarheadSmoke
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -246,7 +253,23 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.AerialBombSmoke, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 460f, lifeSeconds = 0f,
                          tint = new Color(0.12f, 0.11f, 0.11f), priority = 56,
-                         sound = EffectSound.Smoke }
+                         sound = EffectSound.Smoke },
+
+            // --- UAV strike (docs/19-UAV-STRIKES.md) ---
+            // Deliberately the smallest strike blast in the game. A loitering
+            // munition carries a few kilograms of warhead, not a shell — reading
+            // as smaller than a 60 mm mortar bomb is the honest depiction, and it
+            // is what makes the drone a precision tool rather than a cheap
+            // artillery substitute.
+            new VfxDef { id = VfxId.UavWarheadBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryAirBurst, scaleMeters = 150f, lifeSeconds = 2.0f,
+                         tint = new Color(1.00f, 0.80f, 0.42f), priority = 135,
+                         sound = EffectSound.UavWarhead },
+
+            new VfxDef { id = VfxId.UavWarheadSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 150f, lifeSeconds = 0f,
+                         tint = new Color(0.40f, 0.38f, 0.36f), priority = 42,
+                         sound = EffectSound.None }
         };
 
         static Dictionary<VfxId, VfxDef> _byId;

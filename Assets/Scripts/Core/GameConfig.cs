@@ -13,6 +13,9 @@ namespace IronMeridian.Core
         public const string SceneSettings = "Settings";
         public const string SceneTesting = "Testing";
         public const string SceneEastFrance = "EastFrance";
+        public const string SceneSinglePlayer = "SinglePlayer";
+        public const string SceneMultiplayer = "Multiplayer";
+        public const string SceneExtras = "Extras";
         public const string SceneUnitsList = "UnitsList";
         public const string SceneGame = "Game";
 

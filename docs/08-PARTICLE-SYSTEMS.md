@@ -17,8 +17,14 @@ Assets/Scripts/Vfx/
   VfxInstance.cs    handle for a live effect; owns screen-size culling
   ProceduralVfx.cs  code-built fire/smoke/explosion/impact/dust/artillery fallbacks
   EffectPlacementTool.cs  arm an effect, click the terrain to place it
-  ArtilleryCatalog.cs     the four artillery natures — see docs/17-ARTILLERY.md
+  CalledStrikeSystem.cs   shared arm/aim/countdown behind all three strike types
+  ArtilleryCatalog.cs     the fourteen artillery natures — see docs/17-ARTILLERY.md
   ArtilleryStrikeSystem.cs  call for fire: countdown, then a five-round salvo
+  AirStrikeCatalog.cs     the three strike airframes — see docs/18-AIR-STRIKES.md
+  AirStrikeSystem.cs      tasked air strike; BomberRun.cs flies the aircraft
+  UavCatalog.cs           the unmanned types — see docs/19-UAV-STRIKES.md
+  UavStrikeSystem.cs      tasked UAV strike; DroneRun.cs flies the drone
+  RotorSpinner.cs         spins rotors/propellers on unrigged models
   TargetAreaMarker.cs     the 3D target-area volume a strike is placed with
 Assets/Editor/
   VfxInstaller.cs   Tools > Iron Meridian > Install VFX Prefabs
@@ -61,7 +67,7 @@ VfxSystem.PlayWreck(lat, lon, severity01);
 | `Fire` | Flame cone with a noise field, plus a smoke crown | all `Fire*`, `GroundFire` |
 | `Smoke` | Rising, churning column | `SmokePlume`, `SmokeScreen`, all artillery smoke |
 | `Dust` | Flat ring across the ground plane | `Dust` |
-| `ArtilleryAirBurst` | White-hot flash, **flat fast shrapnel disc**, small core | `ArtilleryLightBurst` |
+| `ArtilleryAirBurst` | White-hot flash, **flat fast shrapnel disc**, small core | `ArtilleryLightBurst`, `UavWarheadBurst` |
 | `ArtilleryDirtColumn` | **Narrow vertical soil column** under gravity, small flash, low skirt | `ArtilleryMortarBurst` |
 | `ArtilleryHeavyBlast` | Fireball, **ground shock ring**, arcing debris, dust | `ArtilleryMediumBurst`, `ArtilleryHeavyBurst`, `AerialBombBurst` |
 
@@ -95,8 +101,10 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `ArtilleryHeavySmoke` | Heavy oily column off a 203 mm burst | 380 m | loops | 52 | procedural |
 | `AerialBombBurst` | Air-dropped weapon landing — the largest blast in the game | 560 m | 4.2 s | 140 | procedural |
 | `AerialBombSmoke` | Black column off an air-dropped weapon | 460 m | loops | 56 | procedural |
+| `UavWarheadBurst` | Loitering-munition warhead — the smallest strike blast | 150 m | 2.0 s | 135 | procedural |
+| `UavWarheadSmoke` | Thin smoke off a drone warhead | 150 m | loops | 42 | procedural |
 
-The eight artillery rows are the calibre register of **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
+The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
 Artillery smoke loops and is dispersed explicitly by `ArtilleryStrikeSystem` via `VfxSystem.StopAfter` — the same pattern `PlayWreck` uses to burn a wreck out. A finite `lifeSeconds` would cut the particles off mid-air rather than letting them thin out.
 
@@ -157,7 +165,15 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 |---|---|---|---|
 | Weapon lands | `AerialBombBurst` + `AerialBombSmoke` | ×5 per pass, released 0.34 s apart along the aircraft's track | `BomberRun.ReleaseOne` → `AirStrikeSystem.Detonate` |
 
-**AIR STRIKE** panel → pick an airframe → click the terrain → a 10 s countdown → the aircraft runs in and walks a stick of five through the target. The blasts follow the aeroplane rather than landing in a heap, because a released weapon keeps the aircraft's forward speed as it falls. If the aircraft model is not installed the weapons still land, on the same attack heading, with no aeroplane. Full detail in **docs/18-AIR-STRIKES.md**.
+**AIR STRIKE** panel → pick an airframe (B-2, strike fighter or attack helicopter) → click the terrain → a 10 s countdown → the aircraft runs in and walks a stick of five through the target. The blasts follow the aeroplane rather than landing in a heap, because a released weapon keeps the aircraft's forward speed as it falls. If the aircraft model is not installed the weapons still land, on the same attack heading, with no aeroplane. Full detail in **docs/18-AIR-STRIKES.md**.
+
+### UAV strikes
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Drone warhead | `UavWarheadBurst` + `UavWarheadSmoke` | Once, where the drone reaches the ground | `DroneRun.Update` → `UavStrikeSystem.Detonate` |
+
+**UAV STRIKES** panel → pick a type → click the terrain → a 10 s countdown → the drone launches, cruises in and dives onto the point. One aircraft, one warhead, and deliberately the smallest blast of any strike here. Full detail in **docs/19-UAV-STRIKES.md**.
 
 ### Deployment
 

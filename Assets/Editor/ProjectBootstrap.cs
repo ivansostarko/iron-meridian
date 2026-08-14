@@ -12,7 +12,8 @@ namespace IronMeridian.EditorTools
     ///
     ///     Tools > Iron Meridian > Setup Project
     ///
-    /// Creates all scenes (MainMenu, Settings, Testing, EastFrance, Game),
+    /// Creates all scenes (MainMenu, Settings, Testing, EastFrance, SinglePlayer,
+    /// Multiplayer, Extras, UnitsList, Game),
     /// wires them into Build Settings and configures player settings.
     /// All UI and world content is built at runtime by the scripts attached
     /// here, so the scenes stay tiny and merge-friendly.
@@ -35,6 +36,9 @@ namespace IronMeridian.EditorTools
                 MakeScene(GameConfig.SceneSettings, "IronMeridian.UI.SettingsUI"),
                 MakeScene(GameConfig.SceneTesting, "IronMeridian.UI.TestingUI"),
                 MakeScene(GameConfig.SceneEastFrance, "IronMeridian.UI.EastFranceUI"),
+                MakeScene(GameConfig.SceneSinglePlayer, "IronMeridian.UI.SinglePlayerUI"),
+                MakeScene(GameConfig.SceneMultiplayer, "IronMeridian.UI.MultiplayerUI"),
+                MakeScene(GameConfig.SceneExtras, "IronMeridian.UI.ExtrasUI"),
                 MakeScene(GameConfig.SceneUnitsList, "IronMeridian.UI.UnitsListUI"),
                 MakeScene(GameConfig.SceneGame, "IronMeridian.Core.GameController", menuCamera: false),
             };

@@ -10,12 +10,26 @@ Called fire missions in the map editor: pick a nature, place a target area on th
 
 Rows live in `Assets/Scripts/Vfx/ArtilleryCatalog.cs`. The panel, the target marker and the impact sequence are all driven from them — a new calibre appears in the UI by adding a row, not by editing the UI.
 
-| Calibre | Target radius | Burst effect | Smoke effect | Smoke lasts | Round spacing | Marker colour |
+| Origin | Class | Calibre | Real weapon | Beaten zone | Burst | Round spacing |
 |---|---|---|---|---|---|---|
-| **105 mm** light howitzer | 140 m | `ArtilleryLightBurst` | `ArtilleryLightSmoke` | 9 s | 0.30 s | pale yellow |
-| **120 mm** heavy mortar | 120 m | `ArtilleryMortarBurst` | `ArtilleryMortarSmoke` | 11 s | 0.42 s | tan |
-| **155 mm** medium howitzer | 190 m | `ArtilleryMediumBurst` | `ArtilleryMediumSmoke` | 15 s | 0.55 s | orange |
-| **203 mm** heavy howitzer | 260 m | `ArtilleryHeavyBurst` | `ArtilleryHeavySmoke` | 22 s | 0.85 s | deep red |
+| NATO | Mortar | **60 mm** | M224 | 70 m | mortar | 0.20 s |
+| NATO | Mortar | **81 mm** | L16 / M252 | 100 m | mortar | 0.28 s |
+| NATO | Mortar | **120 mm** | M120 / RT-61 | 130 m | mortar | 0.42 s |
+| NATO | Gun | **105 mm** | M119 / L118 | 140 m | light | 0.30 s |
+| NATO | Gun | **155 mm** | M777 / PzH 2000 | 190 m | medium | 0.55 s |
+| NATO | Gun | **203 mm** | M110 | 260 m | heavy | 0.85 s |
+| Russian | Mortar | **82 mm** | 2B14 Podnos | 105 m | mortar | 0.28 s |
+| Russian | Mortar | **120 mm** | 2B11 Sani | 135 m | mortar | 0.42 s |
+| Russian | Mortar | **160 mm** | M-160 | 185 m | heavy | 0.60 s |
+| Russian | Mortar | **240 mm** | 2S4 Tyulpan | 300 m | heavy | 1.10 s |
+| Russian | Gun | **122 mm** | D-30 / 2S1 Gvozdika | 150 m | medium | 0.35 s |
+| Russian | Gun | **130 mm** | M-46 | 175 m | medium | 0.45 s |
+| Russian | Gun | **152 mm** | 2S3 / 2S19 Msta-S | 200 m | heavy | 0.55 s |
+| Russian | Gun | **203 mm** | 2S7 Pion | 285 m | heavy | 0.95 s |
+
+**Fourteen natures, four burst signatures.** Each nature does *not* get its own effect. What separates a 122 mm shell from a 152 mm one on a map three kilometres wide is how big the hole is, not what the flash looks like — so natures map onto four signatures (light burst, mortar soil column, standard HE burst, heavy blast) and are told apart by **beaten zone, burst scale and rate of fire**, all of which are real differences the player can see and use. Inventing fourteen near-identical particle effects would be fourteen things to keep in step for no gain. The same applies to the reports: four, mapped the same way.
+
+**Mortars are not just small guns.** A mortar bomb arrives almost vertically and throws far more soil than fire, which is a genuinely different event on the map — hence `ArtilleryKind` and the separate `ArtilleryDirtColumn` signature. The two heaviest Russian mortars are exceptions that use the heavy blast: at 160 mm and 240 mm the round is a siege weapon and reads as one.
 
 Shared constants, also in `ArtilleryCatalog`:
 
@@ -24,9 +38,9 @@ Shared constants, also in `ArtilleryCatalog`:
 | `CountdownSeconds` | 10 | Time between the call for fire and the first round |
 | `ShellsPerMission` | 5 | Rounds in one mission |
 
-**Ordered by calibre, not by the order they were requested.** A munitions list that runs 105 → 120 → 155 → 203 is scannable, and the target radius grows monotonically down the panel, so the trade-off between the natures is legible without reading a word.
+**Split by inventory, then ordered by calibre.** Fourteen natures will not fit in one column, and a scroll would bury the choice that matters, so the panel has **NATO / RUSSIAN** tabs — the first decision a player makes, and it halves the list. Within a page the natures run mortars then guns, ascending by calibre, so the beaten zone grows monotonically down the page and the trade-off is legible without reading a word.
 
-**Why each nature has its own effects rather than one scaled explosion.** The three events genuinely do not look alike from a map camera: a 105 mm round is a bright crack with a flat shrapnel disc, a 120 mm mortar bomb is a narrow column of soil, and a heavy shell is a fireball with a ground shock ring and arcing debris. Scaling one effect four ways would make every nature the same event at four sizes, which defeats the point of having four buttons. 155 mm and 203 mm *do* share a signature (`ArtilleryHeavyBlast`) and differ by scale and lifetime — because that is what actually separates them.
+**Why four signatures rather than one scaled explosion.** The four events genuinely do not look alike from a map camera: a light round is a bright crack with a flat shrapnel disc, a mortar bomb is a narrow column of soil, and a heavy shell is a fireball with a ground shock ring and arcing debris. One effect scaled four ways would make every nature the same event at four sizes. Within a signature, scale and rate of fire do the rest of the work — which is exactly what separates a 152 mm from a 203 mm.
 
 ---
 
@@ -47,13 +61,13 @@ Left rail → ARTILLERY STRIKE      UnitPaletteUI.BuildArtillerySection
 | `Vfx/ArtilleryCatalog.cs` | The natures in numbers — the single source of truth |
 | `Vfx/ArtilleryStrikeSystem.cs` | The natures and the salvo |
 | `Vfx/TargetAreaMarker.cs` | The 3D target-area volume |
-| `UI/UnitPaletteUI.cs` | `BuildArtillerySection` — the four buttons |
+| `UI/UnitPaletteUI.cs` | `BuildArtillerySection` — origin tabs and the nature pages |
 | `UI/GameHUD.cs` | `SetFireMission` — the countdown banner |
 | `Core/GameController.cs` | Builds the system and wires it to the HUD and palette |
 
-### Shared with air strikes
+### Shared with air and UAV strikes
 
-Everything up to the moment something lands is identical between a fire mission and an air strike, and lives in `CalledStrikeSystem<TKey>`. `ArtilleryStrikeSystem` supplies the natures and the salvo; `AirStrikeSystem` supplies the airframes and the bombing run. Both also share `TargetAreaMarker` and the HUD banner — `GameController.RefreshStrikeBanner` decides which of the two the single banner shows. See docs/18-AIR-STRIKES.md.
+Everything up to the moment something lands is identical across all three, and lives in `CalledStrikeSystem<TKey>`. `ArtilleryStrikeSystem` supplies the natures and the salvo; `AirStrikeSystem` supplies the airframes and the bombing run; `UavStrikeSystem` supplies the drone and its dive. All three share `TargetAreaMarker` and the HUD banner — `GameController.RefreshStrikeBanner` shows whichever of the three is nearest to landing. See docs/18-AIR-STRIKES.md and docs/19-UAV-STRIKES.md.
 
 ### The countdown is the feature
 
@@ -77,9 +91,55 @@ The square root is what makes the scatter uniform **by area**. Without it every 
 
 Placement is ground-checked exactly like `EffectPlacementTool`: Cesium streams terrain in, and a click over tiles that have not arrived has no ground to put an impact on. Such a click is **refused with a message and leaves the tube armed** — losing a whole fire mission to the tile streamer would punish the player for something they did not do.
 
+
 ---
 
-## 3. The target-area marker
+## Damage
+
+Strikes are no longer visual only. Every round, weapon and warhead is resolved
+through `Units/BlastDamage`, which is shared by all three strike types so they
+answer the question the same way.
+
+Two radii, because a blast is not a switch:
+
+| Radius | Effect |
+|---|---|
+| **Lethal** | Destroyed outright, whatever its strength was |
+| **Blast** | Damage falls off with the **square** of the distance out to this edge |
+
+Square falloff rather than linear because blast overpressure does. Linear makes
+the rim of the circle as dangerous as the middle, which turns artillery into a
+stamp-shaped area-denial tool instead of a weapon you have to aim.
+
+Surviving formations also take **shock** — morale and organisation — at 55× the
+strength damage, so being shelled and living through it still costs a formation
+its composure. Near the blast edge that is the entire effect.
+
+**It hits both sides.** A strike is placed on a piece of ground, and ground does
+not check uniforms. Friendly fire is not a special case; it is what falls out of
+doing the honest thing, and it is what makes placing a mission near your own line
+a decision.
+
+Artillery's numbers are **derived from calibre** rather than listed per nature:
+
+| Quantity | Relation | 60 mm | 155 mm | 240 mm |
+|---|---|---|---|---|
+| Lethal radius | `calibre × 0.16` m | 9.6 m | 24.8 m | 38.4 m |
+| Blast radius | `calibre × 0.85` m | 51 m | 132 m | 204 m |
+| Max damage | `calibre / 700`, capped 0.06–0.40 | 0.09 | 0.22 | 0.34 |
+
+Charge mass, and therefore lethal area, scales with the bore — so one relation
+stays consistent by construction where fourteen hand-tuned triples would be
+fourteen numbers to keep plausible against each other. A new nature gets sensible
+values the moment its calibre is written down.
+
+Each of the five rounds is resolved **where it actually lands**, not against the
+target area as a whole. That is what makes the scatter matter, and why a wide
+sheaf is not strictly better than a tight one.
+
+---
+
+## 4. The target-area marker
 
 `TargetAreaMarker` draws the area as a **volume**, not a decal, because a flat ring painted on the imagery is unreadable on this map: the camera spends most of its time at a shallow pitch, where a circle on sloping ground foreshortens into a line and vanishes entirely behind a ridge.
 
@@ -109,9 +169,8 @@ Artillery smoke **loops** (`lifeSeconds = 0`) and is dispersed explicitly by `Ru
 
 ---
 
-## 5. Known gaps
+## 6. Known gaps
 
-- **Strikes do no damage.** A mission is currently visual and audible only — it does not touch unit strength, morale or organisation. This was left deliberately: the feature sits in the map editor next to the other hand-placed effects, and choosing a damage model (how much, falloff with distance, which teams, how it interacts with `CombatSystem`'s tick) is a balance decision rather than a rendering one. The hook is `ArtilleryStrikeSystem.RunSalvo`, which already knows the impact point and radius of every round.
 - **No firing battery.** Rounds appear at the target; nothing on the map fires them, and no unit is consumed or required to call the mission.
 - **No ammunition or cooldown.** Missions are unlimited and can be placed as fast as they can be clicked.
 - **Not saved.** A mission in the air is lost on save/load; the marker is runtime-only and is not part of the map schema.

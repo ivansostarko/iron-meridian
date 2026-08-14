@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using IronMeridian.Map;
+using IronMeridian.Units;
 
 namespace IronMeridian.Vfx
 {
@@ -57,11 +58,19 @@ namespace IronMeridian.Vfx
             // Full alarm for the duration of the shooting, then the marker goes.
             if (marker != null) marker.SetAlarm(1f);
 
+            int destroyed = 0;
+
             for (int i = 0; i < ArtilleryCatalog.ShellsPerMission; i++)
             {
                 ScatterPoint(lat, lon, def.radiusMeters, i, out double roundLat, out double roundLon);
 
                 VfxSystem.Play(def.burst, roundLat, roundLon, def.burstScale);
+
+                // Every round is resolved where it actually lands, not against
+                // the target area as a whole — which is what makes the scatter
+                // matter and why a wide sheaf is not strictly better.
+                destroyed += BlastDamage.Apply(roundLat, roundLon,
+                    def.LethalRadiusM, def.BlastRadiusM, def.MaxDamage);
 
                 // Smoke loops by design and is dispersed explicitly, the same
                 // way a wreck is burned out — see VfxSystem.PlayWreck.
@@ -75,7 +84,9 @@ namespace IronMeridian.Vfx
 
             if (marker != null) Destroy(marker.gameObject);
 
-            Flash?.Invoke($"Rounds complete — {def.name}, {ArtilleryCatalog.ShellsPerMission} rounds fired.");
+            Flash?.Invoke(destroyed > 0
+                ? $"Rounds complete — {def.name}. {destroyed} formation(s) destroyed."
+                : $"Rounds complete — {def.name}, {ArtilleryCatalog.ShellsPerMission} rounds fired.");
         }
 
         /// <summary>

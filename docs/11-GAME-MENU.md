@@ -53,7 +53,22 @@ All three layers set `raycastTarget = false`, so the background never intercepts
 
 | Asset | Path | Resource path | Screens | Scrim | Description |
 |---|---|---|---|---|---|
-| Default menu artwork | `Assets/Resources/Backgrounds/default_background.png` | `Backgrounds/default_background` | Main Menu, Settings, Testing, Units List, East France | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
+| Default menu artwork | `Assets/Resources/Backgrounds/default_background.png` | `Backgrounds/default_background` | Main Menu, Settings, Testing, Units List, East France — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
+| Single player | *not supplied yet* | `Backgrounds/single_player` | Single Player | 0.62 | **Awaiting artwork.** Falls back to the default image. |
+| Multiplayer | *not supplied yet* | `Backgrounds/multiplayer` | Multiplayer | 0.62 | **Awaiting artwork.** Falls back to the default image. |
+| Extras | *not supplied yet* | `Backgrounds/extras` | Extras | 0.62 | **Awaiting artwork.** Falls back to the default image. |
+
+### Fallbacks
+
+A `BackgroundDef` may name a `fallback`. The three rows above have no image file
+yet and fall back to the default artwork, so those screens look finished rather
+than showing a flat colour — which reads as broken rather than as unbuilt.
+
+**Adding the real artwork is the whole of the work.** Drop a PNG at the resource
+path the row names and it is used on the next run; no code change, no catalogue
+change. `UIFactory.CreateScreenBackground` walks the chain (bounded to four hops,
+so a catalogue edit that makes a loop cannot hang the screen it was meant to
+decorate).
 
 Id in code: `BackgroundId.Default`.
 

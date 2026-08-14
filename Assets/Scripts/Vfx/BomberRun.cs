@@ -30,9 +30,6 @@ namespace IronMeridian.Vfx
     /// </summary>
     public class BomberRun : MonoBehaviour
     {
-        /// <summary>Bank angle held through the run, degrees. Enough to read as flying, not aerobatics.</summary>
-        const float BankDegrees = 8f;
-
         /// <summary>Called for each weapon as it reaches the ground: latitude, longitude.</summary>
         public System.Action<double, double> BombImpact;
         /// <summary>Called once the aircraft has left and this object is about to go.</summary>
@@ -148,6 +145,11 @@ namespace IronMeridian.Vfx
 
             // Nose down the local +Z unless the model says otherwise.
             model.transform.localRotation = Quaternion.Euler(0f, _def.noseYawOffsetDeg, 0f);
+
+            // Rotors, if this airframe has any. A jet returns null and pays for
+            // nothing; a helicopter gets its main and tail rotors turning, which
+            // is the whole difference between an aircraft and a sculpture.
+            RotorSpinner.Attach(model, _def.rotors);
         }
 
         void Update()
@@ -193,7 +195,10 @@ namespace IronMeridian.Vfx
             // The anchor keeps local +Y along the globe normal, so heading is a
             // plain yaw. Bearings run clockwise from north and Unity yaw runs
             // clockwise from +Z, which is what makes this a direct assignment.
-            transform.localRotation = Quaternion.Euler(0f, _headingDeg, BankDegrees);
+            // Pitch and bank come from the airframe: a jet rolls hard into its
+            // run, a gunship flies nose-low and barely banked, a bomber does
+            // neither to any degree worth drawing.
+            transform.localRotation = Quaternion.Euler(_def.pitchDegrees, _headingDeg, _def.bankDegrees);
         }
 
         /// <summary>Releases any weapon whose moment has come.</summary>

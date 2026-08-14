@@ -73,7 +73,7 @@ namespace PhysicsPlayground
             ball.GetComponent<MeshRenderer>().material.color = new Vector4(1, 1, 1, 1);
             ball.GetComponent<MeshRenderer>().material.SetFloat("_Glossiness", 0.6f);
             ball.transform.position = spawnPoint;
-            ball.GetComponent<Rigidbody>().velocity = Vector3.zero;
+            ball.GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
             ball.GetComponent<Rigidbody>().angularVelocity = Vector3.zero;
             resettingBall = false;
         }

@@ -74,6 +74,9 @@ namespace IronMeridian.Models
         public const string MainBattleTank = "main_battle_tank";
         public const string ScoutCar = "scout_car";
         public const string StealthBomber = "stealth_bomber";
+        public const string AttackHelicopter = "attack_helicopter";
+        public const string StrikeFighter = "strike_fighter";
+        public const string KamikazeDrone = "kamikaze_drone";
 
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
         {
@@ -104,6 +107,9 @@ namespace IronMeridian.Models
                 sourceAsset = "Military Prop Pack: Defense",
                 sourceCandidates = new[]
                 {
+                    // The pack ships one combined mesh named after the pack
+                    // itself rather than after the gun in it.
+                    "Defensive_props",
                     "Howitzer", "Artillery", "Field_Gun", "Cannon", "AntiTankGun"
                 },
                 idleClip = null,
@@ -116,6 +122,9 @@ namespace IronMeridian.Models
                 sourceAsset = "Homing Missile",
                 sourceCandidates = new[]
                 {
+                    // The Homing Missile pack's mesh is a sheet of several
+                    // missiles, named for the sheet rather than for any one of them.
+                    "Missiles_Pack",
                     "HomingMissile", "Homing_Missile", "Missile", "Rocket"
                 },
                 idleClip = null,
@@ -155,6 +164,9 @@ namespace IronMeridian.Models
                 sourceAsset = "M3A1 Scout Car",
                 sourceCandidates = new[]
                 {
+                    // Roofed variant first: the pack ships both, and a scout car
+                    // with its roof on reads better as a counter at map scale.
+                    "WW2_M3A1_Scout_Car", "WW2_M3A1_Scout_Car_NoRoof",
                     "M3A1", "M3A1_Scout_Car", "M3A1ScoutCar", "ScoutCar"
                 },
                 idleClip = null,
@@ -177,6 +189,37 @@ namespace IronMeridian.Models
                 idleClip = null,
                 // A flying wing with no moving surfaces. Its flight is animated
                 // in code by BomberRun, not by a clip.
+                animated = false
+            },
+
+            // The three below are also aircraft rather than units — see the note
+            // on stealth_bomber. The helicopter and the drone have their rotors
+            // as separate meshes in the source FBX, which is what lets
+            // RotorSpinner turn them without any rig or clip.
+            [AttackHelicopter] = new UnitModelDef
+            {
+                resourcePath = "Models/AttackHelicopter",
+                sourceAsset = "RTS Modern Combat Vehicle Pack Free — MSH_N2",
+                sourceCandidates = new[] { "MSH_N2_LE", "MSH_N2" },
+                idleClip = null,
+                animated = false
+            },
+
+            [StrikeFighter] = new UnitModelDef
+            {
+                resourcePath = "Models/StrikeFighter",
+                sourceAsset = "RTS Modern Combat Vehicle Pack Free — FA_N26",
+                sourceCandidates = new[] { "FA_N26_LE", "FA_N26" },
+                idleClip = null,
+                animated = false
+            },
+
+            [KamikazeDrone] = new UnitModelDef
+            {
+                resourcePath = "Models/KamikazeDrone",
+                sourceAsset = "Professional Assets — DronePack (Quad)",
+                sourceCandidates = new[] { "_FBX Mesh [Quad]", "FBX Mesh [Quad]", "Quad" },
+                idleClip = null,
                 animated = false
             }
         };

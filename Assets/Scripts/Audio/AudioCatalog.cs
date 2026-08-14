@@ -11,7 +11,13 @@ namespace IronMeridian.Audio
         /// <summary>Silence — stops whatever is playing.</summary>
         None,
         /// <summary>The single ambient bed shared by every screen.</summary>
-        MenuTheme
+        MenuTheme,
+        /// <summary>Single-player campaign screen.</summary>
+        SinglePlayerTheme,
+        /// <summary>Multiplayer lobby screen.</summary>
+        MultiplayerTheme,
+        /// <summary>Extras screen.</summary>
+        ExtrasTheme
     }
 
     /// <summary>
@@ -45,6 +51,14 @@ namespace IronMeridian.Audio
 
         /// <summary>What this track is for — mirrored in docs/10-AUDIO.md.</summary>
         public string description;
+
+        /// <summary>
+        /// Track to fall back to when this one has no file yet. Same reasoning
+        /// as <c>BackgroundDef.fallback</c>: a screen is entitled to its own
+        /// music, but silence reads as a bug where the shared bed reads as a
+        /// screen that simply has not been scored yet.
+        /// </summary>
+        public MusicTrack fallback = MusicTrack.None;
     }
 
     /// <summary>One ambience bed: where to load it and how loud it should sit.</summary>
@@ -80,6 +94,31 @@ namespace IronMeridian.Audio
                 volume = 0.45f,
                 loop = true,
                 description = "Ambient bed for every screen — menus, testing, units list and the map."
+            },
+
+            // The three below have no track of their own yet and fall back to
+            // the menu theme. Drop a file at the path named here and it is used
+            // automatically — see docs/10-AUDIO.md.
+            new MusicDef
+            {
+                track = MusicTrack.SinglePlayerTheme,
+                resourcePath = "Audio/main-menu/single_player",
+                volume = 0.45f, loop = true, fallback = MusicTrack.MenuTheme,
+                description = "Single-player campaign screen. Awaiting its own track."
+            },
+            new MusicDef
+            {
+                track = MusicTrack.MultiplayerTheme,
+                resourcePath = "Audio/main-menu/multiplayer",
+                volume = 0.45f, loop = true, fallback = MusicTrack.MenuTheme,
+                description = "Multiplayer lobby screen. Awaiting its own track."
+            },
+            new MusicDef
+            {
+                track = MusicTrack.ExtrasTheme,
+                resourcePath = "Audio/main-menu/extras",
+                volume = 0.45f, loop = true, fallback = MusicTrack.MenuTheme,
+                description = "Extras screen. Awaiting its own track."
             }
         };
 

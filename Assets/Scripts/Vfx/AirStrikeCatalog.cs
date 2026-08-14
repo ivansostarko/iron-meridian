@@ -7,8 +7,12 @@ namespace IronMeridian.Vfx
     /// <summary>Airframes the strike menu can task.</summary>
     public enum StrikeAircraft
     {
-        /// <summary>B-2 Spirit — heavy stealth bomber, one pass, a stick of five.</summary>
-        B2Spirit
+        /// <summary>B-2 Spirit — heavy stealth bomber, one high pass, a stick of five.</summary>
+        B2Spirit,
+        /// <summary>Strike fighter — fast, low, a tight stick on one run.</summary>
+        StrikeFighter,
+        /// <summary>Attack helicopter — slow, very low, walks its load across the target.</summary>
+        AttackHelicopter
     }
 
     /// <summary>One airframe: what it flies like, what it drops, and how it sounds.</summary>
@@ -73,6 +77,35 @@ namespace IronMeridian.Vfx
         /// <summary>Colour of the target-area marker and the countdown banner.</summary>
         public Color markerColor;
 
+        // --- what one weapon does to a formation (see BlastDamage) ---
+        // Listed rather than derived: there are three airframes, and an
+        // air-dropped weapon has no calibre to derive from.
+
+        /// <summary>Inside this, a formation is destroyed outright. Metres.</summary>
+        public float lethalRadiusM = 60f;
+        /// <summary>Outer edge of the damage falloff. Metres.</summary>
+        public float blastRadiusM = 300f;
+        /// <summary>Strength removed at the lethal edge, before the square falloff.</summary>
+        public float maxDamage = 0.55f;
+
+        /// <summary>
+        /// Bank held through the run, degrees. A fixed-wing aircraft leans into
+        /// its attack; a helicopter flying a level pass barely does.
+        /// </summary>
+        public float bankDegrees = 8f;
+
+        /// <summary>
+        /// Nose-down attitude through the run, degrees. Gunships fly nose-low;
+        /// a bomber does not.
+        /// </summary>
+        public float pitchDegrees;
+
+        /// <summary>
+        /// Rotors and propellers to spin, matched by mesh-name substring. Empty
+        /// for a jet. See <see cref="RotorSpinner"/>.
+        /// </summary>
+        public RotorSpinner.Spec[] rotors = System.Array.Empty<RotorSpinner.Spec>();
+
         /// <summary>Total seconds the aircraft is on screen.</summary>
         public float RunSeconds => approachSeconds + egressSeconds;
     }
@@ -118,7 +151,80 @@ namespace IronMeridian.Vfx
                 smoke = VfxId.AerialBombSmoke,
                 smokeSeconds = 26f,
                 burstScale = 1.15f,
+                bankDegrees = 8f,
+                lethalRadiusM = 65f, blastRadiusM = 320f, maxDamage = 0.58f,
                 markerColor = new Color(0.45f, 0.72f, 1.00f)
+            },
+
+            // Fast and low. The whole pass is over in half the bomber's time and
+            // the stick is tight, which is the trade: a smaller beaten zone
+            // delivered quickly, rather than a wide one delivered from altitude.
+            new AircraftDef
+            {
+                aircraft = StrikeAircraft.StrikeFighter,
+                label = "STRIKE FIGHTER",
+                name = "Multirole strike fighter",
+                detail = "Fast and low — one tight pass",
+                radiusMeters = 220f,
+                modelId = UnitModelLibrary.StrikeFighter,
+                wingspanMeters = 150f,
+                noseYawOffsetDeg = 0f,
+                altitudeMeters = 650f,
+                approachKm = 5.5f,
+                egressKm = 5.5f,
+                approachSeconds = 3.0f,
+                egressSeconds = 2.6f,
+                releaseIntervalSeconds = 0.20f,
+                fallSeconds = 0.75f,
+                burst = VfxId.AerialBombBurst,
+                smoke = VfxId.AerialBombSmoke,
+                smokeSeconds = 20f,
+                burstScale = 0.90f,
+                // A fast jet rolls hard into its run.
+                bankDegrees = 22f,
+                pitchDegrees = 6f,
+                lethalRadiusM = 50f, blastRadiusM = 240f, maxDamage = 0.46f,
+                markerColor = new Color(0.55f, 0.85f, 0.95f)
+            },
+
+            // Slow, very low, nose-down, rotors turning. It is on screen longer
+            // than either fixed-wing aircraft, which is the point — a gunship
+            // run is something you watch happen rather than something that has
+            // already happened by the time you look up.
+            new AircraftDef
+            {
+                aircraft = StrikeAircraft.AttackHelicopter,
+                label = "ATTACK HELICOPTER",
+                name = "Attack helicopter",
+                detail = "Slow and very low — walks its load in",
+                radiusMeters = 180f,
+                modelId = UnitModelLibrary.AttackHelicopter,
+                wingspanMeters = 170f,
+                noseYawOffsetDeg = 0f,
+                altitudeMeters = 220f,
+                approachKm = 2.2f,
+                egressKm = 2.0f,
+                approachSeconds = 6.5f,
+                egressSeconds = 5.0f,
+                releaseIntervalSeconds = 0.55f,
+                fallSeconds = 0.55f,
+                burst = VfxId.AerialBombBurst,
+                smoke = VfxId.AerialBombSmoke,
+                smokeSeconds = 16f,
+                burstScale = 0.70f,
+                // Barely banked, distinctly nose-down: how a gunship runs in.
+                bankDegrees = 4f,
+                pitchDegrees = 10f,
+                lethalRadiusM = 35f, blastRadiusM = 170f, maxDamage = 0.34f,
+                rotors = new[]
+                {
+                    // Main rotor over the fuselage, tail rotor on the boom. The
+                    // axes are the model's own local ones — if a rotor spins in
+                    // the wrong plane, these two vectors are the fix.
+                    new RotorSpinner.Spec { nameContains = "Screw_Main", axis = Vector3.up,    rpm = 380f },
+                    new RotorSpinner.Spec { nameContains = "Screw_Back", axis = Vector3.right, rpm = 620f }
+                },
+                markerColor = new Color(0.55f, 0.90f, 0.65f)
             }
         };
 

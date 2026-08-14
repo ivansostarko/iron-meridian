@@ -418,8 +418,20 @@ namespace IronMeridian.UI
             var def = BackgroundCatalog.Get(id);
             if (def == null) return root;
 
-            var sprite = LoadSprite(def.resourcePath);
-            if (sprite == null) return root;   // LoadSprite has already warned
+            // Follow the fallback chain: a screen names its own artwork and
+            // borrows the shared image until that file exists. Bounded rather
+            // than recursive, so a catalogue edit that makes a loop cannot hang
+            // the screen it was meant to decorate.
+            Sprite sprite = null;
+            for (int hop = 0; hop < 4 && def != null; hop++)
+            {
+                sprite = LoadSprite(def.resourcePath);
+                if (sprite != null) break;
+                if (def.fallback == BackgroundId.None) break;
+                def = BackgroundCatalog.Get(def.fallback);
+            }
+
+            if (sprite == null || def == null) return root;   // LoadSprite has already warned
 
             var img = CreateImage(root, sprite, "Artwork");
             var rt = (RectTransform)img.transform;

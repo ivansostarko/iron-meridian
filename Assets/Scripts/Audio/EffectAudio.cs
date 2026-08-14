@@ -36,7 +36,14 @@ namespace IronMeridian.Audio
         /// <summary>Air-dropped weapon — the deepest, longest detonation in the game.</summary>
         AerialBomb,
         /// <summary>Jet passing overhead — a swelling roar that travels with the aircraft.</summary>
-        JetPass
+        JetPass,
+
+        // --- UAV strikes (docs/19-UAV-STRIKES.md) ---
+
+        /// <summary>Loitering-munition warhead — small and sharp, not a shell.</summary>
+        UavWarhead,
+        /// <summary>Quadcopter propellers — a looping buzz that travels with the drone.</summary>
+        DroneBuzz
     }
 
     /// <summary>
@@ -118,8 +125,14 @@ namespace IronMeridian.Audio
             Object.Destroy(source.gameObject);
         }
 
+        /// <summary>
+        /// Sounds that run until stopped. The drone buzz joins fire and smoke:
+        /// it lasts exactly as long as the aircraft does, which the caller knows
+        /// and this class cannot.
+        /// </summary>
         static bool Loops(EffectSound sound) =>
-            sound == EffectSound.Fire || sound == EffectSound.Smoke;
+            sound == EffectSound.Fire || sound == EffectSound.Smoke ||
+            sound == EffectSound.DroneBuzz;
 
         static Transform Root()
         {
@@ -153,7 +166,9 @@ namespace IronMeridian.Audio
             [EffectSound.ArtilleryMedium] = "Audio/effects/artillery_155",
             [EffectSound.ArtilleryHeavy] = "Audio/effects/artillery_203",
             [EffectSound.AerialBomb] = "Audio/effects/aerial_bomb",
-            [EffectSound.JetPass] = "Audio/effects/jet_pass"
+            [EffectSound.JetPass] = "Audio/effects/jet_pass",
+            [EffectSound.UavWarhead] = "Audio/effects/uav_warhead",
+            [EffectSound.DroneBuzz] = "Audio/effects/drone_buzz"
         };
 
         static AudioClip Resolve(EffectSound sound)

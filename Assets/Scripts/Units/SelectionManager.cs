@@ -28,6 +28,8 @@ namespace IronMeridian.Units
         public System.Action<string> Flash;       // user feedback (e.g. failed move order)
         /// <summary>True while a battle is running: right-click orders a march instead of repositioning.</summary>
         public System.Func<bool> BattleRunning;
+        /// <summary>Raised with the unit under the cursor, or null. Drives the hover tooltip.</summary>
+        public System.Action<UnitActor> HoverChanged;
 
         const float DragThresholdPx = 6f;
 
@@ -505,6 +507,7 @@ namespace IronMeridian.Units
                 if (_hover != null) _hover.SetHover(false);
                 _hover = unit;
                 if (_hover != null) _hover.SetHover(true);
+                HoverChanged?.Invoke(_hover);
             }
         }
 

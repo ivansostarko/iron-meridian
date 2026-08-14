@@ -50,7 +50,7 @@ public class homing_missile : MonoBehaviour
         smoke.Pause();
         smoke.transform.position =sleepposition;
         smoke.Play();
-        projectilerb.velocity = Vector3.zero;
+        projectilerb.linearVelocity = Vector3.zero;
         thrust_sound.Pause();
         call_destroy_effects();
         transform.position = sleepposition;
@@ -102,7 +102,7 @@ public class homing_missile : MonoBehaviour
             timealive++;
             if (timealive < timebeforebursting)
             {
-                projectilerb.velocity = transform.up * -1 * downspeed;
+                projectilerb.linearVelocity = transform.up * -1 * downspeed;
             }
             if (timealive == timebeforebursting)
             {
@@ -117,7 +117,7 @@ public class homing_missile : MonoBehaviour
             if (timealive >= timebeforebursting && timealive < timebeforedestruction)
             {
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetpointer.transform.rotation, turnSpeed);
-                projectilerb.velocity = transform.forward * speed;
+                projectilerb.linearVelocity = transform.forward * speed;
             }
         }
     }

@@ -22,18 +22,153 @@ Combat power = `(attack + 0.8·defence + 0.5·hardAttack + 0.3·antiAir) × eche
 
 Team, Squad, Section, Platoon, Company, Battalion, Regiment, Brigade, Division, Corps, Army — with APP-6 indicators (Ø, ●, ●●, ●●●, |, ||, |||, X, XX, XXX, XXXX) shown above the icon.
 
-## Core ground units (25)
+## Categories
 
-Infantry, Mechanised infantry, Motorised infantry, Armour, Reconnaissance, Special forces, Artillery, Rocket artillery, Mortar, Anti-tank, Air defence, Surface-to-air missile, Engineer, EOD, CBRN, Military police, Signals, Electronic warfare, Intelligence, Headquarters, Logistics, Supply, Transport, Maintenance, Medical.
+`UnitDefinition.Category` is what the rest of the game branches on, and there are
+exactly two:
 
-## Drone-relevant units (12)
+| Category | Holds ground | 3D model | Notes |
+|---|---|---|---|
+| **CoreGround** | Yes | Rifleman, or its own equipment where a pack is imported | The front line is made of these; the automatic boundary is derived from where they stand |
+| **Drone** | No | **None, deliberately** | `UnitModelLibrary.Resolve` returns null rather than showing a misleading infantryman for an unmanned system |
 
-UAS operator team, Reconnaissance UAS unit, Armed UAS unit, Loitering-munition unit, Counter-UAS unit, Air-defence radar, Electronic-warfare unit, Signals-intelligence unit, Forward observer, Target-acquisition unit, Joint fires cell, Tactical command post.
+Drone units use the APP-6 "flying wing" modifier in their icons. Units with high
+`antiAir` or `canCounterUas` (air defence, SAM, counter-UAS, EW) are the counter
+to drone units in combat.
 
-Drone units use the APP-6 "flying wing" modifier in their icons. Units with high `antiAir` or `canCounterUas` (air defence, SAM, counter-UAS, EW) are the counter to Red/Blue drone units in combat.
+**Echelon is not part of a unit type.** Every type deploys at battalion and is
+re-sized afterwards from the info panel — see docs/03-GAMEPLAY.md.
+
+---
+
+## Unit register (generated)
+
+<!-- BEGIN GENERATED UNITS -->
+
+> **Generated from `Assets/StreamingAssets/Data/units.json`** — 37 unit types in 2 categories. Do not hand-edit the tables below; edit `scripts/generate_units.py`, re-run it, and regenerate this section.
+
+| Category | Types | What it is |
+|---|---|---|
+| **CoreGround** | 25 | Everything that holds ground. These are the formations the front line is made of — they take and lose terrain, and the automatic boundary is derived from where they stand. |
+| **Drone** | 12 | Unmanned systems. They see, jam and strike but do not hold ground, and `UnitModelLibrary.Resolve` deliberately returns **no 3D model** for them rather than showing a misleading infantryman. |
+
+---
+
+### CoreGround (25)
+
+Everything that holds ground. These are the formations the front line is made of — they take and lose terrain, and the automatic boundary is derived from where they stand.
+
+| id | Name | Atk | Hard | Def | Armr | AA | Range km | See km | Speed | Men | Indirect | Anti-UAS | Support |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `air_defence` | Air Defence | 10 | 5 | 30 | 15 | 80 | 6 | 5 | 30 | 65 | — | yes | — |
+| `anti_tank` | Anti-tank | 25 | 90 | 45 | 10 | 2 | 4 | 2.5 | 25 | 55 | — | — | — |
+| `armour` | Armour | 60 | 85 | 55 | 90 | 10 | 3 | 2.5 | 45 | 60 | — | — | — |
+| `artillery` | Artillery | 75 | 30 | 15 | 8 | 2 | 24 | 1.5 | 35 | 90 | yes | — | — |
+| `cbrn` | CBRN | 6 | 2 | 22 | 12 | 1 | 0.4 | 1.5 | 32 | 40 | — | — | yes |
+| `electronic_warfare` | Electronic Warfare | 4 | 2 | 16 | 6 | 15 | 30 | 3 | 38 | 45 | — | yes | yes |
+| `engineer` | Engineer | 25 | 15 | 40 | 15 | 3 | 0.8 | 1.8 | 30 | 85 | — | — | yes |
+| `eod` | EOD | 8 | 4 | 20 | 10 | 1 | 0.4 | 1.5 | 35 | 25 | — | — | yes |
+| `headquarters` | Headquarters | 5 | 2 | 20 | 10 | 2 | 0.4 | 3 | 35 | 75 | — | — | yes |
+| `infantry` | Infantry | 30 | 5 | 40 | 5 | 8 | 0.8 | 2 | 5 | 120 | — | — | — |
+| `intelligence` | Intelligence | 3 | 1 | 14 | 5 | 1 | 0.3 | 7 | 35 | 35 | — | — | yes |
+| `logistics` | Logistics | 3 | 1 | 12 | 5 | 1 | 0.3 | 1 | 45 | 95 | — | — | yes |
+| `maintenance` | Maintenance | 2 | 1 | 12 | 5 | 1 | 0.3 | 1 | 40 | 65 | — | — | yes |
+| `mech_infantry` | Mechanised Infantry | 45 | 25 | 50 | 35 | 12 | 1.5 | 2.5 | 35 | 130 | — | — | — |
+| `medical` | Medical | 1 | 0 | 12 | 5 | 1 | 0.2 | 1 | 40 | 70 | — | — | yes |
+| `military_police` | Military Police | 18 | 4 | 30 | 8 | 2 | 0.6 | 2 | 50 | 55 | — | — | yes |
+| `mortar` | Mortar | 45 | 10 | 18 | 5 | 1 | 7 | 1.2 | 12 | 60 | yes | — | — |
+| `mot_infantry` | Motorised Infantry | 35 | 8 | 42 | 10 | 9 | 1 | 2.2 | 55 | 125 | — | — | — |
+| `recon` | Reconnaissance | 20 | 12 | 25 | 20 | 8 | 1.2 | 6 | 65 | 45 | — | — | — |
+| `rocket_artillery` | Rocket Artillery | 90 | 35 | 12 | 8 | 2 | 70 | 1.5 | 40 | 80 | yes | — | — |
+| `sam` | Surface-to-air Missile | 5 | 2 | 25 | 12 | 95 | 40 | 8 | 30 | 70 | — | yes | — |
+| `signals` | Signals | 5 | 2 | 18 | 6 | 1 | 0.3 | 1.2 | 40 | 50 | — | — | yes |
+| `special_forces` | Special Forces | 55 | 15 | 45 | 5 | 10 | 1 | 4.5 | 8 | 40 | — | — | — |
+| `supply` | Supply | 2 | 1 | 10 | 4 | 1 | 0.3 | 1 | 45 | 80 | — | — | yes |
+| `transport` | Transport | 2 | 1 | 10 | 4 | 1 | 0.3 | 1 | 60 | 70 | — | — | yes |
+
+<details><summary>Descriptions and sustainment</summary>
+
+| id | Description | Ammo | Stock | Fuel | Use/km | Food d | Sup/d | Train | Morale | Org |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `air_defence` | Gun/short-range AD. Protects manoeuvre units from air and UAS. | 35mm AHEAD | 4200 | 3600 | 2.2 | 3 | 1.4 | 66 | 62 | 58 |
+| `anti_tank` | ATGM teams and tank destroyers. Lethal vs armour. | ATGM (Javelin-class) | 96 | 1800 | 1.6 | 3 | 1 | 68 | 64 | 60 |
+| `armour` | Main battle tanks. Breakthrough and shock element. | 120mm APFSDS/HE | 1600 | 22000 | 8.5 | 3 | 2 | 70 | 70 | 65 |
+| `artillery` | Tube artillery battalion slice. Long-range fires. | 155mm HE/SMART | 960 | 6800 | 3 | 3 | 2.2 | 65 | 60 | 55 |
+| `cbrn` | CBRN reconnaissance and decontamination. | 5.56mm NATO | 9000 | 2600 | 1.8 | 3 | 1.2 | 70 | 62 | 58 |
+| `electronic_warfare` | Jamming, direction finding and electronic attack. | 5.56mm NATO | 6000 | 2800 | 1.8 | 3 | 1.5 | 74 | 62 | 58 |
+| `engineer` | Mobility, counter-mobility, fortifications and breaching. | 5.56mm + demolitions | 24000 | 4800 | 2.4 | 3 | 1.6 | 62 | 63 | 60 |
+| `eod` | Explosive ordnance disposal teams. | Demolition charges | 300 | 1400 | 1.4 | 3 | 0.8 | 78 | 68 | 62 |
+| `headquarters` | Command element. Boosts organisation of nearby units. | 5.56mm NATO | 9000 | 3600 | 2 | 4 | 2 | 72 | 68 | 70 |
+| `infantry` | Foot infantry. Strong in rough and urban terrain. | 5.56mm NATO | 42000 | 0 | 0 | 3 | 1 | 60 | 65 | 60 |
+| `intelligence` | Analysis and fusion. Improves spotting for the whole force. | 5.56mm NATO | 4000 | 1800 | 1.4 | 3 | 1.1 | 80 | 64 | 60 |
+| `logistics` | Sustainment planning and distribution node. | 5.56mm NATO | 8000 | 16000 | 2.8 | 6 | 2.4 | 55 | 58 | 55 |
+| `maintenance` | Repair and recovery of vehicles and equipment. | 5.56mm NATO | 4500 | 5200 | 2.2 | 4 | 1.8 | 60 | 58 | 56 |
+| `mech_infantry` | Infantry mounted in IFVs, fights mounted or dismounted. | 5.56mm + 25mm | 52000 | 9000 | 4.2 | 3 | 1.4 | 65 | 68 | 62 |
+| `medical` | Role 1/2 medical. Reduces losses of nearby units. | None (protected) | 0 | 4200 | 2 | 5 | 1.6 | 64 | 62 | 58 |
+| `military_police` | Route control, security, detention, rear-area operations. | 9mm/5.56mm | 15000 | 2600 | 1.4 | 3 | 0.9 | 60 | 62 | 60 |
+| `mortar` | Close-support indirect fires organic to infantry. | 120mm mortar | 720 | 900 | 1 | 3 | 1.2 | 60 | 60 | 58 |
+| `mot_infantry` | Truck/APC-mobile infantry. Fast on roads, light protection. | 5.56mm NATO | 46000 | 5200 | 2 | 3 | 1.2 | 62 | 66 | 61 |
+| `recon` | Screens, scouts and finds the enemy. Very high view range. | 7.62mm + 30mm | 18000 | 4200 | 2.4 | 4 | 0.8 | 75 | 70 | 70 |
+| `rocket_artillery` | MLRS. Very long-range saturation and precision fires. | 227mm GMLRS | 144 | 7600 | 3.4 | 3 | 2.6 | 68 | 62 | 55 |
+| `sam` | Medium/long-range SAM battery. Area air denial. | SAM (NASAMS-class) | 48 | 4200 | 2.6 | 3 | 1.8 | 70 | 62 | 55 |
+| `signals` | Communications backbone. Enables command and control. | 5.56mm NATO | 8000 | 2400 | 1.6 | 3 | 1.3 | 66 | 60 | 58 |
+| `special_forces` | Elite raiding, DA and deep reconnaissance element. | 5.56mm/7.62mm | 16000 | 0 | 0 | 5 | 0.7 | 95 | 90 | 80 |
+| `supply` | Ammunition, fuel and rations resupply point. | 5.56mm NATO | 6000 | 14000 | 2.6 | 8 | 2.2 | 52 | 56 | 54 |
+| `transport` | Truck transport. Moves units and freight. | 5.56mm NATO | 5000 | 20000 | 3 | 5 | 2 | 52 | 56 | 54 |
+
+</details>
+
+---
+
+### Drone (12)
+
+Unmanned systems. They see, jam and strike but do not hold ground, and `UnitModelLibrary.Resolve` deliberately returns **no 3D model** for them rather than showing a misleading infantryman.
+
+| id | Name | Atk | Hard | Def | Armr | AA | Range km | See km | Speed | Men | Indirect | Anti-UAS | Support |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ad_radar` | Air-defence Radar | 1 | 0 | 14 | 8 | 25 | 60 | 60 | 28 | 30 | — | yes | yes |
+| `armed_uas` | Armed UAS | 45 | 40 | 12 | 4 | 3 | 60 | 45 | 15 | 30 | yes | — | — |
+| `counter_uas` | Counter-UAS | 6 | 2 | 22 | 10 | 70 | 8 | 6 | 30 | 35 | — | yes | — |
+| `ew_unit` | Electronic-warfare Unit | 4 | 2 | 16 | 6 | 30 | 30 | 3 | 35 | 40 | — | yes | yes |
+| `forward_observer` | Forward Observer | 10 | 4 | 20 | 5 | 3 | 1 | 8 | 8 | 10 | — | — | yes |
+| `joint_fires` | Joint Fires Cell | 5 | 2 | 16 | 6 | 2 | 0.5 | 5 | 30 | 20 | — | — | yes |
+| `loitering_munition` | Loitering-munition Unit | 55 | 60 | 10 | 3 | 2 | 40 | 25 | 15 | 22 | yes | — | — |
+| `recon_uas` | Reconnaissance UAS | 4 | 2 | 10 | 3 | 2 | 50 | 50 | 15 | 25 | — | — | yes |
+| `sigint` | Signals-intelligence | 2 | 1 | 14 | 5 | 2 | 45 | 45 | 32 | 35 | — | — | yes |
+| `tactical_cp` | Tactical Command Post | 4 | 2 | 18 | 8 | 2 | 0.5 | 4 | 30 | 35 | — | — | yes |
+| `target_acquisition` | Target-acquisition Unit | 3 | 1 | 15 | 6 | 4 | 30 | 30 | 30 | 30 | — | — | yes |
+| `uas_operator` | UAS Operator Team | 8 | 3 | 15 | 4 | 4 | 12 | 12 | 8 | 12 | — | — | yes |
+
+<details><summary>Descriptions and sustainment</summary>
+
+| id | Description | Ammo | Stock | Fuel | Use/km | Food d | Sup/d | Train | Morale | Org |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `ad_radar` | Surveillance radar. Extends air picture for AD and C-UAS. | 5.56mm NATO | 3000 | 2600 | 1.8 | 3 | 1.4 | 70 | 60 | 55 |
+| `armed_uas` | MALE/attack drones with guided munitions. | Guided munitions | 36 | 1600 | 1.2 | 3 | 1.4 | 80 | 66 | 58 |
+| `counter_uas` | Dedicated drone-defeat: jammers, guns, interceptors. | C-UAS effectors | 600 | 2400 | 1.8 | 3 | 1.2 | 72 | 62 | 58 |
+| `ew_unit` | EW element focused on the UAS fight: link and GNSS denial. | 5.56mm NATO | 5000 | 2600 | 1.8 | 3 | 1.5 | 75 | 62 | 58 |
+| `forward_observer` | Eyes for the guns. Sharply improves artillery accuracy. | 5.56mm NATO | 3000 | 0 | 0 | 4 | 0.5 | 82 | 70 | 62 |
+| `joint_fires` | Coordinates artillery, UAS and air. Fires multiplier. | 5.56mm NATO | 2500 | 1800 | 1.4 | 3 | 1.1 | 85 | 66 | 62 |
+| `loitering_munition` | One-way attack drones. High lethality vs vehicles and guns. | Loitering munitions | 48 | 900 | 0.8 | 3 | 1.3 | 74 | 64 | 56 |
+| `recon_uas` | Tactical ISR drones. Deep, persistent surveillance. | UAS airframes | 18 | 1200 | 1 | 3 | 1 | 76 | 64 | 58 |
+| `sigint` | Intercept and geolocation of enemy emitters. | 5.56mm NATO | 4000 | 2200 | 1.6 | 3 | 1.3 | 80 | 62 | 58 |
+| `tactical_cp` | Forward C2 node for the drone/fires fight. | 5.56mm NATO | 4000 | 2600 | 1.8 | 4 | 1.6 | 76 | 66 | 68 |
+| `target_acquisition` | Counter-battery radar and acoustic sensors. | 5.56mm NATO | 3500 | 2400 | 1.6 | 3 | 1.2 | 78 | 62 | 58 |
+| `uas_operator` | Small-UAS crews flying quadcopters and fixed-wing sUAS. | sUAS batteries | 60 | 0 | 0 | 3 | 0.6 | 78 | 66 | 60 |
+
+</details>
+
+<!-- END GENERATED UNITS -->
 
 ## Adding a new unit type
 
 1. Add a `unit(...)` line in `scripts/generate_units.py` and run it.
 2. Add a glyph branch for the new id in `scripts/generate_icons.py` and run it.
-3. Done — the palette, combat and saves pick the new type up automatically.
+3. Run `python scripts/generate_units_doc.py` to refresh the register above.
+4. Done — the palette, combat and saves pick the new type up automatically.
+
+**The register is generated, not written.** `scripts/generate_units_doc.py` reads
+the shipped `units.json` and rewrites everything between the
+`BEGIN/END GENERATED UNITS` markers. A hand-maintained table of 37 units with 25
+columns each would be wrong within a week; this one cannot disagree with the data
+because it is the data.

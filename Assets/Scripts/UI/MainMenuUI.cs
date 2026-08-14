@@ -34,12 +34,21 @@ namespace IronMeridian.UI
                 "REAL-TERRAIN OPERATIONAL WARGAME", 26, GameConfig.UiTextDim);
             UIFactory.Place(subtitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -250), new Vector2(1000, 40));
 
+            // Six entries now rather than three, so the buttons are shorter and
+            // the block is anchored from its top rather than centred — a centred
+            // group grows in both directions and would have walked up into the
+            // title as entries were added.
             var menu = UIFactory.CreateGroup(canvas.transform, "Menu");
-            UIFactory.Place(menu, new Vector2(0.5f, 0.5f), new Vector2(0, -60), new Vector2(460, 400));
+            UIFactory.Place(menu, new Vector2(0.5f, 0.5f), new Vector2(0, 60), new Vector2(460, 560));
 
-            MakeMenuButton(menu, "TESTING", 0, () => SceneManager.LoadScene(GameConfig.SceneTesting));
-            MakeMenuButton(menu, "SETTINGS", 1, () => SceneManager.LoadScene(GameConfig.SceneSettings));
-            MakeMenuButton(menu, "QUIT", 2, ShowQuitModal);
+            // Play modes first, tools second: what most people came to do goes
+            // at the top, and QUIT stays last where it can't be hit by accident.
+            MakeMenuButton(menu, "SINGLE PLAYER", 0, () => SceneManager.LoadScene(GameConfig.SceneSinglePlayer));
+            MakeMenuButton(menu, "MULTIPLAYER", 1, () => SceneManager.LoadScene(GameConfig.SceneMultiplayer));
+            MakeMenuButton(menu, "EXTRAS", 2, () => SceneManager.LoadScene(GameConfig.SceneExtras));
+            MakeMenuButton(menu, "TESTING", 3, () => SceneManager.LoadScene(GameConfig.SceneTesting));
+            MakeMenuButton(menu, "SETTINGS", 4, () => SceneManager.LoadScene(GameConfig.SceneSettings));
+            MakeMenuButton(menu, "QUIT", 5, ShowQuitModal);
 
             var version = UIFactory.CreateText(canvas.transform,
                 $"{GameConfig.GameName} {GameConfig.Version}", 18, GameConfig.UiTextDim);
@@ -50,9 +59,9 @@ namespace IronMeridian.UI
 
         void MakeMenuButton(Transform parent, string label, int index, UnityEngine.Events.UnityAction action)
         {
-            var btn = UIFactory.CreateButton(parent, label, action, GameConfig.UiPanel, GameConfig.UiText, 30);
+            var btn = UIFactory.CreateButton(parent, label, action, GameConfig.UiPanel, GameConfig.UiText, 28);
             var rt = (RectTransform)btn.transform;
-            UIFactory.Place(rt, new Vector2(0.5f, 1f), new Vector2(0, -index * 110), new Vector2(460, 90));
+            UIFactory.Place(rt, new Vector2(0.5f, 1f), new Vector2(0, -index * 88), new Vector2(460, 74));
 
             // Accent strip on the left edge
             var strip = UIFactory.CreatePanel(rt, "Strip", GameConfig.UiAccent);

@@ -17,9 +17,16 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | `military_truck` | `Models/MilitaryTruck` | [ZIL-130 Military Truck](https://assetstore.unity.com/packages/3d/vehicles/land/zil-130-military-truck-208991) | static | `transport`, `logistics`, `supply` |
 | `main_battle_tank` | `Models/Leopard2` | [Tank Leopard 2](https://assetstore.unity.com/packages/3d/vehicles/land/tank-leopard2-264329) | static | `armour` |
 | `scout_car` | `Models/ScoutCar` | [M3A1 Scout Car](https://assetstore.unity.com/packages/3d/vehicles/land/m3a1-scout-car-53149) | static | `recon` |
+| `attack_helicopter` | `Models/AttackHelicopter` | [RTS Modern Combat Vehicle Pack Free](https://assetstore.unity.com/packages/3d/vehicles/rts-modern-combat-vehicle-pack-free-281758) — `MSH_N2_LE.fbx` | static; rotors spun by `RotorSpinner` | **Not a unit** — flown by `AirStrikeSystem` |
+| `strike_fighter` | `Models/StrikeFighter` | RTS Modern Combat Vehicle Pack Free — `FA_N26_LE.fbx` | static | **Not a unit** — flown by `AirStrikeSystem` |
+| `kamikaze_drone` | `Models/KamikazeDrone` | [Professional Assets DronePack](https://assetstore.unity.com/packages/p/free-pack-117641) — `_FBX Mesh [Quad].FBX` | static; propellers spun by `RotorSpinner` | **Not a unit** — flown by `UavStrikeSystem`; see docs/19-UAV-STRIKES.md |
 | `stealth_bomber` | `Models/StealthBomber` | [Hessburg — Stealth Bomber](https://assetstore.unity.com/packages/package/56765) — `Stealth_Bomber.fbx` | static | **Not a unit** — flown by `AirStrikeSystem`; see docs/18-AIR-STRIKES.md |
 
-**`stealth_bomber` is the first model that is not a unit.** It has no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns it — no formation is represented by a B-2. It is in the library anyway because the library is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds its prefab from that list. `BomberRun.LoadModel` fetches it by id.
+**Four models are aircraft rather than units.** `stealth_bomber`, `strike_fighter`, `attack_helicopter` and `kamikaze_drone` have no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns them — no formation is represented by a B-2 or a quadcopter. They are in the library because it is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds their prefabs from that list.
+
+**Rotors without a rig.** The helicopter and the drone ship their rotors as separate named meshes (`3_Screw_Main`, `3_Screw_Back`, `Quad Propeller 1/2`), which `RotorSpinner` finds by name substring and turns. No skeleton, no clip, no Animator — which is what makes it possible at all under the project's runtime-only constraints.
+
+**Original note on `stealth_bomber`:** It has no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns it — no formation is represented by a B-2. It is in the library anyway because the library is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds its prefab from that list. `BomberRun.LoadModel` fetches it by id.
 
 **Not yet modelled:** every `Drone` category unit. `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message rather than a misleading infantryman.
 
@@ -30,26 +37,49 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | Asset | Expected location | Status |
 |---|---|---|
 | Low Poly Soldiers Demo | `Assets/LowPolySoldiers_demo/` | **Imported.** `models/Soldier_demo.FBX` (Biped rig, `Bip001` root), `animation/demo_combat_{idle,run,shoot}.FBX`, two materials + TGA textures |
-| Anti-Air Defense Radar | anywhere under `Assets/` | *Not in the project yet* |
-| Military Prop Pack: Defense | anywhere under `Assets/` | *Not in the project yet* |
-| Homing Missile | anywhere under `Assets/` | *Not in the project yet* |
-| ZIL-130 Military Truck | anywhere under `Assets/` | *Not in the project yet* |
-| Tank Leopard 2 | anywhere under `Assets/` | *Not in the project yet* |
-| M3A1 Scout Car | anywhere under `Assets/` | *Not in the project yet* |
-| Hessburg — Stealth Bomber | `Assets/Hessburg - Stealth Bomber/` | **Downloaded, needs one extra step** — ships as nested `.unitypackage` archives; see below |
+| Anti-Air Defense Radar | `Assets/Radar/` | **Imported** — `Radar.FBX` |
+| Military Prop Pack: Defense | `Assets/Defensive_props/` | **Imported** — `models/Defensive_props.fbx` |
+| Homing Missile | `Assets/homing missile/` | **Imported** — `Models/Missiles_Pack.FBX`. Its demo *prefabs* are broken (see below); the mesh is fine |
+| ZIL-130 Military Truck | `Assets/ZIL130_MilitaryTruck/` | **Imported** — `Meshes/ZIL130.fbx` |
+| Tank Leopard 2 | `Assets/Kucher/Tank Leopard2/` | **Imported** — `Models/Leopard2.fbx` |
+| M3A1 Scout Car | `Assets/M3A1 Scout Car/` | **Imported** — `WW2_M3A1_Scout_Car.FBX` |
+| Hessburg — Stealth Bomber | `Assets/Hessburg - Stealth Bomber/` | **Imported** — `Stealth_Bomber.fbx`. Shipped as nested `.unitypackage` archives; see below |
 
-> **This table needs an audit.** Several of the packs listed above as absent now
-> have folders under `Assets/` (`Kucher/`, `M3A1 Scout Car/`, `ZIL130_MilitaryTruck/`,
-> `Radar/`, `PVO/`, `Defensive_props/`). Their statuses here were written before
-> those imports and have not been re-checked. Run `Install Unit Models` and update
-> this table from what it reports.
+> **Audited 2026-08-14.** All seven packs are now present. Three of them ship
+> their mesh under a name none of the original `sourceCandidates` matched, so the
+> installer was silently skipping them — the candidate lists have been corrected:
+>
+> | Model | Actual mesh file | Candidate added |
+> |---|---|---|
+> | `field_artillery` | `Defensive_props.fbx` | `Defensive_props` |
+> | `sam_launcher` | `Missiles_Pack.FBX` | `Missiles_Pack` |
+> | `scout_car` | `WW2_M3A1_Scout_Car.FBX` | `WW2_M3A1_Scout_Car` (+ `_NoRoof`) |
+>
+> `air_defence_radar` (`Radar.FBX`), `military_truck` (`ZIL130.fbx`),
+> `main_battle_tank` (`Leopard2.fbx`) and `stealth_bomber` (`Stealth_Bomber.fbx`)
+> already matched. Re-run **Install Unit Models** to build all seven.
 
-The six packs above are **registered but not present** — the entries, the unit
-assignments and the installer support are all in place, and each will build its
-prefab the moment its pack is in the project. Until then, selecting one of those
-unit types shows *"Model 'Models/Leopard2' is not installed. Run Tools > Iron
-Meridian > Install Unit Models."* rather than a soldier standing in for a tank,
-because a silent wrong model is worse than an explicit missing one.
+When a pack is **registered but not present**, the entry, its unit assignments
+and the installer support are all still in place, and it builds its prefab the
+moment the pack arrives. Until then, selecting one of those unit types shows
+*"Model 'Models/Leopard2' is not installed. Run Tools > Iron Meridian > Install
+Unit Models."* rather than a soldier standing in for a tank, because a silent
+wrong model is worse than an explicit missing one.
+
+### Broken demo prefabs in imported packs
+
+Some packs import with their **demo prefabs** referencing assets that were never
+brought in, which Unity reports as *"The file might be corrupt or have a missing
+Variant parent or nested Prefabs."* Known cases: FORGE3D — Sci-Fi Effects
+(`Missile 1`, `Sci-Fi Effects - Missile 2`, `Missile Impact`, `Assembled Turrets
+… Variant`) and Homing Missile (`homing_missile.prefab`). All are Prefab Variants
+whose parents are absent from the project.
+
+**This does not affect Iron Meridian.** Nothing in `Assets/Scripts` references a
+FORGE3D or Homing Missile prefab — the model register uses the packs' **meshes**,
+which import fine. The errors are noise from demo content. Fix them by
+re-importing the pack completely from the Package Manager, or delete the demo
+folders if the pack is only wanted for its meshes.
 
 ### Finding the source mesh
 

@@ -49,10 +49,23 @@ namespace IronMeridian.Audio
                 return;
             }
 
-            var clip = Resources.Load<AudioClip>(def.resourcePath);
-            if (clip == null)
+            // Follow the fallback chain: a screen names its own track and
+            // borrows the shared bed until that file exists. Bounded rather than
+            // recursive, so a catalogue edit that makes a loop cannot hang the
+            // screen it was meant to score.
+            AudioClip clip = null;
+            var resolved = def;
+            for (int hop = 0; hop < 4 && resolved != null; hop++)
             {
-                // Warn once: this is called from six scene bootstraps and would
+                clip = Resources.Load<AudioClip>(resolved.resourcePath);
+                if (clip != null) break;
+                if (resolved.fallback == MusicTrack.None) break;
+                resolved = AudioCatalog.Get(resolved.fallback);
+            }
+
+            if (clip == null || resolved == null)
+            {
+                // Warn once: this is called from every scene bootstrap and would
                 // otherwise fill the console on every navigation.
                 if (!_warnedMissing)
                 {
@@ -62,6 +75,23 @@ namespace IronMeridian.Audio
                 }
                 return;
             }
+
+            // Already playing this exact clip? Then the only thing that changes
+            // is which track we say is current.
+            //
+            // This is the fallback chain's sharp edge. The early return above
+            // compares *tracks*, and two screens that both borrow the shared bed
+            // are different tracks resolving to the same file — so without this
+            // check, navigating between them would stop and restart the same
+            // audio, which is precisely the restart-on-every-navigation that
+            // MusicManager exists to prevent (golden rule 9).
+            if (mgr._source.clip == clip && mgr._source.isPlaying)
+            {
+                Current = track;
+                return;
+            }
+
+            def = resolved;
 
             mgr._source.clip = clip;
             mgr._source.loop = def.loop;

@@ -39,6 +39,8 @@ Assets/Scripts/
                          chrome measures from it, never from the section panel
     UiIcons.cs           HUD icon set, drawn procedurally
     UiTooltip.cs         hover captions for icon-only controls
+    UnitHoverTooltip.cs  map-unit hover card: side, strength, status, ranges
+    PlaceholderScreenUI.cs  shared "under development" page + the three menu screens
     MapFont.cs           the one typeface for world-space map text (condensed OS
                          font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
                          TaskMarker and RangeRing captions
@@ -76,6 +78,7 @@ Assets/Scripts/
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
     RangeRing.cs         range volumes: line of sight, weapon range, fog contacts
+    BlastDamage.cs       what a shell/bomb/warhead does to formations under it
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
     MapLine.cs           LineRenderer polyline, terrain clamping, styles, captions
@@ -103,6 +106,10 @@ Assets/Scripts/
     AirStrikeCatalog.cs  the strike airframes — see docs/18-AIR-STRIKES.md
     AirStrikeSystem.cs   tasked strike: countdown, then a bombing run
     BomberRun.cs         the flying aircraft and its bomb release (code-animated)
+    RotorSpinner.cs      spins rotors/propellers on unrigged models by mesh name
+    UavCatalog.cs        the unmanned types — see docs/19-UAV-STRIKES.md
+    UavStrikeSystem.cs   tasked UAV strike: countdown, then a one-way flight
+    DroneRun.cs          the drone's cruise, nose-over and terminal dive
     TargetAreaMarker.cs  3D target-area volume (procedural mesh, vertex colours)
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project

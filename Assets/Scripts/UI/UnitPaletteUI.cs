@@ -64,7 +64,7 @@ namespace IronMeridian.UI
         public System.Action<UnitActor> SelectUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
-        enum Section { General, Units, Boundaries, Effects, Artillery, AirStrike, Weather, Map, DateTime }
+        enum Section { General, Units, Boundaries, Effects, Artillery, AirStrike, UavStrike, Weather, Map, DateTime }
         enum ListMode { Available, Deployed }
 
         /// <summary>
@@ -108,9 +108,14 @@ namespace IronMeridian.UI
         const float AvailableCardHeight = 58f;
         const float DeployedCardHeight = 66f;
         /// <summary>Y of the list's tab row, measured from the section's top edge.</summary>
-        const float ListTop = -130f;
-        /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 374f;
+        /// <summary>
+        /// Y of the list's tab row, measured from the section's top edge. Moved
+        /// up 40 px when the echelon dropdown was removed — the list took the
+        /// space rather than leaving a gap where a control used to be.
+        /// </summary>
+        const float ListTop = -90f;
+        /// <summary>Emblem block plus the ten nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 410f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -120,7 +125,14 @@ namespace IronMeridian.UI
 
         Team _team = Team.User;
         Affiliation _affiliation = Affiliation.Friendly;
-        Echelon _echelon = Echelon.Battalion;
+        /// <summary>
+        /// Size every unit is deployed at. Battalion because it is the echelon an
+        /// operational map is actually drawn at — brigades are too coarse to
+        /// manoeuvre and companies too many to command.
+        /// </summary>
+        const Echelon DefaultEchelon = Echelon.Battalion;
+
+        readonly Echelon _echelon = DefaultEchelon;
         Section _section = Section.Units;
         ListMode _listMode = ListMode.Available;
         string _search = "";
@@ -180,9 +192,8 @@ namespace IronMeridian.UI
         EffectPlacementTool _effects;
         CameraRig _rig;
         Camera _worldCam;
-        GameObject _groundMarker;
-        CesiumGlobeAnchor _groundMarkerAnchor;
-        PlacementMarker _markerAnim;
+        /// <summary>3D drop preview — the volume shown under the cursor while dragging.</summary>
+        TargetAreaMarker _placementMarker;
         bool _lastDropValid;
         double _dropLat, _dropLon;
 
@@ -199,7 +210,7 @@ namespace IronMeridian.UI
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
             GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
             ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
-            MapControlsUI mapControls, LineDrawTool drawTool)
+            UavStrikeSystem uavStrike, MapControlsUI mapControls, LineDrawTool drawTool)
         {
             _canvas = canvas;
             _map = map;
@@ -210,6 +221,7 @@ namespace IronMeridian.UI
             _effects = effects;
             _artillery = artillery;
             _airStrike = airStrike;
+            _uavStrike = uavStrike;
             _mapControls = mapControls;
             _drawTool = drawTool;
 
@@ -239,6 +251,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Artillery] = MakeSectionContent(body, "Artillery");
             _sectionContent[Section.AirStrike] = MakeSectionContent(body, "AirStrike");
+            _sectionContent[Section.UavStrike] = MakeSectionContent(body, "UavStrike");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
@@ -249,6 +262,7 @@ namespace IronMeridian.UI
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildArtillerySection(_sectionContent[Section.Artillery]);
             BuildAirStrikeSection(_sectionContent[Section.AirStrike]);
+            BuildUavStrikeSection(_sectionContent[Section.UavStrike]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
@@ -285,6 +299,7 @@ namespace IronMeridian.UI
             if (_effects != null) _effects.ArmedChanged += RefreshEffects;
             if (_artillery != null) _artillery.ArmedChanged += RefreshArtillery;
             if (_airStrike != null) _airStrike.ArmedChanged += RefreshAirStrike;
+            if (_uavStrike != null) _uavStrike.ArmedChanged += RefreshUavStrike;
         }
 
         static RectTransform MakeSectionContent(RectTransform body, string name)
@@ -429,9 +444,10 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -152);
             AddNavRow(panel, Section.Artillery, "ARTILLERY STRIKE", UiIcons.Artillery, -188);
             AddNavRow(panel, Section.AirStrike, "AIR STRIKE", UiIcons.FlyingWing, -224);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -260);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -296);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -332);
+            AddNavRow(panel, Section.UavStrike, "UAV STRIKES", UiIcons.Quadcopter, -260);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -296);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -332);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -368);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -583,20 +599,24 @@ namespace IronMeridian.UI
             _blueTab = SideButton(content, "FRIENDLY", Pad, half, () => SetTeam(Team.User), out _blueFill);
             _redTab = SideButton(content, "ENEMY", Pad + half + 6f, half, () => SetTeam(Team.Enemy), out _redFill);
 
-            // --- echelon ---
-            // There is no affiliation picker any more. It offered four values of
-            // which only two were ever right — the side tabs above already say
-            // whose the unit is, and SetTeam derives Friendly/Hostile from that —
-            // so it was a control whose only real use was to contradict the tab
-            // beside it. The 40 px it took goes to the list, which needed it.
-            var echNames = new List<string>(System.Enum.GetNames(typeof(Echelon)));
-            var echDd = UIFactory.CreateDropdown(content, echNames, (int)Echelon.Battalion,
-                i => _echelon = (Echelon)i);
-            StyleDropdown(echDd, -50);
+            // Neither an affiliation picker nor an echelon dropdown any more.
+            //
+            // Affiliation offered four values of which only two were ever right —
+            // the side tabs above already say whose the unit is, and SetTeam
+            // derives Friendly/Hostile from that — so it was a control whose only
+            // real use was to contradict the tab beside it.
+            //
+            // Echelon went the same way: a dropdown listing every size from
+            // section to army, sitting above a list of 37 unit types, made
+            // deploying one unit a two-control operation and put the rarely-wanted
+            // choice in front of the always-wanted one. Units now deploy at
+            // <see cref="DefaultEchelon"/> and are re-sized after the fact from the
+            // info panel, which is where the rest of a formation's details are
+            // edited anyway. The ~90 px both controls took goes to the list.
 
             // --- search ---
             var searchFrame = UIFactory.CreateBorderedPanel(content, "SearchFrame", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(searchFrame, new Vector2(0f, 1f), new Vector2(Pad, -90), new Vector2(InnerWidth, 34));
+            UIFactory.Place(searchFrame, new Vector2(0f, 1f), new Vector2(Pad, -50), new Vector2(InnerWidth, 34));
 
             var glass = UIFactory.CreateImage(searchFrame, UiIcons.Search, "SearchGlyph");
             glass.color = UiTheme.TextFaint;
@@ -1096,56 +1116,134 @@ namespace IronMeridian.UI
         ArtilleryStrikeSystem _artillery;
         readonly List<(ArtilleryCaliber caliber, Image fill, Text label)> _artilleryButtons =
             new List<(ArtilleryCaliber, Image, Text)>();
-
-        /// <summary>Button glyph per nature. The catalogue owns the numbers; the UI owns the pictures.</summary>
-        static Sprite CaliberGlyph(ArtilleryCaliber caliber) => caliber switch
-        {
-            ArtilleryCaliber.Light105 => UiIcons.ShellLight,
-            ArtilleryCaliber.Mortar120 => UiIcons.MortarBomb,
-            ArtilleryCaliber.Heavy203 => UiIcons.ShellHeavy,
-            _ => UiIcons.ShellMedium
-        };
+        readonly Dictionary<ArtilleryOrigin, RectTransform> _artilleryPages =
+            new Dictionary<ArtilleryOrigin, RectTransform>();
+        readonly List<(ArtilleryOrigin origin, Image fill, Text label)> _originTabs =
+            new List<(ArtilleryOrigin, Image, Text)>();
+        ArtilleryOrigin _artilleryOrigin = ArtilleryOrigin.Nato;
 
         /// <summary>
-        /// The fire-support menu. One button per nature, driven entirely from
-        /// <see cref="ArtilleryCatalog"/> — a new calibre appears here by adding
-        /// a catalogue row, not by editing this method.
+        /// Button glyph per nature. The catalogue owns the numbers; the UI owns
+        /// the pictures. Chosen by kind and weight rather than by exact calibre,
+        /// so a new nature gets a sensible icon without touching this.
+        /// </summary>
+        static Sprite CaliberGlyph(ArtilleryDef def)
+        {
+            if (def.kind == ArtilleryKind.Mortar) return UiIcons.MortarBomb;
+            if (def.calibreMm <= 105) return UiIcons.ShellLight;
+            if (def.calibreMm >= 152) return UiIcons.ShellHeavy;
+            return UiIcons.ShellMedium;
+        }
+
+        /// <summary>
+        /// The fire-support menu, driven entirely from <see cref="ArtilleryCatalog"/>.
+        ///
+        /// Fourteen natures will not fit in one column, and stacking them into a
+        /// scroll would bury the choice that actually matters. They are split by
+        /// **inventory** instead — NATO or Russian — because that is the first
+        /// decision a player makes and it halves the list. Within a page they run
+        /// mortars then guns, ascending by calibre, so the beaten zone grows
+        /// monotonically down the page and the trade-off between natures is
+        /// legible without reading a word.
         /// </summary>
         void BuildArtillerySection(RectTransform content)
         {
             SectionLabel(content, "CALL FOR FIRE", -8);
 
-            float y = -30f;
-            foreach (var def in ArtilleryCatalog.All)
+            BuildOriginTabs(content, -30f);
+
+            // One page per inventory, both laid out at the same origin; only the
+            // selected one is active.
+            foreach (ArtilleryOrigin origin in System.Enum.GetValues(typeof(ArtilleryOrigin)))
             {
-                ArtilleryButton(content, def, y);
-                y -= 58f;
+                var page = UIFactory.CreateGroup(content, "ArtyPage_" + origin);
+                page.anchorMin = new Vector2(0, 0); page.anchorMax = new Vector2(1, 1);
+                page.offsetMin = Vector2.zero; page.offsetMax = Vector2.zero;
+                _artilleryPages[origin] = page;
+                BuildOriginPage(page, origin);
             }
 
-            var stop = UIFactory.CreateBorderedPanel(content, "StandDown", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 32));
+            ShowArtilleryOrigin(_artilleryOrigin);
+            RefreshArtillery();
+        }
+
+        void BuildOriginTabs(RectTransform content, float y)
+        {
+            var origins = new[] { ArtilleryOrigin.Nato, ArtilleryOrigin.Russian };
+            var names = new[] { "NATO", "RUSSIAN" };
+            float w = (InnerWidth - 6f) / 2f;
+
+            for (int i = 0; i < origins.Length; i++)
+            {
+                var origin = origins[i];
+                var frame = UIFactory.CreateBorderedPanel(content, "Origin_" + names[i],
+                    UiTheme.Surface, UiTheme.Border);
+                UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad + i * (w + 6f), y),
+                    new Vector2(w, 30));
+
+                var btn = UIFactory.CreateButton(frame, names[i], () => ShowArtilleryOrigin(origin),
+                    new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+                UIFactory.Stretch((RectTransform)btn.transform);
+
+                _originTabs.Add((origin, frame.Find("Fill").GetComponent<Image>(),
+                    btn.GetComponentInChildren<Text>()));
+            }
+        }
+
+        void BuildOriginPage(RectTransform page, ArtilleryOrigin origin)
+        {
+            float y = -68f;
+            ArtilleryKind? lastKind = null;
+
+            foreach (var def in ArtilleryCatalog.OfOrigin(origin))
+            {
+                // A heading each time the class changes: a mortar and a gun of
+                // the same calibre are different weapons, and the list should say so.
+                if (lastKind != def.kind)
+                {
+                    SectionLabel(page, def.kind == ArtilleryKind.Mortar ? "MORTARS" : "GUNS & HOWITZERS", y);
+                    y -= 22f;
+                    lastKind = def.kind;
+                }
+
+                ArtilleryButton(page, def, y);
+                y -= 50f;
+            }
+
+            var stop = UIFactory.CreateBorderedPanel(page, "StandDown", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 30));
             var stopBtn = UIFactory.CreateButton(stop, "STAND DOWN",
                 () => { if (_artillery != null) _artillery.Cancel(); },
                 new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
             UIFactory.Stretch((RectTransform)stopBtn.transform);
 
-            var hint = UIFactory.CreateText(content,
-                $"Pick a nature, then click the map to place the target area. A {ArtilleryCatalog.CountdownSeconds:0} " +
-                $"second countdown runs in the HUD, then {ArtilleryCatalog.ShellsPerMission} rounds land inside the " +
-                "circle. Heavier calibres take a wider area and land more slowly. The marker cannot be recalled once " +
-                "the mission is away — right-click or Esc only stands down the tube. Several missions can be in the " +
-                "air at once, so fire can be walked across a position.",
+            var hint = UIFactory.CreateText(page,
+                "Pick a nature, then click the map to place the target area. A ten second countdown runs in the " +
+                "HUD, then " + ArtilleryCatalog.ShellsPerMission + " rounds land inside the circle. The number on " +
+                "each button is that nature's beaten zone. A mission cannot be recalled once away — STAND DOWN " +
+                "only clears the tube. Several can be in the air at once, so fire can be walked across a position.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
-                new Vector2(InnerWidth, 150));
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 44f),
+                new Vector2(InnerWidth, 130));
+        }
 
-            RefreshArtillery();
+        void ShowArtilleryOrigin(ArtilleryOrigin origin)
+        {
+            _artilleryOrigin = origin;
+            foreach (var kv in _artilleryPages) kv.Value.gameObject.SetActive(kv.Key == origin);
+
+            foreach (var (o, fill, label) in _originTabs)
+            {
+                bool on = o == origin;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                if (label != null) label.color = on ? UiTheme.Accent : UiTheme.TextDim;
+            }
         }
 
         void ArtilleryButton(RectTransform content, ArtilleryDef def, float y)
         {
-            var frame = UIFactory.CreateBorderedPanel(content, "Arty_" + def.label, UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+            var frame = UIFactory.CreateBorderedPanel(content, "Arty_" + def.caliber, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 46));
 
             var btn = UIFactory.CreateButton(frame, "",
                 () => { if (_artillery != null) _artillery.Toggle(def.caliber); },
@@ -1154,18 +1252,18 @@ namespace IronMeridian.UI
             var caption = btn.GetComponentInChildren<Text>(true);
             if (caption != null) caption.gameObject.SetActive(false);
 
-            var icon = UIFactory.CreateImage(frame, CaliberGlyph(def.caliber), "Glyph");
+            var icon = UIFactory.CreateImage(frame, CaliberGlyph(def), "Glyph");
             icon.color = def.markerColor;
             icon.raycastTarget = false;
-            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(10, 0), new Vector2(22, 22));
 
             var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
-                46f, InnerWidth - 92f, topInset: 9f);
+                40f, InnerWidth - 88f, topInset: 6f);
 
-            // Target-area radius on the right. It is the number that decides
-            // which nature to call for, so it belongs on the button rather than
-            // only in the hint text.
-            var radius = UIFactory.CreateText(frame, $"{def.radiusMeters:0} m", UiTheme.FontLabel,
+            // Beaten zone on the right. It is the number that decides which
+            // nature to call for, so it belongs on the button rather than only
+            // in the hint text.
+            var radius = UIFactory.CreateText(frame, def.radiusMeters.ToString("0") + " m", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight);
             radius.raycastTarget = false;
             UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
@@ -1190,6 +1288,18 @@ namespace IronMeridian.UI
         AirStrikeSystem _airStrike;
         readonly List<(StrikeAircraft aircraft, Image fill, Text label)> _airStrikeButtons =
             new List<(StrikeAircraft, Image, Text)>();
+
+        /// <summary>
+        /// Button glyph per airframe. The flying wing is the bomber's own
+        /// silhouette; the other two borrow shapes that read at 24 px — a rotor
+        /// disc for the helicopter, a swept dart for the fighter.
+        /// </summary>
+        static Sprite AirframeGlyph(StrikeAircraft aircraft) => aircraft switch
+        {
+            StrikeAircraft.AttackHelicopter => UiIcons.Helicopter,
+            StrikeAircraft.StrikeFighter => UiIcons.Jet,
+            _ => UiIcons.FlyingWing
+        };
 
         /// <summary>
         /// The air-tasking menu. Same shape as the artillery panel because it is
@@ -1240,7 +1350,7 @@ namespace IronMeridian.UI
             var caption = btn.GetComponentInChildren<Text>(true);
             if (caption != null) caption.gameObject.SetActive(false);
 
-            var icon = UIFactory.CreateImage(frame, UiIcons.FlyingWing, "Glyph");
+            var icon = UIFactory.CreateImage(frame, AirframeGlyph(def.aircraft), "Glyph");
             icon.color = def.markerColor;
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
@@ -1263,6 +1373,90 @@ namespace IronMeridian.UI
             foreach (var (aircraft, fill, label) in _airStrikeButtons)
             {
                 bool on = _airStrike.Armed.HasValue && _airStrike.Armed.Value == aircraft;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
+        // --------------------------------------------------- uav strike section
+
+        UavStrikeSystem _uavStrike;
+        readonly List<(UavType uav, Image fill, Text label)> _uavButtons =
+            new List<(UavType, Image, Text)>();
+
+        /// <summary>
+        /// The unmanned menu. Kept separate from AIR STRIKE rather than folded
+        /// into it, because what is being tasked is a different kind of thing: an
+        /// airframe comes back and a loitering munition does not, so the two ask
+        /// different questions of the player and are answered from different
+        /// stocks. Driven entirely from <see cref="UavCatalog"/>.
+        /// </summary>
+        void BuildUavStrikeSection(RectTransform content)
+        {
+            SectionLabel(content, "TASK A UAV", -8);
+
+            float y = -30f;
+            foreach (var def in UavCatalog.All)
+            {
+                UavButton(content, def, y);
+                y -= 58f;
+            }
+
+            var abort = UIFactory.CreateBorderedPanel(content, "AbortUav", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(abort, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 32));
+            var abortBtn = UIFactory.CreateButton(abort, "ABORT TASKING",
+                () => { if (_uavStrike != null) _uavStrike.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)abortBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                "Pick a type, then click the map to place the objective. A ten second countdown runs in the HUD, " +
+                "then the drone launches, flies in and dives onto the point it was given. It is expended on the " +
+                "target — one aircraft, one warhead, and nothing comes back. The blast is deliberately the smallest " +
+                "of any strike here: a loitering munition carries a few kilograms, not a shell, which makes it a " +
+                "precision tool rather than cheap artillery.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
+                new Vector2(InnerWidth, 160));
+
+            RefreshUavStrike();
+        }
+
+        void UavButton(RectTransform content, UavDef def, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Uav_" + def.uav, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_uavStrike != null) _uavStrike.Toggle(def.uav); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, UiIcons.Quadcopter, "Glyph");
+            icon.color = def.markerColor;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
+
+            var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
+                46f, InnerWidth - 92f, topInset: 9f);
+
+            var radius = UIFactory.CreateText(frame, def.radiusMeters.ToString("0") + " m", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight);
+            radius.raycastTarget = false;
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+
+            _uavButtons.Add((def.uav, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>Repaints from the system's state — it owns what is armed, not the panel.</summary>
+        void RefreshUavStrike()
+        {
+            if (_uavStrike == null) return;
+            foreach (var (uav, fill, label) in _uavButtons)
+            {
+                bool on = _uavStrike.Armed.HasValue && _uavStrike.Armed.Value == uav;
                 fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
                 label.color = on ? UiTheme.Accent : UiTheme.Text;
             }
@@ -1702,7 +1896,7 @@ namespace IronMeridian.UI
                 if (!GeoUtils.TrySampleTerrainHeight(_map.Georeference, lat, lon, out double ground))
                 {
                     _lastDropValid = false;
-                    _groundMarker.SetActive(false);
+                    _placementMarker.SetVisible(false);
                     return;
                 }
 
@@ -1710,20 +1904,19 @@ namespace IronMeridian.UI
                 // this point rather than re-raycasting on release, so the unit
                 // cannot land somewhere the preview never showed.
                 _dropLat = lat; _dropLon = lon;
-                _groundMarkerAnchor.longitudeLatitudeHeight =
-                    new Unity.Mathematics.double3(lon, lat, ground + 3.0);
-                _groundMarker.SetActive(true);
+                _placementMarker.MoveTo(lat, lon);
+                _placementMarker.SetVisible(true);
             }
             else
             {
-                _groundMarker.SetActive(false);
+                _placementMarker.SetVisible(false);
             }
         }
 
         void EndDrag(PointerEventData e)
         {
             _dragGhost.gameObject.SetActive(false);
-            _groundMarker.SetActive(false);
+            _placementMarker.SetVisible(false);
             if (_dragging == null) return;
 
             // Released back over the palette, HUD bar or info panel — not a valid
@@ -1747,65 +1940,32 @@ namespace IronMeridian.UI
             _dragging = null;
         }
 
+        /// <summary>
+        /// The drop preview: the same 3D volume a strike target area uses,
+        /// scaled down to a formation's footprint.
+        ///
+        /// It was a flat spinning reticle, which had the failing every decal on
+        /// this map has — at the shallow camera pitch the editor is usually
+        /// worked at, a circle on sloping ground foreshortens into a line, and
+        /// behind a fold of terrain it disappears entirely. You could not see
+        /// where you were about to put a battalion. A volume standing on the
+        /// ground reads from any angle, and reusing TargetAreaMarker means the
+        /// preview and the strike markers stay visually consistent for free —
+        /// motes included.
+        /// </summary>
         void BuildGroundMarker()
         {
-            _groundMarker = new GameObject("PlacementPreview");
-            _groundMarker.transform.SetParent(_map.Georeference.transform, false);
-            _groundMarkerAnchor = _groundMarker.AddComponent<CesiumGlobeAnchor>();
-
-            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            Destroy(quad.GetComponent<Collider>());
-            quad.transform.SetParent(_groundMarker.transform, false);
-            quad.transform.localRotation = Quaternion.Euler(90, 0, 0);
-            quad.transform.localScale = Vector3.one * 320f;
-            var mat = RuntimeMaterials.UnlitTexture(ProceduralTextures.Reticle(UiTheme.Accent));
-            quad.GetComponent<MeshRenderer>().material = mat;
-
-            _markerAnim = _groundMarker.AddComponent<PlacementMarker>();
-            _markerAnim.Init(quad.transform, mat);
-
-            _groundMarker.SetActive(false);
+            _placementMarker = TargetAreaMarker.Create(_map.Georeference,
+                PlacementRadiusMeters, UiTheme.Accent);
+            _placementMarker.SetAlarm(0f);
+            _placementMarker.SetVisible(false);
         }
 
         /// <summary>
-        /// Idle animation for the drop reticle: a slow spin plus a breathing
-        /// pulse, so it reads as a live cursor rather than a decal stamped on
-        /// the imagery. Scale is driven in world metres, so it stays a constant
-        /// ground footprint regardless of zoom.
+        /// Footprint of the drop preview, metres. About the ground a deployed
+        /// battalion's icon covers, so what you see is the space it will take.
         /// </summary>
-        class PlacementMarker : MonoBehaviour
-        {
-            const float BaseSize = 320f;
-
-            Transform _quad;
-            Material _mat;
-            float _t;
-
-            public void Init(Transform quad, Material mat)
-            {
-                _quad = quad; _mat = mat;
-            }
-
-            // Re-shown each time the pointer re-enters valid terrain, which
-            // replays the pop-in.
-            void OnEnable() => _t = 0f;
-
-            void Update()
-            {
-                if (_quad == null) return;
-                _t += Time.unscaledDeltaTime;
-
-                float pop = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_t / 0.18f));
-                float breathe = 1f + Mathf.Sin(_t * 3.4f) * 0.05f;
-                _quad.localScale = Vector3.one * (BaseSize * pop * breathe);
-
-                _quad.localRotation = Quaternion.Euler(90f, 0f, _t * 26f);
-
-                var c = _mat.color;
-                c.a = Mathf.Lerp(0.35f, 0.95f, (Mathf.Sin(_t * 3.4f) + 1f) * 0.5f) * pop;
-                _mat.color = c;
-            }
-        }
+        const float PlacementRadiusMeters = 260f;
 
         void OnDestroy()
         {
@@ -1817,6 +1977,7 @@ namespace IronMeridian.UI
             if (_effects != null) _effects.ArmedChanged -= RefreshEffects;
             if (_artillery != null) _artillery.ArmedChanged -= RefreshArtillery;
             if (_airStrike != null) _airStrike.ArmedChanged -= RefreshAirStrike;
+            if (_uavStrike != null) _uavStrike.ArmedChanged -= RefreshUavStrike;
             if (_map == null) return;
             _map.ViewModeChanged -= OnViewModeChanged;
             _map.StyleChanged -= OnStyleChanged;

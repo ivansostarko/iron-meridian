@@ -3,11 +3,27 @@
 ## Screen flow
 
 ```
-Main Menu ── TESTING ──┬── DEV ................ game screen (Lyon)
-    │                  └── MAP EAST FRANCE .... "Under development"
+Main Menu ── SINGLE PLAYER ..... "Under development"
+    ├── MULTIPLAYER ....... "Under development"
+    ├── EXTRAS ............ "Under development"
+    ├── TESTING ──┬── DEV ................ game screen (Lyon)
+    │             └── MAP EAST FRANCE .... "Under development"
     ├── SETTINGS ──┬── VIDEO SETTINGS (resolution, window mode, v-sync)
     │              └── AUDIO SETTINGS (master volume for the whole game)
     └── QUIT ...... confirmation modal
+
+**Play modes first, tools second.** SINGLE PLAYER, MULTIPLAYER and EXTRAS are
+placeholders — each is a real screen with its own background and music entry, a
+plain "under development" statement and a way back — but they sit above TESTING
+because that is the order the menu will read in when they are built, and moving
+them later would retrain the player for nothing. QUIT stays last, where it cannot
+be hit by accident.
+
+Each placeholder **names its own artwork and its own track** in
+`BackgroundCatalog` / `AudioCatalog`, and falls back to the shared menu image and
+bed until those files exist. Dropping a file in at the path the catalogue row
+names is the whole of the work — no code change. See docs/11-GAME-MENU.md and
+docs/10-AUDIO.md.
 ```
 
 ## The game screen (DEV)
@@ -39,11 +55,12 @@ The editor's left chrome is in two pieces:
 | Nav row | What the panel shows |
 |---|---|
 | **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight** and **fog of war** |
-| **UNITS** | Team, echelon, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
+| **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
 | **CONTROL MEASURES** | The five kinds of line that can be drawn by hand — picking one opens its options on the right |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
-| **ARTILLERY STRIKE** | Call for fire — see docs/17-ARTILLERY.md |
-| **AIR STRIKE** | Task an airframe — see docs/18-AIR-STRIKES.md |
+| **ARTILLERY STRIKE** | Call for fire — NATO / Russian tabs, 14 natures. See docs/17-ARTILLERY.md |
+| **AIR STRIKE** | Task an airframe — bomber, fighter or helicopter. See docs/18-AIR-STRIKES.md |
+| **UAV STRIKES** | Task a loitering munition — see docs/19-UAV-STRIKES.md |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
 | **MAP** | Tile style, 2D/3D, layers, unit-label size |
 | **DATE AND TIME** | Scenario H-hour and presets |
@@ -67,11 +84,15 @@ Click a row to open it; click the **same** row again, or the **✕** in the pane
 
 ### Deploying units (drag & drop)
 
-Open **UNITS** in the left rail — the panel lists all 37 unit types with their icons:
+Open **UNITS** in the left rail — the panel lists all 37 unit types with their icons.
+
+**There is no echelon picker.** Units deploy at **battalion**, which is the echelon an operational map is actually drawn at — brigades are too coarse to manoeuvre and companies too many to command. A dropdown listing every size from section to army, sitting above a list of 37 types, made deploying one unit a two-control operation and put the rarely-wanted choice in front of the always-wanted one; a formation's size is changed after the fact from the info panel, where the rest of its details are edited anyway.
+
 
 1. Pick the team tab (**FRIENDLY** / **ENEMY**). Affiliation follows from it — friendly units are Friendly, enemy units Hostile — so there is no separate picker to contradict the tab.
-2. Choose the **Echelon** (Team ... Army). Echelon scales manpower and combat power.
-3. **Drag** a unit card onto the terrain — it deploys where you drop it.
+2. **Drag** a unit card onto the terrain — it deploys where you drop it, at battalion strength.
+
+The drop is ground-checked twice: the cursor must be over the terrain **and** the ground under that point must be measurable. The two come apart at a tile seam, where a unit would otherwise land at the fallback height — floating over a valley or buried in a ridge.
 
 The cards carry drag handlers, which means dragging one *deploys* rather than
 scrolls the list. Use the wheel or the scrollbar on the right of the list to
@@ -86,6 +107,15 @@ reach the units past the fold.
 | **Shift + right-click** terrain | **Adds a waypoint** to the end of the current march instead of replacing it (battle mode) |
 | `C` | Aim the selection's facing: move the mouse to swing every selected unit onto a bearing. The heading arrows brighten and the status line reads the live bearing. LMB/Enter confirms, `Esc` cancels |
 | `Esc` | Deselect |
+| **Hover** a unit icon | Tooltip beside the cursor: side, type, echelon, strength bar, status, morale/organisation/ammo/fuel and both ranges |
+
+**Hovering costs nothing.** Identifying a counter used to mean selecting it,
+which replaces the current selection, closes whatever is open on the right and
+cancels any order being aimed. Reading the map should not have side effects, so
+the tooltip answers "what is that?" without a click. It is shown in both scenario
+and battle mode — the information is as useful laying a scenario out as fighting
+it — and never appears for a formation the fog is hiding, since the icon is gone
+precisely so its position is unknown.
 
 The **heading arrow** is drawn flat on the ground ahead of the icon in the unit's
 team colour, in both 2D and 3D and in both scenario and battle mode. It is the

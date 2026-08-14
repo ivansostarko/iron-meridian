@@ -67,7 +67,24 @@ There is currently **one** volume slider (master). Separate music/ambience/SFX b
 |---|---|---|---|---|---|---|
 | Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **All six**: Main Menu, Settings, Testing, Units List, East France, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
 
-Track id in code: `MusicTrack.MenuTheme`.
+| Single player | *not supplied yet* | `Audio/main-menu/single_player` | Single Player | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
+| Multiplayer | *not supplied yet* | `Audio/main-menu/multiplayer` | Multiplayer | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
+| Extras | *not supplied yet* | `Audio/main-menu/extras` | Extras | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
+
+Track ids in code: `MusicTrack.MenuTheme` / `.SinglePlayerTheme` / `.MultiplayerTheme` / `.ExtrasTheme`.
+
+**Fallbacks.** A `MusicDef` may name a `fallback`. The three screens above have no
+track yet and borrow the menu theme, so they are scored rather than silent —
+silence reads as a bug where a shared bed reads as a screen that has not been
+scored yet. Drop an audio file at the resource path the row names and it is used
+on the next run, with no code change.
+
+There is one sharp edge, and `MusicManager` handles it: the "already playing this
+track" early return compares **tracks**, and two screens that both borrow the menu
+theme are different tracks resolving to the same file. Without a second check on
+the resolved *clip*, navigating between them would stop and restart the same
+audio — precisely the restart-on-every-navigation this manager exists to prevent
+(golden rule 9).
 
 > The folder is named `main-menu` because that is where the track was first used; it is now the game-wide bed. Renaming it means updating `AudioCatalog.MenuTheme.resourcePath`.
 
@@ -104,8 +121,11 @@ Every effect in `VfxCatalog` can carry a sound; it is a field on the catalogue r
 | Artillery 155 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_155.*` | `ArtilleryMediumBurst` | No | The reference report: deep body, long tail. 92 → 30 Hz over 0.85 s. |
 | Artillery 203 mm | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/artillery_203.*` | `ArtilleryHeavyBurst` | No | Very low and slow to decay, with a rolling echo. 66 → 19 Hz over 1.35 s, 4.2 s clip. |
 | Aerial bomb | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/aerial_bomb.*` | `AerialBombBurst` | No | Deeper and longer than any tube: 58 → 15 Hz over 1.7 s, 5 s clip. The heaviest detonation in the game. |
+| UAV warhead | **Synthesised** (`ProceduralAudio.Shell`) — or `Audio/effects/uav_warhead.*` | `UavWarheadBurst` | No | High and sharp and gone: 240 → 95 Hz over 0.28 s, 1.4 s clip. A few kilograms, not a shell — the lightest detonation in the game. |
 
-Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact` / `.ArtilleryLight` / `.ArtilleryMortar` / `.ArtilleryMedium` / `.ArtilleryHeavy` / `.AerialBomb` (and `.JetPass`, which is not carried by an effect — see §2.4). `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle. Artillery *smoke* carries no sound of its own for the two lighter natures either; the heavier two reuse the smoke hiss.
+Ids in code: `EffectSound.Fire` / `.Explosion` / `.Smoke` / `.Impact` / `.ArtilleryLight` / `.ArtilleryMortar` / `.ArtilleryMedium` / `.ArtilleryHeavy` / `.AerialBomb` / `.UavWarhead` (and `.JetPass` / `.DroneBuzz`, which are not carried by effects — see §2.4).
+
+**Fourteen artillery natures, four reports.** The natures map onto the four calibre-band reports the same way they map onto four burst effects — see docs/17-ARTILLERY.md. What tells a 122 mm from a 152 mm apart by ear at map scale is the *rate of fire*, which the catalogue varies per nature, not a fifth waveform. `WeaponFire` and `Dust` carry no sound — at one puff per firing formation they would turn a front line into a rattle. Artillery *smoke* carries no sound of its own for the two lighter natures either; the heavier two reuse the smoke hiss.
 
 **Why four artillery reports rather than one.** Calibre is audible in real life — a 105 mm round cracks, a 203 mm round is felt before it is heard — so a fire mission that sounds the same whatever was called for throws away the one cue that tells the player which battery answered. All four come from a single parameterised synthesiser, `ProceduralAudio.Shell`, layering a pitch-falling **body**, a filtered noise **crack** and a slow **rumble** bed; opening the crack filter and raising the body gives a light gun, closing it and dropping the body gives a heavy one. Each calibre uses a fixed seed, so a nature always sounds like itself between runs. See docs/17-ARTILLERY.md.
 
@@ -132,6 +152,7 @@ Sounds played directly rather than carried by a particle effect's catalogue row.
 | Sound | Source | Played by | Loops | Description |
 |---|---|---|---|---|
 | Jet pass | **Synthesised** (`ProceduralAudio.JetPass`) — or `Assets/Resources/Audio/effects/jet_pass.*` | `BomberRun.Launch`, parented to the aircraft | No | Broadband roar swelling and fading over a turbine tone that slides 115 → 62 Hz. 6 s. |
+| Drone buzz | **Synthesised** (`ProceduralAudio.DroneBuzz`) — or `Audio/effects/drone_buzz.*` | `DroneRun.Launch`, parented to the drone | **Yes** | Five detuned blade-pass tones (118–237 Hz) over a thin hiss. The detuning is the trick: four propellers never turn at exactly the same rate, and the slow beating between them is what the ear reads as a multirotor rather than a wasp. Cut the instant the warhead goes off. |
 
 `EffectSound.JetPass` is the first sound in the project **not** attached to a `VfxId`, because the thing making it is an aircraft rather than an effect. It is played with `EffectAudio.PlayAt(..., parent: aircraft)` so it travels with the aeroplane and is loudest as it passes overhead.
 

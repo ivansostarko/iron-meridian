@@ -39,11 +39,13 @@ namespace IronMeridian.Core
         EffectPlacementTool _effects;
         ArtilleryStrikeSystem _artillery;
         AirStrikeSystem _airStrike;
+        UavStrikeSystem _uavStrike;
 
         // Latest countdown reported by each strike system. A null title means
         // that system has nothing in the air; see RefreshStrikeBanner.
         (string title, float remaining, float total, Color colour) _artilleryBanner;
         (string title, float remaining, float total, Color colour) _airStrikeBanner;
+        (string title, float remaining, float total, Color colour) _uavStrikeBanner;
 
         /// <summary>
         /// Shows whichever strike is closest to landing. Ties are impossible in
@@ -53,9 +55,12 @@ namespace IronMeridian.Core
         {
             var pick = _artilleryBanner;
 
-            bool airIsSooner = _airStrikeBanner.title != null &&
-                               (pick.title == null || _airStrikeBanner.remaining < pick.remaining);
-            if (airIsSooner) pick = _airStrikeBanner;
+            foreach (var other in new[] { _airStrikeBanner, _uavStrikeBanner })
+            {
+                bool sooner = other.title != null &&
+                              (pick.title == null || other.remaining < pick.remaining);
+                if (sooner) pick = other;
+            }
 
             _hud.SetFireMission(pick.title, pick.remaining, pick.total,
                 pick.title == null ? UiTheme.Accent : pick.colour);
@@ -65,6 +70,7 @@ namespace IronMeridian.Core
         GameHUD _hud;
         UnitPaletteUI _palette;
         BoundaryPanelUI _boundaryPanel;
+        UnitHoverTooltip _hoverTooltip;
         UnitInfoPanel _infoPanel;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -178,6 +184,10 @@ namespace IronMeridian.Core
             _airStrike = gameObject.AddComponent<AirStrikeSystem>();
             _airStrike.Init(_map, _rig.Cam);
 
+            // Tasked UAV strikes — see docs/19-UAV-STRIKES.md.
+            _uavStrike = gameObject.AddComponent<UavStrikeSystem>();
+            _uavStrike.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
@@ -186,6 +196,7 @@ namespace IronMeridian.Core
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
                                             _airStrike.IsArmed ||
+                                            _uavStrike.IsArmed ||
                                             _drawTool.Current != LineDrawTool.Mode.None;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -202,10 +213,17 @@ namespace IronMeridian.Core
 
             _hud = gameObject.AddComponent<GameHUD>();
             _hud.Build(canvas, _combat, _clock);
+
+            // Identifying a counter should not cost a click. Built after the HUD
+            // so it draws over it, and shown in both modes — the information is
+            // as useful when laying a scenario out as when fighting it.
+            _hoverTooltip = UnitHoverTooltip.Create(canvas);
+            _selection.HoverChanged = u => _hoverTooltip.Show(u);
             _selection.Flash = _hud.Flash;
             _effects.Flash = _hud.Flash;
             _artillery.Flash = _hud.Flash;
             _airStrike.Flash = _hud.Flash;
+            _uavStrike.Flash = _hud.Flash;
 
             // Both strike systems report their countdown every frame, and there
             // is one banner. Left to themselves they would fight over it — the
@@ -220,6 +238,11 @@ namespace IronMeridian.Core
             _airStrike.CountdownChanged = (title, remaining, total, colour) =>
             {
                 _airStrikeBanner = (title, remaining, total, colour);
+                RefreshStrikeBanner();
+            };
+            _uavStrike.CountdownChanged = (title, remaining, total, colour) =>
+            {
+                _uavStrikeBanner = (title, remaining, total, colour);
                 RefreshStrikeBanner();
             };
 
@@ -259,7 +282,7 @@ namespace IronMeridian.Core
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _artillery, _airStrike, _mapControls, _drawTool);
+                    _artillery, _airStrike, _uavStrike, _mapControls, _drawTool);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
