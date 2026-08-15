@@ -33,6 +33,12 @@ namespace IronMeridian.Vfx
         protected override string NameFor(ArtilleryCaliber key) =>
             ArtilleryCatalog.Get(key).name;
 
+        protected override string BudgetKeyFor(ArtilleryCaliber key) =>
+            ArtilleryCatalog.BudgetKey(key);
+
+        protected override int BudgetLimitFor(ArtilleryCaliber key) =>
+            ArtilleryCatalog.Get(key).missions;
+
         protected override float CountdownFor(ArtilleryCaliber key) =>
             ArtilleryCatalog.CountdownSeconds;
 

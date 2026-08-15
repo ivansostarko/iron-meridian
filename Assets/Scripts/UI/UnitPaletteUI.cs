@@ -5,7 +5,6 @@ using UnityEngine.UI;
 using CesiumForUnity;
 using IronMeridian.Core;
 using IronMeridian.Data;
-using IronMeridian.Lines;
 using IronMeridian.Map;
 using IronMeridian.Save;
 using IronMeridian.Units;
@@ -61,8 +60,6 @@ namespace IronMeridian.UI
 
         // Tool strip.
         public System.Action SelectToolRequested;
-        public System.Action BoundaryToolRequested;
-        public System.Action DefensiveLineToolRequested;
 
         // Deployed list.
         public System.Action<UnitActor> SelectUnitRequested;
@@ -72,15 +69,7 @@ namespace IronMeridian.UI
 
         enum Section
         {
-            General, Units, Commanders, Boundaries, Effects, Artillery, AirStrike, UavStrike,
-            /// <summary>
-            /// The odd one out: it has no section panel of its own and opens a
-            /// board docked in the section panel's place. See
-            /// <see cref="MissileSystemsRequested"/>.
-            /// </summary>
-            Missiles,
-            NavalStrike,
-            Missions,
+            General, Units, Players, Commanders, Effects, Missions,
             Weather, Map, DateTime
         }
         enum ListMode { Available, Deployed }
@@ -148,8 +137,8 @@ namespace IronMeridian.UI
         /// space rather than leaving a gap where a control used to be.
         /// </summary>
         const float ListTop = -90f;
-        /// <summary>Emblem block plus the fourteen nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 554f;
+        /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 374f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -242,7 +231,12 @@ namespace IronMeridian.UI
 
         MapManager _map;
         MapControlsUI _mapControls;
-        LineDrawTool _drawTool;
+        /// <summary>
+        /// The fire menus' host. The four sections built here that belong to it
+        /// are laid out into its pages rather than into this rail's section
+        /// panel — see <see cref="StrikeDockUI"/> for why they left the rail.
+        /// </summary>
+        StrikeDockUI _strikeDock;
         GameClock _clock;
         WeatherSystem _weather;
         EffectPlacementTool _effects;
@@ -267,7 +261,7 @@ namespace IronMeridian.UI
             GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
             ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
             UavStrikeSystem uavStrike, NavalStrikeSystem naval,
-            MapControlsUI mapControls, LineDrawTool drawTool)
+            MapControlsUI mapControls, StrikeDockUI strikeDock)
         {
             _canvas = canvas;
             _map = map;
@@ -281,7 +275,7 @@ namespace IronMeridian.UI
             _uavStrike = uavStrike;
             _naval = naval;
             _mapControls = mapControls;
-            _drawTool = drawTool;
+            _strikeDock = strikeDock;
 
             // The section panel is created first so it draws *behind* the rail —
             // uGUI paints in hierarchy order, and the closed position tucks the
@@ -306,13 +300,9 @@ namespace IronMeridian.UI
 
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
+            _sectionContent[Section.Players] = MakeSectionContent(body, "Players");
             _sectionContent[Section.Commanders] = MakeSectionContent(body, "Commanders");
-            _sectionContent[Section.Boundaries] = MakeSectionContent(body, "Boundaries");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
-            _sectionContent[Section.Artillery] = MakeSectionContent(body, "Artillery");
-            _sectionContent[Section.AirStrike] = MakeSectionContent(body, "AirStrike");
-            _sectionContent[Section.UavStrike] = MakeSectionContent(body, "UavStrike");
-            _sectionContent[Section.NavalStrike] = MakeSectionContent(body, "NavalStrike");
             _sectionContent[Section.Missions] = MakeSectionContent(body, "Missions");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
@@ -320,17 +310,25 @@ namespace IronMeridian.UI
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
+            BuildPlayersSection(_sectionContent[Section.Players]);
             BuildCommandersSection(_sectionContent[Section.Commanders]);
-            BuildBoundariesSection(_sectionContent[Section.Boundaries]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
-            BuildArtillerySection(_sectionContent[Section.Artillery]);
-            BuildAirStrikeSection(_sectionContent[Section.AirStrike]);
-            BuildUavStrikeSection(_sectionContent[Section.UavStrike]);
-            BuildNavalStrikeSection(_sectionContent[Section.NavalStrike]);
             BuildMissionsSection(_sectionContent[Section.Missions]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
+
+            // The four fire menus live in the strike dock's pages rather than in
+            // this rail. They are still built here because their controls are
+            // driven from catalogues this class already holds references to —
+            // what moved is where they are drawn, not who draws them.
+            if (_strikeDock != null)
+            {
+                BuildArtillerySection(_strikeDock.PageFor(StrikeDockUI.Menu.Artillery));
+                BuildAirStrikeSection(_strikeDock.PageFor(StrikeDockUI.Menu.AirStrike));
+                BuildUavStrikeSection(_strikeDock.PageFor(StrikeDockUI.Menu.UavStrike));
+                BuildNavalStrikeSection(_strikeDock.PageFor(StrikeDockUI.Menu.NavalStrike));
+            }
 
             BuildToolStrip(panel);
             OpenSection(Section.Units);
@@ -425,23 +423,9 @@ namespace IronMeridian.UI
             return body;
         }
 
-        /// <summary>Raised by the MISSILE SYSTEMS nav row; the controller opens the right-hand board.</summary>
-        public System.Action MissileSystemsRequested;
-
         /// <summary>Opens a section, or closes the panel if that section is already showing.</summary>
         void OpenSection(Section section)
         {
-            // MISSILE SYSTEMS has no section of its own. It closes the sliding
-            // panel and hands over to the right-hand board, which is honest
-            // about where the controls actually are — leaving the left panel
-            // open on whatever was last shown would look like the click missed.
-            if (section == Section.Missiles)
-            {
-                ClosePanel();
-                MissileSystemsRequested?.Invoke();
-                return;
-            }
-
             if (_panelOpen && _section == section) { ClosePanel(); return; }
 
             _section = section;
@@ -502,26 +486,12 @@ namespace IronMeridian.UI
         /// </summary>
         bool _chromeHidden;
 
-        /// <summary>True while the right-hand missile board is up; drives its nav row's highlight.</summary>
-        bool _missilesOpen;
-
-        /// <summary>
-        /// Tells the rail whether the missile board is showing. Its row cannot
-        /// use the section panel's own open state — it has no section — and a
-        /// nav row that never lights up reads as a button that did nothing.
-        /// </summary>
-        public void SetMissilePanelOpen(bool open)
-        {
-            _missilesOpen = open;
-            PaintNav();
-        }
-
         /// <summary>Which nav row reads as active — none at all while the panel is closed.</summary>
         void PaintNav()
         {
             foreach (var (s, _, fill, glyph, label, bar) in _navRows)
             {
-                bool on = s == Section.Missiles ? _missilesOpen : (_panelOpen && s == _section);
+                bool on = _panelOpen && s == _section;
                 fill.color = on ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
                 glyph.color = on ? UiTheme.Accent : UiTheme.TextFaint;
                 label.color = on ? UiTheme.Text : UiTheme.TextDim;
@@ -593,26 +563,23 @@ namespace IronMeridian.UI
             emblem.raycastTarget = false;
             UIFactory.Place((RectTransform)emblem.transform, new Vector2(0f, 1f), new Vector2(Pad, -14), new Vector2(19, 19));
 
+            // Nine rows, not fifteen. The five fire menus went to the strike
+            // dock at the top right (they are things you *do* in a scenario,
+            // not things you set one up with), and CONTROL MEASURES went
+            // altogether. What is left is the authoring nav, in the order a
+            // scenario is actually built: the ground rules, the forces, who is
+            // fighting, who commands, then the dressing.
             AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
-            AddNavRow(panel, Section.Boundaries, "CONTROL MEASURES", UiIcons.Square, -116);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -152);
-            AddNavRow(panel, Section.Artillery, "ARTILLERY STRIKE", UiIcons.Artillery, -188);
-            AddNavRow(panel, Section.AirStrike, "AIR STRIKE", UiIcons.FlyingWing, -224);
-            AddNavRow(panel, Section.UavStrike, "UAV STRIKES", UiIcons.Quadcopter, -260);
-            // Opens a panel on the *right* rather than a section in the sliding
-            // panel — see MissilePanelUI for why that one needs the width.
-            AddNavRow(panel, Section.Missiles, "MISSILE SYSTEMS", UiIcons.Interceptor, -296);
-            // Last of the five fire menus, so all the ways of putting explosives
-            // on a piece of ground sit together in the rail.
-            AddNavRow(panel, Section.NavalStrike, "NAVY STRIKE", UiIcons.Warship, -332);
+            AddNavRow(panel, Section.Players, "PLAYERS", UiIcons.Shield, -116);
+            AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -152);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -188);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -368);
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -404);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -440);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -476);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -512);
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -224);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -260);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -296);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -332);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -1207,15 +1174,16 @@ namespace IronMeridian.UI
 
             // Names the icon row. It used to sit under a full panel of labelled
             // controls that gave it context; alone at the foot of the rail it
-            // reads as five unexplained glyphs without this.
+            // reads as unexplained glyphs without this.
             var caption = UIFactory.CreateSectionHeader(strip, "TOOLS", UiTheme.TextFaint);
             UIFactory.PlaceTopLeft(caption.rectTransform, Pad, 8f, RailWidth - Pad * 2f, 14f);
 
+            // Three tools, not five. The pencil and the square drew control
+            // measures by hand; that whole feature is gone — see the class
+            // remarks and docs/03-GAMEPLAY.md. Only the cursor latches now.
             AddTool(strip, 0, UiIcons.Cursor, () => SelectToolRequested?.Invoke());
-            AddTool(strip, 1, UiIcons.Pencil, () => DefensiveLineToolRequested?.Invoke());
-            AddTool(strip, 2, UiIcons.Square, () => BoundaryToolRequested?.Invoke());
-            AddTool(strip, 3, UiIcons.Pin, () => GenerateSectorsRequested?.Invoke());
-            AddTool(strip, 4, UiIcons.Chart, ToggleView);
+            AddTool(strip, 1, UiIcons.Pin, () => GenerateSectorsRequested?.Invoke());
+            AddTool(strip, 2, UiIcons.Chart, ToggleView);
 
             SetActiveTool(0);
         }
@@ -1230,8 +1198,8 @@ namespace IronMeridian.UI
             var btn = UIFactory.CreateIconButton(frame, glyph, () =>
             {
                 // Sector generation and the view toggle are one-shot commands,
-                // not modes — only the first three latch.
-                if (captured <= 2) SetActiveTool(captured);
+                // not modes — only the cursor latches.
+                if (captured == 0) SetActiveTool(captured);
                 action();
             }, new Color(0, 0, 0, 0), UiTheme.TextDim, 8f);
             UIFactory.Stretch((RectTransform)btn.transform);
@@ -1253,70 +1221,8 @@ namespace IronMeridian.UI
             }
         }
 
-        /// <summary>Called by the controller when the draw tool exits on its own.</summary>
+        /// <summary>Puts the cursor tool back on top. Kept for callers that end a mode.</summary>
         public void ResetToolToSelect() => SetActiveTool(0);
-
-        // -------------------------------------------------- boundaries section
-
-        /// <summary>Raised with the kind to draw; the controller opens the options panel.</summary>
-        public System.Action<LineKind> ControlMeasureRequested;
-
-        /// <summary>
-        /// The kinds of control measure that can be drawn by hand.
-        ///
-        /// Picking a kind is a separate decision from styling it, which is why
-        /// this is a section in the rail and the options are a panel on the
-        /// right: kind changes how the line should be laid on the ground — a
-        /// rear boundary runs parallel to the front, a lateral one runs into it
-        /// — so it is chosen before anything else and then left alone, while
-        /// colour and width are fiddled with until they look right.
-        /// </summary>
-        void BuildBoundariesSection(RectTransform content)
-        {
-            SectionLabel(content, "DRAW A CONTROL MEASURE", -8);
-
-            float y = -30f;
-            foreach (var (kind, name, detail) in BoundaryPanelUI.Kinds)
-            {
-                ControlMeasureButton(content, kind, name, detail, y);
-                y -= 58f;
-            }
-
-            var stop = UIFactory.CreateBorderedPanel(content, "StopDrawing", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 32));
-            var stopBtn = UIFactory.CreateButton(stop, "STOP DRAWING",
-                () => { SelectToolRequested?.Invoke(); ResetToolToSelect(); },
-                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
-            UIFactory.Stretch((RectTransform)stopBtn.transform);
-
-            var hint = UIFactory.CreateText(content,
-                "Pick a kind, set it up in the panel on the right, then click the map to place each vertex. " +
-                "Enter or double-click finishes the line; Esc abandons it. The style carries over, so a run of " +
-                "phase lines only needs setting up once.",
-                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
-                new Vector2(InnerWidth, 110));
-        }
-
-        void ControlMeasureButton(RectTransform content, LineKind kind, string name, string detail, float y)
-        {
-            var frame = UIFactory.CreateBorderedPanel(content, "Kind_" + name, UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
-
-            var btn = UIFactory.CreateButton(frame, "",
-                () => ControlMeasureRequested?.Invoke(kind),
-                new Color(0, 0, 0, 0), UiTheme.Text, 1);
-            UIFactory.Stretch((RectTransform)btn.transform);
-            var caption = btn.GetComponentInChildren<Text>(true);
-            if (caption != null) caption.gameObject.SetActive(false);
-
-            var icon = UIFactory.CreateImage(frame, UiIcons.Square, "Glyph");
-            icon.color = UiTheme.Accent;
-            icon.raycastTarget = false;
-            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(20, 20));
-
-            UIFactory.CreateStackedLabels(frame, name, detail, 42f, InnerWidth - 54f, topInset: 9f);
-        }
 
         // ----------------------------------------------------- effects section
 
@@ -1550,7 +1456,9 @@ namespace IronMeridian.UI
             var radius = UIFactory.CreateText(frame, def.radiusMeters.ToString("0") + " m", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight);
             radius.raycastTarget = false;
-            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 6), new Vector2(52, 14));
+
+            AllowanceLabel(frame, ArtilleryCatalog.BudgetKey(def.caliber), def.missions);
 
             _artilleryButtons.Add((def.caliber, frame.Find("Fill").GetComponent<Image>(), name));
         }
@@ -1646,7 +1554,9 @@ namespace IronMeridian.UI
             var radius = UIFactory.CreateText(frame, $"{def.radiusMeters:0} m", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight);
             radius.raycastTarget = false;
-            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 7), new Vector2(52, 14));
+
+            AllowanceLabel(frame, AirStrikeCatalog.BudgetKey(def.aircraft), def.missions);
 
             _airStrikeButtons.Add((def.aircraft, frame.Find("Fill").GetComponent<Image>(), name));
         }
@@ -1706,7 +1616,8 @@ namespace IronMeridian.UI
                 "everything inside that circle, and flies home. What it saw stays on the map as last-known " +
                 "contacts. Turn FOG OF WAR on in GENERAL and start the battle, or there is nothing for it to " +
                 "uncover.\n\n" +
-                "Every sortie, armed or not, costs one of the scenario's 99 strikes.",
+                "Each type has its own allowance — the second figure on its button. Every sortie, " +
+                "armed or not, spends one of them, and running one type out does not touch the others.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
                 new Vector2(InnerWidth, 300));
@@ -1745,7 +1656,9 @@ namespace IronMeridian.UI
             var radius = UIFactory.CreateText(frame, figure, UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight);
             radius.raycastTarget = false;
-            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 7), new Vector2(52, 14));
+
+            AllowanceLabel(frame, UavCatalog.BudgetKey(def.uav), def.missions);
 
             _uavButtons.Add((def.uav, frame.Find("Fill").GetComponent<Image>(), name));
         }
@@ -1864,8 +1777,8 @@ namespace IronMeridian.UI
                 "burst, smoke and report.\n\n" +
                 "Naval mountings are automatic, so a mission is more rounds, faster, than a battery's five. " +
                 "The number on each button is the beaten zone; the round count is on the line beneath it.\n\n" +
-                "A mission cannot be recalled once away — CHECK FIRE only stands the gun down. Every mission " +
-                "spends one of the scenario's 99 strikes.",
+                "A mission cannot be recalled once away — CHECK FIRE only stands the gun down. Each mounting " +
+                "has its own allowance, shown as the second figure on its button.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 44f),
                 new Vector2(InnerWidth, 250));
@@ -1903,17 +1816,22 @@ namespace IronMeridian.UI
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(10, 0),
                 new Vector2(22, 22));
 
-            var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
+            // The round count moves into the detail line. It is a fixed property
+            // of the mounting — it never changes while you play — so it belongs
+            // with the prose that describes the gun, and it frees the right-hand
+            // column for the two figures that do change the decision: the beaten
+            // zone and how many missions are left.
+            var (name, _) = UIFactory.CreateStackedLabels(frame,
+                def.label, $"{def.detail}  ·  {def.roundsPerMission} rds",
                 40f, InnerWidth - 88f, topInset: 6f);
 
-            // Beaten zone over round count: the two numbers that decide which
-            // gun to call for, and the pair that says what "naval" means here.
-            var figures = UIFactory.CreateText(frame,
-                $"{def.radiusMeters:0} m\n{def.roundsPerMission} rds",
+            var radius = UIFactory.CreateText(frame, $"{def.radiusMeters:0} m",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
-            figures.raycastTarget = false;
-            UIFactory.Place(figures.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
-                new Vector2(52, 30));
+            radius.raycastTarget = false;
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 6),
+                new Vector2(52, 14));
+
+            AllowanceLabel(frame, NavalCatalog.BudgetKey(def.gun), def.missions);
 
             _navalButtons.Add((def.gun, frame.Find("Fill").GetComponent<Image>(), name));
         }
@@ -1928,6 +1846,23 @@ namespace IronMeridian.UI
                 fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
                 label.color = on ? UiTheme.Accent : UiTheme.Text;
             }
+        }
+
+        // ----------------------------------------------------- players section
+
+        PlayerPanel _players;
+
+        /// <summary>
+        /// Who is fighting this scenario. Built by <see cref="PlayerPanel"/>
+        /// rather than inline, for the same reason the commanders section is:
+        /// it is a small application of its own and this file is long enough.
+        /// See docs/25-PLAYERS.md.
+        /// </summary>
+        void BuildPlayersSection(RectTransform content)
+        {
+            _players = new PlayerPanel(content);
+            _players.Flash = m => DropRejected?.Invoke(m);
+            _players.Build();
         }
 
         // -------------------------------------------------- commanders section
@@ -2753,8 +2688,6 @@ namespace IronMeridian.UI
         /// Latches the tool strip's boundary button, so an armed draw tool reads
         /// the same in the rail as it does in the options panel that armed it.
         /// </summary>
-        public void MarkBoundaryToolActive() => SetActiveTool(2);
-
         /// <summary>Repaints every toggle and readout from the systems that own the state.</summary>
         void RefreshMapSection()
         {
@@ -2792,7 +2725,13 @@ namespace IronMeridian.UI
         // --------------------------------------------------- strike allowance
 
         /// <summary>Every "STRIKES REMAINING" readout on the rail, repainted together.</summary>
-        readonly List<Text> _budgetLabels = new List<Text>();
+        /// <summary>
+        /// Every per-system "missions left" readout on a fire button, with the
+        /// budget key and limit it reports. Repainted together whenever a
+        /// mission is spent — see <see cref="RefreshStrikeBudget"/>.
+        /// </summary>
+        readonly List<(Text label, string key, int limit)> _budgetLabels =
+            new List<(Text, string, int)>();
 
         /// <summary>
         /// The shared strike allowance, shown at the head of each fire menu.
@@ -2803,35 +2742,61 @@ namespace IronMeridian.UI
         /// used would let them find that out the hard way. See
         /// <see cref="StrikeBudget"/>.
         /// </summary>
+        /// <summary>
+        /// Names the right-hand column of the fire buttons below it.
+        ///
+        /// It used to be the allowance itself — one shared count of ninety-nine
+        /// for every strike in the game. The count is now attached to each
+        /// system (see <see cref="StrikeBudget"/>), so what this row does is
+        /// say what the second figure on every button beneath it means. A
+        /// column of bare "4 / 6"s with nothing to read them against is the
+        /// kind of number a player learns to ignore.
+        /// </summary>
         void StrikeBudgetRow(RectTransform content, float y)
         {
-            var frame = UIFactory.CreateBorderedPanel(content, "StrikeBudget",
+            var frame = UIFactory.CreateBorderedPanel(content, "AllowanceLegend",
                 UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 28));
 
-            var name = UIFactory.CreateText(frame, "STRIKES REMAINING", UiTheme.FontLabel,
+            var name = UIFactory.CreateText(frame, "MISSIONS AVAILABLE", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleLeft);
             name.raycastTarget = false;
             UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 0),
-                new Vector2(InnerWidth - 96f, 14));
+                new Vector2(InnerWidth - 110f, 14));
 
-            var value = UIFactory.CreateText(frame, "", UiTheme.FontSmall, UiTheme.Accent,
-                TextAnchor.MiddleRight, FontStyle.Bold);
-            value.raycastTarget = false;
-            UIFactory.Place(value.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
-                new Vector2(80, 16));
+            var note = UIFactory.CreateText(frame, "PER SYSTEM", UiTheme.FontLabel,
+                UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            note.raycastTarget = false;
+            UIFactory.Place(note.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
+                new Vector2(94, 16));
+        }
 
-            _budgetLabels.Add(value);
+        /// <summary>
+        /// The "missions left" figure on a fire button, under its radius. Every
+        /// fire menu builds its right-hand column the same way, so a player
+        /// reads the same two numbers in the same place whichever one is open.
+        /// </summary>
+        Text AllowanceLabel(RectTransform frame, string key, int limit)
+        {
+            var label = UIFactory.CreateText(frame, "", UiTheme.FontLabel,
+                UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            label.raycastTarget = false;
+            UIFactory.Place(label.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, -9),
+                new Vector2(56, 14));
+
+            _budgetLabels.Add((label, key, limit));
+            return label;
         }
 
         /// <summary>Repaints every allowance readout. Driven by the budget's own event.</summary>
         void RefreshStrikeBudget()
         {
-            foreach (var label in _budgetLabels)
+            foreach (var (label, key, limit) in _budgetLabels)
             {
                 if (label == null) continue;
-                label.text = StrikeBudget.RemainingText;
-                label.color = StrikeBudget.RemainingColour(UiTheme.Accent, UiTheme.Warning, UiTheme.Hostile);
+                label.text = StrikeBudget.RemainingText(key, limit);
+                label.color = StrikeBudget.RemainingColour(key, limit,
+                    UiTheme.Accent, UiTheme.Warning, UiTheme.Hostile);
             }
         }
 
@@ -2971,8 +2936,9 @@ namespace IronMeridian.UI
             // callbacks fire into a destroyed component on scene reload.
             UnitRegistry.Changed -= OnUnitsChanged;
             StrikeBudget.Changed -= RefreshStrikeBudget;
-            // The commanders panel subscribes to two registries of its own.
+            // The commanders and players panels subscribe to registries of their own.
             _commanders?.Dispose();
+            _players?.Dispose();
             if (_clock != null) _clock.StartChanged -= RefreshStartLabel;
             if (_weather != null) _weather.Changed -= RefreshWeather;
             if (_effects != null) _effects.ArmedChanged -= RefreshEffects;

@@ -14,13 +14,15 @@ namespace IronMeridian.Lines
     ///   Backspace           — undo the last corner
     ///   Esc                 — cancel, leaving the area as it was
     ///
-    /// **Why this is not <see cref="LineDrawTool"/>.** That tool draws control
-    /// measures, and a control measure is part of the *map file* — it is saved,
-    /// loaded and fought over. A mission area belongs to the *mission record*:
-    /// the same ground can carry two missions with different boundaries, and the
-    /// boundary has to survive the map being re-saved. So the overlay here is
-    /// built directly rather than through <see cref="LineManager"/>, which is
-    /// what keeps it out of <c>MapSaveData.lines</c>.
+    /// **Why this is not a <see cref="LineManager"/> line.** Everything in the
+    /// line manager is part of the *map file* — saved, loaded and fought over.
+    /// A mission area belongs to the *mission record* instead: the same ground
+    /// can carry two missions with different boundaries, and a boundary has to
+    /// survive the map being re-saved. So the overlay here is built directly,
+    /// which is what keeps it out of <c>MapSaveData.lines</c>.
+    ///
+    /// It is now the only click-to-draw tool in the editor — the hand-drawn
+    /// control measures it used to sit beside are gone; see docs/03-GAMEPLAY.md.
     ///
     /// The overlay is shown whenever a mission is open, drawing or not: an area
     /// you cannot see is an area you cannot check.

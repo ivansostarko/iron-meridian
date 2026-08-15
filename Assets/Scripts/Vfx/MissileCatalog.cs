@@ -39,6 +39,14 @@ namespace IronMeridian.Vfx
         public MissileRole role;
         public MissileWeight weight;
 
+        /// <summary>
+        /// Rounds of this system a scenario may fire. Deliberately small
+        /// throughout — a theatre missile is an event, not a fire mission — and
+        /// smallest of all on the heavy ballistic systems. Counted by
+        /// <see cref="StrikeBudget"/> — see docs/20-MISSILE-SYSTEMS.md.
+        /// </summary>
+        public int missions = 4;
+
         /// <summary>Button caption — the designation, as it is actually called.</summary>
         public string label;
         /// <summary>Full name for messages and the countdown banner.</summary>
@@ -144,7 +152,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Patriot, origin = MissileOrigin.Nato,
+                id = MissileSystemId.Patriot, origin = MissileOrigin.Nato, missions = 6,
                 role = MissileRole.AirDefence, weight = MissileWeight.Medium,
                 label = "PATRIOT",
                 name = "MIM-104 Patriot (PAC-3 MSE)",
@@ -160,7 +168,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.SampT, origin = MissileOrigin.Nato,
+                id = MissileSystemId.SampT, origin = MissileOrigin.Nato, missions = 6,
                 role = MissileRole.AirDefence, weight = MissileWeight.Medium,
                 label = "SAMP/T NG",
                 name = "SAMP/T NG — Aster 30",
@@ -176,7 +184,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Nasams, origin = MissileOrigin.Nato,
+                id = MissileSystemId.Nasams, origin = MissileOrigin.Nato, missions = 8,
                 role = MissileRole.AirDefence, weight = MissileWeight.Light,
                 label = "NASAMS",
                 name = "NASAMS — AMRAAM-ER",
@@ -192,7 +200,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Thaad, origin = MissileOrigin.Nato,
+                id = MissileSystemId.Thaad, origin = MissileOrigin.Nato, missions = 3,
                 role = MissileRole.AirDefence, weight = MissileWeight.Heavy,
                 label = "THAAD",
                 name = "THAAD — terminal high-altitude defence",
@@ -208,7 +216,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Himars, origin = MissileOrigin.Nato,
+                id = MissileSystemId.Himars, origin = MissileOrigin.Nato, missions = 8,
                 role = MissileRole.SurfaceStrike, weight = MissileWeight.Medium,
                 label = "HIMARS",
                 name = "HIMARS — ATACMS / PrSM",
@@ -226,7 +234,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.S400, origin = MissileOrigin.Enemy,
+                id = MissileSystemId.S400, origin = MissileOrigin.Enemy, missions = 6,
                 role = MissileRole.AirDefence, weight = MissileWeight.Heavy,
                 label = "S-400",
                 name = "S-400 Triumf",
@@ -242,7 +250,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Iskander, origin = MissileOrigin.Enemy,
+                id = MissileSystemId.Iskander, origin = MissileOrigin.Enemy, missions = 4,
                 role = MissileRole.SurfaceStrike, weight = MissileWeight.Heavy,
                 label = "ISKANDER-M",
                 name = "9K720 Iskander-M",
@@ -258,7 +266,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Hq9, origin = MissileOrigin.Enemy,
+                id = MissileSystemId.Hq9, origin = MissileOrigin.Enemy, missions = 6,
                 role = MissileRole.AirDefence, weight = MissileWeight.Medium,
                 label = "HQ-9B",
                 name = "HQ-9B",
@@ -274,7 +282,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Df26, origin = MissileOrigin.Enemy,
+                id = MissileSystemId.Df26, origin = MissileOrigin.Enemy, missions = 2,
                 role = MissileRole.SurfaceStrike, weight = MissileWeight.Heavy,
                 label = "DF-26",
                 name = "DF-26 Dongfeng",
@@ -290,7 +298,7 @@ namespace IronMeridian.Vfx
 
             new MissileSystemDef
             {
-                id = MissileSystemId.Bavar373, origin = MissileOrigin.Enemy,
+                id = MissileSystemId.Bavar373, origin = MissileOrigin.Enemy, missions = 5,
                 role = MissileRole.AirDefence, weight = MissileWeight.Light,
                 label = "BAVAR-373",
                 name = "Bavar-373",
@@ -319,7 +327,14 @@ namespace IronMeridian.Vfx
 
         static Dictionary<MissileSystemId, MissileSystemDef> _byId;
 
-        public static MissileSystemDef Get(MissileSystemId id)
+         /// <summary>
+        /// The key this system's missions are counted under. Prefixed by family
+        /// because the five strike catalogues have five unrelated enums whose
+        /// member names can collide. See <see cref="StrikeBudget"/>.
+        /// </summary>
+        public static string BudgetKey(MissileSystemId id) => StrikeBudget.Key("missile", id);
+
+       public static MissileSystemDef Get(MissileSystemId id)
         {
             EnsureTuned();
             if (_byId == null)

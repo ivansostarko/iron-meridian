@@ -39,6 +39,15 @@ namespace IronMeridian.UI
         /// <summary>Top of the scrolling list, and the clear space under it.</summary>
         const float ListTop = -246f, ListBottom = 86f;
 
+        /// <summary>
+        /// How far the campaign and mission rows are indented from the board's
+        /// own left edge, matching <c>MainMenuUI.MenuIndent</c>. The masthead
+        /// stays hard against the edge and the list steps in from it, so a
+        /// player walking main menu → campaigns → missions sees one board being
+        /// refilled rather than three screens that happen to look similar.
+        /// </summary>
+        const float ListIndent = 60f;
+
         const float RowHeight = 96f, RowGap = 8f;
         const float StripRest = 4f, StripHover = 8f;
         /// <summary>Where a row's text column starts: clear of the glyph.</summary>
@@ -133,7 +142,7 @@ namespace IronMeridian.UI
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(0, 1);
             srt.pivot = new Vector2(0, 0.5f);
-            srt.offsetMin = new Vector2(BoardX, ListBottom);
+            srt.offsetMin = new Vector2(BoardX + ListIndent, ListBottom);
             srt.offsetMax = new Vector2(BoardX + BoardWidth, ListTop);
 
             var layout = _listContent.GetComponent<VerticalLayoutGroup>();
@@ -289,7 +298,7 @@ namespace IronMeridian.UI
                 new Vector2(34, 0), new Vector2(30, 30));
 
             float captionWidth = string.IsNullOrEmpty(caption) ? 0f : 150f;
-            float textWidth = BoardWidth - UIFactory.ScrollbarWidth - TextX - 24f - captionWidth;
+            float textWidth = BoardWidth - ListIndent - UIFactory.ScrollbarWidth - TextX - 24f - captionWidth;
 
             var title = UIFactory.CreateText(frame, label, 24, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);

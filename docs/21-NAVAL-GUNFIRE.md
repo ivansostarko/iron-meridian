@@ -52,7 +52,7 @@ What differs is the **shape of the mission**, and that is where the character li
 
 - **Rate of fire.** These are automatic mountings. A Mk 110 puts twelve rounds down in under two seconds; a battery's five take three. The strike reads as a hosing rather than as separate impacts, which is what naval gunfire looks like.
 - **Dispersion.** The rounds come from a moving platform at a range no land gun in the game matches, so the beaten zone is wider for the same calibre. That is a real trade, not a drawback dressed up as one: every round is resolved **where it actually falls** (`NavalStrikeSystem.ScatterPoint`, the same golden-angle/√t construction the artillery salvo uses), so a wider sheaf genuinely spreads the damage thinner.
-- **Availability.** It comes from a ship, so it does not care where the player's guns are — but it spends the same shared allowance every other called strike does.
+- **Availability.** It comes from a ship, so it does not care where the player's guns are — and it is the most plentiful fire in the game: a ship carries hundreds of rounds and does not have to displace, so the mountings run from 8 missions (155 mm AGS) up to 20 (57 mm Mk 110).
 
 ### Marker colours are a different family
 
@@ -73,7 +73,7 @@ Everything up to the first round landing is `CalledStrikeSystem<NavalGun>` — t
 
 ### The strike allowance
 
-A naval mission spends one of the scenario's **99** called strikes, shared with artillery, air strikes, UAV sorties and missile systems — `Vfx/StrikeBudget.cs`, with the "STRIKES REMAINING" readout at the head of this section. Full rationale in docs/17-ARTILLERY.md § *The strike allowance*.
+Each mounting has its own allowance of missions, held as `missions` on its catalogue row and counted by `Vfx/StrikeBudget.cs`. It is shown on the button under the beaten zone, and the round count has moved into the row's detail line — it is a fixed property of the gun, so it belongs with the prose rather than in the column that changes. Full rationale in docs/17-ARTILLERY.md § *The strike allowance*.
 
 ### What a mission leaves behind
 
@@ -102,7 +102,7 @@ The HUD reports the whole mission, not the last round: *"Rounds complete — 127
 | `Vfx/CalledStrikeSystem.cs` | **Shared** arm / aim / countdown machinery |
 | `Vfx/NavalCatalog.cs` | The guns in numbers — the single source of truth |
 | `Vfx/NavalStrikeSystem.cs` | The mission: scatter, bursts, damage, aftermath |
-| `Vfx/StrikeBudget.cs` | The 99 called strikes, shared with the other four menus |
+| `Vfx/StrikeBudget.cs` | Missions flown per mounting; the limits are on the catalogue rows |
 | `Vfx/StrikeAftermath.cs` | The fire and smoke a mission leaves |
 | `Vfx/TargetAreaMarker.cs` | The 3D target-area volume (shared) |
 | `Units/BlastDamage.cs` | What a round does to what is under it (shared) |
@@ -128,7 +128,7 @@ The HUD reports the whole mission, not the last round: *"Rounds complete — 127
 1. **`NavalCatalog` is the source of truth.** Add a gun by adding a row — the buttons, the ring, the salvo, the countdown banner and the blast all read from it.
 2. **Record it in §1 in the same commit**, with its calibre, beaten zone and round count.
 3. **Reuse the calibre-matched artillery burst effects** unless a gun genuinely looks different on the ground. A new effect means a row in `VfxCatalog` **and** an entry in docs/08-PARTICLE-SYSTEMS.md.
-4. **Every mission spends one strike** from `StrikeBudget`, like every other called strike. Do not add a second pool.
+4. **Every gun needs a `missions` figure** and spends one per mission through `StrikeBudget`. Do not add a second counter.
 5. Beaten-zone figures are balance, not reference. If a number changes, change it because the game plays better, and do not dress it up as research.
 
 ---

@@ -71,8 +71,12 @@ Everything up to the moment something lands is identical between a fire mission 
 
 ### The strike allowance
 
-A tasked strike spends one of the scenario's **99** called strikes, shared with
-artillery, UAV sorties and missile systems — `Vfx/StrikeBudget.cs`, with the
+Each airframe has **its own allowance of sorties** — B-2 **2**, strike fighter
+**6**, attack helicopter **10** — held as `missions` on its catalogue row and
+counted by `Vfx/StrikeBudget.cs`. Two B-2 sorties against ten helicopter runs is
+the whole argument for ever tasking the helicopter. Running one airframe out does
+not touch the others. Full rationale in docs/17-ARTILLERY.md § *The strike
+allowance*. The figure is shown on each button, with the
 "STRIKES REMAINING" readout at the head of this section. Full rationale in
 docs/17-ARTILLERY.md § *The strike allowance*.
 

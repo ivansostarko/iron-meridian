@@ -30,6 +30,14 @@ namespace IronMeridian.Vfx
         /// <summary>Radius of the target area in metres — the circle placed on the map.</summary>
         public float radiusMeters;
 
+        /// <summary>
+        /// Sorties of this airframe a scenario may fly. The scarcity that makes
+        /// picking one a decision: two B-2 sorties against eight helicopter
+        /// runs is the whole argument for ever tasking the helicopter.
+        /// Counted by <see cref="StrikeBudget"/> — see docs/18-AIR-STRIKES.md.
+        /// </summary>
+        public int missions = 4;
+
         /// <summary>Model id in <see cref="UnitModelLibrary"/>. Never a Resources path — golden rule 10.</summary>
         public string modelId;
 
@@ -141,7 +149,7 @@ namespace IronMeridian.Vfx
         {
             new AircraftDef
             {
-                aircraft = StrikeAircraft.B2Spirit,
+                aircraft = StrikeAircraft.B2Spirit, missions = 2,
                 label = "B-2 SPIRIT",
                 name = "B-2 Spirit stealth bomber",
                 detail = "One pass, a full stick — hardened targets",
@@ -170,7 +178,7 @@ namespace IronMeridian.Vfx
             // delivered quickly, rather than a wide one delivered from altitude.
             new AircraftDef
             {
-                aircraft = StrikeAircraft.StrikeFighter,
+                aircraft = StrikeAircraft.StrikeFighter, missions = 6,
                 label = "STRIKE FIGHTER",
                 name = "Multirole strike fighter",
                 detail = "Fast and low — one tight pass",
@@ -202,7 +210,7 @@ namespace IronMeridian.Vfx
             // already happened by the time you look up.
             new AircraftDef
             {
-                aircraft = StrikeAircraft.AttackHelicopter,
+                aircraft = StrikeAircraft.AttackHelicopter, missions = 10,
                 label = "ATTACK HELICOPTER",
                 name = "Attack helicopter",
                 detail = "Slow and very low — walks its load in",
@@ -251,7 +259,14 @@ namespace IronMeridian.Vfx
 
         static Dictionary<StrikeAircraft, AircraftDef> _byAircraft;
 
-        public static AircraftDef Get(StrikeAircraft aircraft)
+          /// <summary>
+        /// The key this system's missions are counted under. Prefixed by family
+        /// because the five strike catalogues have five unrelated enums whose
+        /// member names can collide. See <see cref="StrikeBudget"/>.
+        /// </summary>
+        public static string BudgetKey(StrikeAircraft aircraft) => StrikeBudget.Key("air", aircraft);
+
+      public static AircraftDef Get(StrikeAircraft aircraft)
         {
             EnsureTuned();
             if (_byAircraft == null)

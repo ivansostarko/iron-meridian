@@ -10,23 +10,20 @@ namespace IronMeridian.UI
     /// arming a strike whose destruction radius is drawn on the map before
     /// anything is committed to.
     ///
-    /// **This board is on the left, with the other fire menus.** It used to
-    /// dock on the right, which gave it the width it needed and cost it the
-    /// thing that mattered more: MISSILE SYSTEMS is a row in the left rail, and
-    /// clicking a row on the left to open a board on the right reads as a
-    /// mis-click. Worse, the right edge is where the unit info panel and the
-    /// front-line panel live, so opening a fire menu had to drop the player's
-    /// selection to make room. It now stands exactly where the rail's section
-    /// panel stands, and simply takes the section panel's place — only one of
-    /// the two is ever up, and both slide out from behind the same rail.
+    /// **It is a page in the strike dock**, alongside the other four fire
+    /// menus — see <see cref="StrikeDockUI"/>. It has been a left-hand board
+    /// and a right-hand one in turn; what settled it was that the five fire
+    /// menus are one family and belong in one place, reached the same way. This
+    /// class therefore owns its *contents* and nothing about where they are
+    /// drawn: no panel of its own, no show/hide, no docking width.
     ///
-    /// It is wider than a section (<see cref="UiTheme.MissilePanelWidth"/>
-    /// against <see cref="UiTheme.SectionPanelWidth"/>) because it is doing a
-    /// different job. The sections hold controls you set and forget — a weather
-    /// condition, a tile style. A missile system is chosen by *comparing* it
-    /// against nine others on numbers that matter: what it covers, whether that
-    /// number is a warhead or an umbrella, and which side fields it. That
-    /// comparison needs a designation, a description and a radius on one row.
+    /// It gave up 46 px of width in the move (it used to be
+    /// <see cref="UiTheme.MissilePanelWidth"/> against a section's
+    /// <see cref="UiTheme.SectionPanelWidth"/>). That width was for comparing
+    /// systems on one row — a designation, a description and a radius — and it
+    /// is a real loss. One panel in a set of five being wider than the rest is
+    /// a worse tell than any row is helped by the space, and every label on the
+    /// row is best-fitted, so what it costs is a point of type size.
     ///
     /// **Air defence and surface strike are separated and labelled**, because
     /// their radius figures mean opposite things. A 3 km circle on SAMP/T is
@@ -38,24 +35,10 @@ namespace IronMeridian.UI
     /// </summary>
     public class MissilePanelUI : MonoBehaviour
     {
-        /// <summary>True while the panel is showing.</summary>
-        public static bool IsOpen { get; private set; }
-
-        /// <summary>Raised when the panel opens, so competing panels can stand down.</summary>
-        public System.Action Opened;
-
-        /// <summary>
-        /// Raised whenever the board appears or disappears, with the width it
-        /// occupies on the left (0 when hidden). The on-map zoom cluster rides
-        /// this so it is never buried underneath the board.
-        /// </summary>
-        public System.Action<float> LeftInsetChanged;
-
         const float Pad = UiTheme.PanelPadding;
         const float RowHeight = 52f;
-        /// <summary>Where the board's left edge sits: hard against the always-present rail.</summary>
-        const float DockX = UiTheme.LeftPanelWidth;
-        const float PanelWidth = UiTheme.MissilePanelWidth;
+        /// <summary>The dock's page width — this board no longer sets its own.</summary>
+        const float PanelWidth = StrikeDockUI.PanelWidth;
 
         MissileStrikeSystem _missiles;
         RectTransform _panel;
@@ -65,18 +48,23 @@ namespace IronMeridian.UI
             new Dictionary<MissileOrigin, RectTransform>();
         readonly List<(MissileOrigin origin, Image fill, Text label)> _tabs =
             new List<(MissileOrigin, Image, Text)>();
-        readonly List<(MissileSystemId id, Image fill, Image glyph, Text label)> _buttons =
-            new List<(MissileSystemId, Image, Image, Text)>();
-        Text _budgetLabel;
+        readonly List<(MissileSystemId id, Image fill, Image glyph, Text label, Text allowance)> _buttons =
+            new List<(MissileSystemId, Image, Image, Text, Text)>();
 
-        public static MissilePanelUI Create(Canvas canvas, MissileStrikeSystem missiles)
+        /// <summary>
+        /// Builds the board into a page the strike dock owns. The dock supplies
+        /// the panel, the header and the show/hide; this fills the body.
+        /// </summary>
+        public static MissilePanelUI Create(RectTransform page, MissileStrikeSystem missiles)
         {
+            if (page == null) return null;
+
             var go = new GameObject("MissilePanel");
-            go.transform.SetParent(canvas.transform, false);
+            go.transform.SetParent(page, false);
 
             var panel = go.AddComponent<MissilePanelUI>();
             panel._missiles = missiles;
-            panel.Build(canvas);
+            panel.Build(page);
             missiles.ArmedChanged += panel.Refresh;
             StrikeBudget.Changed += panel.Refresh;
             return panel;
@@ -86,47 +74,20 @@ namespace IronMeridian.UI
         {
             if (_missiles != null) _missiles.ArmedChanged -= Refresh;
             StrikeBudget.Changed -= Refresh;
-            if (IsOpen) IsOpen = false;
         }
 
         // ------------------------------------------------------------- build
 
-        void Build(Canvas canvas)
+        void Build(RectTransform page)
         {
-            _panel = UIFactory.CreatePanel(canvas.transform, "MissileSystems", UiTheme.Panel);
-            _panel.anchorMin = new Vector2(0, 0);
-            _panel.anchorMax = new Vector2(0, 1);
-            _panel.pivot = new Vector2(0, 0.5f);
-            _panel.offsetMin = new Vector2(DockX, 0);
-            _panel.offsetMax = new Vector2(DockX + PanelWidth, -UiTheme.TopBarHeight);
-
-            // Hairline down the board's outboard edge, where it meets the map —
-            // the inboard edge butts against the rail and needs no rule.
-            var edge = UIFactory.CreatePanel(_panel, "Edge", UiTheme.Border);
-            edge.anchorMin = new Vector2(1, 0); edge.anchorMax = new Vector2(1, 1);
-            edge.pivot = new Vector2(1, 0.5f);
-            edge.sizeDelta = new Vector2(1, 0);
-            edge.GetComponent<Image>().raycastTarget = false;
+            _panel = page;
 
             float inner = PanelWidth - Pad * 2f;
 
-            var title = UIFactory.CreateText(_panel, "MISSILE SYSTEMS", UiTheme.FontHeading,
-                UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -14),
-                new Vector2(inner - 30f, 22));
-
-            var close = UIFactory.CreateIconButton(_panel, UiIcons.Close, Hide,
-                new Color(0, 0, 0, 0), UiTheme.TextDim, 7f);
-            UIFactory.Place((RectTransform)close.transform, new Vector2(1f, 1f),
-                new Vector2(-Pad, -12), new Vector2(26, 26));
-
-            var rule = UIFactory.CreateDivider(_panel, UiTheme.Border);
-            rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
-            rule.pivot = new Vector2(0.5f, 1);
-            rule.anchoredPosition = new Vector2(0, -38);
-
-            StrikeBudgetRow(-46f, inner);
-            BuildTabs(-82f, inner);
+            // No title and no close button: the dock's header carries both, and
+            // a second heading inside the page would repeat it.
+            StrikeBudgetRow(-8f, inner);
+            BuildTabs(-44f, inner);
 
             // One page per inventory, both laid out at the same origin; only the
             // selected one is active. Same device as the artillery menu, for the
@@ -141,7 +102,6 @@ namespace IronMeridian.UI
             }
 
             ShowOrigin(_origin);
-            _panel.gameObject.SetActive(false);
         }
 
         void BuildTabs(float y, float inner)
@@ -168,33 +128,35 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// The shared strike allowance. The same readout the three rail fire
-        /// menus carry, because it is the same ninety-nine — see
-        /// <see cref="StrikeBudget"/>.
+        /// Names the right-hand column of the buttons below it. The allowance
+        /// itself is per system now — see <see cref="StrikeBudget"/> — and this
+        /// is what tells the player what the second figure on each row is.
         /// </summary>
         void StrikeBudgetRow(float y, float inner)
         {
-            var frame = UIFactory.CreateBorderedPanel(_panel, "StrikeBudget",
+            var frame = UIFactory.CreateBorderedPanel(_panel, "AllowanceLegend",
                 UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(inner, 28));
 
-            var name = UIFactory.CreateText(frame, "STRIKES REMAINING", UiTheme.FontLabel,
+            var name = UIFactory.CreateText(frame, "MISSIONS AVAILABLE", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleLeft);
             name.raycastTarget = false;
             UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 0),
-                new Vector2(inner - 96f, 14));
+                new Vector2(inner - 110f, 14));
 
-            _budgetLabel = UIFactory.CreateText(frame, "", UiTheme.FontSmall, UiTheme.Accent,
-                TextAnchor.MiddleRight, FontStyle.Bold);
-            _budgetLabel.raycastTarget = false;
-            UIFactory.Place(_budgetLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
-                new Vector2(80, 16));
+            var note = UIFactory.CreateText(frame, "PER SYSTEM", UiTheme.FontLabel,
+                UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            note.raycastTarget = false;
+            UIFactory.Place(note.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
+                new Vector2(94, 16));
         }
 
         void BuildPage(RectTransform page, MissileOrigin origin, float inner)
         {
-            // Clear of the title, the allowance readout and the inventory tabs.
-            float y = -122f;
+            // Clear of the allowance legend and the inventory tabs. The dock's
+            // header carries the title, so the page starts higher than it did
+            // when the board had one of its own.
+            float y = -84f;
             MissileRole? lastRole = null;
 
             // Air defence first: it is the larger group and the one whose radius
@@ -271,16 +233,22 @@ namespace IronMeridian.UI
             var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
                 40f, inner - 96f, topInset: 8f);
 
-            // The radius on the right. It is the number that decides which
-            // system to task, so it belongs on the button rather than only in
-            // the hint text.
+            // The radius on the right, with the system's own allowance under it.
+            // Both are numbers that decide which system to task, so they belong
+            // on the button rather than only in the hint text.
             var radius = UIFactory.CreateText(frame, MissileCatalog.RadiusText(def),
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
             radius.raycastTarget = false;
-            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0),
-                new Vector2(56, 16));
+            UIFactory.Place(radius.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 8),
+                new Vector2(56, 14));
 
-            _buttons.Add((def.id, frame.Find("Fill").GetComponent<Image>(), icon, name));
+            var allowance = UIFactory.CreateText(frame, "", UiTheme.FontLabel,
+                UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            allowance.raycastTarget = false;
+            UIFactory.Place(allowance.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, -9),
+                new Vector2(56, 14));
+
+            _buttons.Add((def.id, frame.Find("Fill").GetComponent<Image>(), icon, name, allowance));
         }
 
         /// <summary>
@@ -310,51 +278,24 @@ namespace IronMeridian.UI
             Refresh();
         }
 
-        public void Show()
-        {
-            _panel.gameObject.SetActive(true);
-            IsOpen = true;
-            Opened?.Invoke();
-            LeftInsetChanged?.Invoke(DockX + PanelWidth);
-            Refresh();
-        }
-
-        public void Hide()
-        {
-            bool was = IsOpen;
-            if (_panel != null) _panel.gameObject.SetActive(false);
-            IsOpen = false;
-            // Closing the board stands the launcher down: leaving a system armed
-            // behind a panel that is no longer on screen would turn the next
-            // click on the map into a missile strike nobody asked for.
-            if (_missiles != null) _missiles.Cancel();
-            if (was) LeftInsetChanged?.Invoke(0f);
-        }
-
-        public void Toggle()
-        {
-            if (IsOpen) Hide(); else Show();
-        }
-
         /// <summary>Repaints which system is armed. Driven by the system's own event.</summary>
         void Refresh()
         {
-            if (_budgetLabel != null)
-            {
-                _budgetLabel.text = StrikeBudget.RemainingText;
-                _budgetLabel.color = StrikeBudget.RemainingColour(
-                    UiTheme.Accent, UiTheme.Warning, UiTheme.Hostile);
-            }
-
             var armed = _missiles != null ? _missiles.Armed : null;
 
-            foreach (var (id, fill, glyph, label) in _buttons)
+            foreach (var (id, fill, glyph, label, allowance) in _buttons)
             {
                 bool on = armed.HasValue && armed.Value == id;
                 var def = MissileCatalog.Get(id);
                 fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
                 glyph.color = on ? UiTheme.Accent : def.markerColor;
                 if (label != null) label.color = on ? UiTheme.Accent : UiTheme.Text;
+
+                if (allowance == null) continue;
+                string key = MissileCatalog.BudgetKey(id);
+                allowance.text = StrikeBudget.RemainingText(key, def.missions);
+                allowance.color = StrikeBudget.RemainingColour(key, def.missions,
+                    UiTheme.Accent, UiTheme.Warning, UiTheme.Hostile);
             }
         }
     }

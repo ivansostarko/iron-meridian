@@ -64,6 +64,17 @@ namespace IronMeridian.UI
         /// <summary>Clear space under the list, above the footer rule and version line.</summary>
         const float MenuBottom = 100f;
 
+        /// <summary>
+        /// How far the entry rows are indented from the board's own left edge.
+        ///
+        /// The masthead — emblem, title, accent rule — stays hard against the
+        /// board edge, and the list steps in from it. That is what turns a
+        /// column of cards into a menu *under* a heading rather than a stack of
+        /// panels beside one, and it gives the accent strip down each row's left
+        /// edge somewhere to be read against.
+        /// </summary>
+        const float MenuIndent = 60f;
+
         const float EntryHeight = 72f, EntryGap = 6f;
         /// <summary>Accent strip down an entry's left edge, at rest and under the cursor.</summary>
         const float StripRest = 4f, StripHover = 8f;
@@ -180,7 +191,7 @@ namespace IronMeridian.UI
             var rt = (RectTransform)scroll.transform;
             rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(0, 1);
             rt.pivot = new Vector2(0, 0.5f);
-            rt.offsetMin = new Vector2(BoardX, MenuBottom);
+            rt.offsetMin = new Vector2(BoardX + MenuIndent, MenuBottom);
             rt.offsetMax = new Vector2(BoardX + BoardWidth, MenuTop);
 
             // The shared scroll defaults are tuned for the map editor's small
@@ -244,9 +255,9 @@ namespace IronMeridian.UI
             // and fits its text into 16 px rows, which would shrink a 24 px
             // menu label straight back down to panel size.
             const float TextX = 72f;
-            // The row is as wide as the board less the scrollbar the list now
-            // carries, so the text column stops clear of both.
-            float textWidth = BoardWidth - UIFactory.ScrollbarWidth - TextX - 24f;
+            // The row is as wide as the board less the indent and the scrollbar
+            // the list carries, so the text column stops clear of all three.
+            float textWidth = BoardWidth - MenuIndent - UIFactory.ScrollbarWidth - TextX - 24f;
 
             var title = UIFactory.CreateText(frame, label, 24, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);

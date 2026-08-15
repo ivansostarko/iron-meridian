@@ -61,13 +61,20 @@ namespace IronMeridian.UI
         /// <summary>The section panel that slides out of the rail to hold one section's controls.</summary>
         public const float SectionPanelWidth = 274f;
         /// <summary>
-        /// The missile board, which docks against the rail like the section
-        /// panel but needs more width than a section gets — see
-        /// <see cref="MissilePanelUI"/>. It stands in the section panel's place
-        /// rather than beside it: only one of the two is ever up.
+        /// What the missile board used to be given when it docked on its own.
+        /// It is now a page in the strike dock at the section panel's width —
+        /// see <see cref="MissilePanelUI"/>. Kept as the record of the widest
+        /// a fire menu has needed, for whenever one earns its own dock again.
         /// </summary>
         public const float MissilePanelWidth = 320f;
         public const float RightPanelWidth = 300f;
+        /// <summary>
+        /// Height of the strike dock's icon strip, which sits under the top bar
+        /// at the right-hand end. Every panel that docks on the right starts
+        /// below it rather than under the top bar, so the fire menus can be
+        /// reached with a formation selected — see <see cref="StrikeDockUI"/>.
+        /// </summary>
+        public const float StrikeDockHeight = 56f;
         /// <summary>Standard inset from a panel's edge to its content.</summary>
         public const float PanelPadding = 12f;
         public const float ControlHeight = 34f;

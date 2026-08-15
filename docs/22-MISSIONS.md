@@ -113,7 +113,8 @@ The Game scene strips itself down when `_mission != null`
 
 | Gone | Why |
 |---|---|
-| The left rail and its section panel | Thirteen sections that deploy units and draw control measures. Authoring tools, in a scenario somebody else authored |
+| The left rail and its section panel | Nine sections that deploy units, set the weather and name the players. Authoring tools, in a scenario somebody else authored |
+| The strike dock | The five fire menus at the top right go with the rail — see docs/03-GAMEPLAY.md |
 | The identity block and its home button | The bar's name and the one-click hop out. Esc → EXIT is the way out |
 | The mode chip | There is only one mode in a mission |
 | RESET | Reloads the scenario and resets every setting. Actively dangerous here |

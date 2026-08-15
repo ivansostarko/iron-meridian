@@ -137,7 +137,7 @@ Consequences, all deliberate:
 - The on-map zoom cluster rides whichever left-hand board is up: `MissilePanelUI.LeftInsetChanged` moves it out while the board is open, and `UnitPaletteUI.ReassertMapInset` puts it back when the board closes — the slide animation that normally drives the inset is not running at that moment, so nothing else would take the width back off.
 - Selecting a formation **no longer** closes the board. The two are at opposite edges now, so a launcher can stay chosen while a unit is inspected. Arming a draw tool still closes it, because you cannot draw a boundary and aim a missile with the same click.
 - **Closing the board stands the launcher down.** Leaving a system armed behind a panel that is no longer on screen would turn the next click on the map into a missile strike nobody asked for.
-- The board carries the shared **"STRIKES REMAINING"** readout, because the 99 called strikes are one pool across all four menus — see docs/17-ARTILLERY.md § *The strike allowance*. A missile impact also leaves the standard aftermath: thirty scenario minutes of fire, then two hours of smoke (docs/08-PARTICLE-SYSTEMS.md §2.1).
+- Each launcher carries its **own allowance** under its radius — DF-26 **2**, THAAD **3**, Iskander **4**, up through NASAMS and HIMARS at **8**. Deliberately small throughout: a theatre missile is an event, not a fire mission. See docs/17-ARTILLERY.md § *The strike allowance*. A missile impact also leaves the standard aftermath: thirty scenario minutes of fire, then two hours of smoke (docs/08-PARTICLE-SYSTEMS.md §2.1).
 
 ---
 

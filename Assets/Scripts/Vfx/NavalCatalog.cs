@@ -48,6 +48,14 @@ namespace IronMeridian.Vfx
         /// <summary>Bore in millimetres — the number the button leads with.</summary>
         public int calibreMm;
 
+        /// <summary>
+        /// Missions this mounting may fire. Higher than a land battery's across
+        /// the board — a ship carries hundreds of rounds and does not have to
+        /// displace — with the heavy mountings still the scarcer of them.
+        /// Counted by <see cref="StrikeBudget"/> — see docs/21-NAVAL-GUNFIRE.md.
+        /// </summary>
+        public int missions = 14;
+
         /// <summary>Button caption.</summary>
         public string label;
         /// <summary>Full name for the countdown banner and messages.</summary>
@@ -154,7 +162,7 @@ namespace IronMeridian.Vfx
             // ------------------------------------------------------------ NATO
             new NavalGunDef
             {
-                gun = NavalGun.NatoMk110_57, origin = NavalOrigin.Nato, calibreMm = 57,
+                gun = NavalGun.NatoMk110_57, origin = NavalOrigin.Nato, calibreMm = 57, missions = 20,
                 label = "57 mm", name = "57 mm Mk 110",
                 detail = "Bofors, littoral combat ship — 220 rounds a minute",
                 radiusMeters = 120f,
@@ -168,7 +176,7 @@ namespace IronMeridian.Vfx
             },
             new NavalGunDef
             {
-                gun = NavalGun.NatoOto76, origin = NavalOrigin.Nato, calibreMm = 76,
+                gun = NavalGun.NatoOto76, origin = NavalOrigin.Nato, calibreMm = 76, missions = 18,
                 label = "76 mm", name = "76 mm OTO Melara Super Rapid",
                 detail = "Frigate main gun — the NATO workhorse",
                 radiusMeters = 150f,
@@ -179,7 +187,7 @@ namespace IronMeridian.Vfx
             },
             new NavalGunDef
             {
-                gun = NavalGun.NatoMk45_127, origin = NavalOrigin.Nato, calibreMm = 127,
+                gun = NavalGun.NatoMk45_127, origin = NavalOrigin.Nato, calibreMm = 127, missions = 12,
                 label = "127 mm", name = "127 mm Mk 45 Mod 4",
                 detail = "Five-inch destroyer gun — the standard NGFS mount",
                 radiusMeters = 230f,
@@ -190,7 +198,7 @@ namespace IronMeridian.Vfx
             },
             new NavalGunDef
             {
-                gun = NavalGun.NatoAgs155, origin = NavalOrigin.Nato, calibreMm = 155,
+                gun = NavalGun.NatoAgs155, origin = NavalOrigin.Nato, calibreMm = 155, missions = 8,
                 label = "155 mm", name = "155 mm Advanced Gun System",
                 detail = "Zumwalt-class — the heaviest gun afloat",
                 radiusMeters = 300f,
@@ -203,7 +211,7 @@ namespace IronMeridian.Vfx
             // -------------------------------------------------- Enemy: Russian
             new NavalGunDef
             {
-                gun = NavalGun.EnemyAk176_76, origin = NavalOrigin.Enemy, calibreMm = 76,
+                gun = NavalGun.EnemyAk176_76, origin = NavalOrigin.Enemy, calibreMm = 76, missions = 18,
                 label = "76 mm", name = "76 mm AK-176",
                 detail = "Corvette mount — Russian pattern, fast and light",
                 radiusMeters = 155f,
@@ -214,7 +222,7 @@ namespace IronMeridian.Vfx
             },
             new NavalGunDef
             {
-                gun = NavalGun.EnemyAk100, origin = NavalOrigin.Enemy, calibreMm = 100,
+                gun = NavalGun.EnemyAk100, origin = NavalOrigin.Enemy, calibreMm = 100, missions = 14,
                 label = "100 mm", name = "100 mm AK-100",
                 detail = "Frigate main gun — Russian pattern",
                 radiusMeters = 190f,
@@ -225,7 +233,7 @@ namespace IronMeridian.Vfx
             },
             new NavalGunDef
             {
-                gun = NavalGun.EnemyAk130, origin = NavalOrigin.Enemy, calibreMm = 130,
+                gun = NavalGun.EnemyAk130, origin = NavalOrigin.Enemy, calibreMm = 130, missions = 10,
                 label = "130 mm", name = "130 mm AK-130",
                 detail = "Twin automatic mount — 80 rounds a minute, both barrels",
                 radiusMeters = 250f,
@@ -240,7 +248,7 @@ namespace IronMeridian.Vfx
             // -------------------------------------------------- Enemy: Chinese
             new NavalGunDef
             {
-                gun = NavalGun.EnemyPj26_76, origin = NavalOrigin.Enemy, calibreMm = 76,
+                gun = NavalGun.EnemyPj26_76, origin = NavalOrigin.Enemy, calibreMm = 76, missions = 18,
                 label = "76 mm", name = "76 mm H/PJ-26",
                 detail = "Type 054A frigate — Chinese pattern",
                 radiusMeters = 150f,
@@ -251,7 +259,7 @@ namespace IronMeridian.Vfx
             },
             new NavalGunDef
             {
-                gun = NavalGun.EnemyPj38_130, origin = NavalOrigin.Enemy, calibreMm = 130,
+                gun = NavalGun.EnemyPj38_130, origin = NavalOrigin.Enemy, calibreMm = 130, missions = 10,
                 label = "130 mm", name = "130 mm H/PJ-38",
                 detail = "Type 052D destroyer — Chinese pattern, long reach",
                 radiusMeters = 265f,
@@ -283,7 +291,14 @@ namespace IronMeridian.Vfx
 
         static Dictionary<NavalGun, NavalGunDef> _byGun;
 
-        public static NavalGunDef Get(NavalGun gun)
+         /// <summary>
+        /// The key this system's missions are counted under. Prefixed by family
+        /// because the five strike catalogues have five unrelated enums whose
+        /// member names can collide. See <see cref="StrikeBudget"/>.
+        /// </summary>
+        public static string BudgetKey(NavalGun gun) => StrikeBudget.Key("naval", gun);
+
+       public static NavalGunDef Get(NavalGun gun)
         {
             EnsureTuned();
             if (_byGun == null)

@@ -36,6 +36,8 @@ namespace IronMeridian.Vfx
         protected override float RadiusFor(NavalGun key) => NavalCatalog.Get(key).radiusMeters;
         protected override Color ColourFor(NavalGun key) => NavalCatalog.Get(key).markerColor;
         protected override string NameFor(NavalGun key) => NavalCatalog.Get(key).name;
+        protected override string BudgetKeyFor(NavalGun key) => NavalCatalog.BudgetKey(key);
+        protected override int BudgetLimitFor(NavalGun key) => NavalCatalog.Get(key).missions;
         protected override float CountdownFor(NavalGun key) => NavalCatalog.CountdownSeconds;
 
         protected override string ArmedMessage(NavalGun key)

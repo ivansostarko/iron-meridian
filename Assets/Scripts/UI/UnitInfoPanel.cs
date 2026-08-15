@@ -101,7 +101,10 @@ namespace IronMeridian.UI
             _panel.anchorMin = new Vector2(1, 0); _panel.anchorMax = new Vector2(1, 1);
             _panel.pivot = new Vector2(1, 0.5f);
             _panel.offsetMin = new Vector2(-PanelWidth, 0);
-            _panel.offsetMax = new Vector2(0, -UiTheme.TopBarHeight);
+            // Below the strike dock's icon strip, not under the top bar: those
+            // icons must stay reachable with a formation selected, so nothing
+            // on this edge is allowed to cover them. See StrikeDockUI.
+            _panel.offsetMax = new Vector2(0, -(UiTheme.TopBarHeight + UiTheme.StrikeDockHeight));
 
             // Hairline down the panel's left edge, separating it from the map.
             var edge = UIFactory.CreatePanel(_panel, "Edge", UiTheme.Border);

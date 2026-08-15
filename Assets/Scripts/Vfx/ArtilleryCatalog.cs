@@ -66,6 +66,14 @@ namespace IronMeridian.Vfx
         /// <summary>Bore in millimetres — the number the button leads with.</summary>
         public int calibreMm;
 
+        /// <summary>
+        /// Fire missions of this nature a scenario may call. Light mortars are
+        /// plentiful and heavy guns are not, which is what stops a player
+        /// answering every problem with the biggest calibre on the page.
+        /// Counted by <see cref="StrikeBudget"/> — see docs/17-ARTILLERY.md.
+        /// </summary>
+        public int missions = 12;
+
         /// <summary>Button caption — the calibre alone, as it is called.</summary>
         public string label;
         /// <summary>Full name for the countdown banner and messages.</summary>
@@ -167,7 +175,7 @@ namespace IronMeridian.Vfx
             // ---------------------------------------------------- NATO mortars
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.NatoMortar60, origin = ArtilleryOrigin.Nato,
+                caliber = ArtilleryCaliber.NatoMortar60, origin = ArtilleryOrigin.Nato, missions = 24,
                 kind = ArtilleryKind.Mortar, calibreMm = 60,
                 label = "60 mm", name = "60 mm light mortar",
                 detail = "M224 — company fire, fast and close",
@@ -178,7 +186,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.NatoMortar81, origin = ArtilleryOrigin.Nato,
+                caliber = ArtilleryCaliber.NatoMortar81, origin = ArtilleryOrigin.Nato, missions = 20,
                 kind = ArtilleryKind.Mortar, calibreMm = 81,
                 label = "81 mm", name = "81 mm medium mortar",
                 detail = "L16 / M252 — battalion's own fire support",
@@ -189,7 +197,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.NatoMortar120, origin = ArtilleryOrigin.Nato,
+                caliber = ArtilleryCaliber.NatoMortar120, origin = ArtilleryOrigin.Nato, missions = 16,
                 kind = ArtilleryKind.Mortar, calibreMm = 120,
                 label = "120 mm", name = "120 mm heavy mortar",
                 detail = "M120 / RT-61 — steep angle, throws soil not fire",
@@ -202,7 +210,7 @@ namespace IronMeridian.Vfx
             // ------------------------------------------- NATO guns & howitzers
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.NatoGun105, origin = ArtilleryOrigin.Nato,
+                caliber = ArtilleryCaliber.NatoGun105, origin = ArtilleryOrigin.Nato, missions = 18,
                 kind = ArtilleryKind.Gun, calibreMm = 105,
                 label = "105 mm", name = "105 mm light howitzer",
                 detail = "M119 / L118 — tight sheaf, quick rounds",
@@ -213,7 +221,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.NatoGun155, origin = ArtilleryOrigin.Nato,
+                caliber = ArtilleryCaliber.NatoGun155, origin = ArtilleryOrigin.Nato, missions = 12,
                 kind = ArtilleryKind.Gun, calibreMm = 155,
                 label = "155 mm", name = "155 mm medium howitzer",
                 detail = "M777 / PzH 2000 — the workhorse",
@@ -224,7 +232,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.NatoGun203, origin = ArtilleryOrigin.Nato,
+                caliber = ArtilleryCaliber.NatoGun203, origin = ArtilleryOrigin.Nato, missions = 5,
                 kind = ArtilleryKind.Gun, calibreMm = 203,
                 label = "203 mm", name = "203 mm heavy howitzer",
                 detail = "M110 — fortifications and depots",
@@ -237,7 +245,7 @@ namespace IronMeridian.Vfx
             // -------------------------------------------- Enemy-pattern mortars
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyMortar82, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyMortar82, origin = ArtilleryOrigin.Enemy, missions = 22,
                 kind = ArtilleryKind.Mortar, calibreMm = 82,
                 label = "82 mm", name = "82 mm mortar",
                 detail = "2B14 Podnos — company fire",
@@ -248,7 +256,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyMortar120, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyMortar120, origin = ArtilleryOrigin.Enemy, missions = 16,
                 kind = ArtilleryKind.Mortar, calibreMm = 120,
                 label = "120 mm", name = "120 mm mortar",
                 detail = "2B11 Sani — battalion heavy mortar",
@@ -259,7 +267,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyMortar160, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyMortar160, origin = ArtilleryOrigin.Enemy, missions = 8,
                 kind = ArtilleryKind.Mortar, calibreMm = 160,
                 label = "160 mm", name = "160 mm heavy mortar",
                 detail = "M-160 — breaks field fortifications",
@@ -270,7 +278,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyMortar240, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyMortar240, origin = ArtilleryOrigin.Enemy, missions = 4,
                 kind = ArtilleryKind.Mortar, calibreMm = 240,
                 label = "240 mm", name = "240 mm siege mortar",
                 detail = "2S4 Tyulpan — the heaviest mortar in service",
@@ -283,7 +291,7 @@ namespace IronMeridian.Vfx
             // ----------------------------------- Enemy-pattern guns & howitzers
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyGun122, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyGun122, origin = ArtilleryOrigin.Enemy, missions = 18,
                 kind = ArtilleryKind.Gun, calibreMm = 122,
                 label = "122 mm", name = "122 mm howitzer",
                 detail = "D-30 / 2S1 Gvozdika — divisional workhorse",
@@ -294,7 +302,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyGun130, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyGun130, origin = ArtilleryOrigin.Enemy, missions = 14,
                 kind = ArtilleryKind.Gun, calibreMm = 130,
                 label = "130 mm", name = "130 mm field gun",
                 detail = "M-46 — long range counter-battery",
@@ -305,7 +313,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyGun152, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyGun152, origin = ArtilleryOrigin.Enemy, missions = 12,
                 kind = ArtilleryKind.Gun, calibreMm = 152,
                 label = "152 mm", name = "152 mm howitzer",
                 detail = "2S3 Akatsiya / 2S19 Msta-S — general destructive fire",
@@ -316,7 +324,7 @@ namespace IronMeridian.Vfx
             },
             new ArtilleryDef
             {
-                caliber = ArtilleryCaliber.EnemyGun203, origin = ArtilleryOrigin.Enemy,
+                caliber = ArtilleryCaliber.EnemyGun203, origin = ArtilleryOrigin.Enemy, missions = 5,
                 kind = ArtilleryKind.Gun, calibreMm = 203,
                 label = "203 mm", name = "203 mm heavy gun",
                 detail = "2S7 Pion — army-level siege fire",
@@ -354,7 +362,14 @@ namespace IronMeridian.Vfx
 
         static Dictionary<ArtilleryCaliber, ArtilleryDef> _byCaliber;
 
-        public static ArtilleryDef Get(ArtilleryCaliber caliber)
+          /// <summary>
+        /// The key this system's missions are counted under. Prefixed by family
+        /// because the five strike catalogues have five unrelated enums whose
+        /// member names can collide. See <see cref="StrikeBudget"/>.
+        /// </summary>
+        public static string BudgetKey(ArtilleryCaliber caliber) => StrikeBudget.Key("arty", caliber);
+
+      public static ArtilleryDef Get(ArtilleryCaliber caliber)
         {
             EnsureTuned();
             if (_byCaliber == null)

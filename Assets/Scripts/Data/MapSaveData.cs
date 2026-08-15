@@ -202,5 +202,15 @@ namespace IronMeridian.Data
         /// correctly as "nobody is in command" — see docs/23-COMMANDERS.md.
         /// </summary>
         public List<CommanderState> commanders = new List<CommanderState>();
+
+        /// <summary>
+        /// The sides of the fight and who is playing them. Empty on a map saved
+        /// before players existed, in which case
+        /// <see cref="PlayerRegistry.EnsureDefaults"/> fills in the arrangement
+        /// such a map was always implicitly being played under — Blue by the
+        /// user, Red by the computer. See docs/25-PLAYERS.md.
+        /// </summary>
+        public List<TeamState> teams = new List<TeamState>();
+        public List<PlayerState> players = new List<PlayerState>();
     }
 }

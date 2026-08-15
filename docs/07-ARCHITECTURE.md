@@ -30,6 +30,8 @@ Assets/Scripts/
                           camera clamping (docs/22-MISSIONS.md §1a)
     CommanderData.cs     RankDef/RankCatalog (two ladders) + CommanderState
                           — the order of battle above the units (docs/23-COMMANDERS.md)
+    PlayerData.cs        TeamState/PlayerState/Difficulty + PlayerRegistry —
+                          who is fighting the scenario (docs/25-PLAYERS.md)
     TunableFields.cs     reflection over a data record's editable fields — what
                           drives the DEVELOPMENT catalogue editor
     GameCatalogs.cs      the register of every data table (units + five weapon
@@ -52,10 +54,13 @@ Assets/Scripts/
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
-    BoundaryPanelUI.cs   docked right panel: control-measure side/colour/width/caption
     FrontlinePanelUI.cs  docked right panel: front-line settings, opened by clicking the line
-    MissilePanelUI.cs    docked LEFT panel, in the section panel's place: ten
-                          missile systems (docs/20-MISSILE-SYSTEMS.md)
+    StrikeDockUI.cs      the five fire menus: an icon cluster under the top
+                          bar's right end and one right-docked panel behind it
+    MissilePanelUI.cs    the missile board, built into a StrikeDockUI page
+                          (docs/20-MISSILE-SYSTEMS.md)
+    PlayerPanel.cs       the rail's PLAYERS section: teams, players, computer
+                          difficulty (docs/25-PLAYERS.md)
     UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
     MapControlsUI.cs     on-map zoom cluster (bottom-left) + compass (bottom-right)
     UiTheme.cs           map-editor design tokens (colours, sizes)
@@ -77,6 +82,9 @@ Assets/Scripts/
     ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
     LossesDialog.cs      the casualty list, TAB in battle mode: both sides'
                           losses side by side, from Units/LossLedger
+    GroupPanelUI.cs      right panel for a 2+ selection: name it as a group,
+                          recall/fly to a saved group, move formations between
+                          groups, and the (mocked) group order bar
     MainMenuUI.cs        left-hand command board: grouped entries + quit modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
@@ -93,11 +101,14 @@ Assets/Scripts/
     EastFranceUI.cs      "Under development" placeholder
     GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.
                          SetMissionMode strips it to the clock (docs/22-MISSIONS.md §3)
-    UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel.
+    UnitPaletteUI.cs     left rail (nine-row section nav + three tools) + the
+                         sliding section panel. Also builds the four fire menus
+                         into StrikeDockUI's pages — what moved is where they
+                         are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence (+ submenus)
-                         (the left rail's ARTILLERY STRIKE section lives in
+                         (the strike dock's ARTILLERY page is built by
                           UnitPaletteUI.BuildArtillerySection — docs/17-ARTILLERY.md)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
@@ -143,7 +154,6 @@ Assets/Scripts/
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground
     DefenceOrderSystem.cs Defend / Hold / Guard — lines, battle position, distribution
-    LineDrawTool.cs      click-to-draw boundaries & defensive lines
     MissionAreaTool.cs   click-to-draw a mission's boundary, and the overlay that
                           shows it. Deliberately NOT a LineManager line — the area
                           belongs to the mission record, not the map file
@@ -186,8 +196,8 @@ Assets/Scripts/
                           trail, and a wreck burning where it lands
     StrikeAftermath.cs   30 scenario minutes of fire, then 2 hours of smoke,
                           left where any strike landed (docs/08-PARTICLE-SYSTEMS.md)
-    StrikeBudget.cs      the 99 called strikes a scenario has, shared by
-                          artillery, air, UAV and missiles
+    StrikeBudget.cs      missions flown per delivery system; the limits live on
+                          the catalogue rows (docs/03-GAMEPLAY.md)
     TargetAreaMarker.cs  3D target-area volume (procedural mesh, vertex colours)
   Editor/
     ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
@@ -235,7 +245,7 @@ MainMenu ─▶ Development (Testing scene) ─▶ Game scene
                           ├─ LoadingScreenUI.Show            overlay until terrain streams in
                           ├─ MapManager.Build(Lyon)          Cesium globe
                           ├─ CameraRig.Init                  strategy camera
-                          ├─ LineManager / MarkerManager / LineDrawTool
+                          ├─ LineManager / MarkerManager
                           ├─ FrontlineSystem / SectorSystem / DefenceOrderSystem
                           ├─ VfxSystem                       fire/smoke (before units spawn)
                           ├─ CombatSystem / AttackOrderSystem / FogOfWarSystem / ReconOrderSystem

@@ -38,6 +38,15 @@ namespace IronMeridian.Vfx
         /// <summary>Radius of the target area in metres.</summary>
         public float radiusMeters;
 
+        /// <summary>
+        /// Sorties of this type a scenario may fly. Cheap quadcopters are
+        /// numerous, one-way strategic airframes are not, and the single
+        /// reconnaissance drone is the scarcest thing in the menu because what
+        /// it brings back is the most valuable. Counted by
+        /// <see cref="StrikeBudget"/> — see docs/19-UAV-STRIKES.md.
+        /// </summary>
+        public int missions = 8;
+
         /// <summary>Model id in <see cref="UnitModelLibrary"/>. Never a Resources path — golden rule 10.</summary>
         public string modelId;
 
@@ -158,7 +167,7 @@ namespace IronMeridian.Vfx
         {
             new UavDef
             {
-                uav = UavType.KamikazeDrone,
+                uav = UavType.KamikazeDrone, missions = 12,
                 label = "KAMIKAZE DRONE",
                 name = "Kamikaze drone",
                 detail = "Loitering munition — one target, one warhead",
@@ -185,7 +194,7 @@ namespace IronMeridian.Vfx
 
             new UavDef
             {
-                uav = UavType.ShahedDrone,
+                uav = UavType.ShahedDrone, missions = 5,
                 label = "SHAHED DRONE",
                 name = "Shahed drone",
                 detail = "Long-range one-way attack — deep strike, heavy warhead",
@@ -226,7 +235,7 @@ namespace IronMeridian.Vfx
 
             new UavDef
             {
-                uav = UavType.ReconDrone,
+                uav = UavType.ReconDrone, missions = 3,
                 label = "RECONNAISSANCE DRONE",
                 name = "Reconnaissance drone",
                 detail = "Looks — 10 km search area, 5 minutes on station",
@@ -273,7 +282,14 @@ namespace IronMeridian.Vfx
 
         static Dictionary<UavType, UavDef> _byType;
 
-        public static UavDef Get(UavType type)
+          /// <summary>
+        /// The key this system's missions are counted under. Prefixed by family
+        /// because the five strike catalogues have five unrelated enums whose
+        /// member names can collide. See <see cref="StrikeBudget"/>.
+        /// </summary>
+        public static string BudgetKey(UavType type) => StrikeBudget.Key("uav", type);
+
+      public static UavDef Get(UavType type)
         {
             EnsureTuned();
             if (_byType == null)

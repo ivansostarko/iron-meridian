@@ -68,9 +68,26 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
       "latitude": 45.7760, "longitude": 4.8050, "heightMeters": 0,
       "headingDeg": 92                // direction the task is oriented on (the threat)
     }
+  ],
+
+  "teams": [
+    { "id": "team-blue", "name": "Blue Force", "side": "User" },
+    { "id": "team-red",  "name": "Red Force",  "side": "Enemy" }
+  ],
+
+  "players": [
+    { "id": "player-…", "name": "User",     "teamId": "team-blue",
+      "kind": "Human" },
+    { "id": "player-…", "name": "Computer", "teamId": "team-red",
+      "kind": "Computer", "difficulty": "Regular" }
   ]
 }
 ```
+
+`teams` and `players` say who is fighting the scenario — see
+[25-PLAYERS.md](25-PLAYERS.md). A file with neither (anything saved before they
+existed) loads and is given the default roster above, which is the arrangement
+such a map was always implicitly being played under.
 
 `label` is drawn on the map by `MapLine` itself — at both ends of a long line, at
 the midpoint of a short one — so a caption is a property of the line rather than

@@ -71,31 +71,50 @@ Everything up to the moment something lands is identical across all five, and li
 
 ### The strike allowance
 
-A scenario has **99 called strikes**, and artillery, naval gunfire, air strikes,
-UAV sorties and missile systems all spend from the same pool. It lives in
-`Vfx/StrikeBudget.cs`, is consumed by `CalledStrikeSystem.Launch`, and is shown
-as a "STRIKES REMAINING" readout at the head of all five menus.
+Every delivery system has **its own allowance of missions**, held as `missions`
+on its catalogue row and counted by `Vfx/StrikeBudget.cs`. The figure is shown on
+each button, under the beaten zone, in all five fire menus: two B-2 sorties,
+twenty-four 60 mm fire missions, one DF-26.
 
-**Why one pool rather than five.** Every one of these menus asks the same
-question — commit a piece of ground and something lands on it. With unlimited
-missions the answer is always yes, and the choice between a 105 mm fire mission
-and an Iskander stops being a choice at all: you call both. A single shared
-allowance makes every strike cost the same thing, which is *the next strike*, and
-that is what turns five menus into one decision. Separate pools would have said
-the opposite — that artillery is free once air is spent — and would have needed
-five counters on screen to explain it.
+**Why per system and not one pool.** It used to be a single pool of ninety-nine
+shared by every strike in the game. That made every strike cost the same thing —
+the next strike — so the choice between a 60 mm mortar mission and an Iskander
+was free, and the only rational play was to spend the pool on whatever was
+biggest. What makes a heavy weapon a real choice is that there are *two of them*.
+An allowance attached to the weapon says what is scarce and what is plentiful,
+says it on the button at the moment of choosing, and needs no explanation.
 
-**Ninety-nine, and it is a hard stop.** Deliberately larger than any scenario
-needs, so it never gets in the way of laying one out; it is there to stop the map
-editor being used as an infinite paint tool. The count is spent when a mission is
-**placed**, not when it lands: a mission cannot be recalled once away, so that is
-the moment the player spent it. An exhausted allowance refuses both arming and
-firing, and stands the tube down after the last one.
+It also puts the number where the rest of a weapon's numbers already live:
+`missions` sits beside the beaten zone and the countdown on the catalogue row, so
+it is visible and tunable in **Development → Units List** like any other stat.
 
-The readout turns amber under a fifth remaining and red at zero.
+The artillery allowances, lightest to heaviest:
+
+| Nature | Missions | | Nature | Missions |
+|---|---|---|---|---|
+| 60 mm mortar | 24 | | 82 mm mortar | 22 |
+| 81 mm mortar | 20 | | 122 mm gun | 18 |
+| 105 mm gun | 18 | | 120 mm mortar (enemy) | 16 |
+| 120 mm mortar | 16 | | 130 mm gun | 14 |
+| 155 mm gun | 12 | | 152 mm gun | 12 |
+| 203 mm gun | 5 | | 160 mm mortar | 8 |
+| | | | 240 mm mortar | 4 |
+| | | | 203 mm gun | 5 |
+
+**`StrikeBudget` only counts.** It does not hold the limits — the caller passes
+each system's own figure in with the key, because the catalogues are the single
+source of truth for what a weapon can do and a second copy of the limits would be
+a second thing to keep in step.
+
+The count is spent when a mission is **placed**, not when it lands: a mission
+cannot be recalled once away, so that is the moment the player spent it. An
+exhausted system refuses both arming and firing and stands its own tube down —
+only its own; everything else in the menu is still available.
+
+The readout turns amber at a third remaining and red at zero.
 `StrikeBudget.Reset()` runs when the scene starts and on RESET — the state is
-static and survives a scene load, and a fresh map opening with forty strikes
-already spent would be inexplicable.
+static and survives a scene load, and a fresh map opening with a spent bomber
+would be inexplicable.
 
 ### What a mission leaves behind
 

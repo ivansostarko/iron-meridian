@@ -160,7 +160,7 @@ The nose tips down over the last quarter of the cruise so the dive is *entered* 
 | `Vfx/AirTarget.cs` | Puts the flight on the air picture so it can be shot at — docs/24-AIR-DEFENCE.md |
 | `Vfx/DroneFall.cs` | What is left of a sortie that was intercepted |
 | `Vfx/StrikeAftermath.cs` | The fire and smoke an attack sortie leaves — docs/08-PARTICLE-SYSTEMS.md §2.1 |
-| `Vfx/StrikeBudget.cs` | The 99 strikes a scenario has, shared with artillery, air and missiles |
+| `Vfx/StrikeBudget.cs` | Sorties flown per type; the limits are on the catalogue rows |
 | `Vfx/RotorSpinner.cs` | Spins the propellers (shared with the helicopter) |
 | `Vfx/TargetAreaMarker.cs` | The 3D target-area volume (shared) |
 | `UI/UnitPaletteUI.cs` | `BuildUavStrikeSection` |
@@ -187,16 +187,22 @@ The strike allowance is **not** refunded either way: the sortie was flown.
 
 ### The strike allowance
 
-Every sortie tasked here, **armed or not**, spends one of the scenario's 99
-called strikes — the same pool artillery, air strikes and missile systems draw
-from. `StrikeBudget` refuses arming and firing once it is empty, and the
-"STRIKES REMAINING" readout at the head of this section is the same count shown
-in the other three menus. See `Vfx/StrikeBudget.cs` and docs/17-ARTILLERY.md §
-*The strike allowance*.
+Each type has **its own allowance of sorties**, held as `missions` on its
+catalogue row and shown on its button under the radius:
 
-The reconnaissance drone costs one because it is a real asset being sent
-somewhere, and because a free reconnaissance option next to three paid strike
-options is not a choice — it is a button you press first, every time.
+| Type | Sorties | Why |
+|---|---|---|
+| Kamikaze drone | 12 | Cheap and numerous — the workhorse |
+| Shahed-class | 5 | A one-way strategic airframe, not a grenade on a quadcopter |
+| Reconnaissance | 3 | The scarcest thing in the menu |
+
+Every sortie tasked here, **armed or not**, spends one of its type's. Running the
+quadcopters out does not touch the reconnaissance drone, and vice versa. See
+`Vfx/StrikeBudget.cs` and docs/17-ARTILLERY.md § *The strike allowance*.
+
+The reconnaissance drone is the scarcest because what it brings back is the most
+valuable — and because a free reconnaissance option next to three paid strike
+options is not a choice, it is a button you press first, every time.
 
 
 ## Damage
@@ -238,9 +244,9 @@ it a precision instrument rather than cheap artillery.
 
 ## 5. Known gaps
 
-- **No stock, cooldown or operator unit.** There is a shared allowance of 99
-  (`StrikeBudget`) but no per-type stock, no reload and no unit on the map that
-  has to exist for a sortie to be flown.
+- **No cooldown, no reload and no operator unit.** There is a per-type
+  allowance (`StrikeBudget`) but nothing that replenishes it and no unit on the
+  map that has to exist for a sortie to be flown.
 - **Not saved.** A sortie in the air is lost on save/load — including a
   reconnaissance drone on station, whose sensor goes with it.
 - **`noseYawOffsetDeg` and the Shahed's rotor axis are unverified.** The

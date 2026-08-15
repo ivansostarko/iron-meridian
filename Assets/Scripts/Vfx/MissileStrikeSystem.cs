@@ -28,6 +28,8 @@ namespace IronMeridian.Vfx
         protected override float RadiusFor(MissileSystemId key) => MissileCatalog.Get(key).radiusMeters;
         protected override Color ColourFor(MissileSystemId key) => MissileCatalog.Get(key).markerColor;
         protected override string NameFor(MissileSystemId key) => MissileCatalog.Get(key).name;
+        protected override string BudgetKeyFor(MissileSystemId key) => MissileCatalog.BudgetKey(key);
+        protected override int BudgetLimitFor(MissileSystemId key) => MissileCatalog.Get(key).missions;
         protected override float CountdownFor(MissileSystemId key) => MissileCatalog.CountdownSeconds;
 
         protected override string ArmedMessage(MissileSystemId key)

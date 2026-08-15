@@ -67,34 +67,56 @@ The editor's left chrome is in two pieces:
 |---|---|
 | **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight**, **max weapon range** and **fog of war** |
 | **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
-| **CONTROL MEASURES** | The five kinds of line that can be drawn by hand — picking one opens its options on the right |
+| **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
+| **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
-| **ARTILLERY STRIKE** | Call for fire — NATO / Enemy tabs, 14 natures. See docs/17-ARTILLERY.md |
-| **AIR STRIKE** | Task an airframe — bomber, fighter or helicopter. See docs/18-AIR-STRIKES.md |
-| **UAV STRIKES** | Task a loitering munition or a Shahed-class one-way drone — see docs/19-UAV-STRIKES.md |
-| **MISSILE SYSTEMS** | Ten launchers, NATO and enemy. Opens a board docked in the section panel's place rather than a section here — see docs/20-MISSILE-SYSTEMS.md |
-| **NAVY STRIKE** | Naval gunfire support — NATO NAVY / ENEMY NAVY tabs, nine mountings. See docs/21-NAVAL-GUNFIRE.md |
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
 | **MAP** | Tile style, 2D/3D, layers, unit-label size |
 | **DATE AND TIME** | Scenario H-hour and presets |
 
-**Control measures are set up in two places on purpose.** The *kind* is chosen in
-the rail, because it changes how the line should be laid on the ground — a rear
-boundary runs parallel to the front, a lateral one runs into it — so it is
-decided first and then left alone. The *styling* (side, colour, width, planned or
-actual, caption) lives in a **docked panel on the right**, because those are
-fiddled with until they look right against the terrain.
-
-That panel used to be a modal dialog, which was the wrong shape twice over: it
-blocked the map while collecting settings that are all about *where* the line
-will go, and it had to be dismissed before drawing, so changing your mind about a
-colour meant cancelling the line and starting again. Docked, the terrain stays
-visible and clickable behind it, and a change applies to the next line without a
-round trip. Opening it drops the unit selection, since two panels cannot share
-the right-hand edge — and you are drawing now, not inspecting a formation.
+**Nine rows, not fifteen.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, then the dressing.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
+
+The tool strip along the bottom is down to three: the **cursor**, **generate sectors** and the **2D/3D toggle**. The pencil and the square drew control measures by hand.
+
+### The strike dock
+
+The five ways of putting explosives on a piece of ground — **artillery, air, UAV, missile, naval** — are a cluster of five icons under the top bar's right-hand end. Click one to open its menu, docked on the right beneath the icons; click it again, or the **✕**, to close it.
+
+**Why they left the rail.** They were five of the rail's fifteen rows, and the other ten are things you *set up* a scenario with. These are not that: they are things you *do* during one, they are all the same verb, and mixing them into the authoring nav made the rail read as a settings menu with weapons in it. Pulling them into their own cluster says what they have in common and gets them to one click from anywhere.
+
+**The icons never hide.** Everything else that docks on the right — the unit inspector, the group panel, the front-line options — now begins *below* the icon strip rather than under the top bar, so a fire menu can be reached with a formation selected. The panel itself still shares the right edge with them, because two panels cannot occupy one strip of screen: opening a fire menu drops the selection, and selecting a formation closes the fire menu. Closing a menu also stands its launcher down — leaving one armed behind a panel that is off screen would turn the next click on the map into a strike nobody asked for.
+
+| Icon | Menu | Detail |
+|---|---|---|
+| Artillery piece | **ARTILLERY STRIKE** | NATO / Enemy tabs, 14 natures. docs/17-ARTILLERY.md |
+| Flying wing | **AIR STRIKE** | Bomber, fighter or helicopter. docs/18-AIR-STRIKES.md |
+| Quadcopter | **UAV STRIKES** | Loitering munition, Shahed-class, reconnaissance. docs/19-UAV-STRIKES.md |
+| Interceptor | **MISSILE SYSTEMS** | Ten launchers, NATO and enemy. docs/20-MISSILE-SYSTEMS.md |
+| Warship | **NAVY STRIKE** | Nine mountings, NATO and enemy. docs/21-NAVAL-GUNFIRE.md |
+
+### Missions per weapon, not per scenario
+
+Every fire menu shows **two figures on each row**: the beaten zone, and how many missions that system has left. The allowance belongs to the weapon — two B-2 sorties, twenty 81 mm fire missions, one DF-26 — and running one system out does not touch any other.
+
+It used to be a single pool of ninety-nine shared by every strike in the game, which made the choice between a 60 mm mortar mission and an Iskander free: they cost the same thing, so the only rational play was to spend the pool on whatever was biggest. What makes a heavy weapon a real choice is that there are two of them.
+
+The figure is `missions` on the catalogue row, beside the beaten zone and the countdown, so it is visible and tunable in **Development → Units List** like any other stat. See `Vfx/StrikeBudget.cs`.
+
+### Control measures
+
+**Removed.** The editor no longer draws boundaries, phase lines or defensive lines by hand: the CONTROL MEASURES rail section, its right-hand options panel and the two drawing tools are all gone.
+
+What survives is every control measure the game *derives* for itself, because those are the ones that carry information rather than decoration:
+
+- the automatic **front line** (`FrontlineSystem`), clickable for its own settings;
+- **GENERAL → GENERATE SECTORS**, which derives each side's lateral boundaries, FEBA and rear boundary from where its units stand;
+- the lines and battle positions **DEFEND / HOLD / GUARD** put on the map as part of an order;
+- a **mission's boundary**, drawn in the MISSIONS panel — the one click-to-draw tool left, and it belongs to the mission record rather than to the map.
+
+Lines saved in an existing map still load and draw; nothing was removed from the line model itself.
 
 ### Deploying units (drag & drop)
 
@@ -138,7 +160,39 @@ A formation the fog has taken off the map is not listed here, since the list wou
 | **Shift + right-click** terrain | **Adds a waypoint** to the end of the current march instead of replacing it (battle mode) |
 | `C` | Aim the selection's facing: move the mouse to swing every selected unit onto a bearing. The heading arrows brighten and the status line reads the live bearing. LMB/Enter confirms, `Esc` cancels |
 | `Esc` | Deselect |
-| **Hover** a unit icon | Tooltip beside the cursor: side, type, echelon, strength bar, status, morale/organisation/ammo/fuel and both ranges |
+| **Hover** a unit icon | Hover card beside the counter — see *Hovering costs nothing* below |
+
+### Groups
+
+Select **two or more** formations — box-select by dragging, or shift-click them one at a time — and the right-hand panel becomes the **group panel** instead of the unit inspector. (One formation is a unit, not a group, so at a selection of one the inspector comes back.)
+
+| Block | What it is |
+|---|---|
+| **GROUP ORDERS** | MOVE / ATTACK / DEFEND for the group as a whole. Shown **only when everything selected belongs to the same group** — a bar captioned with a group's name acting on a half-and-half selection would be lying about its scope |
+| Name field + **CREATE GROUP** / **UNGROUP** | Names the current selection as a group, or takes it out of whatever group it is in |
+| **SELECTED UNITS** | A row per selected formation: icon, name, echelon, and the group it currently belongs to. **⇄** moves that one formation to another group; **✕** deletes it from the map |
+| **EXISTING GROUPS** | Every group with a living member, with its size |
+
+**The order buttons are a mockup.** They carry the same glyphs the single-unit order bar uses and say plainly that the order is not wired up yet. Giving them a *plausible* behaviour — issuing the order to each member in turn — would be worse than doing nothing: a group move is not several unit moves, it is a formation moving with an axis, a frontage and an order of march, and shipping the naive version would make the real one a bug report rather than a feature.
+
+#### Recalling a group
+
+| Input on an EXISTING GROUPS row | Action |
+|---|---|
+| **Click** | Selects that group's members on the map |
+| **Double-click** | Selects them **and flies the camera to them** |
+| **＋** | Moves everything currently selected into that group |
+
+The flight frames the whole group rather than using a fixed altitude: the standoff comes from the group's own radius about its centre, with a floor, so a brigade holding a thirty-kilometre frontage does not arrive with two of its units on screen and the rest off it. As with the DEPLOYED list, any pan or zoom cancels the flight.
+
+#### Moving formations between groups
+
+A group is a property of the units in it, not an object of its own, so *"move these units to that group"* is expressed as a selection plus a destination — and both are already on this panel. Two paths, because they answer two different questions:
+
+- **＋ on a group row** takes the **whole selection** into that group. This is the bulk path — splitting a force between two axes is a statement about a set of formations, not about each of them in turn.
+- **⇄ on a unit row** opens a chooser for that **one** formation, listing every group plus *(no group)*. This is how a battalion moves between brigades.
+
+Both write straight to `UnitState.groupId` / `groupName`, so regrouping is saved with the map like any other unit property.
 
 ### Connection alerts
 
@@ -166,10 +220,33 @@ failure path covers that case with a better message.
 **Hovering costs nothing.** Identifying a counter used to mean selecting it,
 which replaces the current selection, closes whatever is open on the right and
 cancels any order being aimed. Reading the map should not have side effects, so
-the tooltip answers "what is that?" without a click. It is shown in both scenario
-and battle mode — the information is as useful laying a scenario out as fighting
-it — and never appears for a formation the fog is hiding, since the icon is gone
-precisely so its position is unknown.
+the hover card answers "what is that?" without a click. It is shown in both
+scenario and battle mode — the information is as useful laying a scenario out as
+fighting it — and never appears for a formation the fog is hiding, since the icon
+is gone precisely so its position is unknown.
+
+The card is placed **beside the counter, not under the cursor**: a counter is a
+small target and the pointer is somewhere inside it, so a card hung off the mouse
+covers the symbol being asked about and slides around under a hand that is
+holding still.
+
+**Everything on it is labelled by a picture.** It leads with the formation's own
+APP-6 symbol — so the card and the counter are visibly the same thing — over its
+name and its echelon / arm / side. Under that, each reading sits behind a glyph
+in a fixed position:
+
+| | Reading | |
+|---|---|---|
+| 🛡 | Strength | Bar and percentage, green → amber → red |
+| ⚡ | Status | Coloured with the state: routed red, suppressed and engaging amber, moving blue |
+| ⚑ MOR · ✎ ORG | Morale, organisation | Same three-colour thresholds as strength |
+| ▪ AMMO · ● FUEL | Ammunition, fuel | Red at zero — out of ammunition is a state, not a low number |
+| ◉ SEE · ⌁ REACH | View range, weapon range | |
+
+It used to be four lines of prose with the readings run together as
+`MOR 74 ORG 61 AMMO 3200 FUEL 480` — six numbers a player had to parse a caption
+to identify, on a card that is up for about a second. Position and shape are what
+a glance can use; a word is what a glance skips.
 
 The **heading arrow** is drawn flat on the ground ahead of the icon in the unit's
 team colour, in both 2D and 3D and in both scenario and battle mode. It is the
@@ -336,11 +413,12 @@ each of these keeps retrying until real terrain is underneath, then refreshes
 slowly. A miss never overwrites a height that was already good, so nothing can be
 lost inside a ridge or left floating over a valley.
 
-### Lines: boundaries & defensive lines
+### How lines are drawn
 
-- **DRAW BOUNDARY** — yellow sector boundary separating the two teams.
-- **DRAW DEFENSIVE LINE** — thick team-coloured fortification line.
-- Left-click adds points, **right-click / Enter finishes**, `Esc` cancels.
+These rules apply to every line on the map — the derived front line, generated
+sector boundaries, defensive positions and mission areas alike. Hand-drawing is
+gone (see *Control measures* above); the drawing model is not.
+
 - **Lines are draped, not strung.** Every segment is subdivided at ~220 m and each sample is clamped to the ground, so a boundary drawn with two clicks across ten kilometres lies on the terrain the whole way rather than flying over the valleys and vanishing inside the ridges between its two vertices.
 - **STAND UP IN 3D** — for defensive lines and battle positions, which mark ground that is physically held, the flag chooses how far clear of the terrain the graphic floats (25 m in 3D, 140 m in 2D so it reads as an overlay from straight above). **Boundaries and phase lines ignore it and always read `DRAPED`**: a control measure is a line drawn on a map, not a fence standing in the world, and a wall of colour reaching into the sky hides the terrain the boundary is there to divide. Height is used for one thing only — putting the line on the ground.
 - A line's `label` amplifier is drawn on the map — at both ends for a long line, at the midpoint for a short one — so `FEBA`, `PL BLUE` and `DEFENCE LINE — …` say what they are and keep saying it after a reload.

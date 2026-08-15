@@ -11,7 +11,7 @@ namespace IronMeridian.UI
     /// main menu, exit to Windows. Freezes gameplay via Time.timeScale while
     /// open. Runs before other gameplay scripts (see DefaultExecutionOrder)
     /// so BlockOpen reads this frame's pre-Escape state, not the post-Escape
-    /// state already consumed by SelectionManager/LineDrawTool.
+    /// state already consumed by SelectionManager/MissionAreaTool.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public class PauseMenuUI : MonoBehaviour
@@ -27,7 +27,7 @@ namespace IronMeridian.UI
         public System.Func<float> ResumeTimeScale;
 
         /// <summary>
-        /// Where EXIT goes. The main menu from the map editor; the campaign
+        /// Where EXIT TO MAIN MENU goes. The main menu from the map editor; the campaign
         /// browser from a mission, so leaving one drops the player back at the
         /// board they picked it from rather than making them walk the whole menu
         /// again to retry it.
@@ -56,7 +56,11 @@ namespace IronMeridian.UI
             MenuButton(box, "RESUME GAME", 0, Resume);
             MenuButton(box, "SAVE", 1, DoSave);
             MenuButton(box, "LOAD", 2, DoLoad);
-            MenuButton(box, "EXIT", 3, ExitToMainMenu);
+            // Both exits say where they go. "EXIT" beside "EXIT TO WINDOWS"
+            // asked the player to infer the difference from the absence of a
+            // destination, which is exactly the reading you do not want to get
+            // wrong on a menu that can close the game.
+            MenuButton(box, "EXIT TO MAIN MENU", 3, ExitToMainMenu);
             MenuButton(box, "EXIT TO WINDOWS", 4, ShowQuitModal);
 
             // Sits just below the last button (index 4 ends at -130-4*76-62 = -516).
@@ -72,6 +76,9 @@ namespace IronMeridian.UI
             var btn = UIFactory.CreateButton(parent, label, action, GameConfig.UiPanelLight, GameConfig.UiText, 24);
             UIFactory.Place((RectTransform)btn.transform, new Vector2(0.5f, 1f),
                 new Vector2(0, -130 - index * 76), new Vector2(400, 62));
+            // "EXIT TO MAIN MENU" is the longest caption here and only just
+            // clears 400 px at 24 pt; best-fit shrinks rather than overruns.
+            UIFactory.Fit(btn.GetComponentInChildren<Text>(), 16);
         }
 
         void BuildQuitModal(Transform parent)

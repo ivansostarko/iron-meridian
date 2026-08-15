@@ -79,6 +79,14 @@ namespace IronMeridian.Vfx
         protected abstract string NameFor(TKey key);
         /// <summary>Seconds between the call and the first thing landing.</summary>
         protected abstract float CountdownFor(TKey key);
+        /// <summary>
+        /// The key this option's missions are counted under, and how many it
+        /// gets. Both come from the subclass's own catalogue — see
+        /// <see cref="StrikeBudget"/> for why the limits are not held there.
+        /// </summary>
+        protected abstract string BudgetKeyFor(TKey key);
+        protected abstract int BudgetLimitFor(TKey key);
+
         /// <summary>Message when this option is armed.</summary>
         protected abstract string ArmedMessage(TKey key);
         /// <summary>Message when a mission has been placed.</summary>
@@ -102,10 +110,11 @@ namespace IronMeridian.Vfx
             // Refused at the point of arming as well as at the point of firing.
             // Letting a spent allowance arm normally and only complain on the
             // map click would waste the player's aim and read as the click
-            // having missed.
-            if (StrikeBudget.Exhausted)
+            // having missed. The allowance is this system's own — a spent
+            // bomber does not stop the helicopter flying.
+            if (StrikeBudget.IsExhausted(BudgetKeyFor(key), BudgetLimitFor(key)))
             {
-                Flash?.Invoke(StrikeBudget.ExhaustedMessage);
+                Flash?.Invoke(StrikeBudget.ExhaustedMessage(NameFor(key), BudgetLimitFor(key)));
                 return;
             }
 
@@ -190,10 +199,10 @@ namespace IronMeridian.Vfx
             // Spent when the mission is *placed*, because that is the moment it
             // becomes irrevocable — nothing can recall a strike once away, so
             // nothing should be able to get the allowance back either.
-            if (!StrikeBudget.TryConsume())
+            if (!StrikeBudget.TryConsume(BudgetKeyFor(key), BudgetLimitFor(key)))
             {
                 Cancel();
-                Flash?.Invoke(StrikeBudget.ExhaustedMessage);
+                Flash?.Invoke(StrikeBudget.ExhaustedMessage(NameFor(key), BudgetLimitFor(key)));
                 return;
             }
 
@@ -215,12 +224,13 @@ namespace IronMeridian.Vfx
 
             Flash?.Invoke(AwayMessage(key));
 
-            // That was the last one: stand the launcher down rather than leaving
-            // it armed over a map that can no longer answer a click.
-            if (StrikeBudget.Exhausted)
+            // That was this system's last one: stand it down rather than leaving
+            // it armed over a map that can no longer answer a click. Only this
+            // system — everything else in the menu is still available.
+            if (StrikeBudget.IsExhausted(BudgetKeyFor(key), BudgetLimitFor(key)))
             {
                 Cancel();
-                Flash?.Invoke(StrikeBudget.ExhaustedMessage);
+                Flash?.Invoke(StrikeBudget.ExhaustedMessage(NameFor(key), BudgetLimitFor(key)));
             }
         }
 

@@ -33,6 +33,12 @@ namespace IronMeridian.Vfx
         protected override string NameFor(StrikeAircraft key) =>
             AirStrikeCatalog.Get(key).name;
 
+        protected override string BudgetKeyFor(StrikeAircraft key) =>
+            AirStrikeCatalog.BudgetKey(key);
+
+        protected override int BudgetLimitFor(StrikeAircraft key) =>
+            AirStrikeCatalog.Get(key).missions;
+
         protected override float CountdownFor(StrikeAircraft key) =>
             AirStrikeCatalog.CountdownSeconds;
 

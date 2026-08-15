@@ -31,7 +31,7 @@ Assets/Scripts/Vfx/
   InterceptorRun.cs       the surface-to-air missile — see docs/24-AIR-DEFENCE.md
   DroneFall.cs            a drone coming down after being hit
   StrikeAftermath.cs      what a strike leaves: 30 min of fire, then 2 h of smoke
-  StrikeBudget.cs         the 99 called strikes a scenario has, shared by all four
+  StrikeBudget.cs         missions flown per delivery system (docs/17-ARTILLERY.md)
   RotorSpinner.cs         spins rotors/propellers on unrigged models
   TargetAreaMarker.cs     the 3D target-area volume a strike is placed with
 Assets/Editor/
@@ -364,7 +364,7 @@ The strategic camera can show a whole front, so effect count is bounded rather t
 | Per-unit throttles on impact and firing effects | 1.8 s / 2.6 s | `GameConfig` |
 | Wreck fires burn out rather than persisting | 14–32 s | `GameConfig.VfxWreck*` |
 | Concurrent strike-aftermath sites, oldest retired first | 20 | `StrikeAftermath.MaxSites` |
-| Called strikes per scenario, across all four delivery means | 99 | `StrikeBudget.Limit` |
+| Missions per delivery system, per scenario | 2–24, per catalogue row | `<Def>.missions`, counted by `StrikeBudget` |
 | One shared material for all procedural effects | — | `ProceduralVfx.PuffMaterial` |
 
 Effects are **not pooled** — each spawn allocates a `GameObject`. The cap and throttles keep the churn low enough that this has not mattered; if profiling says otherwise, pooling belongs in `VfxSystem.Populate`.

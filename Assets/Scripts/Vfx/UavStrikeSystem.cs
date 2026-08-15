@@ -37,6 +37,8 @@ namespace IronMeridian.Vfx
         protected override float RadiusFor(UavType key) => UavCatalog.Get(key).radiusMeters;
         protected override Color ColourFor(UavType key) => UavCatalog.Get(key).markerColor;
         protected override string NameFor(UavType key) => UavCatalog.Get(key).name;
+        protected override string BudgetKeyFor(UavType key) => UavCatalog.BudgetKey(key);
+        protected override int BudgetLimitFor(UavType key) => UavCatalog.Get(key).missions;
         protected override float CountdownFor(UavType key) => UavCatalog.CountdownSeconds;
 
         protected override string ArmedMessage(UavType key)

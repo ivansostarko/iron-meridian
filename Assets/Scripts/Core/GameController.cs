@@ -42,7 +42,6 @@ namespace IronMeridian.Core
         SelectionManager _selection;
         LineManager _lines;
         MarkerManager _markers;
-        LineDrawTool _drawTool;
         /// <summary>Draws and shows the open mission's boundary — see docs/22-MISSIONS.md.</summary>
         MissionAreaTool _areaTool;
         FrontlineSystem _frontline;
@@ -93,9 +92,8 @@ namespace IronMeridian.Core
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
-        BoundaryPanelUI _boundaryPanel;
+        StrikeDockUI _strikeDock;
         FrontlinePanelUI _frontlinePanel;
-        MissilePanelUI _missilePanel;
         UnitHoverTooltip _hoverTooltip;
         UnitClusterLayer _clusters;
         ConnectivityWatcher _connectivity;
@@ -171,9 +169,6 @@ namespace IronMeridian.Core
 
             _markers = gameObject.AddComponent<MarkerManager>();
             _markers.Init(_map.Georeference);
-
-            _drawTool = gameObject.AddComponent<LineDrawTool>();
-            _drawTool.Init(_map, _rig.Cam, _lines);
 
             // The mission's own boundary. Deliberately not a LineManager line:
             // it belongs to the mission record, not to the map file underneath
@@ -269,8 +264,7 @@ namespace IronMeridian.Core
                                             _uavStrike.IsArmed ||
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
-                                            _areaTool.Drawing ||
-                                            _drawTool.Current != LineDrawTool.Mode.None;
+                                            _areaTool.Drawing;
             _selection.BattleRunning = () => _combat.Running;
 
             // --- UI ---
@@ -372,27 +366,6 @@ namespace IronMeridian.Core
             // Each panel is built in isolation: the whole UI is constructed at
             // runtime, so an exception in one builder used to abort the rest of
             // Start() — silently leaving the info panel, range rings, selection
-            // wiring and pause menu unbuilt with no clue as to why.
-            // Built before the palette: the palette's CONTROL MEASURES section
-            // opens it, and wiring that up needs it to already exist.
-            BuildStep("control measure options", () =>
-            {
-                _boundaryPanel = BoundaryPanelUI.Create(canvas, _drawTool, () =>
-                {
-                    if (_palette != null) _palette.MarkBoundaryToolActive();
-                });
-                // Two panels cannot share the right-hand edge. Opening this one
-                // drops the unit selection, which is what takes the info panel
-                // down — and is honest besides: you are drawing now, not
-                // inspecting a formation.
-                _boundaryPanel.Opened = () =>
-                {
-                    _selection.Select(null);
-                    if (_frontlinePanel != null) _frontlinePanel.Hide();
-                    CloseMissilePanel();
-                };
-            });
-
             // Settings for the automatic front line. Reached by clicking the
             // line itself — see FrontlinePanelUI for why it is not a rail
             // section like everything else.
@@ -401,8 +374,7 @@ namespace IronMeridian.Core
                 _frontlinePanel = FrontlinePanelUI.Create(canvas, _frontline);
                 _frontlinePanel.Opened = () =>
                 {
-                    if (_boundaryPanel != null) _boundaryPanel.Hide();
-                    CloseMissilePanel();
+                    if (_strikeDock != null) _strikeDock.Hide();
                 };
                 _selection.LineClicked = line =>
                 {
@@ -412,35 +384,54 @@ namespace IronMeridian.Core
                 };
             });
 
-            BuildStep("missile systems", () =>
+            // The five fire menus, as an icon cluster at the top right. Built
+            // before the palette: the palette lays its four strike sections
+            // into the dock's pages, so the dock has to exist first.
+            BuildStep("strike dock", () =>
             {
-                _missilePanel = MissilePanelUI.Create(canvas, _missiles);
-                _missilePanel.Opened = () =>
+                _strikeDock = gameObject.AddComponent<StrikeDockUI>();
+                _strikeDock.Build(canvas);
+
+                // Two panels cannot share the right-hand edge, so opening a fire
+                // menu drops the selection — which is honest besides: you are
+                // choosing a weapon now, not inspecting a formation.
+                _strikeDock.Opened = () =>
                 {
-                    // The board docks where the rail's section panel docks, so
-                    // opening it closes that panel; nothing on the right-hand
-                    // edge is disturbed any more, which means a formation can
-                    // stay selected while a launcher is being chosen.
-                    if (_palette != null)
+                    _selection.Select(null);
+                    if (_frontlinePanel != null) _frontlinePanel.Hide();
+                };
+
+                // Closing a menu stands its own system down; leaving one armed
+                // behind a panel that is off screen would turn the next click on
+                // the map into a strike nobody asked for.
+                _strikeDock.Closed = menu =>
+                {
+                    switch (menu)
                     {
-                        _palette.ClosePanel();
-                        _palette.SetMissilePanelOpen(true);
+                        case StrikeDockUI.Menu.Artillery: _artillery.Cancel(); break;
+                        case StrikeDockUI.Menu.AirStrike: _airStrike.Cancel(); break;
+                        case StrikeDockUI.Menu.UavStrike: _uavStrike.Cancel(); break;
+                        case StrikeDockUI.Menu.Missiles: _missiles.Cancel(); break;
+                        case StrikeDockUI.Menu.NavalStrike: _naval.Cancel(); break;
                     }
                 };
-                // The on-map zoom cluster rides whichever left-hand board is up.
-                _missilePanel.LeftInsetChanged = inset =>
-                {
-                    if (_mapControls == null) return;
-                    if (inset > 0f) _mapControls.SetLeftInset(inset);
-                    else if (_palette != null) _palette.ReassertMapInset();
-                };
+
+                _strikeDock.RightInsetChanged = _ => RefreshRightInset();
+            });
+
+            BuildStep("missile systems", () =>
+            {
+                // Not held: the board fills a page the dock owns and is driven
+                // entirely by the missile system's own events from then on.
+                MissilePanelUI.Create(
+                    _strikeDock.PageFor(StrikeDockUI.Menu.Missiles), _missiles);
             });
 
             BuildStep("unit palette", () =>
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _artillery, _airStrike, _uavStrike, _naval, _mapControls, _drawTool);
+                    _artillery, _airStrike, _uavStrike, _naval, _mapControls, _strikeDock);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -454,12 +445,6 @@ namespace IronMeridian.Core
                     _sectors.AutoUpdate = on;
                     if (on) GenerateSectors();
                 };
-                _palette.MissileSystemsRequested = () =>
-                {
-                    if (_missilePanel == null) return;
-                    _missilePanel.Toggle();
-                    _palette.SetMissilePanelOpen(MissilePanelUI.IsOpen);
-                };
                 _palette.LineOfSightChanged = SetLineOfSightVisible;
                 _palette.WeaponRangeChanged = SetWeaponRangeVisible;
                 _palette.FogOfWarChanged = on =>
@@ -470,23 +455,13 @@ namespace IronMeridian.Core
                         : "Fog of war off — the whole order of battle is visible.");
                 };
 
-                // Bottom tool strip.
-                // CONTROL MEASURES section → the docked options panel on the right.
-                _palette.ControlMeasureRequested = kind =>
+                // Bottom tool strip. The cursor is the only latching tool left —
+                // the pencil and the square drew control measures by hand, and
+                // that feature is gone.
+                _palette.SelectToolRequested = () =>
                 {
-                    if (_boundaryPanel == null) return;
-                    _drawTool.PendingKind = kind;
-                    _boundaryPanel.Show(kind);
-                };
-
-                _palette.SelectToolRequested = () => _drawTool.CancelDrawing();
-                _palette.BoundaryToolRequested = () => _drawTool.StartDrawing(LineDrawTool.Mode.Boundary);
-                _palette.DefensiveLineToolRequested = () => _drawTool.StartDrawing(LineDrawTool.Mode.DefensiveLine);
-                // The draw tool also exits on its own (Esc, or finishing a line);
-                // keep the strip's latched button honest when it does.
-                _drawTool.ModeChanged += mode =>
-                {
-                    if (mode == LineDrawTool.Mode.None) _palette.ResetToolToSelect();
+                    _areaTool.CancelDrawing();
+                    _effects.Cancel();
                 };
 
                 // COMMANDERS section — the order of battle above the units.
@@ -505,7 +480,6 @@ namespace IronMeridian.Core
                 _palette.MissionAreaDrawRequested = () =>
                 {
                     if (!PointAreaToolAtPanelMission()) return;
-                    _drawTool.CancelDrawing();
                     _areaTool.StartDrawing();
                 };
                 _palette.MissionAreaRectangleRequested = MakeMissionRectangle;
@@ -576,6 +550,7 @@ namespace IronMeridian.Core
                 _groupPanel.Build(canvas);
                 _groupPanel.Flash = _hud.Flash;
                 _groupPanel.SelectGroupRequested = members => _selection.SetSelection(members);
+                _groupPanel.FlyToGroupRequested = FlyToGroup;
                 _groupPanel.RemoveUnitRequested = u =>
                 {
                     RecordRemoval(u);
@@ -632,20 +607,23 @@ namespace IronMeridian.Core
 
             _selection.SelectionChanged = sel =>
             {
+                _selectionPanelOpen = sel.Count >= 1 && sel[0] != null;
                 bool infoPanelOpen = sel.Count == 1 && sel[0] != null;
-                // The info panel and the front line panel share the right-hand
-                // edge; selecting a formation is a clear statement about which
-                // of the two you now want. The missile board is *not* taken
-                // down with them — it docks on the left, so a launcher can stay
-                // chosen while a formation is inspected on the right.
-                if (infoPanelOpen && _frontlinePanel != null) _frontlinePanel.Hide();
+
+                // Everything that docks on the right shares one strip of screen:
+                // the unit inspector, the group panel, the front line options
+                // and the fire menus. Selecting a formation is a clear statement
+                // about which of them you now want.
+                if (_selectionPanelOpen)
+                {
+                    if (_frontlinePanel != null) _frontlinePanel.Hide();
+                    if (_strikeDock != null) _strikeDock.Hide();
+                }
+
                 if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
                 if (_groupPanel != null) _groupPanel.SetSelection(sel);
-                // The compass lives in the bottom-right corner and steps aside
-                // for the info panel rather than being parked inboard of a panel
-                // that is usually not there.
-                if (_mapControls != null)
-                    _mapControls.SetRightInset(infoPanelOpen ? UiTheme.RightPanelWidth : 0f);
+
+                RefreshRightInset();
                 UpdateRangeRings(sel);
                 RefreshActionBar();
             };
@@ -654,7 +632,7 @@ namespace IronMeridian.Core
             {
                 _pauseMenu = gameObject.AddComponent<PauseMenuUI>();
                 _pauseMenu.Build(canvas);
-                _pauseMenu.BlockOpen = () => _drawTool.Current != LineDrawTool.Mode.None || _selection.Selected != null;
+                _pauseMenu.BlockOpen = () => _areaTool.Drawing || _selection.Selected != null;
                 _pauseMenu.SaveRequested = SaveMap;
                 _pauseMenu.LoadRequested = LoadMap;
                 // EXIT goes back where the player came in from. Dropping a
@@ -1139,11 +1117,10 @@ namespace IronMeridian.Core
 
             if (_hud != null) _hud.SetMissionMode(true);
             if (_palette != null) _palette.SetChromeVisible(false);
-            // Both are opened from the rail, which has just gone. Closing them
-            // is belt and braces — a panel left up with nothing to close it
-            // would sit over the map for the rest of the mission.
-            if (_boundaryPanel != null) _boundaryPanel.Hide();
-            if (_missilePanel != null) _missilePanel.Hide();
+            // The fire menus go with it. Belt and braces — a dock left up
+            // with nothing to close it would sit over the map for the rest
+            // of the mission.
+            if (_strikeDock != null) _strikeDock.SetChromeVisible(false);
         }
 
         /// <summary>
@@ -1283,6 +1260,58 @@ namespace IronMeridian.Core
         /// <summary>Standoff a double-clicked formation is shown at, metres.</summary>
         const float UnitFocusDistanceMeters = 4500f;
 
+        /// <summary>
+        /// Double-click on a group row: select the whole group and travel to it.
+        ///
+        /// Unlike a single formation, a group has an **extent**, so the standoff
+        /// is derived from it rather than fixed — flying to a brigade holding a
+        /// thirty-kilometre frontage at the same altitude as a single battalion
+        /// would put two of its units on screen and leave the player to guess
+        /// where the rest went. The camera pulls back to whatever frames the
+        /// whole group, with a floor so a tightly-stacked group is not shoved
+        /// into the ground.
+        /// </summary>
+        void FlyToGroup(System.Collections.Generic.List<UnitActor> members)
+        {
+            if (members == null || members.Count == 0) return;
+
+            _selection.SetSelection(members);
+
+            double lat = 0, lon = 0;
+            int count = 0;
+            foreach (var u in members)
+            {
+                if (u == null || !u.IsAlive) continue;
+                lat += u.State.latitude; lon += u.State.longitude;
+                count++;
+            }
+            if (count == 0) return;
+
+            lat /= count; lon /= count;
+
+            // Radius of the group about its own centre, in metres.
+            double spreadM = 0;
+            foreach (var u in members)
+            {
+                if (u == null || !u.IsAlive) continue;
+                spreadM = System.Math.Max(spreadM,
+                    GeoUtils.DistanceKm(lat, lon, u.State.latitude, u.State.longitude) * 1000.0);
+            }
+
+            float distance = Mathf.Max(UnitFocusDistanceMeters, (float)spreadM * GroupFocusMargin);
+            _rig.FlyTo(GeoUtils.GeoToUnity(_map.Georeference, lat, lon, 300), distance);
+
+            string name = members[0] != null && !string.IsNullOrEmpty(members[0].State.groupName)
+                ? members[0].State.groupName : "Group";
+            _hud.Flash($"{name} — {count} formation(s) selected, flying to them.");
+        }
+
+        /// <summary>
+        /// How much standoff a group's own radius is worth. Above 2 so the
+        /// outermost formations sit inside the frame rather than on its edge.
+        /// </summary>
+        const float GroupFocusMargin = 2.6f;
+
         /// <summary>Takes every unit, effect and undo step off the map, ready for a fresh load.</summary>
         void ClearMapContents()
         {
@@ -1321,6 +1350,8 @@ namespace IronMeridian.Core
             _save.lines = _lines.Serialize();
             _save.markers = _markers.Serialize();
             _save.commanders = CommanderRegistry.Serialize();
+            _save.teams = PlayerRegistry.SaveTeams();
+            _save.players = PlayerRegistry.SavePlayers();
             _save.viewMode = _map.ViewMode.ToString();
             _save.mapStyle = _map.Style.ToString();
             _save.showBuildings = _map.BuildingsVisible;
@@ -1376,7 +1407,6 @@ namespace IronMeridian.Core
             _combat.SetRunning(false);
             _attacks.CancelAll();
             _recon.CancelAll();
-            _drawTool.CancelDrawing();
             _effects.Cancel();
             _missiles.Cancel();
             _naval.Cancel();
@@ -1385,7 +1415,7 @@ namespace IronMeridian.Core
             _uavStrike.Cancel();
             _selection.Select(null);
             if (_frontlinePanel != null) _frontlinePanel.Hide();
-            CloseMissilePanel();
+            if (_strikeDock != null) _strikeDock.Hide();
 
             // Editor settings, and the panel lamps that report them.
             _fog.SetEnabled(false);
@@ -1470,11 +1500,15 @@ namespace IronMeridian.Core
             // already down, so loading them earlier would have the roster point
             // at formations that did not exist yet.
             CommanderRegistry.LoadFrom(data.commanders);
+            // Who is playing which side. Fills in the two-team, two-player
+            // default when the map carries none — see docs/25-PLAYERS.md.
+            PlayerRegistry.LoadFrom(data.teams, data.players);
         }
 
         void Update()
         {
             TickMissionAutoStart();
+            RefreshRightInset();
 
             if (Input.GetKeyDown(KeyCode.F5)) SaveMap();
             if (Input.GetKeyDown(KeyCode.F9)) LoadMap();
@@ -1558,12 +1592,38 @@ namespace IronMeridian.Core
             _rangeRingLon = u.State.longitude;
         }
 
-        /// <summary>Takes the missile board down and un-lights its nav row with it.</summary>
-        void CloseMissilePanel()
+        /// <summary>True while a selection has a panel up on the right-hand edge.</summary>
+        bool _selectionPanelOpen;
+
+        /// <summary>
+        /// Keeps the on-map compass clear of whatever is docked on the right.
+        ///
+        /// Four things can be there and only one at a time — the unit
+        /// inspector, the group panel, the front line options and the strike
+        /// dock — but they are not the same width, and each used to set the
+        /// inset itself. One place that asks all of them is what stops the
+        /// compass being left parked inboard of a panel that has gone.
+        /// </summary>
+        void RefreshRightInset()
         {
-            if (_missilePanel != null) _missilePanel.Hide();
-            if (_palette != null) _palette.SetMissilePanelOpen(false);
+            if (_mapControls == null) return;
+
+            float inset = 0f;
+            if (_selectionPanelOpen) inset = UiTheme.RightPanelWidth;
+            else if (StrikeDockUI.IsOpen) inset = StrikeDockUI.PanelWidth;
+            else if (FrontlinePanelUI.IsOpen) inset = UiTheme.RightPanelWidth;
+
+            // Polled from Update as well as pushed by the panels, because two of
+            // them close without raising anything. The guard is what makes the
+            // poll free: SetRightInset moves rects, and doing that sixty times a
+            // second for a value that has not changed would be a layout rebuild
+            // per frame.
+            if (Mathf.Approximately(inset, _lastRightInset)) return;
+            _lastRightInset = inset;
+            _mapControls.SetRightInset(inset);
         }
+
+        float _lastRightInset = -1f;
 
         /// <summary>GENERAL → LINE OF SIGHT. Repaints the current selection immediately.</summary>
         void SetLineOfSightVisible(bool on)
