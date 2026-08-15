@@ -49,11 +49,18 @@ namespace IronMeridian.UI
         /// <summary>Y of the emblem row, measured from the top of the screen.</summary>
         const float TitleY = -96f;
         /// <summary>
+        /// Drop from the title to the rule under it. Tightened when the
+        /// strapline between them was removed — a rule left at the old distance
+        /// would be a rule floating in the gap where a line of text used to be.
+        /// </summary>
+        const float RuleDrop = 46f;
+        /// <summary>
         /// Y the scrolling list starts at, measured from the top of the screen.
         /// Higher than it used to be: the blurb that sat between the masthead
-        /// rule and the first entry is gone, and the list took the space.
+        /// rule and the first entry is gone, and so is the strapline; the list
+        /// took both.
         /// </summary>
-        const float MenuTop = -212f;
+        const float MenuTop = -172f;
         /// <summary>Clear space under the list, above the footer rule and version line.</summary>
         const float MenuBottom = 100f;
 
@@ -131,10 +138,10 @@ namespace IronMeridian.UI
             UIFactory.Place(title.rectTransform, new Vector2(0f, 1f),
                 new Vector2(BoardX + 60f, TitleY + 6f), new Vector2(BoardWidth - 60f, 64));
 
-            var subtitle = UIFactory.CreateText(parent, "REAL-TERRAIN OPERATIONAL WARGAME",
-                18, UiTheme.Accent, TextAnchor.UpperLeft, FontStyle.Bold);
-            UIFactory.Place(subtitle.rectTransform, new Vector2(0f, 1f),
-                new Vector2(BoardX + 62f, TitleY - 34f), new Vector2(BoardWidth, 26));
+            // There is no strapline under the title. "REAL-TERRAIN OPERATIONAL
+            // WARGAME" described the genre to somebody who had already bought
+            // the game and opened it — every entry below says what it does, and
+            // the line cost the list a row of vertical space to say nothing.
 
             // Rule under the masthead: accent for the first stretch, then a
             // hairline running out to the edge of the board. The two-part rule
@@ -142,12 +149,12 @@ namespace IronMeridian.UI
             // column reads as one system.
             var accentRule = UIFactory.CreatePanel(parent, "AccentRule", UiTheme.Accent);
             UIFactory.Place(accentRule, new Vector2(0f, 1f),
-                new Vector2(BoardX, TitleY - 86f), new Vector2(84, 3));
+                new Vector2(BoardX, TitleY - RuleDrop), new Vector2(84, 3));
             accentRule.GetComponent<Image>().raycastTarget = false;
 
             var rule = UIFactory.CreatePanel(parent, "Rule", UiTheme.Border);
             UIFactory.Place(rule, new Vector2(0f, 1f),
-                new Vector2(BoardX + 90f, TitleY - 86f), new Vector2(BoardWidth - 90f, 1));
+                new Vector2(BoardX + 90f, TitleY - RuleDrop), new Vector2(BoardWidth - 90f, 1));
             rule.GetComponent<Image>().raycastTarget = false;
         }
 

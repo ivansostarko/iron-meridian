@@ -79,7 +79,7 @@ All navigation uses synchronous `SceneManager.LoadScene`. Menu scenes build thei
 | Main Menu → Development / Settings | Menu buttons | Runtime-built uGUI only |
 | Development → Game | "MAP EDITOR" card | The `Game` scene shows its own loader (§3.1) once it starts |
 | Single player ↔ campaign / mission boards | Row clicks, Escape | Two pages of one scene — nothing is loaded between them |
-| Development → East France / Units and Weapons / Particle Effects / Audio | Cards | Runtime-built uGUI only |
+| Development → East France / Units List / Particles / Audio | Cards | Runtime-built uGUI only |
 | Any → previous screen | Back buttons, Escape | Runtime-built uGUI only |
 
 If a screen ever gains a slow build step, give it a `LoadingScreenUI` and add it to §3.1.

@@ -37,7 +37,7 @@ namespace IronMeridian.Data
 
     /// <summary>
     /// The register of every data table the game is built from, in one place, so
-    /// the DEVELOPMENT → UNITS AND WEAPONS screen is driven by data rather than
+    /// the DEVELOPMENT → UNITS LIST screen is driven by data rather than
     /// by six hand-written panels.
     ///
     /// Adding a weapon family means adding a row here as well as the catalogue

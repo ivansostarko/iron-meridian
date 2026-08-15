@@ -204,7 +204,7 @@ namespace IronMeridian.Vfx
         /// The authored prefab for an effect, or null when there is none the
         /// active render pipeline can draw.
         ///
-        /// Static and public because the DEVELOPMENT → PARTICLE EFFECTS lab has
+        /// Static and public because the DEVELOPMENT → PARTICLES lab has
         /// to answer the same question with no <see cref="VfxSystem"/> in the
         /// scene — and a lab that decided prefab-versus-procedural by its own
         /// rules would be showing something other than what the game plays.

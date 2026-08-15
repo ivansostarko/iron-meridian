@@ -9,7 +9,7 @@ using IronMeridian.Vfx;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// PARTICLE EFFECTS — every row of <see cref="VfxCatalog"/>, played in 3D
+    /// PARTICLES — every row of <see cref="VfxCatalog"/>, played in 3D
     /// with the sound it carries.
     ///
     /// **Why the lab exists.** The catalogue is the register of what the game
@@ -113,7 +113,7 @@ namespace IronMeridian.UI
 
         void BuildHeaderBar(Transform parent)
         {
-            var title = UIFactory.CreateText(parent, "PARTICLE EFFECTS", 46,
+            var title = UIFactory.CreateText(parent, "PARTICLES", 46,
                 GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(80, -66), new Vector2(760, 70));
 

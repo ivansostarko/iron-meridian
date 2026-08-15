@@ -130,6 +130,13 @@ nothing else to wire.
   `docs/12-LOADERS.md` §3.1 and both must always dismiss (golden rule 7). The
   outgoing one is `DontDestroyOnLoad` and one sorting order above the standard
   loader, so the handover has no gap and no coin toss over draw order.
+- **Mission mode strips the scene to the map and the clock.**
+  `GameController.ApplyMissionMode` hides the rail, the identity block, the mode
+  chip, RESET, START BATTLE and the key list; `TickMissionAutoStart` starts the
+  battle once the loader has gone, because there is no control left to press.
+  Anything new added to the editor's chrome has to decide which side of that it
+  is on. See docs/22-MISSIONS.md §3.
+
 - **The Game scene does two jobs.** `_mission == null` is the map editor. Anything
   that assumes a mission is present will break the editor, and anything that
   assumes there is none will break missions.

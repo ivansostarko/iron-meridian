@@ -684,6 +684,8 @@ namespace IronMeridian.Core
                 ApplyMissionArea();
             });
 
+            BuildStep("mission mode", ApplyMissionMode);
+
             // Everything is built; what remains is Cesium streaming tiles for
             // the opening view. Hand the overlay that as its progress source.
             if (_loading != null)
@@ -1031,6 +1033,63 @@ namespace IronMeridian.Core
                 });
         }
 
+        // --------------------------------------------------- mission mode
+
+        /// <summary>
+        /// True once the mission's battle has been started for us. A mission is
+        /// entered to fight it, and there is no START BATTLE control on the
+        /// screen to press — see <see cref="ApplyMissionMode"/>.
+        /// </summary>
+        bool _missionBattleStarted;
+
+        /// <summary>
+        /// Turns the Game scene from a map editor into a mission: **the map and
+        /// the timer, and nothing else.**
+        ///
+        /// The scene does both jobs, and almost all of its chrome belongs to the
+        /// authoring one. The left rail's thirteen sections deploy units and
+        /// draw control measures; RESET reloads the scenario; START BATTLE is
+        /// the editor deciding when to fight. None of that is a player's
+        /// business in a mission that somebody else laid out, and RESET is
+        /// actively dangerous there.
+        ///
+        /// **The on-map zoom cluster and compass stay.** They are map controls,
+        /// not editor tools — the same argument that removes the rail keeps
+        /// them. So do the unit info panel and the order bar, which appear only
+        /// while something is selected and are the only way to give an order.
+        ///
+        /// No-op in the editor, so the two jobs never have to agree on anything
+        /// beyond this one call.
+        /// </summary>
+        void ApplyMissionMode()
+        {
+            if (_mission == null) return;
+
+            if (_hud != null) _hud.SetMissionMode(true);
+            if (_palette != null) _palette.SetChromeVisible(false);
+            // Both are opened from the rail, which has just gone. Closing them
+            // is belt and braces — a panel left up with nothing to close it
+            // would sit over the map for the rest of the mission.
+            if (_boundaryPanel != null) _boundaryPanel.Hide();
+            if (_missilePanel != null) _missilePanel.Hide();
+        }
+
+        /// <summary>
+        /// Starts a mission's battle once the terrain has streamed in.
+        ///
+        /// It has to start by itself: the control that would start it is gone,
+        /// and the clock — the one piece of chrome a mission keeps — only reads
+        /// out while a battle is running. Deferred until the loading overlay has
+        /// gone so the first combat tick does not land on units that are still
+        /// being clamped to terrain Cesium has not delivered.
+        /// </summary>
+        void TickMissionAutoStart()
+        {
+            if (_mission == null || _missionBattleStarted || Loading) return;
+            _missionBattleStarted = true;
+            _combat.SetRunning(true);
+        }
+
         // --------------------------------------------------- mission area
 
         /// <summary>
@@ -1303,6 +1362,8 @@ namespace IronMeridian.Core
 
         void Update()
         {
+            TickMissionAutoStart();
+
             if (Input.GetKeyDown(KeyCode.F5)) SaveMap();
             if (Input.GetKeyDown(KeyCode.F9)) LoadMap();
 

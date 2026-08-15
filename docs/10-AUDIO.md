@@ -65,7 +65,7 @@ There is currently **one** volume slider (master). Separate music/ambience/SFX b
 
 | Asset | Path | Resource path | Screens | Level | Loop | Description |
 |---|---|---|---|---|---|---|
-| Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **Every screen except the two labs**: Main Menu, Settings, Development, Units and Weapons, East France, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
+| Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **Every screen except the two labs**: Main Menu, Settings, Development, Units List, East France, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
 
 | Single player | *not supplied yet* | `Audio/main-menu/single_player` | Single Player | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
 | Multiplayer | *not supplied yet* | `Audio/main-menu/multiplayer` | Multiplayer | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
@@ -188,8 +188,8 @@ Tracked so the inventory stays honest and licensing stays traceable.
 | Main Menu | `MainMenu` | Menu theme | — | — | Click |
 | Settings | `Settings` | Menu theme | — | — | Click |
 | Development | `Testing` | Menu theme | — | — | Click |
-| Units and Weapons | `UnitsList` | Menu theme | — | — | Click |
-| Particle Effects lab | `EffectsList` | **stopped** | — | The selected effect's sound, 2D (§2.3) | Click |
+| Units List | `UnitsList` | Menu theme | — | — | Click |
+| Particles lab | `EffectsList` | **stopped** | — | The selected effect's sound, 2D (§2.3) | Click |
 | Audio lab | `AudioList` | **stopped** | Any bed, on demand | Any effect sound, on demand | Click |
 | East France | `EastFrance` | Menu theme | — | — | Click |
 | Map editor (editing) | `Game` | Menu theme | — | Hand-placed effects (EFFECTS panel) | Click |

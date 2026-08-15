@@ -29,6 +29,13 @@ namespace IronMeridian.UI
         RectTransform _modeChip;
         Image _modeChipFill;
 
+        /// <summary>
+        /// The bar itself and the editor furniture on it. Held so mission mode
+        /// can take them off the screen — see <see cref="SetMissionMode"/>.
+        /// </summary>
+        RectTransform _bar, _identity, _resetFrame;
+        Text _help;
+
         RectTransform _clockPanel;
         Text _clockDate, _clockTime, _clockSpeed;
 
@@ -62,6 +69,7 @@ namespace IronMeridian.UI
             bar.pivot = new Vector2(0.5f, 1);
             bar.offsetMin = new Vector2(0, -UiTheme.TopBarHeight);
             bar.offsetMax = Vector2.zero;
+            _bar = bar;
 
             // Hairline under the bar: what separates chrome from map without a
             // heavy drop shadow.
@@ -86,15 +94,59 @@ namespace IronMeridian.UI
             BuildCountdown(canvas);
             BuildAlert(canvas);
 
-            var help = UIFactory.CreateText(canvas.transform,
+            _help = UIFactory.CreateText(canvas.transform,
                 "LMB select   •   RMB place / move   •   C face   •   Ctrl+C/V copy-paste   •   Ctrl+Z undo   •   WASD pan   •   Wheel zoom   •   Q/E rotate   •   Esc/P pause",
                 UiTheme.FontSmall, UiTheme.TextFaint);
-            UIFactory.Place(help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 10), new Vector2(1180, 22));
+            UIFactory.Place(_help.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 10), new Vector2(1180, 22));
+        }
+
+        /// <summary>
+        /// Strips the bar down to the operational clock for a single-player
+        /// mission, leaving the map and the timer.
+        ///
+        /// **Why the editor's furniture goes.** A mission is a fight on a piece
+        /// of ground somebody else laid out. The identity block, the mode chip,
+        /// RESET, the battle control and the editor key list are all about
+        /// *authoring* a scenario, and every one of them is either useless or
+        /// destructive once the scenario is the thing being played.
+        ///
+        /// **What stays, and why it has to.** The clock — the mission's timer.
+        /// The flash line, the strike countdown and the alert banner: those are
+        /// gameplay feedback, not chrome, and a strike with no countdown is a
+        /// strike the player cannot time. Esc still opens the pause menu, which
+        /// is the way out now that the emblem's home button is gone.
+        /// </summary>
+        public void SetMissionMode(bool on)
+        {
+            if (_identity != null) _identity.gameObject.SetActive(!on);
+            if (_modeChip != null) _modeChip.gameObject.SetActive(!on);
+            if (_resetFrame != null) _resetFrame.gameObject.SetActive(!on);
+            if (_battleBtn != null) _battleBtn.gameObject.SetActive(!on);
+            if (_help != null) _help.gameObject.SetActive(!on);
+
+            // The clock takes the space the battle control and RESET have
+            // vacated, so it sits against the right edge rather than floating
+            // 334 px short of it with nothing to its right.
+            if (_clockPanel != null)
+                _clockPanel.anchoredPosition = new Vector2(on ? -18f : -334f, 0f);
+
+            // The bar stays: it is what the clock is mounted on, and a clock
+            // floating on the terrain with nothing behind it is unreadable over
+            // snow, desert or a lit city.
+            if (_bar != null) _bar.GetComponent<Image>().color =
+                on ? new Color(UiTheme.Chrome.r, UiTheme.Chrome.g, UiTheme.Chrome.b, 0.72f) : UiTheme.Chrome;
         }
 
         /// <summary>Emblem + screen name, the anchor of the whole bar.</summary>
         void BuildIdentity(RectTransform bar)
         {
+            // One container for the emblem, the title and the invisible home
+            // button over them, so mission mode can take the whole block off in
+            // a single call rather than remembering three pieces.
+            _identity = UIFactory.CreateGroup(bar, "Identity");
+            UIFactory.Stretch(_identity);
+            bar = _identity;
+
             var emblem = UIFactory.CreateImage(bar, UiIcons.Shield, "Emblem");
             emblem.color = UiTheme.Accent;
             emblem.raycastTarget = false;
@@ -139,6 +191,7 @@ namespace IronMeridian.UI
             var reset = UIFactory.CreateBorderedPanel(bar, "ResetButton", UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(reset, new Vector2(1f, 0.5f), new Vector2(-18, 0), new Vector2(96, 40));
             reset.pivot = new Vector2(1f, 0.5f);
+            _resetFrame = reset;
 
             var resetBtn = UIFactory.CreateButton(reset, "RESET", () => ResetRequested?.Invoke(),
                 new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);

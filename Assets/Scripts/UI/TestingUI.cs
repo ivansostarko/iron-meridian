@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -11,17 +12,20 @@ namespace IronMeridian.UI
     /// reference labs that let the game's own data be inspected without playing
     /// a scenario to find it.
     ///
-    ///   MAP EDITOR       -> the main game screen (Lyon dev map)
-    ///   UNITS AND WEAPONS-> every unit type and weapon system, editable
-    ///   PARTICLE EFFECTS -> every VfxId, shown in 3D with its sound
-    ///   AUDIO            -> every music, ambience and effect sound, with transport
-    ///   MAP EAST FRANCE  -> placeholder page ("Under development")
+    ///   MAP EDITOR      -> the main game screen (Lyon dev map)
+    ///   UNITS LIST      -> every unit type and weapon system, editable
+    ///   PARTICLES       -> every VfxId, shown in 3D with its sound
+    ///   AUDIO           -> every music, ambience and effect sound, with transport
+    ///   MAP EAST FRANCE -> placeholder page ("Under development")
     ///
-    /// **Why a grid rather than a row.** It carried three fixed cards at
-    /// ±580 px, which is a layout that only works for exactly three and only at
-    /// 16:9 — a fourth would have run off the edge of the screen. The entries
-    /// now flow in a wrapping grid sized from the window, so adding a lab is a
-    /// line of code rather than a re-layout.
+    /// **The grid is placed by hand, not by a layout group.** It was briefly a
+    /// <see cref="GridLayoutGroup"/> swapped into a scroll view's content, which
+    /// does not work: <c>LayoutGroup</c> is <c>[DisallowMultipleComponent]</c>,
+    /// and <c>Destroy</c> on the vertical group already there is deferred to end
+    /// of frame — so <c>AddComponent&lt;GridLayoutGroup&gt;</c> returned null and
+    /// the cards stayed in a vertical stack. Five fixed entries do not need a
+    /// layout engine; the rows below are arithmetic, and each row is centred so
+    /// a short last row does not hang off to one side.
     ///
     /// The scene is still called "Testing" (<see cref="GameConfig.SceneTesting"/>).
     /// Renaming the scene asset would break every build-settings entry and every
@@ -30,10 +34,21 @@ namespace IronMeridian.UI
     /// </summary>
     public class TestingUI : MonoBehaviour
     {
-        const float CardW = 440f, CardH = 260f, CardGap = 24f;
-        /// <summary>Top of the card grid, from the top of the screen.</summary>
-        const float GridTop = -220f;
-        const float SideMargin = 80f, BottomMargin = 48f;
+        const float CardW = 430f, CardH = 240f, CardGap = 26f;
+        /// <summary>Cards per row. Five entries read as 3 + 2 at any window worth supporting.</summary>
+        const int Columns = 3;
+        /// <summary>Top of the first row, measured from the top of the screen.</summary>
+        const float GridTop = 210f;
+
+        /// <summary>One entry, before it is placed.</summary>
+        struct Entry
+        {
+            public Sprite Glyph;
+            public string Title;
+            public string Body;
+            public Color Tone;
+            public string Scene;
+        }
 
         void Start()
         {
@@ -56,64 +71,78 @@ namespace IronMeridian.UI
                 () => SceneManager.LoadScene(GameConfig.SceneMainMenu),
                 new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
 
-            var grid = BuildGrid(canvas.transform);
+            var entries = new List<Entry>
+            {
+                new Entry
+                {
+                    Glyph = UiIcons.Layers, Title = "MAP EDITOR",
+                    Body = "The main game screen. Cesium 3D terrain — deploy units, draw control " +
+                           "measures, author missions and fight.",
+                    Tone = new Color(0.13f, 0.24f, 0.38f), Scene = GameConfig.SceneGame
+                },
+                new Entry
+                {
+                    Glyph = UiIcons.Shield, Title = "UNITS LIST",
+                    Body = "Every unit type, artillery nature, airframe, UAV, missile system and " +
+                           "naval gun — with every value editable and saved to your own copy.",
+                    Tone = new Color(0.20f, 0.22f, 0.14f), Scene = GameConfig.SceneUnitsList
+                },
+                new Entry
+                {
+                    Glyph = UiIcons.Flame, Title = "PARTICLES",
+                    Body = "Every effect in the catalogue, played in 3D with its own sound — the " +
+                           "authored prefab where there is one, the procedural stand-in where there is not.",
+                    Tone = new Color(0.32f, 0.18f, 0.10f), Scene = GameConfig.SceneEffectsList
+                },
+                new Entry
+                {
+                    Glyph = UiIcons.Pulse, Title = "AUDIO",
+                    Body = "Every music bed, weather ambience and effect sound, with its name, its " +
+                           "resource path and a transport to play it.",
+                    Tone = new Color(0.14f, 0.24f, 0.26f), Scene = GameConfig.SceneAudioList
+                },
+                new Entry
+                {
+                    Glyph = UiIcons.Pin, Title = "MAP EAST FRANCE",
+                    Body = "Eastern France scenario map. Operational theatre from Lyon to the Rhine.",
+                    Tone = new Color(0.28f, 0.16f, 0.13f), Scene = GameConfig.SceneEastFrance
+                }
+            };
 
-            Card(grid, UiIcons.Layers, "MAP EDITOR",
-                "The main game screen. Cesium 3D terrain, deploy units, draw control " +
-                "measures, author missions and fight.",
-                new Color(0.13f, 0.24f, 0.38f),
-                () => SceneManager.LoadScene(GameConfig.SceneGame));
-
-            Card(grid, UiIcons.Shield, "UNITS AND WEAPONS",
-                "Every unit type, artillery nature, airframe, UAV, missile system and " +
-                "naval gun — with every value editable and saved to your own copy.",
-                new Color(0.20f, 0.22f, 0.14f),
-                () => SceneManager.LoadScene(GameConfig.SceneUnitsList));
-
-            Card(grid, UiIcons.Flame, "PARTICLE EFFECTS",
-                "Every effect in the catalogue, played in 3D with its own sound — the " +
-                "authored prefab where there is one, the procedural stand-in where there is not.",
-                new Color(0.32f, 0.18f, 0.10f),
-                () => SceneManager.LoadScene(GameConfig.SceneEffectsList));
-
-            Card(grid, UiIcons.Pulse, "AUDIO",
-                "Every music bed, weather ambience and effect sound, with its name, its " +
-                "resource path and a transport to play it.",
-                new Color(0.14f, 0.24f, 0.26f),
-                () => SceneManager.LoadScene(GameConfig.SceneAudioList));
-
-            Card(grid, UiIcons.Pin, "MAP EAST FRANCE",
-                "Eastern France scenario map. Operational theatre from Lyon to the Rhine.",
-                new Color(0.28f, 0.16f, 0.13f),
-                () => SceneManager.LoadScene(GameConfig.SceneEastFrance));
+            Place(canvas.transform, entries);
         }
 
         /// <summary>
-        /// The wrapping card grid. A <see cref="GridLayoutGroup"/> rather than
-        /// hand-placed cards: the number of entries is what changes here, and a
-        /// layout that has to be re-measured every time one is added is a layout
-        /// that will eventually be wrong.
+        /// Lays the cards out in centred rows. Anchored to the top-centre of the
+        /// screen so the block stays put at any window shape — the canvas scaler
+        /// matches width and height equally, so a grid pinned to the left edge
+        /// would drift as the aspect changed.
         /// </summary>
-        RectTransform BuildGrid(Transform parent)
+        void Place(Transform parent, List<Entry> entries)
         {
-            var scroll = UIFactory.CreateScrollView(parent, out RectTransform content, withScrollbar: true);
-            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            int rows = Mathf.CeilToInt(entries.Count / (float)Columns);
 
-            var rt = (RectTransform)scroll.transform;
-            rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(1, 1);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.offsetMin = new Vector2(SideMargin, BottomMargin);
-            rt.offsetMax = new Vector2(-SideMargin, GridTop);
+            for (int row = 0; row < rows; row++)
+            {
+                int first = row * Columns;
+                int count = Mathf.Min(Columns, entries.Count - first);
+                // Centre each row on its own count, so a trailing row of two
+                // sits under the middle of the three above rather than to one side.
+                float rowWidth = count * CardW + (count - 1) * CardGap;
+                float x = -rowWidth * 0.5f + CardW * 0.5f;
+                float y = -(GridTop + row * (CardH + CardGap)) - CardH * 0.5f;
 
-            // CreateScrollView fits a vertical stack; this content is a grid, so
-            // its layout group is swapped rather than configured.
-            Destroy(content.GetComponent<VerticalLayoutGroup>());
-            var layout = content.gameObject.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(CardW, CardH);
-            layout.spacing = new Vector2(CardGap, CardGap);
-            layout.padding = new RectOffset(0, 0, 0, 16);
-            layout.constraint = GridLayoutGroup.Constraint.Flexible;
-            return content;
+                for (int col = 0; col < count; col++)
+                {
+                    var entry = entries[first + col];
+                    var rt = Card(parent, entry);
+                    UIFactory.Place(rt, new Vector2(0.5f, 1f),
+                        new Vector2(x + col * (CardW + CardGap), y), new Vector2(CardW, CardH));
+                    // Place uses the anchor as the pivot; these are positioned
+                    // by their centres, so the pivot has to be re-centred after.
+                    rt.pivot = new Vector2(0.5f, 0.5f);
+                }
+            }
         }
 
         /// <summary>
@@ -121,39 +150,40 @@ namespace IronMeridian.UI
         /// surface, accent strip, glyph — so the two screens read as one
         /// interface rather than as two generations of it.
         /// </summary>
-        void Card(Transform parent, Sprite glyph, string title, string body, Color tone,
-            UnityEngine.Events.UnityAction onClick)
+        RectTransform Card(Transform parent, Entry entry)
         {
-            var frame = UIFactory.CreateBorderedPanel(parent, "Card_" + title, UiTheme.Surface, UiTheme.Border);
+            var frame = UIFactory.CreateBorderedPanel(parent, "Card_" + entry.Title,
+                UiTheme.Surface, UiTheme.Border);
 
-            var btn = UIFactory.CreateButton(frame, "", onClick, new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            var btn = UIFactory.CreateButton(frame, "",
+                () => SceneManager.LoadScene(entry.Scene), new Color(0, 0, 0, 0), UiTheme.Text, 1);
             UIFactory.Stretch((RectTransform)btn.transform);
             var made = btn.GetComponentInChildren<Text>(true);
             if (made != null) made.gameObject.SetActive(false);
 
             // The head band carries the card's own tone, which is what tells the
             // five entries apart at a glance before any of them is read.
-            var head = UIFactory.CreatePanel(frame, "Head", tone);
+            var head = UIFactory.CreatePanel(frame, "Head", entry.Tone);
             head.anchorMin = new Vector2(0, 1); head.anchorMax = new Vector2(1, 1);
             head.pivot = new Vector2(0.5f, 1);
-            head.offsetMin = new Vector2(0, -84);
+            head.offsetMin = new Vector2(0, -80);
             head.offsetMax = Vector2.zero;
             head.GetComponent<Image>().raycastTarget = false;
 
-            var icon = UIFactory.CreateImage(head, glyph, "Glyph");
+            var icon = UIFactory.CreateImage(head, entry.Glyph, "Glyph");
             icon.color = GameConfig.UiAccent;
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
-                new Vector2(24, 0), new Vector2(34, 34));
+                new Vector2(24, 0), new Vector2(32, 32));
 
-            var t = UIFactory.CreateText(head, title, 26, GameConfig.UiText,
+            var t = UIFactory.CreateText(head, entry.Title, 26, GameConfig.UiText,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(t.rectTransform, new Vector2(0f, 0.5f), new Vector2(72, 0),
-                new Vector2(CardW - 96f, 34));
+            UIFactory.Place(t.rectTransform, new Vector2(0f, 0.5f), new Vector2(70, 0),
+                new Vector2(CardW - 94f, 34));
             UIFactory.Fit(t, 15);
 
-            var b = UIFactory.CreateText(frame, body, 17, GameConfig.UiTextDim, TextAnchor.UpperLeft);
-            UIFactory.PlaceTopLeft(b.rectTransform, 24f, 104f, CardW - 48f, CardH - 140f);
+            var b = UIFactory.CreateText(frame, entry.Body, 17, GameConfig.UiTextDim, TextAnchor.UpperLeft);
+            UIFactory.PlaceTopLeft(b.rectTransform, 24f, 100f, CardW - 48f, CardH - 132f);
             UIFactory.Fit(b, 12);
 
             var strip = UIFactory.CreatePanel(frame, "Strip", GameConfig.UiAccent);
@@ -168,6 +198,8 @@ namespace IronMeridian.UI
             AddHover(trigger, EventTriggerType.PointerEnter, () => Paint(fill, strip, true));
             AddHover(trigger, EventTriggerType.PointerExit, () => Paint(fill, strip, false));
             Paint(fill, strip, false);
+
+            return frame;
         }
 
         static void Paint(Image fill, RectTransform strip, bool hover)

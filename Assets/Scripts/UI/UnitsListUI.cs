@@ -11,7 +11,7 @@ using IronMeridian.Vfx;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// UNITS AND WEAPONS — the reference catalogue for every data table the game
+    /// UNITS LIST — the reference catalogue for every data table the game
     /// is built from, and the one place they can be tuned.
     ///
     /// **Six tables, one screen.** Unit types were only ever half the answer to
@@ -155,7 +155,7 @@ namespace IronMeridian.UI
 
         void BuildHeaderBar(Transform parent)
         {
-            var title = UIFactory.CreateText(parent, "UNITS AND WEAPONS", 46,
+            var title = UIFactory.CreateText(parent, "UNITS LIST", 46,
                 GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(80, -66), new Vector2(760, 70));
 

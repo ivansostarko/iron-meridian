@@ -106,6 +106,34 @@ Main menu → SINGLE PLAYER        SinglePlayerUI (campaign board)
   ↓ playing                      Esc / P → PauseMenuUI, EXIT returns to SINGLE PLAYER
 ```
 
+### Mission mode — the map and the timer
+
+The Game scene strips itself down when `_mission != null`
+(`GameController.ApplyMissionMode`):
+
+| Gone | Why |
+|---|---|
+| The left rail and its section panel | Thirteen sections that deploy units and draw control measures. Authoring tools, in a scenario somebody else authored |
+| The identity block and its home button | The bar's name and the one-click hop out. Esc → EXIT is the way out |
+| The mode chip | There is only one mode in a mission |
+| RESET | Reloads the scenario and resets every setting. Actively dangerous here |
+| START BATTLE | See below — there is nothing to press because the battle is already running |
+| The editor key list along the bottom | Copy-paste, undo and control-measure keys are editor bindings |
+
+| Kept | Why |
+|---|---|
+| The **operational clock** | The mission's timer, and the one piece of chrome a mission needs |
+| The zoom cluster and compass | Map controls, not editor tools — the same argument that removes the rail keeps these |
+| Unit info panel, order bar | Only appear while something is selected, and are the only way to give an order |
+| Flash line, strike countdown, alerts | Gameplay feedback. A strike with no countdown is a strike you cannot time |
+| Esc / P → pause menu | The way out, now that the home button has gone |
+
+**The battle starts by itself.** The control that would start it is gone, and the
+clock only reads out while a battle is running — so "show the timer" and "start
+the fight" are the same instruction. `TickMissionAutoStart` runs it once the
+loading overlay has gone, so the first combat tick does not land on units still
+being clamped to terrain Cesium has not delivered.
+
 **One scene does both jobs.** The Game scene is the map editor reached from DEVELOPMENT *and* what a mission is played in — deliberately, because a mission is a map with an order of battle on it, and a second scene would be the same dozen systems wired the same way under a different name. What a mission changes is where the map opens, what the HUD's identity block says, and where BACK and EXIT go.
 
 **Two pages, one scene, for the menus too.** The campaign board and the mission board share a background, a music bed and a frame, and moving between them has to be instant — a scene load between two pages of a menu would put a loading screen in the middle of picking something.

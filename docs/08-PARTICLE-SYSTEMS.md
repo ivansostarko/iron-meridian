@@ -279,7 +279,7 @@ Nothing. Every catalogue row now has at least one call site.
 
 ### The effects lab
 
-**DEVELOPMENT → PARTICLE EFFECTS** (`EffectsListUI` + `VfxPreview`) plays every row of §2 in 3D, on a ground plane, looping, with the sound it carries.
+**DEVELOPMENT → PARTICLES** (`EffectsListUI` + `VfxPreview`) plays every row of §2 in 3D, on a ground plane, looping, with the sound it carries.
 
 It exists because the catalogue is the register of what the game can draw, and the only other way to see an entry was to make the event that triggers it happen on the map — which for half these rows means calling a fire mission and watching a 300 m burst from 20 km up.
 
@@ -345,7 +345,7 @@ World-anchored effects (wrecks, aftermath sites) deliberately outlive their unit
 5. **Call it** via `VfxSystem.Play` / `Attach` / a composite helper. Throttle anything that can fire per combat tick.
 6. **If it uses an authored prefab**, put the prefab name in the catalogue and run **Tools → Iron Meridian → Install VFX Prefabs**.
 7. **Update this file** — the catalogue table in §2 *and* the usage table in §3.
-8. **Check it in the lab** — DEVELOPMENT → PARTICLE EFFECTS. The new row appears there automatically; confirm it plays, that SOURCE says what you expect, and that its sound is the one you meant.
+8. **Check it in the lab** — DEVELOPMENT → PARTICLES. The new row appears there automatically; confirm it plays, that SOURCE says what you expect, and that its sound is the one you meant.
 
 ---
 

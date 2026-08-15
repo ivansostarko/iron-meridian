@@ -76,16 +76,18 @@ Assets/Scripts/
     MainMenuUI.cs        left-hand command board: grouped entries + quit modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
-    UnitsListUI.cs       UNITS AND WEAPONS: six catalogues, editable, saved to
+    UnitsListUI.cs       UNITS LIST: six catalogues, editable, saved to
                           tuning.json
     StatEditorPanel.cs   generic label/value list for any data record; switches
                           from reading to editing without being rebuilt
-    EffectsListUI.cs     PARTICLE EFFECTS lab (docs/08-PARTICLE-SYSTEMS.md §3)
+    EffectsListUI.cs     PARTICLES lab (docs/08-PARTICLE-SYSTEMS.md §3)
     AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
                           (docs/10-AUDIO.md §3)
     EastFranceUI.cs      "Under development" placeholder
-    GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle
-    UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel
+    GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.
+                         SetMissionMode strips it to the clock (docs/22-MISSIONS.md §3)
+    UnitPaletteUI.cs     left rail (section nav + tools) + sliding section panel.
+                         SetChromeVisible(false) takes the whole rail off for a mission
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence (+ submenus)
                          (the left rail's ARTILLERY STRIKE section lives in

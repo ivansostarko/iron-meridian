@@ -30,6 +30,12 @@ EditorBuildSettings:
     path: Assets/Scenes/UnitsList.unity
     guid: f520d0b4999450843b25639bbe718901
   - enabled: 1
+    path: Assets/Scenes/EffectsList.unity
+    guid: 575104d4b3a32214c9284048b972d064
+  - enabled: 1
+    path: Assets/Scenes/AudioList.unity
+    guid: b1d343254570e3a48936a4d5f1c6a282
+  - enabled: 1
     path: Assets/Scenes/Game.unity
     guid: ec78d6795c404be44a979af84de566b5
   m_configObjects: {}

@@ -189,6 +189,9 @@ namespace IronMeridian.UI
             new List<(Section, string, Image, Image, Text, RectTransform)>();
         readonly Dictionary<Section, RectTransform> _sectionContent = new Dictionary<Section, RectTransform>();
 
+        /// <summary>The always-present rail. Held so mission mode can take the whole editor chrome off.</summary>
+        RectTransform _rail;
+
         // Section panel.
         RectTransform _sectionPanel;
         Text _sectionTitle;
@@ -265,6 +268,7 @@ namespace IronMeridian.UI
             var body = BuildSectionPanel(canvas);
 
             var panel = UIFactory.CreatePanel(canvas.transform, "UnitPalette", UiTheme.Panel);
+            _rail = panel;
             panel.anchorMin = new Vector2(0, 0); panel.anchorMax = new Vector2(0, 1);
             panel.pivot = new Vector2(0, 0.5f);
             panel.offsetMin = new Vector2(0, 0);
@@ -437,6 +441,40 @@ namespace IronMeridian.UI
             PaintNav();
         }
 
+        /// <summary>
+        /// Takes the whole editor chrome off the screen — the rail and its
+        /// section panel — for a single-player mission, which is played on the
+        /// map rather than authored on it.
+        ///
+        /// The panel is closed first rather than merely hidden: it would
+        /// otherwise slide back out at its old width the moment the chrome
+        /// returned, and the on-map controls measure their inset from
+        /// <see cref="LeftChromeEdge"/>, which has to go to zero with it.
+        /// </summary>
+        public void SetChromeVisible(bool visible)
+        {
+            if (!visible) ClosePanel();
+            _chromeHidden = !visible;
+
+            if (_rail != null) _rail.gameObject.SetActive(visible);
+            if (_sectionPanel != null && !visible) _sectionPanel.gameObject.SetActive(false);
+
+            // Parked at the closed end so nothing is left mid-animation if the
+            // chrome ever comes back.
+            _slide = visible ? 1f : 0f;
+
+            LeftChromeEdge = visible ? RailWidth + PanelWidth : 0f;
+            if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
+        }
+
+        /// <summary>
+        /// True while the whole rail is off the screen. The slide animation has
+        /// to know: it runs from <see cref="Update"/> on the controller's own
+        /// GameObject, which is still alive, and would otherwise keep pushing
+        /// the on-map controls 232 px inboard of a rail that is not there.
+        /// </summary>
+        bool _chromeHidden;
+
         /// <summary>True while the right-hand missile board is up; drives its nav row's highlight.</summary>
         bool _missilesOpen;
 
@@ -466,6 +504,8 @@ namespace IronMeridian.UI
 
         void Update()
         {
+            if (_chromeHidden) return;
+
             float target = _panelOpen ? 1f : 0f;
             if (Mathf.Approximately(_slide, target)) return;
 
@@ -482,7 +522,7 @@ namespace IronMeridian.UI
         /// </summary>
         void ApplySlide()
         {
-            if (_sectionPanel == null) return;
+            if (_sectionPanel == null || _chromeHidden) return;
 
             float x = Mathf.Lerp(RailWidth - PanelWidth, RailWidth, Mathf.SmoothStep(0f, 1f, _slide));
             _sectionPanel.anchoredPosition = new Vector2(x, -UiTheme.TopBarHeight * 0.5f);

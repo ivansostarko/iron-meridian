@@ -34,7 +34,7 @@ namespace IronMeridian.Save
 
     /// <summary>
     /// The player's own tuning of the game's data tables, written by the
-    /// DEVELOPMENT → UNITS AND WEAPONS screen.
+    /// DEVELOPMENT → UNITS LIST screen.
     ///
     ///   Player : %USERPROFILE%/AppData/LocalLow/…/Iron Meridian/tuning.json
     ///
