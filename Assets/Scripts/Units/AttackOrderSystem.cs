@@ -8,10 +8,10 @@ using IronMeridian.Vfx;
 namespace IronMeridian.Units
 {
     /// <summary>
-    /// The five offensive tasks from the battle order bar: pick a task, click an
+    /// The offensive task from the battle order bar: pick it, click an
     /// enemy formation, and the attacker carries it out.
     ///
-    /// One loop serves all five (see <see cref="AttackTaskCatalog"/> for what
+    /// One loop serves every task (see <see cref="AttackTaskCatalog"/> for what
     /// separates them). An order runs through three phases:
     ///
     ///  • **Approaching** — the target is out of the task's engagement range, so
@@ -74,6 +74,15 @@ namespace IronMeridian.Units
             public float engageRangeKm;
             public float nextBlast;
             public float arrowExpiry;      // unscaled time the idle arrow fades; 0 = not on a timer
+
+            // --- area attacks ---
+            // Set when the order was given onto ground rather than onto a
+            // formation. The objective is then the *area*, and the target is
+            // only ever whichever hostile formation is currently in it — so
+            // killing one does not end the order, it re-acquires.
+            public bool hasArea;
+            public double areaLat, areaLon;
+            public double areaRadiusKm;
         }
 
         public void Init(CombatSystem combat, CesiumGeoreference geo)
@@ -169,6 +178,115 @@ namespace IronMeridian.Units
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Attacks a piece of *ground* rather than a formation: everything
+        /// hostile inside the objective, and anything that walks into it while
+        /// the order stands.
+        ///
+        /// **Why this is not just "attack the nearest unit there".** With fog of
+        /// war on, the ground you most want to attack is exactly the ground you
+        /// cannot see a counter on — so the order has to be able to stand with
+        /// no target at all, hold the attacker on the objective, and take
+        /// whatever appears. That is also what makes it work against *multiple*
+        /// formations: the order re-acquires inside the area every time the
+        /// current target dies, instead of ending with the first one.
+        /// </summary>
+        public bool OrderArea(UnitActor attacker, double lat, double lon, double radiusKm, AttackTask task)
+        {
+            if (!CombatSystem.BattleRunning)
+            {
+                Flash?.Invoke("Attack orders need a running battle — press START BATTLE first.");
+                return false;
+            }
+            if (attacker == null || !attacker.IsAlive)
+            {
+                Flash?.Invoke("Select a unit before ordering an attack.");
+                return false;
+            }
+
+            var target = NearestHostileIn(attacker, lat, lon, radiusKm);
+            if (target != null)
+            {
+                if (!Order(attacker, target, task)) return false;
+                TagArea(attacker, lat, lon, radiusKm);
+                Flash?.Invoke($"{Name(attacker)} attacks the area — {Name(target)} engaged, " +
+                              $"{radiusKm:0.#} km objective.");
+                return true;
+            }
+
+            // Nothing visible on it. The order still stands: close on the
+            // objective and take what turns up.
+            Cancel(attacker, null);
+
+            var def = AttackTaskCatalog.Get(task);
+            var order = new AttackOrder
+            {
+                attacker = attacker,
+                target = null,
+                def = def,
+                phase = Phase.Waiting,
+                engageRangeKm = Mathf.Max(0.05f, attacker.Def.weaponRangeKm * def.engageRangeFraction),
+                hasArea = true,
+                areaLat = lat,
+                areaLon = lon,
+                areaRadiusKm = radiusKm
+            };
+            _orders.Add(order);
+
+            // Close to a firing position rather than onto the objective itself:
+            // an attack is delivered from somewhere that can see the ground, not
+            // from on top of it.
+            MoveToEngage(attacker, lat, lon, order.engageRangeKm);
+
+            Flash?.Invoke($"{Name(attacker)} attacks the area — nothing on it yet, closing to " +
+                          $"{order.engageRangeKm:0.#} km.");
+            return true;
+        }
+
+        /// <summary>Marks an existing order as an area attack, so it re-acquires.</summary>
+        void TagArea(UnitActor attacker, double lat, double lon, double radiusKm)
+        {
+            foreach (var o in _orders)
+            {
+                if (o.attacker != attacker) continue;
+                o.hasArea = true;
+                o.areaLat = lat; o.areaLon = lon; o.areaRadiusKm = radiusKm;
+            }
+        }
+
+        /// <summary>The nearest living hostile formation inside an objective, or null.</summary>
+        static UnitActor NearestHostileIn(UnitActor attacker, double lat, double lon, double radiusKm)
+        {
+            var hostile = attacker.State.TeamEnum == Team.User ? Team.Enemy : Team.User;
+            UnitActor best = null;
+            double bestKm = double.MaxValue;
+
+            foreach (var u in UnitRegistry.OfTeam(hostile))
+            {
+                if (u == null || !u.IsAlive) continue;
+                double km = GeoUtils.DistanceKm(lat, lon, u.State.latitude, u.State.longitude);
+                if (km > radiusKm || km >= bestKm) continue;
+                best = u; bestKm = km;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Marches the attacker to a firing position on an objective: along the
+        /// line between where it stands and the objective, stopping a little
+        /// inside its own engagement range.
+        /// </summary>
+        static void MoveToEngage(UnitActor attacker, double lat, double lon, float engageKm)
+        {
+            double km = GeoUtils.DistanceKm(attacker.State.latitude, attacker.State.longitude, lat, lon);
+            if (km <= engageKm) return;
+
+            float bearing = GeoUtils.BearingDeg(attacker.State.latitude, attacker.State.longitude, lat, lon);
+            GeoUtils.Destination(attacker.State.latitude, attacker.State.longitude, bearing,
+                km - engageKm * 0.9, out double stopLat, out double stopLon);
+            attacker.Mover.MoveTo(stopLat, stopLon, bearing);
         }
 
         /// <summary>Drops this unit's order, if it has one.</summary>
@@ -284,6 +402,23 @@ namespace IronMeridian.Units
                 }
                 if (order.target == null || !order.target.IsAlive)
                 {
+                    // An area attack outlives its target: the objective is
+                    // the ground, so the order looks for the next thing on it.
+                    if (order.hasArea && ReacquireInArea(order)) { Step(order); continue; }
+
+                    if (order.hasArea)
+                    {
+                        // Nothing on the objective. Hold on it rather than
+                        // ending — this is the state the order exists for. The
+                        // march is only re-issued when the attacker is standing
+                        // still: this runs every combat tick, and laying a fresh
+                        // route once a second would restart the approach forever.
+                        order.phase = Phase.Waiting;
+                        if (!order.attacker.Mover.IsMoving)
+                            MoveToEngage(order.attacker, order.areaLat, order.areaLon, order.engageRangeKm);
+                        continue;
+                    }
+
                     Retire(order); _orders.RemoveAt(i);
                     Flash?.Invoke($"{Name(order.attacker)} — target destroyed.");
                     continue;
@@ -366,6 +501,26 @@ namespace IronMeridian.Units
         static double Separation(AttackOrder order) => GeoUtils.DistanceKm(
             order.attacker.State.latitude, order.attacker.State.longitude,
             order.target.State.latitude, order.target.State.longitude);
+
+        /// <summary>
+        /// Points an area attack at the next hostile formation inside its
+        /// objective. Returns false when there is nothing on it.
+        /// </summary>
+        bool ReacquireInArea(AttackOrder order)
+        {
+            var next = NearestHostileIn(order.attacker, order.areaLat, order.areaLon, order.areaRadiusKm);
+            if (next == null) return false;
+
+            order.target = next;
+            order.phase = Phase.Pending;
+            order.openingSpent = true;      // surprise is spent on the first one only
+
+            if (order.arrow != null) order.arrow.Finish();
+            order.arrow = AxisArrow.Create(_geo, order.attacker, next, order.def.arrowTint);
+
+            Flash?.Invoke($"{Name(order.attacker)} — {Name(next)} now the target on the objective.");
+            return true;
+        }
 
         void Update()
         {

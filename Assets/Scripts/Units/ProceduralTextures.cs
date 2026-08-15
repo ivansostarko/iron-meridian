@@ -157,6 +157,53 @@ namespace IronMeridian.Units
             return dx * dx + dy * dy < r * r;
         }
 
+        /// <summary>
+        /// Three stacked bars with a lamp beside the middle one — the Commands
+        /// button. A switch panel rather than a verb, because unlike the other
+        /// five buttons this one gives no task: it flips how the formation
+        /// behaves when nobody is telling it anything.
+        /// </summary>
+        public static Texture2D CommandIcon(Color color, int size = 64) => Draw(color, size, (u, v) =>
+        {
+            float best = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                float y = 0.28f + i * 0.22f;
+                // The bar stops short of the right edge to leave room for a lamp.
+                float bar = Inside(Mathf.Abs(v - y) < 0.055f && u > 0.16f && u < 0.66f);
+                float lamp = Inside(Circle(u, v, 0.80f, y, 0.075f));
+                best = Mathf.Max(best, Mathf.Max(bar, lamp));
+            }
+            return best;
+        });
+
+        /// <summary>
+        /// A broken arrow across a sheet — the Planner button. Dashed, because
+        /// everything the planner draws is an intention rather than an order,
+        /// and a dashed line is what a control measure that has not happened yet
+        /// is drawn as everywhere else on this map.
+        /// </summary>
+        public static Texture2D PlannerIcon(Color color, int size = 64) => Draw(color, size, (u, v) =>
+        {
+            // Sheet: an outline, so the arrow reads on top of it rather than in it.
+            bool inSheet = u > 0.14f && u < 0.86f && v > 0.12f && v < 0.88f;
+            bool inCore = u > 0.20f && u < 0.80f && v > 0.18f && v < 0.82f;
+            float sheet = Inside(inSheet && !inCore);
+
+            // Dashed diagonal, bottom-left to top-right.
+            float d = (u - 0.24f) - (v - 0.26f);
+            bool onAxis = Mathf.Abs(d) < 0.07f && u > 0.24f && u < 0.70f;
+            bool dash = Mathf.Repeat((u + v) * 7f, 1f) < 0.55f;
+            float axis = Inside(onAxis && dash);
+
+            // Solid head at the end of it — the objective is not in doubt.
+            float t = Mathf.InverseLerp(0.80f, 0.62f, u);
+            float head = Inside(u >= 0.62f && u <= 0.80f &&
+                                Mathf.Abs((v - 0.64f) - (u - 0.71f)) < 0.20f * t);
+
+            return Mathf.Max(sheet, Mathf.Max(axis, head));
+        });
+
         /// <summary>Shield — the Defence order.</summary>
         public static Texture2D ShieldIcon(Color color, int size = 64) => Draw(color, size, (u, v) =>
         {

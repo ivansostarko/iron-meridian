@@ -47,6 +47,12 @@ namespace IronMeridian.Core
         FrontlineSystem _frontline;
         SectorSystem _sectors;
         DefenceOrderSystem _defence;
+        /// <summary>Ring / line / quadrant graphics for every placed task — docs/15-COMBAT-ORDERS.md.</summary>
+        TaskAreaSystem _taskAreas;
+        /// <summary>The five movement tasks and the standing commands under them.</summary>
+        ManoeuvreOrderSystem _manoeuvre;
+        /// <summary>Drawn intentions. Nothing it puts on the map executes.</summary>
+        PlannerSystem _planner;
         CombatSystem _combat;
         AttackOrderSystem _attacks;
         ReconOrderSystem _recon;
@@ -184,8 +190,19 @@ namespace IronMeridian.Core
 
             // Defend / Hold / Guard. Its graphics are ordinary lines and
             // markers, so they save and load with the rest of the map.
+            // Every placed task draws through one system, so a defence, a
+            // recon objective and a rally point are read the same way.
+            _taskAreas = gameObject.AddComponent<TaskAreaSystem>();
+            _taskAreas.Init(_lines, _markers, _map.Georeference);
+
             _defence = gameObject.AddComponent<DefenceOrderSystem>();
-            _defence.Init(_lines, _markers);
+            _defence.Init(_lines, _markers, _taskAreas);
+
+            _manoeuvre = gameObject.AddComponent<ManoeuvreOrderSystem>();
+            _manoeuvre.Init(_taskAreas);
+
+            _planner = gameObject.AddComponent<PlannerSystem>();
+            _planner.Init(_lines);
 
             // Effects must exist before any unit spawns — a unit restored below
             // strength starts burning the moment it is built.
@@ -336,6 +353,9 @@ namespace IronMeridian.Core
             };
 
             _defence.Flash = _hud.Flash;
+            _taskAreas.Flash = _hud.Flash;
+            _manoeuvre.Flash = _hud.Flash;
+            _planner.Flash = _hud.Flash;
             _attacks.Flash = _hud.Flash;
             _recon.Flash = _hud.Flash;
             _hud.ResetRequested = ConfirmReset;
@@ -581,25 +601,58 @@ namespace IronMeridian.Core
                 _actionBar = gameObject.AddComponent<UnitActionBarUI>();
                 _actionBar.Build(canvas);
                 _actionBar.Flash = _hud.Flash;
-                _actionBar.MoveRequested = () => _selection.ArmMoveOrder();
-                _actionBar.DefendRequested = () => _defence.Defend(_selection.Selected);
-                _actionBar.HoldRequested = () => _defence.Hold(_selection.Selected);
-                _actionBar.GuardRequested = () => _defence.Guard(_selection.Selected);
-                _selection.MoveOrderResolved = () => _actionBar.ClearMoveArmed();
+                // Every task on the bar is the same shape: pick it, then click
+                // the ground. One arming mechanism carries all of them —
+                // SelectionManager.ArmGroundPick — and each order just supplies
+                // what to do with the point.
+                _actionBar.MoveRequested = task => _selection.ArmGroundPick(
+                    (lat, lon) => OrderMove(task, lat, lon),
+                    "Move order cancelled.");
 
-                // Attack: the bar picks the task, the next map click picks the
-                // target, and the order system does the rest.
+                _actionBar.DefenceRequested = task => _selection.ArmGroundPick(
+                    (lat, lon) => OrderDefence(task, lat, lon),
+                    "Defensive task cancelled.");
+
+                _actionBar.PlanRequested = kind => _selection.ArmGroundPick(
+                    (lat, lon) => _planner.Draw(_selection.Selected, kind, lat, lon),
+                    "Plan cancelled.");
+
+                _selection.GroundPickResolved = () => _actionBar.ClearArmed();
+
+                // The standing commands act at once — no ground to pick.
+                _actionBar.StopRequested = () => ForSelection(u => _manoeuvre.Stop(u));
+                _actionBar.ToggleFreeMovementRequested = () =>
+                {
+                    var lead = _selection.Selected;
+                    if (lead == null) return;
+                    // Flipped from the lead formation's state so a mixed
+                    // selection ends up all one way rather than inverted
+                    // unit by unit into whatever it already was.
+                    bool on = !lead.State.freeMovement;
+                    ForSelection(u => _manoeuvre.SetFreeMovement(u, on));
+                };
+                _actionBar.ToggleAutomaticAttackRequested = () =>
+                {
+                    var lead = _selection.Selected;
+                    if (lead == null) return;
+                    bool on = !lead.State.automaticAttack;
+                    ForSelection(u => _manoeuvre.SetAutomaticAttack(u, on));
+                };
+
+                // Attack: the bar picks the task, and the next map click is
+                // either an enemy formation or the ground to attack.
                 _actionBar.AttackRequested = task => _selection.ArmAttackOrder(task);
                 _selection.AttackTargetPicked = (target, task) =>
                     _attacks.Order(_selection.Selected, target, task);
-                _selection.AttackOrderResolved = () => _actionBar.ClearAttackArmed();
+                _selection.AttackGroundPicked = (lat, lon, task) =>
+                    OrderAreaAttack(task, lat, lon);
+                _selection.AttackOrderResolved = () => _actionBar.ClearArmed();
 
                 // Recon: same shape, but the map click is a point on the ground
                 // rather than an enemy formation.
                 _actionBar.ReconRequested = task => _selection.ArmReconOrder(task);
-                _selection.ReconPointPicked = (lat, lon, task) =>
-                    _recon.Order(_selection.Selected, lat, lon, task);
-                _selection.ReconOrderResolved = () => _actionBar.ClearReconArmed();
+                _selection.ReconPointPicked = (lat, lon, task) => OrderRecon(task, lat, lon);
+                _selection.ReconOrderResolved = () => _actionBar.ClearArmed();
                 // The order bar belongs to game mode; leaving battle puts the
                 // editor back in charge.
                 _combat.RunningChanged += _ => RefreshActionBar();
@@ -622,6 +675,9 @@ namespace IronMeridian.Core
 
                 if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
                 if (_groupPanel != null) _groupPanel.SetSelection(sel);
+                // The whole map can be carrying orders at once; this is what
+                // makes the selected formation's own area stand out of them.
+                if (_taskAreas != null) _taskAreas.SetSelection(sel);
 
                 RefreshRightInset();
                 UpdateRangeRings(sel);
@@ -867,6 +923,14 @@ namespace IronMeridian.Core
         void RecordRemoval(UnitActor actor)
         {
             if (actor == null) return;
+
+            // A formation's orders go with it. Without this its task area, its
+            // plan and its pending contingency would outlive it — graphics on
+            // the map belonging to a counter that is no longer there.
+            if (_taskAreas != null) _taskAreas.ClearFor(actor);
+            if (_planner != null) _planner.ClearFor(actor);
+            if (_manoeuvre != null) _manoeuvre.Forget(actor.State.instanceId);
+
             var snapshot = actor.State.Clone();
             string name = string.IsNullOrEmpty(snapshot.customName)
                 ? UnitDatabase.Get(snapshot.defId)?.name ?? snapshot.defId
@@ -1407,6 +1471,9 @@ namespace IronMeridian.Core
             _combat.SetRunning(false);
             _attacks.CancelAll();
             _recon.CancelAll();
+            if (_manoeuvre != null) _manoeuvre.CancelAll();
+            if (_taskAreas != null) _taskAreas.ClearAll();
+            if (_planner != null) _planner.ClearAll();
             _effects.Cancel();
             _missiles.Cancel();
             _naval.Cancel();
@@ -1591,6 +1658,99 @@ namespace IronMeridian.Core
             _rangeRingLat = u.State.latitude;
             _rangeRingLon = u.State.longitude;
         }
+
+        // ------------------------------------------------- order bar helpers
+
+        /// <summary>
+        /// Applies an order to every formation in the selection. The bar acts on
+        /// the lead unit's *state* but on the whole selection's *behaviour* — a
+        /// player who has box-selected six battalions and pressed STOP means all
+        /// six, and asking them to do it once per counter would be the interface
+        /// forgetting what a selection is for.
+        /// </summary>
+        void ForSelection(System.Action<UnitActor> order)
+        {
+            foreach (var u in new System.Collections.Generic.List<UnitActor>(_selection.Selection))
+                if (u != null && u.IsAlive) order(u);
+        }
+
+        /// <summary>
+        /// MOVE, FAST MOVE, TACTICAL MOVE, WITHDRAW or RETREAT onto the picked
+        /// ground. Given to the whole selection; each formation gets its own
+        /// objective ring, because six rings on one point would be one ring.
+        /// </summary>
+        void OrderMove(MoveTask task, double lat, double lon)
+        {
+            ForSelection(u => _manoeuvre.Order(u, task, lat, lon));
+        }
+
+        /// <summary>
+        /// RECON AREA on the picked ground: four sectors about the point, and
+        /// the formation moves there and searches it.
+        ///
+        /// The area is drawn from the formation's own sensor reach under the
+        /// task, so the quadrants are the ground it will *actually* see rather
+        /// than a fixed circle that flatters a scout car and shortchanges a
+        /// surveillance radar.
+        /// </summary>
+        void OrderRecon(ReconTask task, double lat, double lon)
+        {
+            var unit = _selection.Selected;
+            if (unit == null) return;
+
+            var def = ReconTaskCatalog.Get(task);
+            double radiusKm = System.Math.Min(20.0,
+                System.Math.Max(1.0, unit.Def.viewRangeKm * def.sensorRangeFactor));
+            float axis = GeoUtils.BearingDeg(unit.State.latitude, unit.State.longitude, lat, lon);
+
+            _taskAreas.Show(unit, TaskAreaShape.Quadrants, MarkerKind.Recon, "RECON",
+                lat, lon, radiusKm, axis, def.arrowTint, VfxId.TaskAreaRecon);
+
+            _recon.Order(unit, lat, lon, task);
+        }
+
+        /// <summary>DEFEND, HOLD or GUARD on the picked ground.</summary>
+        void OrderDefence(UnitActionBarUI.DefenceTask task, double lat, double lon)
+        {
+            var unit = _selection.Selected;
+            if (unit == null) return;
+
+            switch (task)
+            {
+                case UnitActionBarUI.DefenceTask.Defend: _defence.Defend(unit, lat, lon); break;
+                case UnitActionBarUI.DefenceTask.Hold: _defence.Hold(unit, lat, lon); break;
+                default: _defence.Guard(unit, lat, lon); break;
+            }
+        }
+
+        /// <summary>
+        /// An attack onto ground rather than onto a formation. The objective
+        /// ring is drawn first so the player can see what was committed to, and
+        /// the order system takes whatever is inside it.
+        /// </summary>
+        void OrderAreaAttack(AttackTask task, double lat, double lon)
+        {
+            var unit = _selection.Selected;
+            if (unit == null) return;
+
+            double radiusKm = AttackObjectiveRadiusKm(unit);
+            float axis = GeoUtils.BearingDeg(unit.State.latitude, unit.State.longitude, lat, lon);
+
+            _taskAreas.Show(unit, TaskAreaShape.Ring, MarkerKind.Attack, "ATTACK",
+                lat, lon, radiusKm, axis, AttackTaskCatalog.Get(task).arrowTint,
+                VfxId.TaskAreaAttack);
+
+            _attacks.OrderArea(unit, lat, lon, radiusKm, task);
+        }
+
+        /// <summary>
+        /// Radius of an attack objective. Half the formation's own weapon range,
+        /// floored and capped: a mortar company attacking "that ground" means a
+        /// much smaller piece of it than a rocket battalion does, and the ring
+        /// has to be something the formation can actually cover.
+        /// </summary>
+        static double AttackObjectiveRadiusKm(UnitActor unit) =>
+            System.Math.Min(8.0, System.Math.Max(0.6, unit.Def.weaponRangeKm * 0.5));
 
         /// <summary>True while a selection has a panel up on the right-hand edge.</summary>
         bool _selectionPanelOpen;

@@ -135,7 +135,24 @@ namespace IronMeridian.Vfx
         /// <summary>The kill: a warhead going off against a drone, in the air.</summary>
         AirInterceptBurst,
         /// <summary>Burning airframe coming down — looping, attached to the wreck, killed on landing.</summary>
-        DroneFallTrail
+        DroneFallTrail,
+
+        // --- task areas (see docs/15-COMBAT-ORDERS.md) ---
+        //
+        // The ground a formation has been *told about*. Four ids rather than one
+        // tinted at the call site, because the catalogue is where an effect's
+        // appearance lives (golden rule 11) — and because the four intents are
+        // the one thing a player scanning a map full of orders needs to tell
+        // apart at a glance, before reading a single label.
+
+        /// <summary>Ground a formation is defending, holding or guarding — looping.</summary>
+        TaskAreaDefend,
+        /// <summary>Ground a formation is attacking onto — looping.</summary>
+        TaskAreaAttack,
+        /// <summary>Ground a formation is searching — looping.</summary>
+        TaskAreaRecon,
+        /// <summary>A move objective, a withdrawal line or a rally point — looping.</summary>
+        TaskAreaMove
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -492,7 +509,39 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.DroneFallTrail, prefabPath = null,
                          fallback = VfxFallback.Fire,      scaleMeters = 70f,  lifeSeconds = 0f,
                          tint = new Color(1.00f, 0.52f, 0.16f), priority = 58,
-                         sound = EffectSound.Fire }
+                         sound = EffectSound.Fire },
+
+            // --- task areas (docs/15-COMBAT-ORDERS.md) ---
+            // Pale, slow, silent motes marking ground a formation has been told
+            // about. Deliberately the lowest priority in the catalogue: these
+            // are the longest-lived effects on the map — an order stands until
+            // it is cancelled — and if the concurrency budget has to give, it
+            // must give up a marker rather than a round landing. Silent for the
+            // same reason: a screen of standing orders would otherwise be a
+            // screen of overlapping loops.
+            //
+            // The Smoke builder rather than Dust because these have to loop; the
+            // tints are what separate the four intents at a glance.
+
+            new VfxDef { id = VfxId.TaskAreaDefend, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 260f, lifeSeconds = 0f,
+                         tint = new Color(0.52f, 0.82f, 0.70f), priority = 22,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.TaskAreaAttack, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 260f, lifeSeconds = 0f,
+                         tint = new Color(1.00f, 0.68f, 0.34f), priority = 24,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.TaskAreaRecon, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 260f, lifeSeconds = 0f,
+                         tint = new Color(0.62f, 0.90f, 0.78f), priority = 22,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.TaskAreaMove, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 260f, lifeSeconds = 0f,
+                         tint = new Color(0.58f, 0.78f, 0.96f), priority = 22,
+                         sound = EffectSound.None }
         };
 
         static Dictionary<VfxId, VfxDef> _byId;

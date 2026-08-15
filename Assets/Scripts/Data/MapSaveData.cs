@@ -41,6 +41,38 @@ namespace IronMeridian.Data
         public float fuel;
         public int foodDays;
 
+        // --- standing commands (see UnitCommand and docs/15-COMBAT-ORDERS.md) ---
+        //
+        // Not orders: switches on how the formation behaves when nothing else is
+        // telling it what to do. Saved with the unit, because "this battery does
+        // not shoot at what wanders past" is a property of the scenario as much
+        // as its position is.
+
+        /// <summary>
+        /// Roam within <see cref="CommandInfo.FreeMovementRadiusKm"/> of where
+        /// it was released, when idle. **Off by default**: a formation that
+        /// wandered off the ground the player put it on, because they did not
+        /// know a switch existed, would be the game losing their scenario for
+        /// them.
+        /// </summary>
+        public bool freeMovement;
+
+        /// <summary>
+        /// Engage anything that comes into range without being told. **On by
+        /// default**, because that is what every formation did before this
+        /// existed and a map full of units that had silently stopped fighting
+        /// would be inexplicable. Turning it off is how a screen or a
+        /// reconnaissance element is kept out of a fight it cannot win.
+        /// </summary>
+        public bool automaticAttack = true;
+
+        /// <summary>
+        /// Where FREE MOVEMENT is measured from — set when it is switched on, so
+        /// the radius is anchored to the ground the player released the unit on
+        /// rather than creeping along behind it.
+        /// </summary>
+        public double freeMovementLatitude, freeMovementLongitude;
+
         /// <summary>
         /// Deep copy. UnitState is a reference type shared with the live actor,
         /// so clipboard and undo snapshots must copy it or they would track the
@@ -67,7 +99,11 @@ namespace IronMeridian.Data
             status = status,
             ammo = ammo,
             fuel = fuel,
-            foodDays = foodDays
+            foodDays = foodDays,
+            freeMovement = freeMovement,
+            automaticAttack = automaticAttack,
+            freeMovementLatitude = freeMovementLatitude,
+            freeMovementLongitude = freeMovementLongitude
         };
 
         public Team TeamEnum => team == "Enemy" ? Team.Enemy : Team.User;

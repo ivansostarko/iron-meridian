@@ -132,10 +132,19 @@ is, and how it gets there.
 | Task | Sensor | Unit moves | Sensor rides the unit | Notes |
 |---|---|---|---|---|
 | **RECON AREA** | ×1.9 view range | yes | no — waits on the objective | The unit drives there and searches it |
-| **RECON ROUTE** | ×1.4 | yes | yes | Narrower: it is covering a line, not a box |
-| **OBSERVE** | **×2.6** | **no** | yes (it is stationary) | Furthest-seeing task. Standing still on chosen ground is the best observation there is |
-| **UAV RECON** | ×2.2 | no | the *sensor* flies | Straight over the terrain at 140 km/h, out and back, 1 h endurance (≈140 km of reach) |
-| **COMBAT PATROL** | ×1.5 | yes | yes | Shuttles between start and objective until cancelled; fights normally |
+
+**One task.** Route recon, observe, UAV recon and combat patrol were removed from
+the menu — with fog of war on, the question is always *which ground do I want to
+see*, and the answer is an area. `ReconTaskDef` keeps every field the four used
+(scanning on the move, an airborne sensor, patrolling) and `ReconOrderSystem`
+still honours all of them; the table simply has nothing that sets them, so a
+second task is a row rather than a rewrite.
+
+**The objective is drawn.** Four quadrants about the point, sized to
+`viewRangeKm × sensorRangeFactor` — the ground the formation will *actually*
+see rather than a fixed circle — each labelled on its own border, with looping
+`TaskAreaRecon` motes over it. Quadrants because searching is responsibility
+divided up, not a place somebody stands. See docs/15-COMBAT-ORDERS.md §1a.
 
 All factors are > 1: a unit given a recon task is *looking*, rather than merely
 being somewhere. The sensor radius is floored at 1.5 km so a short-sighted unit
@@ -310,7 +319,7 @@ than the fog itself, and is deliberately not in this one.
 | File | Role |
 |---|---|
 | `Assets/Scripts/Units/FogOfWarSystem.cs` | Detection sweep, hiding, contacts, sensor registry |
-| `Assets/Scripts/Units/ReconTaskCatalog.cs` | The five recon tasks in numbers — the table in §2 |
+| `Assets/Scripts/Units/ReconTaskCatalog.cs` | The recon task in numbers — the table in §2 |
 | `Assets/Scripts/Units/ReconOrderSystem.cs` | Task lifecycle: outbound, on station, patrol, UAV flight |
 | `Assets/Scripts/Units/AxisArrow.cs` | The objective arrow (shared with attack orders) |
 | `Assets/Scripts/Units/UnitActor.cs` | `HiddenByFog`, `SetHiddenByFog` |

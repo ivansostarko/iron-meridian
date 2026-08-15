@@ -3,28 +3,33 @@ using UnityEngine;
 using IronMeridian.Data;
 using IronMeridian.Map;
 using IronMeridian.Units;
+using IronMeridian.Vfx;
 
 namespace IronMeridian.Lines
 {
     /// <summary>
     /// The three defensive tasks a selected unit can be given from the battle
-    /// order bar (FM 3-90 ch.8 — defensive tasks vs security tasks):
+    /// order bar (FM 3-90 ch.8 — defensive tasks vs security tasks). Each one
+    /// is now **placed**: the player picks the ground, and the task is laid out
+    /// around that point rather than around wherever the formation happened to
+    /// be standing.
     ///
-    ///  • **Defend** — prepare a position and fight from it. Lays a defence line
-    ///    across the threat axis, a battle position enclosing the ground behind
-    ///    it, and pushes the commander's subordinates out along the frontage so
-    ///    the line is actually manned instead of merely drawn.
-    ///  • **Hold** — retain this ground. Pins the unit where it stands, facing
-    ///    the threat, and marks the position.
-    ///  • **Guard** — screen the protected force forward of it. Pushes the unit
-    ///    out toward the threat, within supporting distance, and marks that
-    ///    position.
+    ///  • **Defend** — prepare a position and fight from it. Lays a defence
+    ///    line across the threat axis through the chosen ground, a battle
+    ///    position enclosing the depth behind it, and pushes the commander's
+    ///    subordinates out along the frontage so the line is manned instead of
+    ///    merely drawn.
+    ///  • **Hold** — retain the chosen ground. A ring about the point, and the
+    ///    formation moves onto it and faces the threat.
+    ///  • **Guard** — screen forward. Four sectors about the chosen ground, each
+    ///    labelled, because a screen is responsibility divided up rather than a
+    ///    place somebody stands.
     ///
-    /// Every graphic this produces is ordinary map data: lines go through
-    /// <see cref="LineManager"/> and markers through <see cref="MarkerManager"/>,
-    /// so a defence survives a save/load like anything else on the map. Ids are
-    /// prefixed <c>defence-</c>, keeping them clear of the <c>sector-</c> set
-    /// that "clear tactical graphics" regenerates.
+    /// **The area graphics come from <see cref="TaskAreaSystem"/>**, which draws
+    /// the ring, the line and the quadrants for every task in the game — so a
+    /// defence, a recon and a rally point are read the same way. What stays here
+    /// is what is specific to defending: the frontage arithmetic, the threat
+    /// axis, and distributing subordinates along a line.
     ///
     /// Orientation always comes from the enemy: the threat axis is the bearing
     /// to the centre of the opposing force. With no enemy on the map the unit's
@@ -37,8 +42,6 @@ namespace IronMeridian.Lines
         const int LinePoints = 9;
         /// <summary>Forward bow at the centre of the line, as a fraction of its frontage.</summary>
         const double BowFraction = 0.10;
-        /// <summary>How far ahead of the commander the line is laid, as a fraction of frontage.</summary>
-        const double StandoffFraction = 0.35;
         /// <summary>Depth of the battle position behind the line, as a fraction of frontage.</summary>
         const double DepthFraction = 0.45;
         /// <summary>Frontage floor and ceiling, km.</summary>
@@ -50,48 +53,57 @@ namespace IronMeridian.Lines
         /// <summary>Guard standoff floor and ceiling, km.</summary>
         const double MinGuardKm = 0.6, MaxGuardKm = 8.0;
 
+        // Defence runs green-through-teal, deliberately nowhere near the attack
+        // orange or the movement blue: a glance at a map full of orders should
+        // separate "holding this" from "going there" before a label is read.
+        static readonly Color DefendTint = new Color(0.45f, 0.85f, 0.62f);
+        static readonly Color HoldTint = new Color(0.40f, 0.80f, 0.75f);
+        static readonly Color GuardTint = new Color(0.55f, 0.88f, 0.55f);
+
         public System.Action<string> Flash;
 
         LineManager _lines;
         MarkerManager _markers;
+        TaskAreaSystem _areas;
 
-        public void Init(LineManager lines, MarkerManager markers)
+        public void Init(LineManager lines, MarkerManager markers, TaskAreaSystem areas)
         {
-            _lines = lines; _markers = markers;
+            _lines = lines; _markers = markers; _areas = areas;
         }
 
         // ------------------------------------------------------- Defend
 
         /// <summary>
-        /// Prepares a defence around the selected unit: the line, the battle
-        /// position behind it, and the subordinates that man it. Returns false
-        /// when there is nothing to defend with.
+        /// Prepares a defence on the chosen ground: the line across the threat
+        /// axis, the battle position behind it, and the subordinates that man
+        /// it. Returns false when there is nothing to defend with.
         /// </summary>
-        public bool Defend(UnitActor commander)
+        public bool Defend(UnitActor commander, double lat, double lon)
         {
-            if (commander == null || !commander.IsAlive)
-            {
-                Flash?.Invoke("Select a unit before ordering a defence.");
-                return false;
-            }
+            if (!Ready(commander, "defend")) return false;
 
             var subordinates = Subordinates(commander);
             float threat = ThreatBearing(commander);
             var team = commander.State.TeamEnum;
             double frontageKm = FrontageKm(commander, subordinates.Count);
-            double standoffKm = frontageKm * StandoffFraction;
             double depthKm = frontageKm * DepthFraction;
-
-            // Centre of the position: forward of the commander, on the threat axis.
-            GeoUtils.Destination(commander.State.latitude, commander.State.longitude,
-                threat, standoffKm, out double centreLat, out double centreLon);
 
             ClearFor(commander);
 
-            var forwardEdge = ArcPoints(centreLat, centreLon, threat, frontageKm,
+            // The line goes through the ground the player picked. It used to be
+            // laid a fixed standoff ahead of wherever the commander happened to
+            // be standing, which meant the order could not be *aimed* — the only
+            // way to move a defence was to move the formation and give it again.
+            var forwardEdge = ArcPoints(lat, lon, threat, frontageKm,
                 frontageKm * BowFraction, LinePoints);
 
             string designation = Designation(commander);
+
+            // The shared task area carries the label, the motes and the select
+            // pulse; the two lines below are the doctrinal graphic underneath it.
+            _areas?.Show(commander, TaskAreaShape.Line, MarkerKind.Defend, "DEFEND",
+                lat, lon, frontageKm * 0.5, threat, DefendTint, VfxId.TaskAreaDefend);
+
             _lines.Upsert(new MapLineData
             {
                 id = LineId(commander),
@@ -100,7 +112,7 @@ namespace IronMeridian.Lines
                 is3D = true,
                 autoGenerated = true,
                 points = forwardEdge,
-                label = $"DEFENCE LINE — {designation.ToUpperInvariant()}",
+                label = "DEFENCE LINE — " + designation.ToUpperInvariant(),
                 echelon = EchelonInfo.Indicator(commander.State.EchelonEnum)
             });
 
@@ -111,35 +123,23 @@ namespace IronMeridian.Lines
                 team = team.ToString(),
                 is3D = true,
                 autoGenerated = true,
-                points = AreaPoints(centreLat, centreLon, threat, frontageKm, depthKm, forwardEdge)
+                points = AreaPoints(lat, lon, threat, frontageKm, depthKm, forwardEdge)
             });
 
-            _markers.Set(new MapMarkerData
-            {
-                id = MarkerId(commander),
-                kind = MarkerKind.Defend.ToString(),
-                team = team.ToString(),
-                unitId = commander.State.instanceId,
-                label = $"DEFEND\n{designation}",
-                latitude = centreLat,
-                longitude = centreLon,
-                headingDeg = threat
-            });
-
-            int placed = DistributeAlongLine(subordinates, centreLat, centreLon, threat, frontageKm);
+            int placed = DistributeAlongLine(subordinates, lat, lon, threat, frontageKm);
 
             // The commander sits back inside the position rather than on the
             // line — it is directing the defence, not holding a slice of it.
             // With nobody to direct it takes the centre of its own line.
             if (subordinates.Count > 0)
             {
-                GeoUtils.Destination(centreLat, centreLon, Reciprocal(threat), depthKm * 0.6,
+                GeoUtils.Destination(lat, lon, Reciprocal(threat), depthKm * 0.6,
                     out double cpLat, out double cpLon);
                 Reposition(commander, cpLat, cpLon, threat);
             }
             else
             {
-                commander.SetHeading(threat);
+                Reposition(commander, lat, lon, threat);
             }
 
             Flash?.Invoke(placed > 0
@@ -150,38 +150,46 @@ namespace IronMeridian.Lines
 
         // ------------------------------------------------------- Hold / Guard
 
-        /// <summary>Pins the unit on the ground it is standing on and marks the position.</summary>
-        public bool Hold(UnitActor unit)
+        /// <summary>
+        /// Puts the formation on the chosen ground and pins it there, inside a
+        /// ring sized to what it can actually hold.
+        /// </summary>
+        public bool Hold(UnitActor unit, double lat, double lon)
         {
             if (!Ready(unit, "hold")) return false;
 
             float threat = ThreatBearing(unit);
-            unit.Mover.Cancel();
-            unit.SetHeading(threat);
+            double radiusKm = HoldRadiusKm(unit);
+
+            ClearFor(unit);
+            _areas?.Show(unit, TaskAreaShape.Ring, MarkerKind.Hold, "HOLD",
+                lat, lon, radiusKm, threat, HoldTint, VfxId.TaskAreaDefend);
+
+            Reposition(unit, lat, lon, threat);
             unit.State.status = UnitStatus.Idle.ToString();
 
-            PinTask(unit, MarkerKind.Hold, "HOLD", unit.State.latitude, unit.State.longitude, threat);
-            Flash?.Invoke($"{Designation(unit)} holds its position, oriented {threat:000}°.");
+            Flash?.Invoke($"{Designation(unit)} holds a {radiusKm:0.#} km position, oriented {threat:000}°.");
             return true;
         }
 
         /// <summary>
-        /// Pushes the unit forward onto a guard position between the force it is
-        /// protecting and the threat, and marks it.
+        /// Screens the chosen ground: four sectors about the point, and the
+        /// formation moves onto it facing the threat.
         /// </summary>
-        public bool Guard(UnitActor unit)
+        public bool Guard(UnitActor unit, double lat, double lon)
         {
             if (!Ready(unit, "guard")) return false;
 
             float threat = ThreatBearing(unit);
-            double standoffKm = GuardStandoffKm(unit);
-            GeoUtils.Destination(unit.State.latitude, unit.State.longitude, threat, standoffKm,
-                out double lat, out double lon);
+            double radiusKm = GuardRadiusKm(unit);
 
-            PinTask(unit, MarkerKind.Guard, "GUARD", lat, lon, threat);
+            ClearFor(unit);
+            _areas?.Show(unit, TaskAreaShape.Quadrants, MarkerKind.Guard, "GUARD",
+                lat, lon, radiusKm, threat, GuardTint, VfxId.TaskAreaDefend);
+
             Reposition(unit, lat, lon, threat);
 
-            Flash?.Invoke($"{Designation(unit)} guards {standoffKm:0.#} km forward, oriented {threat:000}°.");
+            Flash?.Invoke($"{Designation(unit)} guards a {radiusKm:0.#} km sector in four, oriented {threat:000}°.");
             return true;
         }
 
@@ -192,29 +200,13 @@ namespace IronMeridian.Lines
             return false;
         }
 
-        void PinTask(UnitActor unit, MarkerKind kind, string caption,
-            double lat, double lon, float heading)
-        {
-            _lines.RemoveAutoGenerated($"defence-{unit.State.instanceId}-");
-            _markers.Set(new MapMarkerData
-            {
-                id = $"defence-{unit.State.instanceId}-{kind.ToString().ToLowerInvariant()}",
-                kind = kind.ToString(),
-                team = unit.State.TeamEnum.ToString(),
-                unitId = unit.State.instanceId,
-                label = $"{caption}\n{Designation(unit)}",
-                latitude = lat,
-                longitude = lon,
-                headingDeg = heading
-            });
-        }
-
         /// <summary>Drops every graphic a previous defensive task left for this unit.</summary>
         public void ClearFor(UnitActor unit)
         {
             if (unit == null) return;
             _lines.RemoveAutoGenerated($"defence-{unit.State.instanceId}-");
             _markers.RemoveForUnit(unit.State.instanceId);
+            _areas?.ClearFor(unit);
         }
 
         // ------------------------------------------------------- geometry
@@ -387,19 +379,31 @@ namespace IronMeridian.Lines
             return System.Math.Min(MaxFrontageKm, System.Math.Max(MinFrontageKm, km));
         }
 
-        /// <summary>How far forward a guard force operates — within supporting range of its parent.</summary>
-        static double GuardStandoffKm(UnitActor unit)
+        /// <summary>Radius of the ground a formation can actually hold, km.</summary>
+        static double HoldRadiusKm(UnitActor unit)
         {
             double bulk = Mathf.Max(1f, EchelonInfo.ManpowerMultiplier(unit.State.EchelonEnum));
-            double km = 0.7 * System.Math.Sqrt(bulk);
-            return System.Math.Min(MaxGuardKm, System.Math.Max(MinGuardKm, km));
+            return System.Math.Min(MaxGuardKm, System.Math.Max(MinGuardKm, 0.5 * System.Math.Sqrt(bulk)));
+        }
+
+        /// <summary>
+        /// Radius of a guard sector. Wider than a hold: a screen covers ground
+        /// rather than occupying it, so the same formation is responsible for
+        /// more of it and correspondingly thinner on all of it.
+        /// </summary>
+        static double GuardRadiusKm(UnitActor unit)
+        {
+            double bulk = Mathf.Max(1f, EchelonInfo.ManpowerMultiplier(unit.State.EchelonEnum));
+            double km = 1.1 * System.Math.Sqrt(bulk);
+            return System.Math.Min(MaxGuardKm * 2.0, System.Math.Max(MinGuardKm * 2.0, km));
         }
 
         static float Reciprocal(float bearing) => (bearing + 180f) % 360f;
 
+        // The DEFEND marker itself is placed by TaskAreaSystem now, under the
+        // task- prefix; these two are the doctrinal graphic that sits under it.
         static string LineId(UnitActor u) => $"defence-{u.State.instanceId}-line";
         static string AreaId(UnitActor u) => $"defence-{u.State.instanceId}-area";
-        static string MarkerId(UnitActor u) => $"defence-{u.State.instanceId}-defend";
 
         static string Designation(UnitActor u) =>
             string.IsNullOrEmpty(u.State.customName) ? u.Def.name : u.State.customName;

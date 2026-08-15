@@ -309,52 +309,82 @@ where it actually is, handing the map back to the editor.
 
 ### Orders (battle mode)
 
-Select a unit while a battle is running and the bottom **order bar** appears:
-**MOVE**, **ATTACK**, **RECON**, **DEFENCE**. The last three each open a submenu
-of tasks. Full reference: [15-COMBAT-ORDERS.md](15-COMBAT-ORDERS.md).
+Select a unit while a battle is running and the bottom **order bar** appears —
+six buttons, each opening a submenu. Full reference:
+[15-COMBAT-ORDERS.md](15-COMBAT-ORDERS.md).
 
-#### Attack — five offensive tasks
+```
+┌────────┬────────┬────────┬─────────┬──────────┬─────────┐
+│  MOVE  │ ATTACK │ RECON  │ DEFENCE │ COMMANDS │ PLANNER │
+└────────┴────────┴────────┴─────────┴──────────┴─────────┘
+```
 
-Pick a task, then **click an enemy formation** to target it (`Esc` or right-click
-cancels; clicking bare ground is a miss and leaves the order armed).
+**Four are tasks and two are not.** MOVE, ATTACK, RECON and DEFENCE each take an
+objective: pick the task, then click the map. COMMANDS are standing switches
+that apply the moment they are clicked. PLANNER draws intentions that nothing
+executes.
+
+#### What a placed order draws
+
+Everything placed draws through one system, so a defence, a recon objective and a
+rally point are read the same way — a **ring** (*how far from here*), a **line**
+(*which line do I hold*) or **four quadrants** (*which ground do I cover*). Each
+area carries a 3D volume, looping motes tinted by intent, labels naming the task
+and the formation, and a **select animation**: the volume swells when the order
+is placed and again whenever its formation is selected, and the area's lines
+thicken while it is. The whole map can be carrying orders at once, and without
+that a screen of overlapping areas says nothing about which one is yours.
+
+#### Move — five tasks
 
 | Task | What it does |
 |---|---|
-| **ATTACK** | Close to effective range and destroy the target. |
-| **ASSAULT** | Close right up. Nearly double damage — and the heaviest return fire, because both sides are fully exposed. Sets the objective alight. |
-| **SUPPRESS** | Fire from maximum range. Barely dents the target's strength and wrecks its morale and organisation, marking it `Suppressed`. Lays a smoke screen on it. |
-| **AMBUSH** | Does **not** move. Sits concealed until the target walks into range, then strikes at ×2.4 with no reply — surprise is worth a great deal once. |
-| **COUNTERATTACK** | Strike an enemy already committed to its own attack; heavy opening blow. |
+| **MOVE** | March at the formation's own speed. |
+| **FAST MOVE** | Road march at ×1.65 — and worth only half its combat power if caught on the way. Speed is not free. |
+| **TACTICAL MOVE** | Bounding advance at ×0.6, in contact formation and slightly *better* than standing still if engaged. |
+| **WITHDRAW** | Draws a **line** behind the formation. It goes there by itself **once it is down to 50% strength**. |
+| **RETREAT** | Draws a **rally ring**. It goes there **at 30%**. |
 
-If the target is out of range the unit **marches to a firing position** first,
-routed over the terrain like any other move. An **attack arrow** in the task's
-colour runs from the attacker to the target while the attack is pending, and
-**fades the moment the unit reaches its firing position** — from there the muzzle
-flashes, impacts, explosions and fires carry it. If the target withdraws, the
-attack follows.
+The last two are not journeys you are ordering now — they are decided in advance
+and executed by the formation, because a commander cannot decide what happens
+when a battalion breaks at the moment it breaks.
+
+#### Attack — one task
+
+Pick ATTACK, then click **either an enemy formation or bare ground**. A click on
+terrain is an order, not a miss: with fog of war on, the ground you most want to
+attack is exactly the ground you cannot see a counter on. Clicking terrain draws
+an objective ring and attacks the **area** — everything hostile inside it, and
+anything that walks into it, re-acquiring each time the current target dies.
+
+**Out of range is not a refusal.** The attacker marches to a firing position by
+itself, routed over the terrain like any other move, and opens fire on arrival.
+An **attack arrow** runs from attacker to target while the attack is pending and
+fades once it is in position; from there the muzzle flashes and impacts carry it.
+If the target withdraws, the attack follows.
 
 A unit acting on an order fires only at what it was told to; unordered units keep
 engaging anything in reach automatically. Orders are cleared when the battle
-stops and are not saved.
+stops and are not saved — the graphics they drew are, because those are ordinary
+map data.
 
-#### Recon — five reconnaissance tasks
+#### Recon — one task
 
-Pick a task, then **click a point on the ground** (not a unit — recon exists to
-look at ground you cannot see). Each task grants a detection footprint the fog of
-war reads: **RECON AREA** searches the objective, **RECON ROUTE** scans the whole
-way there, **OBSERVE** holds position and sees furthest, **UAV RECON** flies a
-sensor out and back, **COMBAT PATROL** shuttles between start and objective ready
-to fight. Full table: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
+**RECON AREA.** Click the centre of the ground to search; four quadrants are
+drawn, sized to what the formation will actually see, and it moves there and
+searches it. The footprint is what the fog of war reads. Full table:
+[16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
 
-#### Defence — three defensive tasks
+#### Defence — three tasks
 
-**DEFENCE** opens a submenu of the three defensive tasks:
+All three are **placed** now: you pick the ground, and the task is laid out
+around that point rather than around wherever the formation was standing.
 
 | Task | What it does |
 |---|---|
-| **DEFEND** | Lays a bowed **defence line** across the threat axis, captioned `DEFENCE LINE — <unit>`, with a closed **battle position** enclosing the ground behind it. Subordinate units are distributed evenly along the frontage and marched to their slots facing the threat; the commander sits back inside the position. |
-| **HOLD** | Pins the unit on the ground it is standing on, stops any march, turns it onto the threat, and marks the position with a yellow `HOLD` marker. |
-| **GUARD** | Pushes the unit forward onto a guard position between the force it protects and the threat, and marks it with a green `GUARD` marker. |
+| **DEFEND** | Lays a bowed **defence line** across the threat axis through the chosen ground, with a closed **battle position** behind it. Subordinates are distributed evenly along the frontage and marched to their slots facing the threat; the commander sits back inside the position. |
+| **HOLD** | A **ring** on the chosen ground. The formation moves onto it, faces the threat and is pinned there. |
+| **GUARD** | **Four sectors** about the chosen ground — a screen covers ground rather than occupying it, so the same formation is thinner on all of it. |
 
 - **Threat axis** is the bearing to the centre of the opposing force. With no
   enemy on the map yet, the unit's own facing stands in.
@@ -363,8 +393,32 @@ to fight. Full table: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
 - **Frontage** scales with echelon and with how many subordinates have to fit on
   the line (1.5–45 km).
 - Re-tasking a unit replaces its graphics; it never stacks two defences.
-- Everything produced is ordinary map data (`defence-*` lines and markers), so a
-  defence survives save/load — see [05-MAP-SAVES.md](05-MAP-SAVES.md).
+
+#### Commands — three standing switches
+
+Not orders: switches on how the formation behaves when nothing else is telling it
+what to do. They apply at once, and the two toggles carry a **lamp** showing
+their state.
+
+| Command | Default | What it does |
+|---|---|---|
+| **STOP** | — | Cancels the march, the contingency and every graphic either left on the map. Does not touch the two switches. |
+| **FREE MOVEMENT** | Off | When idle, roam within **50 km** of where it was released. Off by default — a formation that wandered off the ground you put it on, because you did not know a switch existed, would be the game losing your scenario for you. |
+| **AUTO ATTACK** | On | Engage anything in range without being told. Turning it off keeps a screen or a recon element out of a fight it cannot win; it is still in contact and still takes what is coming. |
+
+Free movement is the lowest-priority thing a formation does — never while
+marching, in contact, or with a contingency waiting. Both switches are saved with
+the unit and are given to the whole selection.
+
+#### Planner — three entries
+
+**Nothing here executes.** MAIN ATTACK draws a heavy arrow from the formation to
+the picked ground; SUPPORTING draws a lighter one; RETREAT LINE calls the same
+order the movement menu does. Both axes are drawn broken, because that is what a
+control measure that has not happened yet looks like.
+
+The weight difference is the point: two identical arrows would be two arrows, a
+weighted pair is a plan.
 
 ### Line of sight
 

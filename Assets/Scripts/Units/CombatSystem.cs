@@ -152,8 +152,14 @@ namespace IronMeridian.Units
                     _engaged.Add(b);
                     _engaged.Add(r);
 
-                    if (bReaches && !Ordered(b)) ResolveAttack(b, r);
-                    if (rReaches && !Ordered(r)) ResolveAttack(r, b);
+                    // AUTOMATIC ATTACK off means the formation does not open
+                    // fire of its own accord — it is still *in* the battle and
+                    // still takes what is coming, which is the whole point of
+                    // switching it off on a screen or a recon element. An
+                    // explicit attack order is unaffected: that is the player
+                    // telling it to shoot, not the sweep deciding for it.
+                    if (bReaches && !Ordered(b) && b.State.automaticAttack) ResolveAttack(b, r);
+                    if (rReaches && !Ordered(r) && r.State.automaticAttack) ResolveAttack(r, b);
                 }
 
             Ticked?.Invoke();

@@ -7,7 +7,7 @@ using IronMeridian.Map;
 namespace IronMeridian.Units
 {
     /// <summary>
-    /// The five reconnaissance tasks from the battle order bar: pick a task,
+    /// The reconnaissance task from the battle order bar: pick it,
     /// click a point on the map, and the unit goes and finds out what is there.
     ///
     /// Recon is what makes <see cref="FogOfWarSystem"/> a game rather than a

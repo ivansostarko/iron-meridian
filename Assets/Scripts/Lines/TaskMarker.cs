@@ -60,11 +60,18 @@ namespace IronMeridian.Lines
         static Color ColorFor(MapMarkerData data)
         {
             if (!System.Enum.TryParse(data.kind, out MarkerKind kind)) kind = MarkerKind.Hold;
+            // Intent, not decoration. The four families a marker can belong to
+            // are the four a player has to tell apart on a map carrying dozens:
+            // defending, attacking, looking, and going somewhere.
             switch (kind)
             {
                 case MarkerKind.Guard: return GameConfig.NeutralGreen;
                 case MarkerKind.Defend:
                     return data.team == Team.Enemy.ToString() ? GameConfig.RedTeam : GameConfig.BlueTeam;
+                case MarkerKind.Attack: return new Color(1.00f, 0.68f, 0.28f);
+                case MarkerKind.Recon: return new Color(0.45f, 0.85f, 0.70f);
+                case MarkerKind.Withdraw: return new Color(0.95f, 0.72f, 0.30f);
+                case MarkerKind.Retreat: return new Color(0.95f, 0.42f, 0.36f);
                 default: return GameConfig.BoundaryYellow;
             }
         }

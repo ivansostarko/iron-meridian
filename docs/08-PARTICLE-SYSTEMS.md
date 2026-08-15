@@ -133,6 +133,10 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `InterceptorTrail` | Motor plume behind an interceptor in flight | 55 m | loops | 30 | procedural |
 | `AirInterceptBurst` | The kill — a warhead against a drone, **in the air** | 120 m | 1.8 s | 145 | procedural |
 | `DroneFallTrail` | Burning airframe coming down after being hit | 70 m | loops | 58 | procedural |
+| `TaskAreaDefend` | Ground a formation is defending, holding or guarding | 260 m | loops | 22 | procedural |
+| `TaskAreaAttack` | Ground a formation is attacking onto | 260 m | loops | 24 | procedural |
+| `TaskAreaRecon` | Ground a formation is searching | 260 m | loops | 22 | procedural |
+| `TaskAreaMove` | A move objective, a withdrawal line or a rally point | 260 m | loops | 22 | procedural |
 
 The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -229,6 +233,22 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Kamikaze warhead | `UavWarheadBurst` + `UavWarheadSmoke` | Once, where the drone reaches the ground | `DroneRun.Update` → `UavStrikeSystem.Detonate` |
 | Shahed warhead | `ShahedWarheadBurst` + `ShahedWarheadSmoke` + `ShahedWreckFire` | Same, for the heavier one-way type | `UavStrikeSystem.Detonate` |
 | Reconnaissance drone's objective | `ReconMarker` under the search ring | Played when the sortie is flown, stopped when the drone has gone home | `UavStrikeSystem.RunReconnaissance` |
+
+### Task areas
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Defend / hold / guard placed | `TaskAreaDefend` at the objective | Once, when the order is given; stopped when it is cancelled | `TaskAreaSystem.Show` |
+| Attack onto ground | `TaskAreaAttack` | as above | `GameController.OrderAreaAttack` |
+| Recon area placed | `TaskAreaRecon` | as above | `GameController.OrderRecon` |
+| Move / withdraw / retreat placed | `TaskAreaMove` | as above | `ManoeuvreOrderSystem.Order` |
+
+**Attached to the area, not played at it.** A one-shot puff says something
+happened; a task area is a standing state, so the motes loop for as long as the
+order does. They are the lowest-priority effects in the catalogue and are
+silent: an order stands until it is cancelled, so these are the longest-lived
+things on the map, and if the budget has to give it must give up a marker rather
+than a round landing. Full detail in **docs/15-COMBAT-ORDERS.md** §1a.
 
 ### Air defence
 

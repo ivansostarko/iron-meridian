@@ -5,8 +5,8 @@ using IronMeridian.Data;
 namespace IronMeridian.Units
 {
     /// <summary>
-    /// What one reconnaissance task does, in numbers. The system runs the same
-    /// loop for all five; this table is what makes them different.
+    /// What one reconnaissance task does, in numbers. The system runs one loop
+    /// for every task; this table is what would make two of them different.
     /// </summary>
     public class ReconTaskDef
     {
@@ -49,17 +49,19 @@ namespace IronMeridian.Units
     }
 
     /// <summary>
-    /// The five reconnaissance tasks the battle order bar offers. Add a row here
-    /// rather than branching on <see cref="ReconTask"/> at a call site, and
-    /// update docs/16-FOG-OF-WAR.md in the same change.
+    /// The reconnaissance tasks the battle order bar offers — one, today. Add a
+    /// row here rather than branching on <see cref="ReconTask"/> at a call site,
+    /// and update docs/16-FOG-OF-WAR.md in the same change.
+    ///
+    /// The def keeps the fields the five tasks used — scanning on the move, an
+    /// airborne sensor, patrolling — because those are what a second task would
+    /// be made of. <see cref="ReconOrderSystem"/> still honours every one of
+    /// them; the table simply has nothing that sets them yet.
     /// </summary>
     public static class ReconTaskCatalog
     {
+        /// <summary>Recon green — the colour of looking rather than shooting.</summary>
         static readonly Color Scout = new Color(0.45f, 0.85f, 0.70f);
-        static readonly Color Route = new Color(0.55f, 0.80f, 0.95f);
-        static readonly Color Static = new Color(0.75f, 0.85f, 0.55f);
-        static readonly Color Air = new Color(0.65f, 0.75f, 1.00f);
-        static readonly Color Fighting = new Color(0.95f, 0.70f, 0.45f);
 
         static readonly ReconTaskDef[] Defs =
         {
@@ -71,65 +73,6 @@ namespace IronMeridian.Units
                 sensorRangeFactor = 1.9f,
                 moves = true,
                 arrowTint = Scout
-            },
-
-            new ReconTaskDef
-            {
-                task = ReconTask.ReconRoute,
-                name = "RECON ROUTE",
-                detail = "Scan the whole way there",
-                // Narrower than an area search: it is covering a line, not a box.
-                sensorRangeFactor = 1.4f,
-                moves = true,
-                scansWhileMoving = true,
-                arrowTint = Route
-            },
-
-            new ReconTaskDef
-            {
-                task = ReconTask.Observe,
-                name = "OBSERVE",
-                detail = "Hold position, watch",
-                // The furthest-seeing task, because a unit that is not moving,
-                // not fighting and has chosen its ground sees further than one
-                // doing anything else.
-                sensorRangeFactor = 2.6f,
-                moves = false,
-                scansWhileMoving = true,
-                arrowTint = Static
-            },
-
-            new ReconTaskDef
-            {
-                task = ReconTask.UavRecon,
-                name = "UAV RECON",
-                detail = "Fly a sensor out and back",
-                sensorRangeFactor = 2.2f,
-                moves = false,          // the unit stays; only the sensor flies
-                scansWhileMoving = true,
-                airborne = true,
-                airborneSpeedKmh = 140f,
-                // One hour on station — a real tactical UAV sortie, and at
-                // 140 km/h that is 140 km of reach, so an objective anywhere on
-                // an operational map is inside it. It was 90 seconds back when
-                // the sensor flew at sixty times its own speed and covered 210
-                // km in that time; with movement on the scenario clock (see
-                // UnitMover) 90 seconds would have got it three kilometres out
-                // before it turned for home.
-                airborneEnduranceSeconds = 3600f,
-                arrowTint = Air
-            },
-
-            new ReconTaskDef
-            {
-                task = ReconTask.CombatPatrol,
-                name = "COMBAT PATROL",
-                detail = "Patrol out and back, ready to fight",
-                sensorRangeFactor = 1.5f,
-                moves = true,
-                scansWhileMoving = true,
-                patrols = true,
-                arrowTint = Fighting
             }
         };
 

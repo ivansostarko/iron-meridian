@@ -153,6 +153,15 @@ namespace IronMeridian.Units
         /// tasks use it so a formation ends up oriented on the threat rather
         /// than on whichever way the road happened to run.
         /// </param>
+        /// <summary>
+        /// Multiplier on cruising speed for the next march, from the movement
+        /// task that ordered it — see <see cref="MoveTaskCatalog"/>. Held on the
+        /// mover rather than passed through <see cref="MoveTo"/> because half a
+        /// dozen callers order a plain march and none of them should have to
+        /// know a task system exists; the two that do set this first.
+        /// </summary>
+        public float SpeedMultiplier { get; set; } = 1f;
+
         public bool MoveTo(double lat, double lon, float? faceOnArrival = null)
         {
             if (!CombatSystem.BattleRunning) return false;
@@ -169,7 +178,7 @@ namespace IronMeridian.Units
             _leg = 0;
             _faceOnArrival = faceOnArrival;
 
-            _cruiseMps = CruiseMps(_actor.Def);
+            _cruiseMps = CruiseMps(_actor.Def) * Mathf.Clamp(SpeedMultiplier, 0.1f, 4f);
             _speedMps = 0f;
             _moving = true;
             _sampleTimer = 0f;                 // sample the ground on the first frame

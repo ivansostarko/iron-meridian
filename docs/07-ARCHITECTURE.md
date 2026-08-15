@@ -107,7 +107,8 @@ Assets/Scripts/
                          are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission
     UnitInfoPanel.cs     right panel: full unit data on click
-    UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence (+ submenus)
+    UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence /
+                         Commands / Planner (+ submenus)
                          (the strike dock's ARTILLERY page is built by
                           UnitPaletteUI.BuildArtillerySection — docs/17-ARTILLERY.md)
   Map/
@@ -133,10 +134,17 @@ Assets/Scripts/
                           happens — read by the TAB casualty list
     AirDefenceSystem.cs  anti-aircraft formations find and shoot down the
                           drones over them (docs/24-AIR-DEFENCE.md)
-    AttackTaskCatalog.cs the five offensive tasks in numbers — docs/15-COMBAT-ORDERS.md
+    AttackTaskCatalog.cs the offensive task in numbers — docs/15-COMBAT-ORDERS.md
+    MoveTaskCatalog.cs   the five movement tasks in numbers (docs/15-COMBAT-ORDERS.md)
+    ManoeuvreOrderSystem.cs  movement orders, the withdraw/retreat contingencies
+                          and the standing commands (stop, free movement, auto attack)
+    TaskAreaSystem.cs    ring / line / quadrant graphics for every placed task:
+                          labels, motes, 3D volume and the select pulse
+    PlannerSystem.cs     the two drawn axes — main and supporting attack.
+                          Nothing it puts on the map executes
     AttackOrderSystem.cs order lifecycle: approach → engage; ordered attacks beat the auto sweep
     AxisArrow.cs         axis arrow: unit -> target unit (attack) or ground point (recon)
-    ReconTaskCatalog.cs  the five recon tasks in numbers - docs/16-FOG-OF-WAR.md
+    ReconTaskCatalog.cs  the recon task in numbers - docs/16-FOG-OF-WAR.md
     ReconOrderSystem.cs  recon lifecycle + the sensors the fog reads
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
@@ -288,7 +296,7 @@ would otherwise be sampled as terrain by a neighbour.
   vector road data on the map to snap to. The corridor search is forward-only, so
   a route can steer around an obstacle but not double back around one; a fully
   blocked corridor falls back to the direct line.
-- Enemy formations never issue orders of their own — the five offensive tasks are
+- Enemy formations never issue orders of their own — the order bar's tasks are
   the player's to give, and Red only fights back through the automatic exchange.
   The one exception is **air defence**, which is automatic on both sides: a
   hostile anti-aircraft formation engages the player's drones without being told

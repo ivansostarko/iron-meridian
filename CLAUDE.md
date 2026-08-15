@@ -36,8 +36,8 @@ Unity 6 (6000.0 LTS) real-terrain operational wargame using **Cesium for Unity 1
 | Add audio | File under `Assets/Resources/Audio/` → row in `AudioCatalog.cs` → play via `MusicManager` → **update `docs/10-AUDIO.md`** |
 | Add a screen background | Image under `Assets/Resources/Backgrounds/` → row in `BackgroundCatalog.cs` → `UIFactory.CreateScreenBackground` → **update `docs/11-GAME-MENU.md`** |
 | Add a loader | `LoadingScreenUI.Show(...)` + `Track(progress, isComplete)` → block the screen's input guards → **update `docs/12-LOADERS.md`** |
-| Add an offensive task | `AttackTask` value in `Enums.cs` → row in `AttackTaskCatalog.cs` → **update `docs/15-COMBAT-ORDERS.md`** (the submenu and the order loop are both driven by the catalogue) |
-| Add a recon task | `ReconTask` value in `Enums.cs` → row in `ReconTaskCatalog.cs` → **update `docs/16-FOG-OF-WAR.md`** |
+| Add an order-bar task | Enum value in `Enums.cs` → row in the matching catalogue (`MoveTaskCatalog` / `AttackTaskCatalog` / `ReconTaskCatalog`) → name a `TaskAreaShape` if it is placed → **update `docs/15-COMBAT-ORDERS.md`**. The submenu and the order loop are both driven by the catalogue |
+| Draw a task's ground | `TaskAreaSystem.Show` — ring, line or quadrants, with labels, motes and the select pulse. Never build the graphic at the call site. **`docs/15-COMBAT-ORDERS.md` §1a** |
 | Add an artillery nature | `ArtilleryCaliber` value + row in `ArtilleryCatalog.cs` → burst/smoke `VfxId` + rows in `VfxCatalog.cs` → `EffectSound` + synth in `ProceduralAudio.cs` → button glyph in `UiIcons.cs` → **update `docs/17-ARTILLERY.md`, `docs/08-PARTICLE-SYSTEMS.md` and `docs/10-AUDIO.md`** |
 | Add a mission | Map editor → **MISSIONS** panel → NEW MISSION HERE → lay it out → set its **MISSION AREA** → SAVE MISSION + MAP. In code: a row in `Assets/StreamingAssets/Data/missions.json`. **Update `docs/22-MISSIONS.md`** |
 | Bound a mission's ground | MISSIONS panel → DRAW AREA ON MAP, or a 20/50/120 km box. Drives the battle camera clamp and the fog blanket — **`docs/22-MISSIONS.md` §1a and `docs/16-FOG-OF-WAR.md` §2b** |

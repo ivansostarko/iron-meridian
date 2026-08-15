@@ -1,8 +1,9 @@
 # Combat Orders
 
 The register of every order a unit can be given in **battle mode**. This is the
-human-readable version of `AttackTaskCatalog.cs` and `DefenceOrderSystem.cs` —
-keep it in step with them in the same change.
+human-readable version of `MoveTaskCatalog.cs`, `AttackTaskCatalog.cs`,
+`ReconTaskCatalog.cs`, `DefenceOrderSystem.cs`, `ManoeuvreOrderSystem.cs` and
+`PlannerSystem.cs` — keep it in step with them in the same change.
 
 Orders live on the bottom **order bar** (`UnitActionBarUI`), which appears only
 while a battle is running and exactly one unit is selected. In scenario mode the
@@ -11,153 +12,297 @@ does not fight.
 
 ```
 ORDERS — 1ST INFANTRY BATTALION
-┌──────────┬──────────┬──────────┬──────────┐
-│   MOVE   │  ATTACK  │  RECON   │ DEFENCE  │
-└──────────┴──────────┴──────────┴──────────┘
-                │          │          │
-        offensive task  recon task  defensive task
-        submenu (×5)    (×5)        (×3)
+┌────────┬────────┬────────┬─────────┬──────────┬─────────┐
+│  MOVE  │ ATTACK │ RECON  │ DEFENCE │ COMMANDS │ PLANNER │
+└────────┴────────┴────────┴─────────┴──────────┴─────────┘
+     │        │        │        │          │          │
+   ×5 move   ×1     ×1 recon  ×3       ×3 standing  ×3 plans
+   tasks    attack   task    defensive   switches
+                             tasks
 ```
 
-Recon sits beside Defence rather than under Attack because it is not an attack:
-with fog of war on it is the only way to find out what is out there. Its five
-tasks are documented in [16-FOG-OF-WAR.md §2](16-FOG-OF-WAR.md).
+**Four of the six are tasks and two are not.** MOVE, ATTACK, RECON and DEFENCE
+each take an objective: pick the task, then click the map. COMMANDS are standing
+switches that apply the moment they are clicked. PLANNER draws intentions that
+nothing executes.
 
 ---
 
-## 1. Move
+## 1. Picking the ground
 
-Arms a pending order; the next click on the map is the destination. The unit
-marches there along a planned route — see
-[03-GAMEPLAY.md](03-GAMEPLAY.md#movement).
+Every task on the bar works the same way, through one mechanism —
+`SelectionManager.ArmGroundPick`. Pick the task, and the next click on the map
+is its objective. `Esc` or a right-click cancels; leaving battle mode cancels.
+
+A click on terrain that has not streamed in yet **leaves the order armed** and
+says so, so a click on a tile the map is still fetching costs one more click
+rather than the whole order.
+
+It used to be one bespoke armed flag per order — one for move, one for attack,
+one for recon — and each new order meant another flag, another branch in
+`SelectionManager.Update` and another pair of resolve callbacks. A callback
+carries everything that differed between them.
+
+## 1a. What a placed order draws
+
+Everything placed draws through **one system**, `Units/TaskAreaSystem.cs`, so a
+defence, a recon objective and a rally point are read the same way. Three
+shapes, and they answer three different questions:
+
+| Shape | Question it answers | Used by |
+|---|---|---|
+| **Ring** | *How far from here* — a circle about the point, radius called out on the rim | HOLD, ATTACK, RETREAT, the three plain moves |
+| **Line** | *Which line do I hold* — a bowed trace across the threat axis, named along its length | DEFEND, WITHDRAW |
+| **Quadrants** | *Which ground do I cover* — four sectors, each labelled on its own border | GUARD, RECON AREA |
+
+Quadrants for the two covering tasks because that is what screening and
+searching actually are: responsibility divided up and allocated, not a place
+somebody stands.
+
+Each area also carries:
+
+- **3D volume.** A `TargetAreaMarker` at the objective — the same volume a
+  called strike is placed with — so the area reads in three dimensions rather
+  than as a decal on the terrain.
+- **Particles.** Looping motes tinted by intent: `TaskAreaDefend`,
+  `TaskAreaAttack`, `TaskAreaRecon`, `TaskAreaMove` (docs/08-PARTICLE-SYSTEMS.md).
+  Attached to the area rather than played at it, because a one-shot puff says
+  something *happened* and a task area is a standing state.
+- **Labels.** On the line for a line, on the rim for a ring, on each border for
+  the quadrants — the task, the formation, and the size.
+- **A select animation.** The volume swells over 0.45 s when the area is placed,
+  and again whenever its formation is selected; the area's lines thicken from
+  45 m to 110 m while it is selected. The whole map can be carrying orders at
+  once, and without this a screen of overlapping areas says nothing about which
+  one belongs to the formation being commanded.
+
+The reveal runs on the volume's alarm channel rather than by rewriting the
+lines: line width goes through `MapLine.RefreshStyle`, which rebuilds the
+polyline's geometry, and doing that per frame for every order on the map would
+be a rebuild storm.
+
+Everything is ordinary map data — lines through `LineManager`, markers through
+`MarkerManager` — so a task area survives a save/load. Ids are prefixed
+`task-<unit>-`, clear of the `sector-` set that "clear tactical graphics"
+regenerates.
 
 ---
 
-## 2. Attack — the five offensive tasks
+## 2. Move — five tasks
 
-Pick a task, then **click an enemy formation**. Attack orders want a *unit*, not
-a point on the ground; clicking bare terrain is a miss and leaves the order
-armed, so a slightly-off click costs one more click rather than the whole order.
-`Esc` or right-click cancels.
+Rows live in `Units/MoveTaskCatalog.cs`.
 
-### What happens next
+| Task | Speed | If caught moving | Objective | What it is |
+|---|---|---|---|---|
+| **MOVE** | ×1.0 | ×1.0 | Ring | March at the formation's own speed |
+| **FAST MOVE** | ×1.65 | **×0.55** | Ring | Road march — quick, strung out, in no state to fight |
+| **TACTICAL MOVE** | ×0.6 | ×1.15 | Ring | Bounding advance — slow, in contact formation |
+| **WITHDRAW** | ×1.25 | ×0.75 | **Line** | Break contact **at 50% strength** |
+| **RETREAT** | ×1.5 | ×0.45 | Ring | Fall back **at 30% strength** |
 
-1. An **attack arrow** is drawn from the attacker to the target, dashes marching
-   toward what is about to be hit, coloured by task.
-2. If the target is already inside the task's engagement range, the unit opens
-   fire at once and the arrow fades after a couple of seconds.
-3. Otherwise the unit **marches to a firing position** — on the bearing from the
-   target back toward itself, just inside engagement range — routed over the
-   terrain like any other move, with the usual movement trail. **The arrow fades
-   the moment it arrives**, and the engagement's own muzzle flashes, impacts and
-   fires carry the story from there.
-4. If the target withdraws out of range, the order returns to the approach phase
-   and follows it. An attack does not quietly lapse because the enemy moved.
+**Three are moves and two are plans.** The first three execute the moment they
+are given and differ only in the trade between speed and readiness — the whole
+of the choice is *how much of a hurry am I in, and what am I willing to be
+caught as*. FAST MOVE is not simply the better option: a column at road-march
+pace fights at half weight.
 
-### The tasks
+WITHDRAW and RETREAT are **not journeys the player is ordering now**. The
+formation carries the objective and goes when its own strength falls to the
+task's trigger. That is the point: a commander cannot decide what happens when a
+battalion breaks *at the moment it breaks*, so they decide beforehand and the
+formation carries it out. Giving both to a fresh formation is how you decide in
+advance what happens when it is hurt and when it is finished.
 
-| Task | Closes to | Damage | Shock | Return fire | Advances | Opening |
-|---|---|---|---|---|---|---|
-| **ATTACK** — close and destroy | 85% of weapon range | ×1.0 | ×1.0 | ×1.0 | yes | — |
-| **ASSAULT** — close right up | 22% | ×1.85 | ×1.4 | **×1.45** | yes | ×1.25 |
-| **SUPPRESS** — pin from max range | 100% | ×0.40 | **×2.6** | ×0.55 | yes | — |
-| **AMBUSH** — hold concealed | 75% | ×1.15 | ×1.8 | ×0.85 | **no** | **×2.4, free** |
-| **COUNTERATTACK** — strike a committed enemy | 70% | ×1.35 | ×1.5 | ×0.9 | yes | ×1.6 |
+Triggers are checked once a second by `ManoeuvreOrderSystem` — a formation's
+state does not meaningfully change between two combat ticks.
 
-- **Damage** scales strength loss. **Shock** scales the morale and organisation
-  damage that stops a formation functioning without killing anyone — which is
-  why suppression barely dents a target's strength and wrecks its ability to act.
-  A target whose organisation falls below 25 is marked `Suppressed`.
-- **Return fire** is what the target hits back with, and only if the attacker is
-  inside the *target's* weapon range. An assault is decisive precisely because
-  both sides are fully exposed at that distance.
-- **Advances = no** is the whole of AMBUSH: it sits where it is and lets the
-  target walk into range. Its arrow stays up marking the ground it is watching,
-  and its opening volley is doubled *and* draws no reply — surprise is worth a
-  great deal once and nothing afterwards.
-- **Opening** multipliers apply to the first volley of an order only.
+`in transit` multipliers are held on the catalogue row and **are not read by the
+damage model yet**; the figure belongs with the task rather than being invented
+at the point it is finally needed.
+
+---
+
+## 3. Attack — one task
+
+Pick ATTACK, then click **either an enemy formation or bare ground**.
+
+**A click on terrain is an order, not a miss.** It used to be refused on the
+grounds that an attack needs a target; but with fog of war on, the ground you
+most want to attack is exactly the ground you cannot see a counter on. Clicking
+terrain attacks the **area** — everything hostile inside it, and anything that
+walks into it while the order stands.
+
+| Clicked | What the order becomes |
+|---|---|
+| An enemy formation | Close to engagement range and destroy it. Ends when the target dies. |
+| Bare ground | An objective ring of `weaponRangeKm × 0.5` (0.6–8 km). The attacker closes to a firing position and engages whatever is inside; when that dies it **re-acquires** the next thing on the objective, and holds when there is nothing. |
+
+**Out of range is not a refusal.** The attacker marches to a firing position by
+itself — along the line to the objective, stopping a little inside its own
+engagement range — and opens fire on arrival. `engageRangeFraction` on the
+catalogue row is what "in range" means: 0.85 of the formation's own weapon
+range, so it closes rather than sniping from the very edge.
+
+**One task, deliberately.** There used to be five — attack, assault, suppress,
+ambush, counterattack — separated by numbers the player could not see. What a
+commander is deciding at this level is *where* to attack. The def keeps every
+field the five used (shock, return fire, opening volley, obscuration) because
+those are what a second task would be *made of*; the table having one row is a
+statement about the menu, not about the model underneath it.
 
 ### Precedence over automatic combat
 
-`CombatSystem` normally has every opposing pair in weapon range exchange damage
-each tick. A unit acting on an explicit order is **skipped by that sweep** and
-fires only at what it was told to — otherwise it would shoot twice a tick, once
-at its objective and once at whatever else was in reach. Units with no order
-still engage anything they can reach, which is what keeps a front line fighting
-without micromanaging every formation.
-
-The ordinary exchange's damage clamp is untouched; the task multiplier is applied
-on top of the clamped value, under an outer ceiling so no single order can delete
-a formation in one tick.
+A unit acting on an explicit attack order is skipped by `CombatSystem`'s
+automatic sweep, so it fires once a tick at what it was told to rather than
+twice — once at its objective and once at whatever else is in range.
 
 ### Not saved
 
-Attack orders are live combat state, not map data, and are deliberately **not**
-written to the save file. A scenario describes a situation; reloading one should
-not resume half-finished engagements. Stopping the battle clears every order and
-abandons any approach march in progress.
+Orders are live state, not map data. A save records where formations are, not
+what they were told; reloading a battle leaves every unit idle on the ground it
+was standing on. The *graphics* an order drew do survive, because those are
+ordinary lines and markers.
 
 ---
 
-## 3. Defence — the three defensive tasks
+## 4. Recon — one task
 
-| Task | What it does |
+**RECON AREA.** Pick it, click the centre of the ground to search. Four
+quadrants are drawn, sized to what the formation will actually see —
+`viewRangeKm × sensorRangeFactor`, so the area flatters a surveillance radar and
+not a scout car — and the formation moves there and searches it.
+
+The other four recon tasks (route, observe, UAV, combat patrol) are gone from
+the menu. `ReconTaskDef` keeps the fields they used — scanning on the move, an
+airborne sensor, patrolling — and `ReconOrderSystem` still honours every one of
+them; the table simply has nothing that sets them. Full behaviour in
+[16-FOG-OF-WAR.md §2](16-FOG-OF-WAR.md).
+
+---
+
+## 5. Defence — three tasks
+
+All three are now **placed**: the player picks the ground, and the task is laid
+out around that point rather than around wherever the formation happened to be
+standing. Aiming a defence used to mean moving the formation first and giving
+the order again.
+
+| Task | Draws | What it does |
+|---|---|---|
+| **DEFEND** | Line + doctrinal defence line + battle position | Lays the line across the threat axis through the chosen ground, encloses the depth behind it, and **distributes the commander's subordinates along the frontage** so the line is manned rather than merely drawn. The commander sits back inside the position. |
+| **HOLD** | Ring | Puts the formation on the ground and pins it there, facing the threat. Radius is what the formation can actually hold. |
+| **GUARD** | Quadrants | Screens a sector in four. Wider than a hold: a screen covers ground rather than occupying it, so the same formation is thinner on all of it. |
+
+Orientation always comes from the enemy — the threat axis is the bearing to the
+centre of the opposing force. With no enemy on the map the unit's own facing
+stands in, so the tasks still work while a scenario is being built up.
+
+Subordinates are the commander's **group** if it has one, otherwise the smaller
+friendly formations within 12 km. Grouping is explicit in the editor, so it wins;
+proximity is the fallback that makes the order useful on a map nobody has
+grouped.
+
+---
+
+## 6. Commands — three standing switches
+
+Not orders: switches on how the formation behaves when nothing else is telling
+it what to do. They apply the moment they are clicked — there is no ground to
+pick — and the two toggles carry a **lamp** showing their current state, because
+a switch you cannot read the state of is a switch you press twice to find out.
+
+| Command | Default | What it does |
+|---|---|---|
+| **STOP** | — | Cancels the march, the contingency and every graphic either put on the map. Does **not** touch the two switches: stop means "stop what you are doing", not "forget what you are". |
+| **FREE MOVEMENT** | **Off** | When idle, roam within **50 km** of where it was released. Off by default: a formation that wandered off the ground the player put it on, because they did not know a switch existed, would be the game losing their scenario for them. |
+| **AUTO ATTACK** | **On** | Engage anything that comes into range without being told. On by default, because that is what every formation did before this existed. Turning it off is how a screen or a reconnaissance element is kept out of a fight it cannot win. |
+
+**Free movement is the lowest-priority thing a formation does.** It only runs
+when the unit is not marching, not in contact and has no contingency waiting — a
+unit that wandered off mid-fight because a switch was on would be the switch
+overriding the battle. The radius is anchored to where it was switched on, so
+the formation works in the ground it was given rather than drifting across the
+map one hop at a time.
+
+**Auto attack off does not take the unit out of the battle.** It is still in
+contact and still takes what is coming; it simply does not open fire of its own
+accord. An explicit attack order is unaffected — that is the player telling it
+to shoot, not the sweep deciding for it.
+
+Both are saved with the unit (`UnitState.freeMovement`, `automaticAttack`),
+because "this battery does not shoot at what wanders past" is a property of the
+scenario as much as its position is. Commands are given to the **whole
+selection**, flipped from the lead formation's state so a mixed selection ends
+up all one way.
+
+---
+
+## 7. Planner — three entries
+
+**Nothing here executes.** Every other control on the bar makes a formation do
+something now; an operation is not a sequence of those. It is a main effort, the
+supporting efforts that make it possible, and the line everything falls back to
+if it does not work — decided before any of it is ordered, and useful precisely
+because it is written down where it can be looked at while the fighting is
+happening.
+
+| Entry | Draws |
 |---|---|
-| **DEFEND** | Lays a bowed **defence line** across the threat axis, captioned `DEFENCE LINE — <unit>`, with a closed **battle position** behind it. Subordinates are distributed evenly along the frontage and marched to their slots facing the threat; the commander sits back inside the position. |
-| **HOLD** | Pins the unit where it stands, stops any march, turns it onto the threat, and marks the position with a yellow `HOLD` marker. |
-| **GUARD** | Pushes the unit forward onto a guard position between the force it protects and the threat, and marks it with a green `GUARD` marker. |
+| **MAIN ATTACK** | A heavy 140 m arrow from the formation to the picked ground, in attack orange, dashed |
+| **SUPPORTING** | A 70 m arrow in a lighter amber |
+| **RETREAT LINE** | Calls `MOVE → RETREAT` — the same order, not a copy of it |
 
-Unlike attack orders, everything defence produces **is** map data — `defence-*`
-lines and markers that round-trip through the save file. See
-[05-MAP-SAVES.md](05-MAP-SAVES.md#defensive-tasks).
+The weight difference is the whole point: two identical arrows would be two
+arrows, a weighted pair is a plan. Both are drawn `planned`, so they render
+broken — that is what a control measure that has not happened yet looks like
+everywhere else on this map.
 
----
+The retreat line is **not** a separate planner feature. It is a movement
+contingency, because unlike the two axes it is something a formation actually
+carries out; two controls that looked like planning and behaved differently
+would be worse than one control in two places.
 
-## 4. Effects and audio each order triggers
-
-Every effect below goes through `VfxSystem` and carries its catalogue sound —
-see [08-PARTICLE-SYSTEMS.md](08-PARTICLE-SYSTEMS.md) and
-[10-AUDIO.md](10-AUDIO.md), which are the registers.
-
-| Moment | Effect | Sound | Where |
-|---|---|---|---|
-| Attacker fires | `WeaponFire` | — | `CombatSystem.ResolveAttack` → `UnitActor.NotifyFiring` |
-| Rounds land on the target | `ImpactBurst` | Impact | `UnitActor.ApplyDamage` |
-| A volley takes ≥1.8% strength | `Explosion` | **Explosion** | `AttackOrderSystem.Engage`, throttled to one per 2.4 s per order |
-| ASSAULT opens | `GroundFire` on the objective, 20 s | **Fire** | `AttackOrderSystem.BeginEngagement` |
-| SUPPRESS opens | `SmokeScreen` on the target, for the order's life | **Smoke** | `AttackOrderSystem.BeginEngagement` |
-| Target drops below 45% strength | `FireSmall`/`Medium`/`Large` attached | Fire | `UnitActor.RefreshBurning` |
-| Target destroyed | `PlayWreck` — explosion, fire, smoke plume | Explosion + Fire + Smoke | `UnitActor.Die` |
-
-`GroundFire` resolves to the imported **Free Fire VFX** floor-fire prefab where
-the render pipeline can draw it, and to the procedural stand-in otherwise — the
-same rule every effect in this project follows. No effect and no sound in the
-table needs an asset to be installed: everything degrades to a procedural
-build. See §4 of [08-PARTICLE-SYSTEMS.md](08-PARTICLE-SYSTEMS.md) for why the
-authored pack usually falls back.
+Axes are built as **outlines**, not filled meshes, because everything on this
+map is a draped polyline — an arrow that was a mesh would be the one graphic
+that did not follow the terrain, and over a ridge that difference is the whole
+picture. Ids are prefixed `plan-`.
 
 ---
 
-## 5. Where the code lives
+## 8. Where the code lives
 
-| File | Role |
+| Script | Role |
 |---|---|
-| `Assets/Scripts/Data/Enums.cs` | `AttackTask`, `MarkerKind` |
-| `Assets/Scripts/Units/AttackTaskCatalog.cs` | The five tasks in numbers — the table in §2 |
-| `Assets/Scripts/Units/AttackOrderSystem.cs` | Order lifecycle: approach, wait, engage |
-| `Assets/Scripts/Units/AxisArrow.cs` | The axis arrow on the map — to a target unit (attack) or a ground point (recon) |
-| `Assets/Scripts/Units/ReconTaskCatalog.cs`, `ReconOrderSystem.cs` | The recon tasks — see [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md) |
-| `Assets/Scripts/Units/CombatSystem.cs` | Tick loop, `ResolveAttack`, order precedence |
-| `Assets/Scripts/Lines/DefenceOrderSystem.cs` | Defend / Hold / Guard |
-| `Assets/Scripts/UI/UnitActionBarUI.cs` | The order bar and both submenus |
-| `Assets/Scripts/Units/SelectionManager.cs` | Arming an order and picking the target |
+| `UI/UnitActionBarUI.cs` | The six-button bar and its submenus |
+| `Units/SelectionManager.cs` | `ArmGroundPick` — one mechanism for every placed order |
+| `Units/TaskAreaSystem.cs` | Ring / line / quadrant areas, labels, motes, select pulse |
+| `Units/MoveTaskCatalog.cs` | The five movement tasks in numbers |
+| `Units/ManoeuvreOrderSystem.cs` | Movement orders, the two contingencies, the standing commands |
+| `Units/AttackTaskCatalog.cs` | The offensive task in numbers |
+| `Units/AttackOrderSystem.cs` | Order lifecycle: approach → engage; `OrderArea` for ground attacks |
+| `Units/ReconTaskCatalog.cs` | The reconnaissance task in numbers |
+| `Units/ReconOrderSystem.cs` | Recon lifecycle and the sensors the fog reads |
+| `Lines/DefenceOrderSystem.cs` | Defend / hold / guard: frontage, threat axis, subordinate distribution |
+| `Units/PlannerSystem.cs` | The two drawn axes |
+| `Units/AxisArrow.cs` | The live attack/recon axis arrow — unit to target |
+| `Core/GameController.cs` | Wires all of it and owns the objective-sizing rules |
 
-## Adding an offensive task
+---
 
-1. Add a value to `AttackTask` in `Data/Enums.cs`.
-2. Add its row to `AttackTaskCatalog.Defs` — name, one-liner, ranges, multipliers,
-   opening effect, arrow colour.
-3. Nothing else. The submenu is built from the catalogue, and `AttackOrderSystem`
-   runs the same loop for every task.
-4. **Update §2 of this file**, and §3 of `08-PARTICLE-SYSTEMS.md` if the task
-   triggers an effect at a new moment.
+## Adding a task
+
+1. **A row in the right catalogue** — `MoveTaskCatalog`, `AttackTaskCatalog`,
+   `ReconTaskCatalog`. The menu is read off the catalogue, so the caption and
+   the one-liner cannot drift from the behaviour.
+2. **Name a `TaskAreaShape`** if it is placed. Do not build a graphic at the
+   call site; `TaskAreaSystem` draws all three shapes.
+3. **A `MarkerKind`** if it pins a point, plus its colour in `TaskMarker.Tint`.
+4. **A `VfxId` + catalogue row** if it needs its own motes, with a procedural
+   fallback (golden rule 11).
+5. **Update this file**, and docs/08-PARTICLE-SYSTEMS.md if an effect was added.
+
+## Related
+
+docs/03-GAMEPLAY.md (the map editor and movement) · docs/16-FOG-OF-WAR.md (what
+recon is for) · docs/08-PARTICLE-SYSTEMS.md (the task-area effects) ·
+docs/23-COMMANDERS.md (who a defence's subordinates are)

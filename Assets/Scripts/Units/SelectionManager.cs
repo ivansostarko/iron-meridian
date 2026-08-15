@@ -54,15 +54,59 @@ namespace IronMeridian.Units
         bool _rotating;
         readonly List<float> _headingsBeforeRotate = new List<float>();
 
-        bool _moveArmed;
-        /// <summary>Raised when an armed move order is placed or cancelled.</summary>
-        public System.Action MoveOrderResolved;
+        // ------------------------------------------------------- ground picking
 
-        /// <summary>Arms the action bar's Move order: the next map click is the destination.</summary>
-        public void ArmMoveOrder()
+        /// <summary>
+        /// The pending "click a point on the map" order, if any. One mechanism
+        /// for every order that wants ground — the five movement tasks, the
+        /// three defensive ones and both planner axes.
+        ///
+        /// It used to be one bespoke armed flag per order, and each new order
+        /// meant another flag, another branch in <see cref="Update"/> and
+        /// another pair of resolve/clear callbacks. A callback carries
+        /// everything that differed.
+        /// </summary>
+        System.Action<double, double> _groundPick;
+        string _groundPickCancelMessage;
+
+        /// <summary>Raised when a ground pick is placed or cancelled, so the order bar can un-latch.</summary>
+        public System.Action GroundPickResolved;
+
+        /// <summary>True while the player is picking a point for an order.</summary>
+        public bool IsPickingGround => _groundPick != null;
+
+        /// <summary>
+        /// Arms a ground pick: the next click on the map calls
+        /// <paramref name="onPicked"/> with its geodetic position.
+        /// </summary>
+        public void ArmGroundPick(System.Action<double, double> onPicked, string cancelMessage)
         {
-            if (_selection.Count == 0) return;
-            _moveArmed = true;
+            if (_selection.Count == 0 || onPicked == null) return;
+            _groundPick = onPicked;
+            _groundPickCancelMessage = cancelMessage;
+        }
+
+        void ResolveGroundPick(string message)
+        {
+            _groundPick = null;
+            if (message != null) Flash?.Invoke(message);
+            GroundPickResolved?.Invoke();
+        }
+
+        void HandleGroundPick()
+        {
+            var pick = _groundPick;
+            if (pick == null) return;
+
+            if (!_map.RaycastGround(_cam, Input.mousePosition, out Vector3 world))
+            {
+                Flash?.Invoke("Terrain not loaded there yet — try again in a moment.");
+                return;      // stay armed: the tiles may be a second away
+            }
+
+            GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out _);
+            ResolveGroundPick(null);
+            pick(lat, lon);
         }
 
         // ------------------------------------------------------- attack targeting
@@ -142,10 +186,21 @@ namespace IronMeridian.Units
             ResolveReconOrder(null);
         }
 
+        /// <summary>Raised with a piece of ground to attack, when the click hit no formation.</summary>
+        public System.Action<double, double, AttackTask> AttackGroundPicked;
+
         /// <summary>
-        /// Turns a click into a target. Held in one place because every failure
-        /// here needs a reason on screen — an armed order that silently does
-        /// nothing when you click the wrong thing is the worst outcome.
+        /// Turns a click into an objective. Held in one place because every
+        /// failure here needs a reason on screen — an armed order that silently
+        /// does nothing when you click the wrong thing is the worst outcome.
+        ///
+        /// **A click on bare ground is an order, not a miss.** It used to be
+        /// refused, on the grounds that an attack needs a target; but with fog
+        /// of war on, the ground you most want to attack is exactly the ground
+        /// you cannot see a counter on. Clicking terrain now attacks the *area*
+        /// — everything hostile inside it, and anything that walks into it — and
+        /// clicking a formation attacks that formation. Both end up in the same
+        /// order; the difference is only how the objective was named.
         /// </summary>
         void HandleAttackTarget(AttackTask task)
         {
@@ -157,18 +212,27 @@ namespace IronMeridian.Units
             }
 
             var target = UnitUnderMouse();
-            if (target == null)
+            if (target != null)
             {
-                Flash?.Invoke("Click an enemy formation — attack orders need a target, not a point on the map.");
-                return;      // stay armed: a miss is not a cancellation
-            }
-            if (target.State.TeamEnum == attacker.State.TeamEnum)
-            {
-                Flash?.Invoke("That is one of yours. Pick a target on the opposing side.");
+                if (target.State.TeamEnum == attacker.State.TeamEnum)
+                {
+                    Flash?.Invoke("That is one of yours. Pick a target on the opposing side.");
+                    return;      // stay armed: a mis-click is not a cancellation
+                }
+
+                AttackTargetPicked?.Invoke(target, task);
+                ResolveAttackOrder(null);
                 return;
             }
 
-            AttackTargetPicked?.Invoke(target, task);
+            if (!_map.RaycastGround(_cam, Input.mousePosition, out Vector3 world))
+            {
+                Flash?.Invoke("Terrain not loaded there yet — try again in a moment.");
+                return;
+            }
+
+            GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out _);
+            AttackGroundPicked?.Invoke(lat, lon, task);
             ResolveAttackOrder(null);
         }
         Image _boxImage;
@@ -190,16 +254,14 @@ namespace IronMeridian.Units
             // before selection/orders get a look at the input.
             if (_rotating) { UpdateRotation(overUI); return; }
 
-            // An armed Move order turns the next map click into a destination
-            // instead of a selection change.
-            if (_moveArmed)
+            // An armed ground pick turns the next map click into a point for
+            // whatever order asked for one, instead of a selection change.
+            if (_groundPick != null)
             {
-                if (Input.GetKeyDown(KeyCode.Escape)) { ResolveMoveOrder("Move order cancelled."); return; }
-                if (!blocked && Input.GetMouseButtonDown(0))
-                {
-                    HandleMoveOrder();
-                    ResolveMoveOrder(null);
-                }
+                if (BattleRunning != null && !BattleRunning()) { ResolveGroundPick(null); return; }
+                if (Input.GetKeyDown(KeyCode.Escape)) { ResolveGroundPick(_groundPickCancelMessage); return; }
+                if (Input.GetMouseButtonDown(1)) { ResolveGroundPick(_groundPickCancelMessage); return; }
+                if (!blocked && Input.GetMouseButtonDown(0)) HandleGroundPick();
                 return;
             }
 
@@ -410,13 +472,6 @@ namespace IronMeridian.Units
                 for (int i = 0; i < units.Count && i < before.Count; i++)
                     if (units[i] != null) units[i].SetHeading(before[i]);
             });
-        }
-
-        void ResolveMoveOrder(string message)
-        {
-            _moveArmed = false;
-            if (message != null) Flash?.Invoke(message);
-            MoveOrderResolved?.Invoke();
         }
 
         void CancelRotation()

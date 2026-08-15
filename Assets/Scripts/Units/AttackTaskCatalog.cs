@@ -71,20 +71,19 @@ namespace IronMeridian.Units
     }
 
     /// <summary>
-    /// The five offensive tasks the battle order bar offers. Add a row here
-    /// rather than branching on <see cref="AttackTask"/> at a call site, and
-    /// update docs/15-COMBAT-ORDERS.md in the same change.
+    /// The offensive tasks the battle order bar offers — one, today. Add a row
+    /// here rather than branching on <see cref="AttackTask"/> at a call site,
+    /// and update docs/15-COMBAT-ORDERS.md in the same change.
+    ///
+    /// The def keeps every field the five tasks used (shock, return fire,
+    /// opening volley, obscuration) because those are what a second task would
+    /// be *made of*; the table having one row is a statement about the menu,
+    /// not about the model underneath it.
     /// </summary>
     public static class AttackTaskCatalog
     {
-        // Colours are intent, not decoration: an assault is the hottest thing
-        // on the map, suppression is amber because it is about holding the
-        // target down, and an ambush is muted because it is not moving.
-        static readonly Color Hot = new Color(1.00f, 0.45f, 0.25f);
+        /// <summary>Attack orange — the one hot colour on the map, and it means this.</summary>
         static readonly Color Deliberate = new Color(1.00f, 0.68f, 0.28f);
-        static readonly Color Amber = new Color(0.95f, 0.83f, 0.30f);
-        static readonly Color Concealed = new Color(0.62f, 0.55f, 0.85f);
-        static readonly Color Riposte = new Color(0.45f, 0.85f, 0.95f);
 
         static readonly AttackTaskDef[] Defs =
         {
@@ -92,7 +91,7 @@ namespace IronMeridian.Units
             {
                 task = AttackTask.Attack,
                 name = "ATTACK",
-                detail = "Close and destroy",
+                detail = "Close and destroy what is there",
                 engageRangeFraction = 0.85f,
                 damageMultiplier = 1.0f,
                 shockMultiplier = 1.0f,
@@ -100,77 +99,6 @@ namespace IronMeridian.Units
                 advances = true,
                 openingMultiplier = 1.0f,
                 arrowTint = Deliberate
-            },
-
-            new AttackTaskDef
-            {
-                task = AttackTask.Assault,
-                name = "ASSAULT",
-                detail = "Close right up — decisive, costly",
-                // Onto the objective, not near it. At this range both sides are
-                // fully exposed, which is why return fire is worse than normal.
-                engageRangeFraction = 0.22f,
-                damageMultiplier = 1.85f,
-                shockMultiplier = 1.4f,
-                returnFireMultiplier = 1.45f,
-                advances = true,
-                openingMultiplier = 1.25f,
-                // The ground the assault goes in over catches fire and stays lit.
-                openingEffect = VfxId.GroundFire,
-                openingEffectSeconds = 20f,
-                arrowTint = Hot
-            },
-
-            new AttackTaskDef
-            {
-                task = AttackTask.Suppress,
-                name = "SUPPRESS",
-                detail = "Pin from maximum range",
-                engageRangeFraction = 1.0f,
-                // Suppression is not attrition: it takes very little strength
-                // off the target and a great deal of its ability to function.
-                damageMultiplier = 0.40f,
-                shockMultiplier = 2.6f,
-                returnFireMultiplier = 0.55f,
-                advances = true,
-                openingMultiplier = 1.0f,
-                pins = true,
-                openingEffect = VfxId.SmokeScreen,
-                openingEffectSeconds = 0f,          // hangs for as long as the order does
-                arrowTint = Amber
-            },
-
-            new AttackTaskDef
-            {
-                task = AttackTask.Ambush,
-                name = "AMBUSH",
-                detail = "Hold concealed, strike on contact",
-                engageRangeFraction = 0.75f,
-                damageMultiplier = 1.15f,
-                shockMultiplier = 1.8f,
-                returnFireMultiplier = 0.85f,
-                // The whole task is *not* moving. Giving away the position by
-                // advancing on the target would be the one thing an ambush cannot do.
-                advances = false,
-                openingMultiplier = 2.4f,
-                openingIsFree = true,
-                arrowTint = Concealed
-            },
-
-            new AttackTaskDef
-            {
-                task = AttackTask.Counterattack,
-                name = "COUNTERATTACK",
-                detail = "Strike a committed enemy",
-                engageRangeFraction = 0.70f,
-                damageMultiplier = 1.35f,
-                shockMultiplier = 1.5f,
-                returnFireMultiplier = 0.9f,
-                advances = true,
-                // A formation already committed to its own attack is not set to
-                // receive one; that is worth a heavy opening blow.
-                openingMultiplier = 1.6f,
-                arrowTint = Riposte
             }
         };
 

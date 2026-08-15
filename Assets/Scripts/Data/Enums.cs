@@ -207,47 +207,104 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
-    /// Offensive tasks a unit can be given against a chosen enemy (FM 3-90
-    /// ch.3 — forms of the attack). They differ in how close the attacker
-    /// closes, how hard it hits, and what it is trying to achieve: destruction,
-    /// suppression, or surprise.
+    /// Offensive tasks a unit can be given (FM 3-90 ch.3).
+    ///
+    /// **One task, deliberately.** There used to be five — attack, assault,
+    /// suppress, ambush, counterattack — and they were five rows in a menu
+    /// separated by numbers the player could not see. What a commander is
+    /// actually deciding at this level is *where to attack*, and the answer is a
+    /// place on the map or a formation standing on one. The variations belong to
+    /// a later model that can show what they buy.
     /// </summary>
     public enum AttackTask
     {
-        /// <summary>Deliberate attack: close to effective range and destroy the target.</summary>
-        Attack,
-        /// <summary>Close assault: get right on top of the objective. Decisive and expensive.</summary>
-        Assault,
-        /// <summary>Suppressive fire from maximum range: pin the target rather than kill it.</summary>
-        Suppress,
-        /// <summary>Lie in wait, concealed, and strike the target when it comes into range.</summary>
-        Ambush,
-        /// <summary>Strike back at an enemy that is committed to its own attack.</summary>
-        Counterattack
+        /// <summary>Close to effective range and destroy whatever is in the objective.</summary>
+        Attack
     }
 
     /// <summary>
-    /// Reconnaissance and security tasks (FM 3-98). Every one of them exists to
-    /// answer a question about the enemy, which with fog of war on is the only
-    /// way to see anything beyond a unit's own eyes.
+    /// Reconnaissance tasks (FM 3-98). One, for the same reason the attack menu
+    /// has one: with fog of war on, the question is always *which ground do I
+    /// want to see*, and the answer is an area.
     /// </summary>
     public enum ReconTask
     {
-        /// <summary>Move to a place and find out what is in it.</summary>
-        ReconArea,
-        /// <summary>Find out what is along a route, scanning the whole way there.</summary>
-        ReconRoute,
-        /// <summary>Sit still and watch. The furthest-seeing task, and the only static one.</summary>
-        Observe,
-        /// <summary>Fly a sensor out and back. Fast, wide, and it does not last.</summary>
-        UavRecon,
-        /// <summary>Patrol forward expecting to fight for the information.</summary>
-        CombatPatrol
+        /// <summary>Move to an area and search it.</summary>
+        ReconArea
     }
 
     /// <summary>
-    /// Point graphics pinned to the map by a defensive task. Unlike lines these
-    /// mark a place rather than a limit, so they carry the owning unit and the
+    /// How a formation moves. Every one of these ends with the unit somewhere
+    /// else; what differs is the speed it accepts, the readiness it keeps, and —
+    /// for the last two — whether the move is ordered now or held as a
+    /// contingency against the unit's own strength.
+    /// </summary>
+    public enum MoveTask
+    {
+        /// <summary>March at the formation's own speed.</summary>
+        Move,
+        /// <summary>Road march: faster, strung out, and in no state to fight on arrival.</summary>
+        FastMove,
+        /// <summary>Bounding advance: slower, in contact-ready formation.</summary>
+        TacticalMove,
+        /// <summary>
+        /// Break contact to a line to the rear, **when the formation is down to
+        /// half strength**. A planned move, executed by the unit rather than by
+        /// the player.
+        /// </summary>
+        Withdraw,
+        /// <summary>
+        /// Fall back to a rally point, **when the formation is down to a third**.
+        /// The harder trigger and the more urgent move.
+        /// </summary>
+        Retreat
+    }
+
+    /// <summary>
+    /// The standing behaviours a formation carries between orders. Unlike a task
+    /// these have no objective and never complete — they are switches on how the
+    /// unit behaves when nothing else is telling it what to do.
+    /// </summary>
+    public enum UnitCommand
+    {
+        /// <summary>Cancel every order and stand still.</summary>
+        Stop,
+        /// <summary>Roam within <see cref="FreeMovementRadiusKm"/> when idle.</summary>
+        FreeMovement,
+        /// <summary>Engage anything that comes into range without being told.</summary>
+        AutomaticAttack
+    }
+
+    /// <summary>
+    /// A drawn intention rather than an order. The planner puts the shape of an
+    /// operation on the map; nothing executes it.
+    /// </summary>
+    public enum PlanKind
+    {
+        /// <summary>The decisive effort — the heavy axis.</summary>
+        MainAttack,
+        /// <summary>The shaping effort — a lighter axis that fixes or diverts.</summary>
+        SupportingAttack
+    }
+
+    /// <summary>
+    /// The shape a task draws on the ground. One of three, because the three
+    /// answer different questions: *how far from here* (a ring), *which line do
+    /// I hold* (a line), and *which ground do I cover* (quadrants).
+    /// </summary>
+    public enum TaskAreaShape
+    {
+        /// <summary>A circle about a point, with its radius called out on the rim.</summary>
+        Ring,
+        /// <summary>A bowed line across the threat axis, labelled along its length.</summary>
+        Line,
+        /// <summary>Four sectors about a point, each labelled on its own border.</summary>
+        Quadrants
+    }
+
+    /// <summary>
+    /// Point graphics pinned to the map by a task. Unlike lines these mark a
+    /// place rather than a limit, so they carry the owning unit and the
     /// direction the task is oriented on.
     /// </summary>
     public enum MarkerKind
@@ -257,7 +314,33 @@ namespace IronMeridian.Data
         /// <summary>Screen the protected force forward of it, fighting within supporting range.</summary>
         Guard,
         /// <summary>Centre of a prepared defence, where its line and battle position meet.</summary>
-        Defend
+        Defend,
+        /// <summary>The ground an attack is being made onto.</summary>
+        Attack,
+        /// <summary>The area a formation has been told to search.</summary>
+        Recon,
+        /// <summary>The line a formation breaks contact to at half strength.</summary>
+        Withdraw,
+        /// <summary>The rally point a formation falls back to at a third strength.</summary>
+        Retreat
+    }
+
+    /// <summary>Numbers the standing commands are defined by.</summary>
+    public static class CommandInfo
+    {
+        /// <summary>
+        /// How far a formation on FREE MOVEMENT will wander from where it was
+        /// released, in km. Deliberately large: this is not a patrol radius, it
+        /// is "you have this much of the map to work in", and anything under a
+        /// few tens of kilometres would make an operational formation look
+        /// tethered.
+        /// </summary>
+        public const double FreeMovementRadiusKm = 50.0;
+
+        /// <summary>Strength at or below which a WITHDRAW order executes itself.</summary>
+        public const float WithdrawTriggerStrength = 0.50f;
+        /// <summary>Strength at or below which a RETREAT order executes itself.</summary>
+        public const float RetreatTriggerStrength = 0.30f;
     }
 
     public static class EchelonInfo
