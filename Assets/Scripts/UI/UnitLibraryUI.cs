@@ -46,7 +46,19 @@ namespace IronMeridian.UI
         {
             public string title;
             public string blurb;
-            public Sprite glyph;
+            /// <summary>
+            /// The board glyph, **as a factory rather than a sprite**.
+            ///
+            /// <see cref="Arms"/> is a static field on a MonoBehaviour type, and
+            /// Unity runs those initialisers during its serialization pass —
+            /// where creating a texture is illegal and throws
+            /// <c>SupportsTextureFormatNative is not allowed to be called from a
+            /// MonoBehaviour constructor</c>, failing the build. Every
+            /// <see cref="UiIcons"/> sprite is drawn procedurally on first
+            /// access, so naming one here built it at exactly the wrong moment.
+            /// A delegate stores nothing until the board is drawn.
+            /// </summary>
+            public System.Func<Sprite> glyph;
             public Color tone;
             public UnitBranch[] branches;
         }
@@ -55,21 +67,21 @@ namespace IronMeridian.UI
         {
             new Arm
             {
-                title = "INFANTRY", glyph = UiIcons.Person,
+                title = "INFANTRY", glyph = () => UiIcons.Person,
                 blurb = "Dismounted manoeuvre formations. They fight on their feet and hold the worst ground.",
                 tone = new Color(0.16f, 0.26f, 0.18f),
                 branches = new[] { UnitBranch.Infantry }
             },
             new Arm
             {
-                title = "ARTILLERY", glyph = UiIcons.Artillery,
+                title = "ARTILLERY", glyph = () => UiIcons.Artillery,
                 blurb = "Everything that shoots at what it cannot see, and the observers that aim it.",
                 tone = new Color(0.30f, 0.20f, 0.12f),
                 branches = new[] { UnitBranch.Artillery }
             },
             new Arm
             {
-                title = "ARMOUR", glyph = UiIcons.Equipment,
+                title = "ARMOUR", glyph = () => UiIcons.Equipment,
                 blurb = "Tanks, cavalry and the anti-armour arm that exists to kill them — with the " +
                         "mechanised infantry that rides alongside.",
                 tone = new Color(0.22f, 0.20f, 0.14f),
@@ -77,7 +89,7 @@ namespace IronMeridian.UI
             },
             new Arm
             {
-                title = "AIR", glyph = UiIcons.Jet,
+                title = "AIR", glyph = () => UiIcons.Jet,
                 blurb = "Crewed aviation and unmanned systems, and the ground-based air defence " +
                         "that exists to meet them. Neither holds ground.",
                 tone = new Color(0.14f, 0.22f, 0.34f),
@@ -85,14 +97,14 @@ namespace IronMeridian.UI
             },
             new Arm
             {
-                title = "NAVY", glyph = UiIcons.Warship,
+                title = "NAVY", glyph = () => UiIcons.Warship,
                 blurb = "Vessels. Weeks of fuel and rations, and no terrain to take.",
                 tone = new Color(0.12f, 0.24f, 0.30f),
                 branches = new[] { UnitBranch.Navy }
             },
             new Arm
             {
-                title = "MORE", glyph = UiIcons.Layers,
+                title = "MORE", glyph = () => UiIcons.Layers,
                 blurb = "Sustainment, and the combat support that belongs to no single arm: " +
                         "engineers, signals, ISR, influence, cyber.",
                 tone = new Color(0.22f, 0.18f, 0.26f),
@@ -242,7 +254,7 @@ namespace IronMeridian.UI
             head.offsetMax = Vector2.zero;
             head.GetComponent<Image>().raycastTarget = false;
 
-            var icon = UIFactory.CreateImage(head, arm.glyph, "Glyph");
+            var icon = UIFactory.CreateImage(head, arm.glyph(), "Glyph");
             icon.color = GameConfig.UiAccent;
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),

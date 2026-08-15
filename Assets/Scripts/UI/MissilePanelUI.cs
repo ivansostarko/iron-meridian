@@ -92,13 +92,15 @@ namespace IronMeridian.UI
             // One page per inventory, both laid out at the same origin; only the
             // selected one is active. Same device as the artillery menu, for the
             // same reason: the first decision halves the list.
+            // Named `inventory`, not `page`: this method's own parameter is the
+            // dock page it builds into, and the two nest.
             foreach (MissileOrigin origin in System.Enum.GetValues(typeof(MissileOrigin)))
             {
-                var page = UIFactory.CreateGroup(_panel, "MissilePage_" + origin);
-                page.anchorMin = new Vector2(0, 0); page.anchorMax = new Vector2(1, 1);
-                page.offsetMin = Vector2.zero; page.offsetMax = Vector2.zero;
-                _pages[origin] = page;
-                BuildPage(page, origin, inner);
+                var inventory = UIFactory.CreateGroup(_panel, "MissilePage_" + origin);
+                inventory.anchorMin = new Vector2(0, 0); inventory.anchorMax = new Vector2(1, 1);
+                inventory.offsetMin = Vector2.zero; inventory.offsetMax = Vector2.zero;
+                _pages[origin] = inventory;
+                BuildPage(inventory, origin, inner);
             }
 
             ShowOrigin(_origin);

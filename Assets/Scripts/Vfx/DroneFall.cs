@@ -91,8 +91,14 @@ namespace IronMeridian.Vfx
             }
 
             // A tumble rate per axis, so no two wrecks come down the same way.
+            //
+            // Fully qualified: this file needs `Unity.Mathematics` for double3,
+            // and that namespace has a Random of its own, so the bare name is
+            // ambiguous. Every flight in this folder has the same collision.
             fall._tumble = new Vector3(
-                Random.Range(-160f, 160f), Random.Range(-90f, 90f), Random.Range(-220f, 220f));
+                UnityEngine.Random.Range(-160f, 160f),
+                UnityEngine.Random.Range(-90f, 90f),
+                UnityEngine.Random.Range(-220f, 220f));
 
             // Burning debris, attached so it follows the wreck down and reads as
             // a trail rather than as smoke hanging where the hit happened.
