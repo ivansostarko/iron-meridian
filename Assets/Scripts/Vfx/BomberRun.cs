@@ -40,6 +40,8 @@ namespace IronMeridian.Vfx
         AircraftDef _def;
 
         double _startLat, _startLon, _endLat, _endLon;
+        /// <summary>The aim point. Every weapon is scattered over the target circle around this.</summary>
+        double _targetLat, _targetLon;
         double _groundHeight;
         float _headingDeg;
 
@@ -94,6 +96,8 @@ namespace IronMeridian.Vfx
         /// </summary>
         void PlanTrack(double targetLat, double targetLon)
         {
+            _targetLat = targetLat;
+            _targetLon = targetLon;
             _groundHeight = GeoUtils.SampleTerrainHeight(_geo, targetLat, targetLon, 250.0);
 
             GeoUtils.Destination(targetLat, targetLon, _headingDeg + 180f, _def.approachKm,
@@ -199,28 +203,38 @@ namespace IronMeridian.Vfx
 
         void ReleaseOne(int index)
         {
-            // A released weapon carries the aircraft's forward speed, so it lands
-            // ahead of the release point rather than directly below it. Without
-            // this the stick bunches up under the flight path and the pass reads
-            // as the aircraft dropping straight down.
+            // Where the weapon *would* land if it simply carried the aircraft's
+            // forward throw: down the track from the release point. Without this
+            // the stick bunches up under the flight path and the pass reads as
+            // the aircraft dropping straight down.
             float trackKm = (float)(_def.approachKm + _def.egressKm);
             float speedKmPerSec = trackKm / Mathf.Max(0.01f, _def.RunSeconds);
             float throwKm = speedKmPerSec * _def.fallSeconds;
 
-            // Where the aircraft is right now, along the track.
             float u = _elapsed / Mathf.Max(0.01f, _def.RunSeconds);
             double lat = _startLat + (_endLat - _startLat) * u;
             double lon = _startLon + (_endLon - _startLon) * u;
 
-            GeoUtils.Destination(lat, lon, _headingDeg, throwKm, out double impactLat, out double impactLon);
+            GeoUtils.Destination(lat, lon, _headingDeg, throwKm,
+                out double ballisticLat, out double ballisticLon);
 
-            // Lateral spread so the stick is a swathe rather than a pencil line.
-            // Fully qualified: Unity.Mathematics is imported here for double3 and
-            // brings its own Random with it.
-            float spread = _def.radiusMeters * 0.30f;
-            float offset = UnityEngine.Random.Range(-spread, spread);
-            GeoUtils.Destination(impactLat, impactLon, _headingDeg + 90f, offset / 1000.0,
-                out impactLat, out impactLon);
+            // …and where it is *aimed*: a point spread evenly over the whole
+            // target circle, from the same golden-angle disc the artillery sheaf
+            // uses. The stick used to walk a line across the target with a little
+            // lateral jitter, which left most of the circle the player drew
+            // untouched — the ordnance visibly missed the area it had been given.
+            StrikeImpact.ScatterInCircle(_targetLat, _targetLon, _def.radiusMeters,
+                index, AirStrikeCatalog.BombsPerStrike,
+                out double aimedLat, out double aimedLon);
+
+            // Blend the two rather than using the aim point outright. A weapon
+            // that ignored the aircraft's motion entirely would fall out of the
+            // sky sideways; one that ignored the aim point would not cover the
+            // circle. Weighted toward the aim point, because covering the target
+            // area is the thing being promised and the throw is the flourish.
+            const float AimWeight = 0.78f;
+            double impactLat = ballisticLat + (aimedLat - ballisticLat) * AimWeight;
+            double impactLon = ballisticLon + (aimedLon - ballisticLon) * AimWeight;
 
             StartCoroutine(Fall(impactLat, impactLon));
         }

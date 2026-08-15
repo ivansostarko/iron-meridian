@@ -65,16 +65,19 @@ namespace IronMeridian.Vfx
             // Full alarm for as long as the rounds are coming, then the marker goes.
             if (marker != null) marker.SetAlarm(1f);
 
-            var total = default(BlastResult);
+            // The target area, resolved once as the first round arrives —
+            // everything under the circle the player drew is destroyed, and a
+            // shockwave the size of that circle says so. See StrikeImpact.
+            var total = StrikeImpact.Arrive(lat, lon, def.radiusMeters);
 
             for (int i = 0; i < def.roundsPerMission; i++)
             {
-                ScatterPoint(lat, lon, def.radiusMeters, i, def.roundsPerMission,
+                StrikeImpact.ScatterInCircle(lat, lon, def.radiusMeters, i, def.roundsPerMission,
                     out double roundLat, out double roundLon);
 
                 VfxSystem.Play(def.burst, roundLat, roundLon, def.burstScale);
 
-                total += BlastDamage.Apply(roundLat, roundLon,
+                total += StrikeImpact.Round(roundLat, roundLon, def.radiusMeters,
                     def.LethalRadiusM, def.BlastRadiusM, def.MaxDamage);
 
                 // Smoke loops by design and is dispersed explicitly, the same
@@ -97,27 +100,7 @@ namespace IronMeridian.Vfx
                           total.Report());
         }
 
-        /// <summary>
-        /// Where round <paramref name="index"/> falls inside the beaten zone.
-        ///
-        /// Same construction as the artillery salvo, and for the same reasons:
-        /// the golden angle spreads successive rounds around the circle instead
-        /// of clumping them on one bearing, the square root on the radius makes
-        /// the scatter uniform by *area* (without it every round crowds the
-        /// centre and the sheaf looks nothing like a beaten zone), and jitter on
-        /// top stops the pattern being recognisable between missions.
-        ///
-        /// A naval mission has more rounds than a battery's five, so the count is
-        /// a parameter rather than a constant.
-        /// </summary>
-        static void ScatterPoint(double lat, double lon, float radiusMeters, int index, int count,
-            out double outLat, out double outLon)
-        {
-            float t = (index + 0.5f) / Mathf.Max(1, count);
-            float distance = Mathf.Sqrt(t) * radiusMeters * Random.Range(0.70f, 0.99f);
-            float bearing = index * 137.508f + Random.Range(-22f, 22f);
-
-            GeoUtils.Destination(lat, lon, bearing, distance / 1000.0, out outLat, out outLon);
-        }
+        // Scatter now lives in StrikeImpact.ScatterInCircle, shared with the
+        // artillery salvo and the bombing run.
     }
 }

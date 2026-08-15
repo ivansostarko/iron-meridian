@@ -87,6 +87,12 @@ namespace IronMeridian.Units
             public RangeRing ring;
             /// <summary>Radius the ring was last rebuilt at — see <see cref="RefreshContact"/>.</summary>
             public float shownRadiusKm;
+            /// <summary>
+            /// True while this is a **live** report from crossed observation
+            /// rather than a memory of where the formation was last seen. A live
+            /// contact tracks; a lost one ages. See <see cref="RefreshLiveContact"/>.
+            /// </summary>
+            public bool live;
         }
 
         public void Init(CesiumGeoreference geo, GameClock clock)
@@ -233,22 +239,48 @@ namespace IronMeridian.Units
                 }
 
                 bool held = _contacts.ContainsKey(enemy);
-                bool seen = Detected(enemy, watchers, held ? 0f : HoldHysteresisKm);
+                var sighting = Detect(enemy, watchers, held ? 0f : HoldHysteresisKm);
 
-                if (seen)
+                if (sighting == Sighting.Observed)
                 {
                     if (enemy.HiddenByFog) enemy.SetHiddenByFog(false);
+                    _everSeen.Add(enemy);
                     DropContact(enemy);
+                    continue;
+                }
+
+                // Not in view, either way. The difference is whether the player
+                // is told anything at all about it.
+                if (!enemy.HiddenByFog)
+                {
+                    enemy.SetHiddenByFog(true);
+                    UnitHidden?.Invoke(enemy);
+                }
+
+                if (sighting == Sighting.Contact)
+                {
+                    // Crossed view circles are a **live** report, not a memory:
+                    // something is watching the ground this formation is on right
+                    // now. The ring is re-centred on it every sweep and does not
+                    // grow, which is the whole difference from a lost contact —
+                    // and it is why a formation can be tracked at arm's length
+                    // without ever being identified.
+                    if (!held) RecordContact(enemy);
+                    RefreshLiveContact(enemy);
+                }
+                else if (held && _everSeen.Contains(enemy))
+                {
+                    // Lost, and once known: the estimate ages.
+                    RefreshContact(enemy);
                 }
                 else
                 {
-                    if (!enemy.HiddenByFog)
-                    {
-                        enemy.SetHiddenByFog(true);
-                        UnitHidden?.Invoke(enemy);
-                        RecordContact(enemy);
-                    }
-                    RefreshContact(enemy);
+                    // Never observed and nothing near it now. No ring: drawing
+                    // one would be inventing intelligence, and drawing one for
+                    // every enemy on the first sweep of a battle — which is what
+                    // used to happen — handed the player the entire enemy order
+                    // of battle the moment fog was switched on.
+                    DropContact(enemy);
                 }
             }
 
@@ -290,32 +322,116 @@ namespace IronMeridian.Units
         /// <summary>False until the blanket has been laid over this battle's ground.</summary>
         bool _blanketLaid;
 
+        /// <summary>How well the player can see one enemy formation.</summary>
+        public enum Sighting
+        {
+            /// <summary>Nothing of the player's is looking anywhere near it.</summary>
+            None,
+            /// <summary>
+            /// The two view circles overlap, but the formation itself is outside
+            /// the watcher's own range. Something is out there — a dust cloud, a
+            /// radio net, a patrol that came back — and it is placed as a contact
+            /// rather than drawn. See <see cref="Detect"/>.
+            /// </summary>
+            Contact,
+            /// <summary>Inside a watcher's view range, or a sensor's footprint. Drawn normally.</summary>
+            Observed
+        }
+
         /// <summary>
-        /// Whether anything of the player's can see this formation.
+        /// How well this formation is seen.
+        ///
+        /// **Three tiers rather than two.** Seeing was a switch: inside somebody's
+        /// view range or invisible. That threw away the most interesting state on
+        /// the map — two formations whose *observation* overlaps but neither of
+        /// which has the other in view. Real reconnaissance mostly lives there:
+        /// you know something is out there long before you can describe it.
+        ///
+        /// So an enemy whose own view circle crosses one of the player's, without
+        /// being inside it, becomes a **contact** — the same uncertainty ring a
+        /// formation leaves when it is lost, placed on where it probably is
+        /// rather than on where it is. Its counter stays off the map.
+        ///
         /// <paramref name="bonusKm"/> is the hysteresis: a formation already
         /// being watched is kept slightly past the edge of the arc.
         /// </summary>
-        bool Detected(UnitActor enemy, List<UnitActor> watchers, float bonusKm)
+        Sighting Detect(UnitActor enemy, List<UnitActor> watchers, float bonusKm)
         {
+            bool crossed = false;
+
             foreach (var w in watchers)
             {
                 if (w == null || !w.IsAlive) continue;
                 double km = GeoUtils.DistanceKm(w.State.latitude, w.State.longitude,
                     enemy.State.latitude, enemy.State.longitude);
-                if (km <= w.Def.viewRangeKm + bonusKm) return true;
+
+                if (km <= w.Def.viewRangeKm + bonusKm) return Sighting.Observed;
+                // Circles crossing: the sum of the two radii exceeds the gap.
+                if (km <= w.Def.viewRangeKm + enemy.Def.viewRangeKm + bonusKm) crossed = true;
             }
 
             foreach (var s in _sensors)
             {
                 double km = GeoUtils.DistanceKm(s.latitude, s.longitude,
                     enemy.State.latitude, enemy.State.longitude);
-                if (km <= s.radiusKm + bonusKm) return true;
+                if (km <= s.radiusKm + bonusKm) return Sighting.Observed;
+                if (km <= s.radiusKm + enemy.Def.viewRangeKm + bonusKm) crossed = true;
             }
 
-            return false;
+            return crossed ? Sighting.Contact : Sighting.None;
         }
 
         // ------------------------------------------------------- contacts
+
+        /// <summary>
+        /// Formations the player has actually had in view at some point this
+        /// battle. Only these leave an ageing "last seen" contact when they are
+        /// lost — a formation nobody has ever laid eyes on has no last known
+        /// position to remember, and inventing one would hand over the enemy's
+        /// order of battle on the first sweep.
+        /// </summary>
+        readonly HashSet<UnitActor> _everSeen = new HashSet<UnitActor>();
+
+        /// <summary>
+        /// Radius of a live contact ring, as a fraction of the formation's own
+        /// view range. It is an estimate, not a fix — something is on that ground
+        /// and the ring says roughly where, which is exactly what a crossed
+        /// observation boundary tells you.
+        /// </summary>
+        const float LiveContactShare = 0.45f;
+        const float MinLiveContactKm = 1.2f;
+
+        /// <summary>
+        /// Redraws a **live** contact: something is watching this ground now, so
+        /// the ring follows the formation instead of ageing away from it, and it
+        /// is captioned as a current report rather than as a memory.
+        ///
+        /// It still only moves when the estimate has visibly changed — rebuilding
+        /// a ring re-samples the terrain under 96 vertices, and a formation on the
+        /// march would otherwise cost a few hundred raycasts a second.
+        /// </summary>
+        void RefreshLiveContact(UnitActor enemy)
+        {
+            if (!_contacts.TryGetValue(enemy, out var contact) || contact.ring == null) return;
+
+            float radius = Mathf.Max(MinLiveContactKm, enemy.Def.viewRangeKm * LiveContactShare);
+
+            double moved = GeoUtils.DistanceKm(contact.latitude, contact.longitude,
+                enemy.State.latitude, enemy.State.longitude);
+            bool settled = contact.live && moved < radius * 0.15 &&
+                           Mathf.Approximately(contact.shownRadiusKm, radius);
+            if (settled) return;
+
+            contact.live = true;
+            contact.latitude = enemy.State.latitude;
+            contact.longitude = enemy.State.longitude;
+            contact.shownRadiusKm = radius;
+            contact.seenAt = _clock != null ? _clock.TimeText : "--:--";
+            contact.lostAtRealtime = Time.time;
+
+            contact.ring.Show(contact.latitude, contact.longitude, radius,
+                $"UNIDENTIFIED\nIN CONTACT {contact.seenAt}  ·  ±{radius:0.#} km");
+        }
 
         void RecordContact(UnitActor enemy)
         {
@@ -347,6 +463,10 @@ namespace IronMeridian.Units
         void RefreshContact(UnitActor enemy)
         {
             if (!_contacts.TryGetValue(enemy, out var contact) || contact.ring == null) return;
+
+            // Coming off a live contact: the estimate starts ageing from here,
+            // and from the ring it currently has rather than from the minimum.
+            contact.live = false;
 
             float elapsed = Time.time - contact.lostAtRealtime;
             float kmPerSecond = contact.speedKmh * (float)GameClock.GameSecondsPerRealSecond / 3600f;
@@ -400,6 +520,8 @@ namespace IronMeridian.Units
             foreach (var kv in _contacts)
                 if (kv.Value.ring != null) Destroy(kv.Value.ring.gameObject);
             _contacts.Clear();
+            // The next battle starts blind, which means having seen nothing.
+            _everSeen.Clear();
 
             // The blanket fades itself out; what has to go is the memory of
             // where the player has been, so the next battle starts blind.

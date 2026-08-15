@@ -298,6 +298,17 @@ namespace IronMeridian.Units
             // designer is trying to place.
             if (!CombatSystem.BattleRunning) { Cancel(); return; }
 
+            // Running into the enemy stops the march. A formation exchanging
+            // fire is fighting, not marching through the fight — and a column
+            // that walked out the far side of a contact at cruising speed was
+            // the clearest sign the two systems were not talking to each other.
+            // The order is kept, not cancelled: break contact and it resumes.
+            if (CombatSystem.InContact(_actor))
+            {
+                _actor.State.status = UnitStatus.Engaging.ToString();
+                return;
+            }
+
             var s = _actor.State;
             float dt = Time.deltaTime;
             float turn = TurnRate() * dt;

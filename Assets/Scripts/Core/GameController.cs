@@ -479,6 +479,10 @@ namespace IronMeridian.Core
                     if (mode == LineDrawTool.Mode.None) _palette.ResetToolToSelect();
                 };
 
+                // COMMANDERS section — the order of battle above the units.
+                _palette.CommanderAssignRequested = AssignSelectionToCommander;
+                _palette.CommanderSelectUnitsRequested = SelectCommandersUnits;
+
                 // MISSIONS section — the single-player campaign, edited here.
                 _palette.MissionOpenRequested = OpenMission;
                 _palette.MissionSaveRequested = SaveMission;
@@ -1033,6 +1037,62 @@ namespace IronMeridian.Core
                 });
         }
 
+        // ----------------------------------------------------- commanders
+
+        /// <summary>
+        /// Puts every selected formation under one officer.
+        ///
+        /// The selection is the gesture, deliberately: an order of battle is
+        /// built by picking formations off the map and handing them to somebody,
+        /// which is a drag-select and a button rather than twenty rows of
+        /// dropdowns. Formations from the other side are skipped rather than
+        /// refused — a box drag across a front line catches both, and failing the
+        /// whole assignment because of that would be the panel being pedantic
+        /// about something it can simply do correctly.
+        /// </summary>
+        void AssignSelectionToCommander(Data.CommanderState commander)
+        {
+            if (commander == null) return;
+
+            var picked = _selection.Selection;
+            if (picked == null || picked.Count == 0)
+            {
+                _hud.Flash("Select formations on the map first, then press ASSIGN SELECTED.");
+                return;
+            }
+
+            int assigned = 0, skipped = 0;
+            foreach (var u in picked)
+            {
+                if (u == null || !u.IsAlive) continue;
+                if (u.State.TeamEnum != commander.TeamEnum) { skipped++; continue; }
+                CommanderRegistry.Assign(u, commander);
+                assigned++;
+            }
+
+            CommanderRegistry.RaiseChanged();
+
+            string who = $"{Data.RankCatalog.Get(commander.TeamEnum, commander.rank).abbrev} {commander.name}";
+            _hud.Flash(assigned == 0
+                ? $"Nothing on {who}'s side was selected."
+                : $"{who} takes command of {assigned} formation(s)." +
+                  (skipped > 0 ? $" {skipped} on the other side were left alone." : ""));
+        }
+
+        /// <summary>Selects everything an officer holds, so it can be moved or re-tasked as one.</summary>
+        void SelectCommandersUnits(Data.CommanderState commander)
+        {
+            var units = CommanderRegistry.UnitsOf(commander);
+            if (units.Count == 0)
+            {
+                _hud.Flash("That officer holds no formations.");
+                return;
+            }
+
+            _selection.SetSelection(units);
+            _hud.Flash($"Selected {units.Count} formation(s).");
+        }
+
         // --------------------------------------------------- mission mode
 
         /// <summary>
@@ -1215,6 +1275,7 @@ namespace IronMeridian.Core
                 if (a != null && a.IsAlive) _save.units.Add(a.Snapshot());
             _save.lines = _lines.Serialize();
             _save.markers = _markers.Serialize();
+            _save.commanders = CommanderRegistry.Serialize();
             _save.viewMode = _map.ViewMode.ToString();
             _save.mapStyle = _map.Style.ToString();
             _save.showBuildings = _map.BuildingsVisible;
@@ -1358,6 +1419,10 @@ namespace IronMeridian.Core
             // After the units: a task marker whose owning unit is not on the map
             // is swept away, and during a load that is briefly all of them.
             _markers.LoadFrom(data.markers);
+            // Commanders last. They are referenced by id from the units that are
+            // already down, so loading them earlier would have the roster point
+            // at formations that did not exist yet.
+            CommanderRegistry.LoadFrom(data.commanders);
         }
 
         void Update()

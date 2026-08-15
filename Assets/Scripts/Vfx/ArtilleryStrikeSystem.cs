@@ -58,18 +58,24 @@ namespace IronMeridian.Vfx
             // Full alarm for the duration of the shooting, then the marker goes.
             if (marker != null) marker.SetAlarm(1f);
 
-            var total = default(BlastResult);
+            // The target area itself, resolved once as the first round lands:
+            // everything under the circle the player drew is destroyed, and a
+            // shockwave the size of that circle says so. See StrikeImpact.
+            var total = StrikeImpact.Arrive(lat, lon, def.radiusMeters,
+                heavy: def.calibreMm >= 120);
 
             for (int i = 0; i < ArtilleryCatalog.ShellsPerMission; i++)
             {
-                ScatterPoint(lat, lon, def.radiusMeters, i, out double roundLat, out double roundLon);
+                StrikeImpact.ScatterInCircle(lat, lon, def.radiusMeters, i,
+                    ArtilleryCatalog.ShellsPerMission, out double roundLat, out double roundLon);
 
                 VfxSystem.Play(def.burst, roundLat, roundLon, def.burstScale);
 
-                // Every round is resolved where it actually lands, not against
-                // the target area as a whole — which is what makes the scatter
-                // matter and why a wide sheaf is not strictly better.
-                total += BlastDamage.Apply(roundLat, roundLon,
+                // Every round is then resolved where it actually lands, not
+                // against the target area as a whole — which is what damages
+                // formations outside the ring, what makes the scatter matter and
+                // why a wide sheaf is not strictly better.
+                total += StrikeImpact.Round(roundLat, roundLon, def.radiusMeters,
                     def.LethalRadiusM, def.BlastRadiusM, def.MaxDamage);
 
                 // Smoke loops by design and is dispersed explicitly, the same
@@ -94,23 +100,8 @@ namespace IronMeridian.Vfx
                           $"{ArtilleryCatalog.ShellsPerMission} rounds. {total.Report()}");
         }
 
-        /// <summary>
-        /// Where round <paramref name="index"/> lands inside the target area.
-        ///
-        /// The golden angle spreads successive rounds around the circle instead
-        /// of clumping them, and the square root on the radius makes the scatter
-        /// uniform by *area* — without it every round crowds the centre and the
-        /// sheaf looks nothing like a beaten zone. Jitter on top stops the
-        /// pattern from being recognisable between missions.
-        /// </summary>
-        static void ScatterPoint(double lat, double lon, float radiusMeters, int index,
-            out double outLat, out double outLon)
-        {
-            float t = (index + 0.5f) / ArtilleryCatalog.ShellsPerMission;
-            float distance = Mathf.Sqrt(t) * radiusMeters * Random.Range(0.72f, 0.98f);
-            float bearing = index * 137.508f + Random.Range(-20f, 20f);
-
-            GeoUtils.Destination(lat, lon, bearing, distance / 1000.0, out outLat, out outLon);
-        }
+        // Scatter now lives in StrikeImpact.ScatterInCircle, shared with the
+        // naval mission and the bombing run — all three were spreading ordnance
+        // over a circle and only one of them was doing it correctly.
     }
 }

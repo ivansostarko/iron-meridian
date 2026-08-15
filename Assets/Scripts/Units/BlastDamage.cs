@@ -117,6 +117,58 @@ namespace IronMeridian.Units
         const float FootprintShare = 0.66f;
 
         /// <summary>
+        /// The target area itself is a kill zone.
+        ///
+        /// **Why this exists on top of the per-round model below.** A called
+        /// strike draws a circle on the map, the player puts it over a formation,
+        /// and the promise that circle makes is *everything in here dies*. The
+        /// round-by-round model does not keep that promise: each round is a small
+        /// lethal radius scattered inside a much larger ring, so a formation
+        /// could sit in the middle of an air strike and come out at 60 %
+        /// strength. That reads as the weapon not working, and no amount of
+        /// tuning the falloff fixes it, because the falloff is not the thing the
+        /// circle is promising.
+        ///
+        /// So the ring is resolved once, at the aim point, the moment the first
+        /// ordnance lands: anything whose **centre** is inside it is destroyed.
+        /// Centre rather than footprint edge, deliberately — a division clipped
+        /// by the rim of a 105 mm target area should not evaporate, and requiring
+        /// the counter itself to be under the circle is what keeps the decision
+        /// about where to put it a real one.
+        ///
+        /// The per-round <see cref="Apply"/> passes still run afterwards, and
+        /// still matter: they are what damages the formations *outside* the ring,
+        /// and what makes a wide sheaf different from a tight one.
+        /// </summary>
+        public static BlastResult ApplyRing(double lat, double lon, float ringRadiusM)
+        {
+            var result = default(BlastResult);
+            if (ringRadiusM <= 0f) return result;
+
+            var units = new System.Collections.Generic.List<UnitActor>(UnitRegistry.All);
+
+            foreach (var unit in units)
+            {
+                if (unit == null || !unit.IsAlive) continue;
+
+                double km = GeoUtils.DistanceKm(lat, lon, unit.State.latitude, unit.State.longitude);
+                if (km * 1000.0 > ringRadiusM) continue;
+
+                float before = unit.State.strength;
+                // Enough to take any formation from full strength to nothing,
+                // which routes it through the normal death path — wreck effect,
+                // fade, deregistration.
+                unit.ApplyDamage(2f);
+
+                result.hit++;
+                result.destroyed++;
+                result.strengthLost += before;
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Applies one detonation and reports what it did.
         /// </summary>
         /// <param name="lethalRadiusM">Inside this — measured from the edge of the target's footprint — destroyed outright.</param>

@@ -98,6 +98,18 @@ namespace IronMeridian.Vfx
         /// <summary>Exhaust plume trailing a missile in flight — looping, killed on impact.</summary>
         MissileTrail,
 
+        // --- blast shockwave (see BlastDamage / the strike systems) ---
+
+        /// <summary>
+        /// The overpressure ring racing out from a detonation, flat on the
+        /// ground. Played once per strike at the aim point, sized to the target
+        /// area, so the circle the player was shown and the ground that was
+        /// actually flattened are visibly the same circle.
+        /// </summary>
+        BlastShockwave,
+        /// <summary>Soil and debris thrown up and out of a heavy impact — one-shot.</summary>
+        BlastDebris,
+
         // --- what a strike leaves behind (see StrikeAftermath) ---
 
         /// <summary>Ground burning where a strike landed — looping, 30 scenario minutes.</summary>
@@ -128,7 +140,11 @@ namespace IronMeridian.Vfx
         /// <summary>Mortar bomb: narrow near-vertical column of earth, small flash.</summary>
         ArtilleryDirtColumn,
         /// <summary>Heavy shell: fireball, ground shock ring and arcing debris.</summary>
-        ArtilleryHeavyBlast
+        ArtilleryHeavyBlast,
+        /// <summary>A single flat ring racing outward along the ground. Nothing rises.</summary>
+        Shockwave,
+        /// <summary>Soil and fragments thrown out on ballistic arcs, tumbling as they go.</summary>
+        Debris
     }
 
     /// <summary>One catalogue row: what to spawn, how big, and for how long.</summary>
@@ -377,6 +393,28 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.MissileTrail, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 90f, lifeSeconds = 0f,
                          tint = new Color(0.78f, 0.78f, 0.80f), priority = 30,
+                         sound = EffectSound.None },
+
+            // --- blast shockwave ---
+            // Both are scaled *at the call site* to the strike's own target area
+            // rather than carrying a size here: the whole point is that the ring
+            // matches the circle the player was shown, and that circle is
+            // different for every calibre and airframe. scaleMeters is therefore
+            // a reference size the multiplier works from — see the strike
+            // systems' Shockwave helper.
+            //
+            // Highest priority in the catalogue. This is the frame that tells the
+            // player their strike landed and how far it reached; losing it to the
+            // concurrency budget would be losing the answer to the only question
+            // they asked.
+            new VfxDef { id = VfxId.BlastShockwave, prefabPath = null,
+                         fallback = VfxFallback.Shockwave,  scaleMeters = 100f, lifeSeconds = 1.5f,
+                         tint = new Color(1.00f, 0.94f, 0.80f), priority = 170,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.BlastDebris, prefabPath = null,
+                         fallback = VfxFallback.Debris,     scaleMeters = 100f, lifeSeconds = 2.6f,
+                         tint = new Color(0.52f, 0.44f, 0.34f), priority = 128,
                          sound = EffectSound.None },
 
             // --- strike aftermath (StrikeAftermath) ---

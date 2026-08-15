@@ -222,7 +222,12 @@ namespace IronMeridian.Vfx
                     VfxSystem.Active.StopAfter(fire, def.wreckFireSeconds);
             }
 
-            var result = BlastDamage.Apply(lat, lon,
+            // A loitering munition carries a few kilograms, so it gets the ring
+            // and the shockwave but throws no debris — a quadcopter grenade that
+            // fountained soil like a 203 mm shell would be lying about its size.
+            var result = StrikeImpact.Arrive(lat, lon, def.radiusMeters,
+                heavy: def.blastRadiusM >= 150f);
+            result += StrikeImpact.Round(lat, lon, def.radiusMeters,
                 def.lethalRadiusM, def.blastRadiusM, def.maxDamage);
 
             if (result.hit > 0) Flash?.Invoke($"{def.name} — {result.Report()}");

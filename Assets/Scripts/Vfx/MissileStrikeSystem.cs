@@ -105,7 +105,11 @@ namespace IronMeridian.Vfx
                     VfxSystem.Active.StopAfter(fire, def.fireSeconds);
             }
 
-            var result = BlastDamage.Apply(lat, lon,
+            // A missile is one warhead on one point, so the ring and the round
+            // arrive together: the target area is destroyed outright and the
+            // falloff reaches past it. See StrikeImpact.
+            var result = StrikeImpact.Arrive(lat, lon, def.radiusMeters);
+            result += StrikeImpact.Round(lat, lon, def.radiusMeters,
                 def.lethalRadiusM, def.blastRadiusM, def.maxDamage);
 
             if (result.hit > 0) Flash?.Invoke($"{def.name} — {result.Report()}");

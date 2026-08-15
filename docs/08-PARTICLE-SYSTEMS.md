@@ -273,6 +273,19 @@ Offensive tasks add three call sites on top of the automatic exchange above. See
 | An **assault** goes in | `GroundFire` on the objective, burning for 20 s | Once, when the engagement opens. The ground an assault crosses stays lit whether or not the order survives | `AttackOrderSystem.BeginEngagement` |
 | **Suppressive fire** opens | `SmokeScreen` on the target | Once, when the engagement opens; stopped when the order ends. This is the obscuration case the effect was defined for | `AttackOrderSystem.BeginEngagement` |
 
+### Blast arrival — the shockwave and the debris
+
+Two rows added with the strike-damage rework, played by `StrikeImpact.Arrive` at the aim point of **every** called strike:
+
+| Effect | What it is | Scaled to |
+|---|---|---|
+| `BlastShockwave` | A flat ring of particles racing outward along the ground, decelerating as it goes. Nothing rises — a shockwave that rose would read as another puff of smoke, and its one job is to state a **radius** | The strike's own target area, exactly |
+| `BlastDebris` | Soil and fragments thrown out on ballistic arcs, stretched billboards because a tumbling fragment seen from 2 km up is a streak | 55 % of the ring — debris comes from the impact, not from the whole beaten zone |
+
+Both carry `scaleMeters = 100` as a **reference** size rather than a real one: the call site passes `ringRadius / 100` as the multiplier, which is what puts the ring exactly on the circle the player drew. `BlastShockwave` has the highest priority in the catalogue (170) — it is the frame that answers the only question the player asked, and losing it to the concurrency budget would be losing the answer.
+
+Light warheads skip the debris: `StrikeImpact.Arrive(..., heavy: false)` for a quadcopter grenade and for artillery under 120 mm. A grenade that fountained soil like a 203 mm shell would be lying about its size.
+
 ### Defined but not yet triggered
 
 Nothing. Every catalogue row now has at least one call site.

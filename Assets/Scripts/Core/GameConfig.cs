@@ -21,6 +21,12 @@ namespace IronMeridian.Core
         public const string SceneEffectsList = "EffectsList";
         /// <summary>Audio lab, reached from DEVELOPMENT.</summary>
         public const string SceneAudioList = "AudioList";
+        /// <summary>Unit encyclopaedia, reached from EXTRAS. Two pages in one scene.</summary>
+        public const string SceneUnitLibrary = "UnitLibrary";
+        /// <summary>Downloadable content. Empty for now — see PlaceholderScreenUI.</summary>
+        public const string SceneDlc = "Dlc";
+        /// <summary>Credits. Empty for now — see PlaceholderScreenUI.</summary>
+        public const string SceneCredits = "Credits";
         public const string SceneGame = "Game";
 
         // Default dev map: Lyon, France

@@ -281,11 +281,15 @@ shown.
 
 ### Fog of war
 
-**Left rail → GENERAL → FOG OF WAR.** With it on, enemy formations are drawn only
-where a friendly unit's view range or a recon sensor reaches them. Lose sight of
-one and the map keeps the **contact**: a ring on the last known position,
-captioned with the scenario time of the sighting and growing to cover where that
-formation could have got to since.
+**Left rail → GENERAL → FOG OF WAR.** Seeing has three tiers, not two:
+
+| What you can see | When |
+|---|---|
+| The formation, drawn normally | It is inside a friendly unit's **view range**, or a recon sensor's footprint |
+| A **live contact** — a ring, captioned `UNIDENTIFIED · IN CONTACT`, tracking as it moves | The two units' **view circles cross**, but it is outside yours. Something is out there and you know roughly where, but not what |
+| Nothing at all | No overlap, and you have never seen it |
+
+Lose sight of something you *had* seen and the map keeps a **last-known contact**: a ring on where it was, captioned with the scenario time of the sighting and growing to cover where it could have got to since. A formation you have never laid eyes on leaves no ring — inventing one would hand you the enemy order of battle on the first sweep of the battle.
 
 Battle mode only — the editor shows both sides so you can lay them out. Details
 and known leaks: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
@@ -377,12 +381,17 @@ If the solve fails the line is **removed** rather than left standing: a stale fr
 
 ### Combat
 
-Press **▶ START BATTLE**. Every second, opposing units within weapon range exchange damage:
+Press **▶ START BATTLE**. Every second, opposing units within weapon range exchange damage automatically — there is nothing to order, and a formation that comes into range of the enemy is in a battle whether or not it was told to be.
 
 - Damage scales with the ratio of **combat power** (attack/defence/hard-attack/anti-air × echelon × strength × training/morale).
 - **Hard attack** matters vs armoured targets; **anti-air** matters vs drone units; support units fight at 40%.
+- **Who commands the formation** is one more term: an intact chain of command is worth up to 20%, a broken one costs 12%, and an unassigned formation is exactly neutral. See [23-COMMANDERS.md](23-COMMANDERS.md).
 - Units consume **ammunition** each tick (out of ammo → 25% damage) and lose morale as they take losses.
 - Below 30% strength a unit **routs**; at 0% it is destroyed (fade-out animation) — and the front line updates.
+
+**Range is measured edge to edge, not pin to pin.** Two thirds of each formation's footprint is subtracted from the gap, so a brigade whose leading elements are inside a battalion's weapon range is in range of it. Measuring counter to counter said otherwise by a kilometre or more, which is why formations could stand visibly overlapping without engaging.
+
+**Contact stops the march.** A formation exchanging fire is fighting, not marching through the fight — its move order is *kept*, not cancelled, so breaking contact resumes it. Contact is mutual even when only one side can shoot: being under fire you cannot answer is still being in a battle, and walking away from rounds that are still landing is not a thing a column gets to do.
 
 ### Marching
 

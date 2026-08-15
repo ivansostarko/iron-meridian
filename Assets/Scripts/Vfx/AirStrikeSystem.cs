@@ -57,6 +57,9 @@ namespace IronMeridian.Vfx
 
             _result = default;
             if (marker != null) marker.SetAlarm(1f);
+            _ringResolved = false;
+            _aimLat = lat;
+            _aimLon = lon;
 
             // A random attack heading, so repeated strikes on the same ground do
             // not all run in on the same line.
@@ -101,9 +104,23 @@ namespace IronMeridian.Vfx
             if (smoke != null && VfxSystem.Active != null)
                 VfxSystem.Active.StopAfter(smoke, def.smokeSeconds);
 
-            _result += BlastDamage.Apply(lat, lon,
+            // The target area is resolved once, on the first weapon down: the
+            // circle the player drew is a kill zone and a shockwave that size
+            // says so. Doing it per weapon would draw nine overlapping rings for
+            // one event. See StrikeImpact.
+            if (!_ringResolved)
+            {
+                _ringResolved = true;
+                _result += StrikeImpact.Arrive(_aimLat, _aimLon, def.radiusMeters);
+            }
+
+            _result += StrikeImpact.Round(lat, lon, def.radiusMeters,
                 def.lethalRadiusM, def.blastRadiusM, def.maxDamage);
         }
+
+        /// <summary>The mission's aim point, and whether its target area has been resolved yet.</summary>
+        double _aimLat, _aimLon;
+        bool _ringResolved;
 
         /// <summary>
         /// What the run in progress has done so far. A field rather than a
@@ -114,8 +131,8 @@ namespace IronMeridian.Vfx
 
         /// <summary>
         /// The stick as it would have fallen, without an aircraft to drop it.
-        /// Walks along the same attack heading so the pattern is the one the
-        /// player was promised.
+        /// Spread over the same target circle as the real pass, so a missing
+        /// model costs the aeroplane and nothing else.
         /// </summary>
         IEnumerator FallbackStick(AircraftDef def, double lat, double lon, float heading)
         {
@@ -123,15 +140,8 @@ namespace IronMeridian.Vfx
 
             for (int i = 0; i < n; i++)
             {
-                // Spread along the track from short of the target to beyond it.
-                float along = Mathf.Lerp(-def.radiusMeters * 0.7f, def.radiusMeters * 0.7f,
-                    n == 1 ? 0.5f : i / (float)(n - 1));
-                float lateral = Random.Range(-def.radiusMeters * 0.3f, def.radiusMeters * 0.3f);
-
-                GeoUtils.Destination(lat, lon, heading, along / 1000.0,
+                StrikeImpact.ScatterInCircle(lat, lon, def.radiusMeters, i, n,
                     out double bombLat, out double bombLon);
-                GeoUtils.Destination(bombLat, bombLon, heading + 90f, lateral / 1000.0,
-                    out bombLat, out bombLon);
 
                 Detonate(def, bombLat, bombLon);
 

@@ -69,7 +69,7 @@ namespace IronMeridian.UI
 
         enum Section
         {
-            General, Units, Boundaries, Effects, Artillery, AirStrike, UavStrike,
+            General, Units, Commanders, Boundaries, Effects, Artillery, AirStrike, UavStrike,
             /// <summary>
             /// The odd one out: it has no section panel of its own and opens a
             /// board docked in the section panel's place. See
@@ -145,8 +145,8 @@ namespace IronMeridian.UI
         /// space rather than leaving a gap where a control used to be.
         /// </summary>
         const float ListTop = -90f;
-        /// <summary>Emblem block plus the thirteen nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 518f;
+        /// <summary>Emblem block plus the fourteen nav rows, measured from the rail's top.</summary>
+        const float HeaderHeight = 554f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -285,6 +285,7 @@ namespace IronMeridian.UI
 
             _sectionContent[Section.General] = MakeSectionContent(body, "General");
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
+            _sectionContent[Section.Commanders] = MakeSectionContent(body, "Commanders");
             _sectionContent[Section.Boundaries] = MakeSectionContent(body, "Boundaries");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Artillery] = MakeSectionContent(body, "Artillery");
@@ -298,6 +299,7 @@ namespace IronMeridian.UI
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
+            BuildCommandersSection(_sectionContent[Section.Commanders]);
             BuildBoundariesSection(_sectionContent[Section.Boundaries]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildArtillerySection(_sectionContent[Section.Artillery]);
@@ -427,6 +429,10 @@ namespace IronMeridian.UI
 
             foreach (var kv in _sectionContent)
                 kv.Value.gameObject.SetActive(kv.Key == section);
+
+            // The commanders page skips rebuilds while it is shut — loading a
+            // map would otherwise rebuild it once per formation spawned.
+            if (section == Section.Commanders) _commanders?.OnShown();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -581,10 +587,11 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.NavalStrike, "NAVY STRIKE", UiIcons.Warship, -332);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -368);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -404);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -440);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -476);
+            AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -368);
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -404);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -440);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -476);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -512);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -1839,6 +1846,33 @@ namespace IronMeridian.UI
             }
         }
 
+        // -------------------------------------------------- commanders section
+
+        /// <summary>Put the map's current selection under this officer.</summary>
+        public System.Action<CommanderState> CommanderAssignRequested;
+        /// <summary>Select this officer's formations on the map.</summary>
+        public System.Action<CommanderState> CommanderSelectUnitsRequested;
+
+        CommanderPanel _commanders;
+
+        /// <summary>
+        /// The order of battle above the units. Built by <see cref="CommanderPanel"/>
+        /// rather than here: it is the first section that is a small application
+        /// of its own, and this file is long enough that a fourteenth inline
+        /// builder would be the one nobody could find.
+        /// </summary>
+        void BuildCommandersSection(RectTransform content)
+        {
+            _commanders = new CommanderPanel(content);
+            _commanders.AssignSelectionRequested = c => CommanderAssignRequested?.Invoke(c);
+            _commanders.SelectUnitsRequested = c => CommanderSelectUnitsRequested?.Invoke(c);
+            _commanders.Flash = m => DropRejected?.Invoke(m);
+            _commanders.Build();
+        }
+
+        /// <summary>Repaints the commanders section — the controller calls it after an assignment.</summary>
+        public void RefreshCommanders() => _commanders?.Rebuild();
+
         // ---------------------------------------------------- missions section
 
         /// <summary>Open this mission in the editor: load its map and settings.</summary>
@@ -2853,6 +2887,8 @@ namespace IronMeridian.UI
             // callbacks fire into a destroyed component on scene reload.
             UnitRegistry.Changed -= OnUnitsChanged;
             StrikeBudget.Changed -= RefreshStrikeBudget;
+            // The commanders panel subscribes to two registries of its own.
+            _commanders?.Dispose();
             if (_clock != null) _clock.StartChanged -= RefreshStartLabel;
             if (_weather != null) _weather.Changed -= RefreshWeather;
             if (_effects != null) _effects.ArmedChanged -= RefreshEffects;

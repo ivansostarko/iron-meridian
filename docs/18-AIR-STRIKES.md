@@ -1,6 +1,6 @@
 # Air Strikes
 
-Tasked air strikes in the map editor: pick an airframe, place a target area, and ten seconds later the aircraft runs in and puts a stick of five weapons through it.
+Tasked air strikes in the map editor: pick an airframe, place a target area, and ten seconds later the aircraft runs in and puts a stick of nine weapons across it.
 
 > **Keep this file current.** Every new airframe, burst effect, report or call site must be recorded here in the same change. See [Rules](#rules) at the bottom.
 
@@ -101,7 +101,7 @@ None of the models are rigged, so there is nothing to play — and only the heli
 
 ### Degradation
 
-If the model is not installed, `BomberRun.Launch` returns null after logging what to run, and `AirStrikeSystem` falls back to `FallbackStick` — the same five weapons on the same attack heading, with no aeroplane. **Losing a tasked strike to a missing art asset would be a far worse failure than one with nothing to look at.**
+If the model is not installed, `BomberRun.Launch` returns null after logging what to run, and `AirStrikeSystem` falls back to `FallbackStick` — the same nine weapons over the same target circle, with no aeroplane. **Losing a tasked strike to a missing art asset would be a far worse failure than one with nothing to look at.**
 
 ---
 
@@ -179,3 +179,42 @@ and far easier to react to.
 ## Related
 
 `docs/07-ARCHITECTURE.md` · `docs/08-PARTICLE-SYSTEMS.md` (effect register) · `docs/09-3D-MODELS.md` (model register) · `docs/10-AUDIO.md` (sound register) · `docs/17-ARTILLERY.md` (the shared strike machinery)
+
+---
+
+### The stick falls over the whole circle
+
+Weapons used to walk a **track** across the target with a little lateral jitter,
+which left most of the circle the player drew untouched — the ordnance visibly
+missed the area it had been given. Each release is now aimed at a point spread
+evenly over the disc by the same golden-angle scatter the artillery sheaf uses
+(`StrikeImpact.ScatterInCircle`), blended 78 % toward that aim point and 22 %
+toward where the aircraft's forward throw would have put it. A weapon that ignored
+the aircraft's motion entirely would fall out of the sky sideways; one that ignored
+the aim point would not cover the circle.
+
+`BombsPerStrike` went from 5 to **9** with it: five points scattered across a 320 m
+disc still leave most of it bare.
+
+### The target area is a kill zone
+
+Every called strike resolves its **ring** once, at the aim point, the moment the
+first ordnance lands (`StrikeImpact.Arrive`): anything whose counter is inside the
+circle is destroyed outright, and a shockwave the size of that circle is drawn.
+
+The circle a strike draws makes a promise — *everything in here dies* — and the
+round-by-round model did not keep it. Each round has a lethal radius of a few tens
+of metres scattered inside a target area of hundreds, so a formation could sit in
+the middle of a strike and come out at 60 % strength. That reads as the weapon not
+working, and no amount of tuning the falloff fixes it, because the falloff is not
+what the circle is promising.
+
+Centre rather than footprint edge, deliberately: a division clipped by the rim of a
+105 mm target area should not evaporate, and requiring the counter itself to be
+under the circle is what keeps *where to put it* a real decision.
+
+The per-round passes still run afterwards and still matter — they are what damages
+formations **outside** the ring, and what makes a wide sheaf different from a tight
+one. Their outer reach is now `max(blastRadiusM, ring × 1.9)`, so damage can never
+fall short of the circle the player was shown. See `Vfx/StrikeImpact.cs` and
+`Units/BlastDamage.ApplyRing`.

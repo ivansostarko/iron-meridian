@@ -103,10 +103,25 @@ namespace IronMeridian.Units
             if (_tickTimer >= GameConfig.CombatTickSeconds) _tickTimer = 0f;
         }
 
+        /// <summary>
+        /// Formations that exchanged fire on the last tick. Read by the HUD and
+        /// by <see cref="UnitMover"/>: a formation that has run into the enemy
+        /// stops and fights rather than marching on through the engagement.
+        /// </summary>
+        static readonly HashSet<UnitActor> _engaged = new HashSet<UnitActor>();
+
+        /// <summary>True if this formation is currently in contact with the enemy.</summary>
+        public static bool InContact(UnitActor unit) => unit != null && _engaged.Contains(unit);
+
+        /// <summary>How many formations are in contact right now — the HUD's "engagements" readout.</summary>
+        public static int ContactCount => _engaged.Count;
+
         void Tick()
         {
             var blues = new List<UnitActor>(UnitRegistry.OfTeam(Team.User));
             var reds = new List<UnitActor>(UnitRegistry.OfTeam(Team.Enemy));
+
+            _engaged.Clear();
 
             foreach (var b in blues)
                 foreach (var r in reds)
@@ -115,9 +130,27 @@ namespace IronMeridian.Units
                         b.State.latitude, b.State.longitude,
                         r.State.latitude, r.State.longitude);
 
-                    bool bReaches = km <= b.Def.weaponRangeKm;
-                    bool rReaches = km <= r.Def.weaponRangeKm;
+                    // Range is measured between the formations' near edges, not
+                    // between their map pins — the same correction BlastDamage
+                    // makes. A brigade whose leading elements are inside a
+                    // battalion's weapon range is in range of it, and measuring
+                    // centre to centre said otherwise by a kilometre or more.
+                    float gap = (float)(km * 1000.0)
+                                - EchelonInfo.FootprintRadiusMeters(b.State.EchelonEnum) * ContactFootprintShare
+                                - EchelonInfo.FootprintRadiusMeters(r.State.EchelonEnum) * ContactFootprintShare;
+                    float gapKm = Mathf.Max(0f, gap) / 1000f;
+
+                    bool bReaches = gapKm <= b.Def.weaponRangeKm;
+                    bool rReaches = gapKm <= r.Def.weaponRangeKm;
                     if (!bReaches && !rReaches) continue;
+
+                    // Contact is mutual even when only one of them can shoot.
+                    // Being under fire you cannot answer is still being in a
+                    // battle, and a formation that marched on through it because
+                    // its own range was shorter would be walking away from
+                    // rounds that are still landing on it.
+                    _engaged.Add(b);
+                    _engaged.Add(r);
 
                     if (bReaches && !Ordered(b)) ResolveAttack(b, r);
                     if (rReaches && !Ordered(r)) ResolveAttack(r, b);
@@ -125,6 +158,14 @@ namespace IronMeridian.Units
 
             Ticked?.Invoke();
         }
+
+        /// <summary>
+        /// Share of a formation's footprint that counts as "its leading edge"
+        /// for engagement range. The same two thirds <see cref="BlastDamage"/>
+        /// uses, and for the same reason: the whole radius would make a division
+        /// engage from four kilometres further out than it should.
+        /// </summary>
+        const float ContactFootprintShare = 0.66f;
 
         bool Ordered(UnitActor unit) => HasAttackOrder != null && HasAttackOrder(unit);
 
@@ -158,6 +199,12 @@ namespace IronMeridian.Units
                 mod *= Mathf.Lerp(0.5f, 2.2f, a.antiAir / 100f);
             if (a.isSupport) mod *= 0.4f;
             if (s.ammo <= 0) mod *= 0.25f;
+
+            // Who is commanding this formation, and whether his own chain is
+            // intact. Unassigned is exactly 1.0, so a scenario with no order of
+            // battle fights precisely as it did before commanders existed.
+            // See CommanderRegistry and docs/23-COMMANDERS.md.
+            mod *= CommanderRegistry.CommandBonus(attacker);
 
             // The ordinary exchange is clamped exactly as it always was, and the
             // task multiplier is applied on top of that — folding the multiplier

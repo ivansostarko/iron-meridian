@@ -18,6 +18,13 @@ namespace IronMeridian.Data
         public string customName;       // e.g. "2nd Battalion, 4th Infantry"
         public string groupId;          // shared id for units grouped together, "" if none
         public string groupName;        // player-chosen group name, "" if none
+        /// <summary>
+        /// <see cref="CommanderState.id"/> of the officer commanding this
+        /// formation, "" if none. One commander, many units — the inverse
+        /// (a list on the commander) would need keeping in step with this on
+        /// every reassignment and every deletion.
+        /// </summary>
+        public string commanderId = "";
 
         public double latitude;
         public double longitude;
@@ -49,6 +56,7 @@ namespace IronMeridian.Data
             customName = customName,
             groupId = groupId,
             groupName = groupName,
+            commanderId = commanderId,
             latitude = latitude,
             longitude = longitude,
             heightMeters = heightMeters,
@@ -188,5 +196,11 @@ namespace IronMeridian.Data
         public List<MapLineData> lines = new List<MapLineData>();
         /// <summary>Hold / guard / defend positions — see docs/03-GAMEPLAY.md.</summary>
         public List<MapMarkerData> markers = new List<MapMarkerData>();
+        /// <summary>
+        /// The order of battle above the units: who commands what, on both
+        /// sides. Empty on a map saved before commanders existed, which reads
+        /// correctly as "nobody is in command" — see docs/23-COMMANDERS.md.
+        /// </summary>
+        public List<CommanderState> commanders = new List<CommanderState>();
     }
 }

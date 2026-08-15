@@ -45,7 +45,127 @@ namespace IronMeridian.Vfx
                 case VfxFallback.ArtilleryAirBurst:   BuildArtilleryAirBurst(root, def.tint);   break;
                 case VfxFallback.ArtilleryDirtColumn: BuildArtilleryDirtColumn(root, def.tint); break;
                 case VfxFallback.ArtilleryHeavyBlast: BuildArtilleryHeavyBlast(root, def.tint); break;
+                case VfxFallback.Shockwave:           BuildShockwave(root, def.tint);           break;
+                case VfxFallback.Debris:              BuildDebris(root, def.tint);              break;
             }
+        }
+
+        // ------------------------------------------------------- shockwave
+
+        /// <summary>
+        /// The overpressure ring: a flat circle of particles thrown outward along
+        /// the ground, fading as it goes.
+        ///
+        /// **Everything about this is horizontal.** The emitter is a ring with no
+        /// thickness, gravity is zero, and there is no upward component at all —
+        /// a shockwave that rose would read as another puff of smoke, and the one
+        /// job this effect has is to state a *radius*. It is emitted as a single
+        /// burst rather than over time so the ring stays a ring instead of
+        /// smearing into a disc.
+        ///
+        /// Authored at ~1 unit like everything else here, so the call site scales
+        /// it to the strike's own target area — which is the point: the ring the
+        /// player was shown and the ring that races out are the same circle.
+        /// </summary>
+        static void BuildShockwave(GameObject root, Color tint)
+        {
+            var ps = NewSystem(root, "Shockwave", loop: false);
+
+            var main = ps.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.55f, 0.85f);
+            // One unit of radius in roughly half a second. Tuned against the
+            // lifetime above rather than independently — together they are what
+            // decides where the ring stops, and that has to be the target area.
+            main.startSpeed = new ParticleSystem.MinMaxCurve(1.6f, 2.0f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.16f, 0.28f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.gravityModifier = 0f;
+            main.maxParticles = 160;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 140) });
+
+            // A circle edge, lying flat: radiusThickness 0 keeps every particle
+            // on the rim rather than filling the disc.
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.12f;
+            shape.radiusThickness = 0f;
+            shape.rotation = new Vector3(90f, 0f, 0f);
+            shape.alignToDirection = true;
+
+            SetColourRamp(ps, new[]
+            {
+                (0.00f, Color.white,               0.85f),
+                (0.25f, tint,                      0.55f),
+                (1.00f, tint,                      0.00f)
+            });
+
+            // The rim thickens as it goes, so the ring stays visible as its
+            // particles spread further apart around a growing circumference.
+            var size = ps.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f,
+                new AnimationCurve(
+                    new Keyframe(0f, 0.6f), new Keyframe(0.5f, 1.6f), new Keyframe(1f, 1.9f)));
+
+            // Drag: the ring decelerates as it expands, which is what stops it
+            // travelling for ever and what makes its edge read as a distance
+            // rather than as a speed.
+            var limit = ps.limitVelocityOverLifetime;
+            limit.enabled = true;
+            limit.dampen = 0.35f;
+            limit.limit = new ParticleSystem.MinMaxCurve(2.0f);
+
+            ps.Play();
+        }
+
+        // ---------------------------------------------------------- debris
+
+        /// <summary>
+        /// Soil and fragments thrown out of an impact on ballistic arcs.
+        ///
+        /// Gravity is strongly positive and the cone is wide and shallow, so the
+        /// throw goes *out* rather than up and comes back down — which is what
+        /// separates debris from a dirt column. Stretched billboards, because a
+        /// tumbling fragment seen from two kilometres up is a streak, not a dot.
+        /// </summary>
+        static void BuildDebris(GameObject root, Color tint)
+        {
+            var ps = NewSystem(root, "Debris", loop: false);
+
+            var main = ps.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.9f, 1.8f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(1.1f, 2.4f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.gravityModifier = 1.8f;
+            main.maxParticles = 90;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 70) });
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 62f;              // wide and low: a throw, not a fountain
+            shape.radius = 0.10f;
+            shape.radiusThickness = 1f;
+
+            SetColourRamp(ps, new[]
+            {
+                (0.00f, tint * 1.3f, 0.95f),
+                (0.70f, tint,        0.80f),
+                (1.00f, tint * 0.6f, 0.00f)
+            });
+
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.velocityScale = 0.06f;
+            renderer.lengthScale = 2.4f;
+
+            ps.Play();
         }
 
         // ------------------------------------------------------------ fire

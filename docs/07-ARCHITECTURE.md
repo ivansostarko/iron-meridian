@@ -28,6 +28,8 @@ Assets/Scripts/
                           — the single-player campaign (docs/22-MISSIONS.md)
     MissionArea.cs       a mission's boundary polygon: containment, extent,
                           camera clamping (docs/22-MISSIONS.md §1a)
+    CommanderData.cs     RankDef/RankCatalog (two ladders) + CommanderState
+                          — the order of battle above the units (docs/23-COMMANDERS.md)
     TunableFields.cs     reflection over a data record's editable fields — what
                           drives the DEVELOPMENT catalogue editor
     GameCatalogs.cs      the register of every data table (units + five weapon
@@ -80,6 +82,9 @@ Assets/Scripts/
                           tuning.json
     StatEditorPanel.cs   generic label/value list for any data record; switches
                           from reading to editing without being rebuilt
+    CommanderPanel.cs    the map editor's COMMANDERS section (docs/23-COMMANDERS.md)
+    ExtrasUI.cs          the EXTRAS menu: Units, DLC, Credits
+    UnitLibraryUI.cs     the unit encyclopaedia: arm board, then filtered list + 3D
     EffectsListUI.cs     PARTICLES lab (docs/08-PARTICLE-SYSTEMS.md §3)
     AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
                           (docs/10-AUDIO.md §3)
@@ -99,6 +104,8 @@ Assets/Scripts/
     RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)
   Units/
     UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
+    CommanderRegistry.cs the live roster, chain-of-command walk, assignment,
+                          seeding and the combat bonus (docs/23-COMMANDERS.md)
     UnitLabel.cs         unit caption above the icon: shadowed two-pass TextMesh
                           (attenuated with camera depth by UnitActor.LabelZoomScale)
     UnitMover.cs         routed march: legs, cornering, terrain clamp, trail
@@ -148,6 +155,9 @@ Assets/Scripts/
     VfxInstance.cs       handle for a live effect; screen-size culling
     ProceduralVfx.cs     code-built fallbacks (no asset dependency)
     VfxPreview.cs        plays one effect in a uGUI panel, in 3D, with its sound
+    StrikeImpact.cs      what every called strike does on arrival: the target area
+                          resolved as a kill zone, the shockwave, the debris and
+                          the circular scatter all five strike types share
     EffectPlacementTool.cs  hand-place fire/explosion/smoke on the terrain
     CalledStrikeSystem.cs  shared arm/aim/countdown behind artillery + air strikes
     ArtilleryCatalog.cs  the four artillery natures — see docs/17-ARTILLERY.md

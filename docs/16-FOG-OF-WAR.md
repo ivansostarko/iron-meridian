@@ -54,8 +54,35 @@ once the centre has moved 4% of the radius.
 
 | State | Enemy formation |
 |---|---|
-| Inside a friendly unit's `viewRangeKm`, or a recon sensor's footprint (including a reconnaissance drone's) | Drawn normally |
-| Outside all of them | **Removed from the map** — icon, strength bar, label, selection ring and any fire attached to it |
+| **Observed** — inside a friendly unit's `viewRangeKm`, or a recon sensor's footprint (including a reconnaissance drone's) | Drawn normally |
+| **Contact** — the two units' view circles cross, but it is outside yours | **Removed from the map**, and a live contact ring placed on it |
+| **None** — no overlap at all | Removed from the map, and nothing drawn |
+
+### Three tiers, not two
+
+Seeing used to be a switch: inside somebody's view range, or invisible. That threw
+away the most interesting state on the map — two formations whose *observation*
+overlaps but neither of which has the other in view. Real reconnaissance mostly
+lives there: you know something is out there long before you can describe it.
+
+So an enemy whose own view circle crosses one of yours, without being inside it,
+becomes a **live contact** — captioned `UNIDENTIFIED · IN CONTACT hh:mm`, sized at
+45 % of that formation's own view range, and re-centred on it every sweep. It
+**tracks** rather than ageing, because something is watching that ground right
+now; that is the whole difference from a lost contact, and it is what lets a
+formation be followed at arm's length without ever being identified.
+
+`FogOfWarSystem.Sighting` is the enum; `Detect` returns it.
+
+### Nothing is invented
+
+A formation you have **never observed** leaves no ring. Only what has actually been
+seen and then lost ages into a last-known contact — tracked in `_everSeen`.
+
+This was a real leak: on the first sweep of a battle every enemy was, technically,
+transitioning from "not hidden" to "hidden", so every one of them dropped a
+`LAST SEEN` ring on its exact start position. Turning fog on handed the player the
+entire enemy order of battle.
 
 Losing sight of a formation leaves a **contact** where it was last seen:
 

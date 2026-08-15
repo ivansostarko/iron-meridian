@@ -7,7 +7,7 @@ namespace IronMeridian.Vfx
     /// <summary>Airframes the strike menu can task.</summary>
     public enum StrikeAircraft
     {
-        /// <summary>B-2 Spirit — heavy stealth bomber, one high pass, a stick of five.</summary>
+        /// <summary>B-2 Spirit — heavy stealth bomber, one high pass, a full stick.</summary>
         B2Spirit,
         /// <summary>Strike fighter — fast, low, a tight stick on one run.</summary>
         StrikeFighter,
@@ -118,8 +118,17 @@ namespace IronMeridian.Vfx
     /// </summary>
     public static class AirStrikeCatalog
     {
-        /// <summary>Weapons released in one pass.</summary>
-        public const int BombsPerStrike = 5;
+        /// <summary>
+        /// Weapons released in one pass.
+        ///
+        /// Nine rather than five. The stick is now spread over the whole target
+        /// circle rather than walked along a line (see
+        /// <see cref="StrikeImpact.ScatterInCircle"/>), and five points scattered
+        /// across a 320 m disc leave most of it visibly untouched — the pass
+        /// looked like it had missed the area it was given. Nine covers it
+        /// without the releases running into each other.
+        /// </summary>
+        public const int BombsPerStrike = 9;
 
         /// <summary>
         /// Seconds between tasking the strike and the aircraft appearing. The
@@ -135,7 +144,7 @@ namespace IronMeridian.Vfx
                 aircraft = StrikeAircraft.B2Spirit,
                 label = "B-2 SPIRIT",
                 name = "B-2 Spirit stealth bomber",
-                detail = "One pass, a stick of five — hardened targets",
+                detail = "One pass, a full stick — hardened targets",
                 radiusMeters = 320f,
                 modelId = UnitModelLibrary.StealthBomber,
                 wingspanMeters = 240f,

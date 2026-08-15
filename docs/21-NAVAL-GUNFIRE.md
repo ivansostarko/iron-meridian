@@ -136,3 +136,28 @@ The HUD reports the whole mission, not the last round: *"Rounds complete — 127
 ## Related
 
 `docs/07-ARCHITECTURE.md` · `docs/08-PARTICLE-SYSTEMS.md` (effects register) · `docs/10-AUDIO.md` (audio register) · `docs/17-ARTILLERY.md` (the shared strike model and the damage model) · `docs/18-AIR-STRIKES.md` · `docs/19-UAV-STRIKES.md` · `docs/20-MISSILE-SYSTEMS.md`
+
+---
+
+### The target area is a kill zone
+
+Every called strike resolves its **ring** once, at the aim point, the moment the
+first ordnance lands (`StrikeImpact.Arrive`): anything whose counter is inside the
+circle is destroyed outright, and a shockwave the size of that circle is drawn.
+
+The circle a strike draws makes a promise — *everything in here dies* — and the
+round-by-round model did not keep it. Each round has a lethal radius of a few tens
+of metres scattered inside a target area of hundreds, so a formation could sit in
+the middle of a strike and come out at 60 % strength. That reads as the weapon not
+working, and no amount of tuning the falloff fixes it, because the falloff is not
+what the circle is promising.
+
+Centre rather than footprint edge, deliberately: a division clipped by the rim of a
+105 mm target area should not evaporate, and requiring the counter itself to be
+under the circle is what keeps *where to put it* a real decision.
+
+The per-round passes still run afterwards and still matter — they are what damages
+formations **outside** the ring, and what makes a wide sheaf different from a tight
+one. Their outer reach is now `max(blastRadiusM, ring × 1.9)`, so damage can never
+fall short of the circle the player was shown. See `Vfx/StrikeImpact.cs` and
+`Units/BlastDamage.ApplyRing`.

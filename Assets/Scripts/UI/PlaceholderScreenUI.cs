@@ -85,14 +85,31 @@ namespace IronMeridian.UI
         protected override MusicTrack Track => MusicTrack.MultiplayerTheme;
     }
 
-    /// <summary>Extras. Bootstrapped into the Extras scene.</summary>
-    public class ExtrasUI : PlaceholderScreenUI
+    // ExtrasUI is no longer one of these either. It is a real menu now — see
+    // ExtrasUI.cs — and the two pages it leads to that are still empty are
+    // below.
+
+    /// <summary>Downloadable content. Bootstrapped into the Dlc scene.</summary>
+    public class DlcUI : PlaceholderScreenUI
     {
-        protected override string Title => "EXTRAS";
+        protected override string Title => "DLC";
         protected override string Promise =>
-            "Encyclopaedia, replays and scenario tools will be available in a future build. " +
-            "The unit reference under TESTING is browsable now.";
+            "Additional campaigns, theatres and unit packs will appear here.";
         protected override BackgroundId Background => BackgroundId.Extras;
         protected override MusicTrack Track => MusicTrack.ExtrasTheme;
+        protected override string BackScene => GameConfig.SceneExtras;
+        protected override string BackLabel => "BACK TO EXTRAS";
+    }
+
+    /// <summary>Credits. Bootstrapped into the Credits scene.</summary>
+    public class CreditsUI : PlaceholderScreenUI
+    {
+        protected override string Title => "CREDITS";
+        protected override string Promise =>
+            "Who built Iron Meridian, and the assets and data it was built from.";
+        protected override BackgroundId Background => BackgroundId.Extras;
+        protected override MusicTrack Track => MusicTrack.ExtrasTheme;
+        protected override string BackScene => GameConfig.SceneExtras;
+        protected override string BackLabel => "BACK TO EXTRAS";
     }
 }
