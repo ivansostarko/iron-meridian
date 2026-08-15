@@ -157,6 +157,8 @@ The nose tips down over the last quarter of the cruise so the dive is *entered* 
 | `Vfx/UavStrikeSystem.cs` | The sortie: `RunAttack` detonates a warhead, `RunReconnaissance` works an objective |
 | `Vfx/DroneRun.cs` | The attack flight: cruise, nose-over, terminal dive |
 | `Vfx/ReconDroneRun.cs` | The reconnaissance flight: transit in, orbit on station, transit out |
+| `Vfx/AirTarget.cs` | Puts the flight on the air picture so it can be shot at — docs/24-AIR-DEFENCE.md |
+| `Vfx/DroneFall.cs` | What is left of a sortie that was intercepted |
 | `Vfx/StrikeAftermath.cs` | The fire and smoke an attack sortie leaves — docs/08-PARTICLE-SYSTEMS.md §2.1 |
 | `Vfx/StrikeBudget.cs` | The 99 strikes a scenario has, shared with artillery, air and missiles |
 | `Vfx/RotorSpinner.cs` | Spins the propellers (shared with the helicopter) |
@@ -169,6 +171,19 @@ The nose tips down over the last quarter of the cruise so the dive is *entered* 
 ### Degradation
 
 If the model cannot be built, `DroneRun.Launch` / `ReconDroneRun.Launch` return null after logging what to run, and `UavStrikeSystem` waits out the flight and detonates — or works the objective — anyway. Losing a tasked sortie to a missing art asset would be a far worse failure than one with nothing to watch, and it matters more for the recon drone, whose whole product is intelligence the player has already paid a strike for.
+
+### A sortie can be shot down
+
+Both flights put themselves on the air picture (`AirTarget`) when they launch, as the **User's** aircraft — every called sortie is the player's. A hostile anti-aircraft formation whose envelope they enter tracks them, fires two seconds later, and never misses. See **docs/24-AIR-DEFENCE.md** for the whole engagement.
+
+What the sortie reports changes accordingly:
+
+| Sortie | Intercepted |
+|---|---|
+| Attack | Nothing happens on the objective — no warhead, no damage, no aftermath fire, no *"strike complete"*. The drone comes down burning where it was hit. |
+| Reconnaissance | The sensor comes off the map at once. **What it had already seen stands** — explored ground and last-known contacts are kept, because taking them back would be un-learning something the player was shown. |
+
+The strike allowance is **not** refunded either way: the sortie was flown.
 
 ### The strike allowance
 
@@ -223,9 +238,6 @@ it a precision instrument rather than cheap artillery.
 
 ## 5. Known gaps
 
-- **Nothing can shoot it down**, and no air-defence unit interacts with it. That
-  is most obviously wrong for the reconnaissance drone, which orbits one point at
-  a fixed altitude for five minutes and is the easiest target imaginable.
 - **No stock, cooldown or operator unit.** There is a shared allowance of 99
   (`StrikeBudget`) but no per-type stock, no reload and no unit on the map that
   has to exist for a sortie to be flown.
@@ -251,7 +263,7 @@ it a precision instrument rather than cheap artillery.
 
 ## Related
 
-`docs/07-ARCHITECTURE.md` · `docs/08-PARTICLE-SYSTEMS.md` · `docs/09-3D-MODELS.md` · `docs/10-AUDIO.md` · `docs/17-ARTILLERY.md` · `docs/18-AIR-STRIKES.md`
+`docs/07-ARCHITECTURE.md` · `docs/08-PARTICLE-SYSTEMS.md` · `docs/09-3D-MODELS.md` · `docs/10-AUDIO.md` · `docs/17-ARTILLERY.md` · `docs/18-AIR-STRIKES.md` · `docs/24-AIR-DEFENCE.md`
 
 ---
 

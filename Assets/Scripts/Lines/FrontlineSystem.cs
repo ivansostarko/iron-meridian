@@ -40,6 +40,12 @@ namespace IronMeridian.Lines
     /// polyline of a few hundred vertices, which is what makes it read as a
     /// front rather than as a set of measurements.
     ///
+    /// **The line spans every formation on the map.** The solved bands are the
+    /// ones where both sides have influence; the rest — out past the flanks,
+    /// and any gap between two separate engagements — are filled rather than
+    /// dropped (see <see cref="FillUnsolved"/>). A boundary that stopped short
+    /// of the units it is drawn between is not a boundary.
+    ///
     /// All of the shaping constants are settings rather than constants, driven
     /// from <see cref="UI.FrontlinePanelUI"/> — the line is clickable and opens
     /// its own panel.
@@ -54,15 +60,28 @@ namespace IronMeridian.Lines
         // ------------------------------------------------------------ settings
 
         /// <summary>Bands sampled across the front before smoothing. More = more faithful and more jagged.</summary>
-        public int Resolution { get; private set; } = 41;
+        /// <remarks>41 is the panel's STANDARD setting — see <see cref="UI.FrontlinePanelUI"/>.</remarks>
+        public int Resolution { get; private set; } = DefaultResolution;
         /// <summary>Chaikin corner-cutting passes. Each roughly doubles the vertex count.</summary>
-        public int SmoothingPasses { get; private set; } = 2;
+        /// <remarks>
+        /// Three — the panel's SILK setting — rather than two. The line now runs
+        /// the whole width of the deployment (see <see cref="Recompute"/>), and
+        /// the extrapolated shoulders out past the flanks meet the solved middle
+        /// at a visible corner at two passes. A third pass rounds it, and costs
+        /// one more doubling of a vertex list that is a few hundred long.
+        /// </remarks>
+        public int SmoothingPasses { get; private set; } = DefaultSmoothing;
+
+        /// <summary>Shipped settings, shared by the field initialisers and <see cref="ResetToDefaults"/>.</summary>
+        public const int DefaultResolution = 41;
+        public const int DefaultSmoothing = 3;
+        public const float DefaultInfluenceWidthKm = 6f;
         /// <summary>
         /// Gaussian width across the front, in km. How far along the front a
         /// formation's influence reaches: small values make the line hug each
         /// unit, large values make it a broad sweep through the whole force.
         /// </summary>
-        public float InfluenceWidthKm { get; private set; } = 6f;
+        public float InfluenceWidthKm { get; private set; } = DefaultInfluenceWidthKm;
 
         /// <summary>Whether the line is drawn at all.</summary>
         public bool Visible { get; private set; } = true;
@@ -87,8 +106,6 @@ namespace IronMeridian.Lines
         /// the rear area voting on where the front is.
         /// </summary>
         const float ForwardBiasKm = 4f;
-        /// <summary>Bands whose total weight is below this fraction of the peak are dropped from the ends.</summary>
-        const float EdgeCutoff = 0.06f;
         /// <summary>Metres per degree of latitude. Good to a fraction of a percent anywhere a scenario is fought.</summary>
         const double MetresPerDegLat = 111132.0;
 
@@ -167,16 +184,16 @@ namespace IronMeridian.Lines
         /// <summary>
         /// Back to how the line behaves in a fresh scenario. Called by the
         /// editor's RESET, which puts every panel's settings back — a front line
-        /// still drawn "Silk / Sweeping / violet" after a reset would be the one
+        /// still drawn "Raw / Sweeping / violet" after a reset would be the one
         /// thing on the map still carrying the last session.
         /// </summary>
         public void ResetToDefaults()
         {
             AutoUpdate = true;
             Visible = true;
-            Resolution = 41;
-            SmoothingPasses = 2;
-            InfluenceWidthKm = 6f;
+            Resolution = DefaultResolution;
+            SmoothingPasses = DefaultSmoothing;
+            InfluenceWidthKm = DefaultInfluenceWidthKm;
 
             var line = Line;
             if (line != null)
@@ -204,7 +221,9 @@ namespace IronMeridian.Lines
 
             // Span across the front, from the outermost formation on either
             // side, padded by the influence width so the line does not stop
-            // dead at the last unit's shoulder.
+            // dead at the last unit's shoulder. Every unit on the map is inside
+            // this span by construction, and — since nothing is trimmed off the
+            // ends any more — inside the drawn line too.
             float minLat = float.MaxValue, maxLat = float.MinValue;
             foreach (var n in _blue) { minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral); }
             foreach (var n in _red) { minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral); }
@@ -226,12 +245,15 @@ namespace IronMeridian.Lines
             foreach (var n in _red) redLead = Mathf.Min(redLead, n.Depth);
 
             int bands = Mathf.Max(3, Resolution);
-            var samples = new List<(float lateral, float depth, float weight)>(bands);
-            float peakWeight = 0f;
+            var lateral = new float[bands];
+            var depth = new float[bands];
+            var solved = new bool[bands];
+            int firstSolved = -1, lastSolved = -1;
 
             for (int i = 0; i < bands; i++)
             {
                 float t = Mathf.Lerp(minLat, maxLat, i / (float)(bands - 1));
+                lateral[i] = t;
 
                 float bDepth = Edge(_blue, t, sigma, blueLead, forward: true, out float bWeight);
                 float rDepth = Edge(_red, t, sigma, redLead, forward: false, out float rWeight);
@@ -241,29 +263,25 @@ namespace IronMeridian.Lines
                 // stronger side pushes the line towards the weaker one, which
                 // is the whole reason the front moves when a battle is won.
                 float share = bWeight / (bWeight + rWeight);
-                float depth = Mathf.Lerp(bDepth, rDepth, share);
+                depth[i] = Mathf.Lerp(bDepth, rDepth, share);
+                solved[i] = true;
 
-                float weight = Mathf.Min(bWeight, rWeight);
-                peakWeight = Mathf.Max(peakWeight, weight);
-                samples.Add((t, depth, weight));
+                if (firstSolved < 0) firstSolved = i;
+                lastSolved = i;
             }
 
-            // Trim the ends, where one side has drifted out of contact and the
-            // "front" is an extrapolation across empty map.
-            float floor = peakWeight * EdgeCutoff;
-            int from = 0, to = samples.Count - 1;
-            while (from <= to && samples[from].weight < floor) from++;
-            while (to >= from && samples[to].weight < floor) to--;
-            if (to - from + 1 < 2)
+            if (firstSolved < 0)
             {
                 LastFailure = "The two sides are not in contact anywhere along the front.";
                 Publish(null);
                 return;
             }
 
-            var points = new List<Vector2>(to - from + 1);
-            for (int i = from; i <= to; i++)
-                points.Add(new Vector2(samples[i].lateral, samples[i].depth));
+            FillUnsolved(depth, solved, firstSolved, lastSolved);
+
+            var points = new List<Vector2>(bands);
+            for (int i = 0; i < bands; i++)
+                points.Add(new Vector2(lateral[i], depth[i]));
 
             for (int pass = 0; pass < SmoothingPasses; pass++) points = Chaikin(points);
 
@@ -403,6 +421,47 @@ namespace IronMeridian.Lines
             }
 
             return weight > 0f ? sum / weight : 0f;
+        }
+
+        /// <summary>
+        /// Gives every band a depth, including the ones no solve could reach.
+        ///
+        /// **This is what makes the line cover the whole map rather than only
+        /// the part of it that is fighting.** A band is only solved where both
+        /// sides have some influence; out past either flank, and in any gap
+        /// between two separate engagements, one side's weight is zero and the
+        /// midpoint is undefined. The old code dropped those bands and then
+        /// trimmed the ends harder still, so the front was a short segment
+        /// hanging in the middle of a deployment that ran well past both of its
+        /// ends — a formation on the flank was outside the line that was
+        /// supposed to describe where it stood.
+        ///
+        /// So nothing is dropped. Past the outermost solved band the last
+        /// solved depth is **carried out** to the flank — the front runs
+        /// straight on out of contact, which is what a front does. Gaps in the
+        /// middle are **bridged** by interpolating between the solved bands on
+        /// either side, so a two-battle map reads as one continuous front
+        /// rather than as two disconnected pieces.
+        /// </summary>
+        static void FillUnsolved(float[] depth, bool[] solved, int first, int last)
+        {
+            for (int i = 0; i < first; i++) depth[i] = depth[first];
+            for (int i = last + 1; i < depth.Length; i++) depth[i] = depth[last];
+
+            for (int i = first + 1; i < last; i++)
+            {
+                if (solved[i]) continue;
+
+                // depth[i - 1] is already final: either it was solved, or an
+                // earlier pass of this loop filled it.
+                int a = i - 1, b = i + 1;
+                while (b < last && !solved[b]) b++;
+
+                for (int k = i; k < b; k++)
+                    depth[k] = Mathf.Lerp(depth[a], depth[b], (k - a) / (float)(b - a));
+
+                i = b - 1;
+            }
         }
 
         /// <summary>

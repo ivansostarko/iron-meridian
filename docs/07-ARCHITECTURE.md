@@ -75,6 +75,8 @@ Assets/Scripts/
                          font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
                          TaskMarker and RangeRing captions
     ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
+    LossesDialog.cs      the casualty list, TAB in battle mode: both sides'
+                          losses side by side, from Units/LossLedger
     MainMenuUI.cs        left-hand command board: grouped entries + quit modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
@@ -116,6 +118,10 @@ Assets/Scripts/
     SelectionManager.cs  LMB select, RMB move order, C facing, attack targeting,
                           LMB on a pickable MapLine (LineClicked)
     CombatSystem.cs      tick combat: power ratio, modifiers, consumption
+    LossLedger.cs        what the battle has cost each side, booked as it
+                          happens — read by the TAB casualty list
+    AirDefenceSystem.cs  anti-aircraft formations find and shoot down the
+                          drones over them (docs/24-AIR-DEFENCE.md)
     AttackTaskCatalog.cs the five offensive tasks in numbers — docs/15-COMBAT-ORDERS.md
     AttackOrderSystem.cs order lifecycle: approach → engage; ordered attacks beat the auto sweep
     AxisArrow.cs         axis arrow: unit -> target unit (attack) or ground point (recon)
@@ -172,6 +178,12 @@ Assets/Scripts/
     UavStrikeSystem.cs   tasked UAV sortie: a one-way attack, or a recon orbit
     DroneRun.cs          the drone's cruise, nose-over and terminal dive
     ReconDroneRun.cs     the recon drone's transit, orbit on station and egress
+    AirTarget.cs         the air picture: a track a flight puts itself on, so
+                          air defence can find it without knowing what it is
+    InterceptorRun.cs    the surface-to-air missile — the one flight that
+                          chases (docs/24-AIR-DEFENCE.md)
+    DroneFall.cs         a drone coming down after being hit: tumble, fire
+                          trail, and a wreck burning where it lands
     StrikeAftermath.cs   30 scenario minutes of fire, then 2 hours of smoke,
                           left where any strike landed (docs/08-PARTICLE-SYSTEMS.md)
     StrikeBudget.cs      the 99 called strikes a scenario has, shared by
@@ -268,6 +280,10 @@ would otherwise be sampled as terrain by a neighbour.
   blocked corridor falls back to the direct line.
 - Enemy formations never issue orders of their own — the five offensive tasks are
   the player's to give, and Red only fights back through the automatic exchange.
+  The one exception is **air defence**, which is automatic on both sides: a
+  hostile anti-aircraft formation engages the player's drones without being told
+  to. Since only the player tasks UAV sorties, no friendly battery has anything
+  to shoot at yet — see docs/24-AIR-DEFENCE.md §1a.
 - Suppression costs a target morale and organisation but does not yet reduce its
   outgoing fire; that needs the damage model to read organisation.
 - Fog of war hides enemy *units*; graphics derived from the truth (auto front

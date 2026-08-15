@@ -3,6 +3,7 @@ using CesiumForUnity;
 using Unity.Mathematics;
 using IronMeridian.Audio;
 using IronMeridian.Core;
+using IronMeridian.Data;
 using IronMeridian.Map;
 using IronMeridian.Models;
 
@@ -47,12 +48,27 @@ namespace IronMeridian.Vfx
         /// <summary>Raised once, when it turns for home — the sensor is off from this moment.</summary>
         public System.Action OffStation;
 
+        /// <summary>
+        /// Raised when the drone is shot down instead of flying home. The caller
+        /// needs the difference: a sortie that was destroyed must not be
+        /// reported as one that returned.
+        /// </summary>
+        public System.Action Aborted;
+
         enum Phase { Ingress, Station, Egress }
 
         CesiumGeoreference _geo;
         CesiumGlobeAnchor _anchor;
         UavDef _def;
         AudioSource _engine;
+        AirTarget _track;
+        Transform _model;
+
+        /// <summary>Last placed position, mirrored out of <see cref="Set"/> for the air picture.</summary>
+        double _lat, _lon;
+        float _altitude;
+        /// <summary>Nose bearing as last placed — the heading a wreck carries on along.</summary>
+        float _bearingDeg;
 
         double _startLat, _startLon, _targetLat, _targetLon;
         double _groundHeight;
@@ -96,13 +112,44 @@ namespace IronMeridian.Vfx
             run._targetLon = targetLon;
             run._anchor = go.AddComponent<CesiumGlobeAnchor>();
 
+            run._model = model.transform;
             run.PlanTrack();
             run.ShapeModel(model);
 
             run._engine = EffectAudio.PlayAt(def.engineSound, go.transform.position,
                 def.spanMeters * 6f, go.transform);
 
+            // On the air picture. A reconnaissance drone is the *most* worth
+            // shooting down of the two kinds — it is the one that is going to
+            // leave with something — and a defended sector that let the ISR
+            // airframe orbit it untouched would be no defence at all. See
+            // Units.AirDefenceSystem and docs/24-AIR-DEFENCE.md.
+            run._track = AirTarget.Attach(go, Team.User, def.name);
+            run._track.ShotDown = run.OnShotDown;
+            run._track.SetPosition(run._lat, run._lon, run._altitude);
+
             return run;
+        }
+
+        /// <summary>
+        /// Hit on station. The sortie ends where it is: the sensor comes off the
+        /// map through <see cref="OffStation"/> — the ground it was uncovering
+        /// stops being uncovered the moment the drone stops being over it — and
+        /// the airframe comes down as a wreck.
+        /// </summary>
+        void OnShotDown()
+        {
+            if (_engine != null) { EffectAudio.Stop(_engine); _engine = null; }
+
+            // Raised even from the ingress leg, where the sensor was never
+            // registered: the handler removes a sensor it may not have, which is
+            // exactly the belt-and-braces case UavStrikeSystem already relies on.
+            if (_phase == Phase.Station) OffStation?.Invoke();
+
+            DroneFall.Begin(_geo, _model, _lat, _lon, _altitude, _bearingDeg, _def.burstScale);
+
+            Aborted?.Invoke();
+            Destroy(gameObject);
         }
 
         void PlanTrack()
@@ -267,6 +314,11 @@ namespace IronMeridian.Vfx
         {
             _anchor.longitudeLatitudeHeight = new double3(lon, lat, _groundHeight + altitude);
             transform.localRotation = Quaternion.Euler(0f, yawDeg, roll);
+
+            _lat = lat; _lon = lon; _altitude = altitude; _bearingDeg = yawDeg;
+            // Fed from here rather than read back off the anchor: these are the
+            // numbers that were just computed.
+            if (_track != null) _track.SetPosition(lat, lon, altitude);
         }
 
         void OnDestroy()

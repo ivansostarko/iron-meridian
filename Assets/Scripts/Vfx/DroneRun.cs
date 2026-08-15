@@ -2,6 +2,7 @@ using UnityEngine;
 using CesiumForUnity;
 using Unity.Mathematics;
 using IronMeridian.Audio;
+using IronMeridian.Data;
 using IronMeridian.Map;
 using IronMeridian.Models;
 
@@ -36,10 +37,20 @@ namespace IronMeridian.Vfx
         /// <summary>Called once the drone reaches the target: latitude, longitude.</summary>
         public System.Action<double, double> Impact;
 
+        /// <summary>
+        /// Called instead of <see cref="Impact"/> when the drone is destroyed
+        /// short of its objective. The caller needs the difference: a sortie
+        /// that was shot down must not leave burning ground on the target it
+        /// never reached, nor report a strike complete.
+        /// </summary>
+        public System.Action Aborted;
+
         CesiumGeoreference _geo;
         CesiumGlobeAnchor _anchor;
         UavDef _def;
         AudioSource _buzz;
+        AirTarget _track;
+        Transform _model;
 
         double _startLat, _startLon, _targetLat, _targetLon;
         double _groundHeight;
@@ -78,6 +89,7 @@ namespace IronMeridian.Vfx
             run._targetLon = targetLon;
             run._anchor = go.AddComponent<CesiumGlobeAnchor>();
 
+            run._model = model.transform;
             run.PlanTrack();
             run.ShapeModel(model);
 
@@ -86,7 +98,43 @@ namespace IronMeridian.Vfx
             run._buzz = EffectAudio.PlayAt(def.engineSound, go.transform.position,
                 def.spanMeters * 6f, go.transform);
 
+            // On the air picture, so ground-based air defence can find it. Every
+            // called strike is the player's, so the drone flies as the User's —
+            // it is enemy air defence that will try to stop it. See
+            // Units.AirDefenceSystem and docs/24-AIR-DEFENCE.md.
+            run._track = AirTarget.Attach(go, Team.User, def.name);
+            run._track.ShotDown = run.OnShotDown;
+            // Seeded from the launch placement PlanTrack already made, so the
+            // track is never on the air picture at latitude zero.
+            run._track.SetPosition(run._lat, run._lon, run._altitude);
+
             return run;
+        }
+
+        /// <summary>
+        /// Hit by an interceptor. The attack is over: the warhead is not
+        /// delivered, the <see cref="Impact"/> callback never fires, and what is
+        /// left is a wreck coming down — which is the whole point of shooting a
+        /// loitering munition down rather than letting it arrive.
+        ///
+        /// <see cref="_done"/> is set first so <see cref="Update"/> cannot reach
+        /// the end of the flight in the same frame and detonate anyway.
+        /// </summary>
+        void OnShotDown()
+        {
+            if (_done) return;
+            _done = true;
+
+            if (_buzz != null) { EffectAudio.Stop(_buzz); _buzz = null; }
+
+            CurrentPosition(out double lat, out double lon, out float altitude);
+            DroneFall.Begin(_geo, _model, lat, lon, altitude, _headingDeg, _def.burstScale);
+
+            Aborted?.Invoke();
+
+            // The model now belongs to the fall, which is parented elsewhere;
+            // this object has nothing left to be.
+            Destroy(gameObject);
         }
 
         void PlanTrack()
@@ -187,7 +235,24 @@ namespace IronMeridian.Vfx
 
             _anchor.longitudeLatitudeHeight = new double3(lon, lat, _groundHeight + altitude);
             transform.localRotation = Quaternion.Euler(pitch, _headingDeg, 0f);
+
+            _lat = lat; _lon = lon; _altitude = altitude;
+            // The air picture is fed from here rather than read back off the
+            // anchor: these are the numbers that were just computed, and asking
+            // Cesium for them again would be a round trip through ECEF for a
+            // value already in hand.
+            if (_track != null) _track.SetPosition(lat, lon, altitude);
         }
+
+        /// <summary>Where the drone is right now — for whatever has just shot it down.</summary>
+        void CurrentPosition(out double lat, out double lon, out float altitude)
+        {
+            lat = _lat; lon = _lon; altitude = _altitude;
+        }
+
+        /// <summary>Last placed position, mirrored out of <see cref="Place"/>.</summary>
+        double _lat, _lon;
+        float _altitude;
 
         /// <summary>
         /// How much of the run-in is flown level before the dive starts. The

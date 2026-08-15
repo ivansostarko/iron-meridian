@@ -26,6 +26,10 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 
 **Missiles are built in code too.** `MissileRun` builds its airframe from primitives inline rather than through the library — a body, a nose and four fins. It has no `UnitModelLibrary` entry because no unit type is a missile and nothing else needs to reach it. See docs/20-MISSILE-SYSTEMS.md.
 
+`InterceptorRun` — the surface-to-air missile air defence fires at a drone — is built the same way and for the same reasons, at 34 m nose to tail. See docs/24-AIR-DEFENCE.md.
+
+**A drone that has been shot down keeps its model and loses its animation.** `DroneFall` takes the airframe over from the flight that was interrupted and **stops** every `Animation` on it: a wreck with its propeller still turning and its sensor turret still quartering the ground is the single detail that would give the whole thing away. The tumble is applied to the transform directly rather than through a clip, because it is a random rate per wreck and a clip is a shared authored thing.
+
 **One model is an aircraft rather than a unit.** `stealth_bomber` has no entry in `UnitModelLibrary.Overrides` and `Resolve()` never returns it — no formation is represented by a B-2, and the strike airframes are picked from `AirStrikeCatalog` rather than from the unit catalogue. It is in the library because it is the only sanctioned way to reach a model prefab (golden rule 10) and because the installer builds its prefab from that list. `BomberRun.LoadModel` fetches it by id.
 
 The other three airframes now serve double duty: the strike systems fly them, and the Air/Drone unit types in the catalogue are represented by them. A helicopter reads as a helicopter at map scale, which is the whole test — one airframe standing in for a branch is right in a way that a rifleman standing in for a helicopter never was.
@@ -161,6 +165,7 @@ It will: find the source FBXs, switch their rigs to Legacy (reimporting if neede
 |---|---|---|
 | Development → Units List | Detail panel on the right: the selected unit type's model playing `combat_idle`, orbitable by drag, zoomable by scroll. The AIR STRIKES and UAV STRIKES tabs preview their `modelId` the same way, through `ModelPreview.ShowModel` | `UnitsListUI.RefreshPreview` → `ModelPreview` |
 | Map editor → in flight | The strike airframes over the map: bomber, fighter, helicopter, attack drones and the reconnaissance drone on its orbit | `BomberRun`, `DroneRun`, `ReconDroneRun`, `MissileRun` |
+| Map editor → air defence | The interceptor climbing off a launcher, and the drone it hit tumbling down with its animation stopped | `InterceptorRun`, `DroneFall` (docs/24-AIR-DEFENCE.md) |
 
 **Add a row here whenever a model appears somewhere new.**
 

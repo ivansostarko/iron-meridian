@@ -55,11 +55,17 @@ namespace IronMeridian.UI
         const float TableYWithBranches = -352f, TableYPlain = -300f;
 
         /// <summary>
-        /// Left inset of the ICON column's content, inside its own cell. An
-        /// APP-6 frame is a rectangle, and without a gutter the scroll
-        /// viewport's clipping edge shaves its left stroke.
+        /// Left inset of the **first** column's content, inside its own cell,
+        /// in every catalogue.
+        ///
+        /// The lead column stands against the scroll viewport's clipping edge,
+        /// which shaves the left stroke of an APP-6 frame and the first letter
+        /// of a name. 35 px is a gutter wide enough that the column reads as
+        /// indented rather than as pressed against the frame, and it is applied
+        /// to all six tables so a tab change does not shift the table sideways.
+        /// Every other column keeps the tighter <see cref="RowPad"/>.
         /// </summary>
-        const float IconColumnInset = 36f;
+        const float FirstColumnInset = 35f;
         const float PanelInset = 50f;
 
         enum TeamView { Both, Friendly, Enemy }
@@ -477,17 +483,18 @@ namespace IronMeridian.UI
         {
             ClearChildren(_header);
 
-            foreach (var col in _columns)
+            for (int i = 0; i < _columns.Count; i++)
             {
+                var col = _columns[i];
                 bool active = col.Sort != null && col.Sort == _sortKey;
                 string label = col.Label + (active ? (_sortAscending ? "  ▲" : "  ▼") : "");
+                float inset = i == 0 ? FirstColumnInset : RowPad;
 
                 if (col.Sort == null)
                 {
                     var t = UIFactory.CreateText(_header, label, 15, GameConfig.UiAccent,
                         TextAnchor.MiddleLeft, FontStyle.Bold);
-                    SpanColumn(t.rectTransform, col,
-                        col.Label == "ICON" ? IconColumnInset : RowPad, 34f);
+                    SpanColumn(t.rectTransform, col, inset, 34f);
                     UIFactory.Fit(t, 10);
                     continue;
                 }
@@ -496,12 +503,16 @@ namespace IronMeridian.UI
                 var btn = UIFactory.CreateButton(_header, label, () => ToggleSort(key),
                     new Color(1f, 1f, 1f, active ? 0.08f : 0.02f),
                     active ? GameConfig.UiAccent : GameConfig.UiText, 15);
+                // The button's own fill spans the whole cell — a sort control
+                // that started 35 px in would leave a dead strip beside it that
+                // looks clickable and is not. The caption inside it takes the
+                // indent instead.
                 SpanColumn((RectTransform)btn.transform, col, RowPad, 34f);
 
                 var txt = btn.GetComponentInChildren<Text>();
                 txt.alignment = TextAnchor.MiddleLeft;
                 txt.fontStyle = active ? FontStyle.Bold : FontStyle.Normal;
-                txt.rectTransform.offsetMin = new Vector2(4, 0);
+                txt.rectTransform.offsetMin = new Vector2(i == 0 ? inset - RowPad + 4f : 4f, 0);
                 UIFactory.Fit(txt, 10);
             }
         }
@@ -638,15 +649,28 @@ namespace IronMeridian.UI
             btn.onClick.AddListener(() => Select(entry));
             _rowImages[entry.id] = row.GetComponent<Image>();
 
-            foreach (var col in _columns)
+            FillRow(row, entry);
+        }
+
+        /// <summary>
+        /// Lays one row's cells out. Shared by the initial build and the
+        /// after-an-edit refresh, which were two copies of the same loop and
+        /// drifted apart the moment either column indent changed.
+        /// </summary>
+        void FillRow(RectTransform row, CatalogEntry entry)
+        {
+            for (int i = 0; i < _columns.Count; i++)
             {
+                var col = _columns[i];
+                float inset = i == 0 ? FirstColumnInset : 4f;
+
                 if (col.Cell == null)
                 {
                     // The icon column: one icon per affiliation shown, side by
                     // side when both. Anchored inside the column rather than at
                     // an absolute x, so they stay in their cell when the table
                     // reflows.
-                    float iconX = IconColumnInset;
+                    float iconX = inset;
                     if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", entry.id, iconX, col); iconX += 50f; }
                     if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", entry.id, iconX, col);
                     continue;
@@ -654,7 +678,7 @@ namespace IronMeridian.UI
 
                 bool lead = col.Label == "NAME";
                 Cell(row, col.Cell(entry) ?? "", col, lead ? 17 : 15,
-                    lead ? GameConfig.UiText : GameConfig.UiTextDim);
+                    lead ? GameConfig.UiText : GameConfig.UiTextDim, inset);
             }
         }
 
@@ -693,10 +717,11 @@ namespace IronMeridian.UI
             img.raycastTarget = false;    // clicks belong to the row
         }
 
-        void Cell(Transform parent, string text, Column col, int fontSize, Color? color = null)
+        void Cell(Transform parent, string text, Column col, int fontSize, Color? color = null,
+            float inset = 4f)
         {
             var t = UIFactory.CreateText(parent, text, fontSize, color, TextAnchor.MiddleLeft);
-            SpanColumn(t.rectTransform, col, 4f, 40f);
+            SpanColumn(t.rectTransform, col, inset, 40f);
             // Long names shrink to fit their column instead of running into the
             // next one. Legacy Text has no ellipsis, so best-fit is the closest
             // thing to a responsive cell.
@@ -852,19 +877,7 @@ namespace IronMeridian.UI
 
             var row = (RectTransform)image.transform;
             ClearChildren(row);
-            foreach (var col in _columns)
-            {
-                if (col.Cell == null)
-                {
-                    float iconX = IconColumnInset;
-                    if (_team != TeamView.Enemy) { PlaceIcon(row, "Friendly", _selected.id, iconX, col); iconX += 50f; }
-                    if (_team != TeamView.Friendly) PlaceIcon(row, "Enemy", _selected.id, iconX, col);
-                    continue;
-                }
-                bool lead = col.Label == "NAME";
-                Cell(row, col.Cell(_selected) ?? "", col, lead ? 17 : 15,
-                    lead ? GameConfig.UiText : GameConfig.UiTextDim);
-            }
+            FillRow(row, _selected);
 
             _detailName.text = _selected.name.ToUpperInvariant();
         }

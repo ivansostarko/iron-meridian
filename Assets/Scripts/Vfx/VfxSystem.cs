@@ -68,6 +68,21 @@ namespace IronMeridian.Vfx
             => Active != null ? Active.SpawnOn(id, parent, scaleMultiplier) : null;
 
         /// <summary>
+        /// Plays an effect **in the air**, at a height above the terrain rather
+        /// than on it.
+        ///
+        /// Everything the game blew up used to be standing on the ground, so
+        /// <see cref="Play"/> sampling the terrain and clamping to it was the
+        /// only behaviour worth having. An air-defence interception is not: the
+        /// warhead goes off where the drone is, and a burst that dropped four
+        /// hundred metres to the ground would be reporting a crash rather than
+        /// a kill. See docs/24-AIR-DEFENCE.md.
+        /// </summary>
+        public static VfxInstance PlayAloft(VfxId id, double lat, double lon,
+            double heightAboveGround, float scaleMultiplier = 1f)
+            => Active != null ? Active.SpawnAloft(id, lat, lon, heightAboveGround, scaleMultiplier) : null;
+
+        /// <summary>
         /// The full "something just died here" composite: detonation, then a
         /// burning wreck that smoulders and smokes for a while before going out.
         /// <paramref name="severity01"/> scales it from a lost company to a lost
@@ -126,6 +141,24 @@ namespace IronMeridian.Vfx
             double h = GeoUtils.SampleTerrainHeight(_geo, lat, lon, 250.0);
             // Lift slightly so the effect is not half-buried in the terrain mesh.
             anchor.longitudeLatitudeHeight = new double3(lon, lat, h + 6.0);
+
+            return Populate(go, def, scaleMultiplier);
+        }
+
+        VfxInstance SpawnAloft(VfxId id, double lat, double lon, double heightAboveGround,
+            float scaleMultiplier)
+        {
+            var def = VfxCatalog.Get(id);
+            if (def == null || _geo == null) return null;
+            if (!MakeRoom(def)) return null;
+
+            var go = new GameObject($"VFX_{id}");
+            go.transform.SetParent(_root, false);
+
+            var anchor = go.AddComponent<CesiumGlobeAnchor>();
+            double ground = GeoUtils.SampleTerrainHeight(_geo, lat, lon, 250.0);
+            anchor.longitudeLatitudeHeight =
+                new double3(lon, lat, ground + System.Math.Max(0.0, heightAboveGround));
 
             return Populate(go, def, scaleMultiplier);
         }

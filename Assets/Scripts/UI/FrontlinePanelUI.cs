@@ -49,9 +49,13 @@ namespace IronMeridian.UI
             ("White",   "#E8EDF3")
         };
 
+        // "Standard" rather than "Default" for the zero: it is the width the
+        // system draws the line at, and naming it after the setting rather than
+        // after the absence of one puts it in the same language as the
+        // RESOLUTION and INFLUENCE WIDTH rows below.
         static readonly (string name, float metres)[] Widths =
         {
-            ("Default", 0f), ("Thin", 35f), ("Medium", 70f), ("Heavy", 140f)
+            ("Standard", 0f), ("Thin", 35f), ("Medium", 70f), ("Heavy", 140f)
         };
 
         static readonly (string name, int bands)[] Resolutions =
@@ -76,7 +80,11 @@ namespace IronMeridian.UI
         RectTransform _autoLamp, _visibleLamp;
         Text _autoLabel, _visibleLabel;
 
-        int _colour, _width, _resolution = 1, _smoothing = 2, _influence = 1;
+        // Standard width, standard resolution, standard influence width and
+        // SILK smoothing — the shipped settings. They are indices into the
+        // tables above and must agree with FrontlineSystem's own defaults, or
+        // the panel opens lighting a button the line is not actually drawn with.
+        int _colour, _width, _resolution = 1, _smoothing = 3, _influence = 1;
 
         readonly List<(int index, Image frame)> _colourButtons = new List<(int, Image)>();
         readonly List<(int index, Image fill, Text label)> _widthButtons = new List<(int, Image, Text)>();
@@ -306,7 +314,34 @@ namespace IronMeridian.UI
             _panel.gameObject.SetActive(true);
             IsOpen = true;
             Opened?.Invoke();
+            SyncFromSystem();
             Refresh();
+        }
+
+        /// <summary>
+        /// Reads the live settings back off the system and lights the buttons
+        /// that match.
+        ///
+        /// The panel cannot be the only record of what the line is drawn with:
+        /// the system ships its own defaults and the editor's RESET puts them
+        /// back without going through here, so a panel that only ever wrote
+        /// would come up highlighting whatever it happened to be showing when it
+        /// was last closed.
+        /// </summary>
+        void SyncFromSystem()
+        {
+            if (_front == null) return;
+            _resolution = NearestIndex(Resolutions.Length, i => Resolutions[i].bands, _front.Resolution, _resolution);
+            _smoothing = NearestIndex(Smoothings.Length, i => Smoothings[i].passes, _front.SmoothingPasses, _smoothing);
+            _influence = NearestIndex(Influences.Length, i => Influences[i].km, _front.InfluenceWidthKm, _influence);
+        }
+
+        /// <summary>Index whose value matches <paramref name="value"/>, or <paramref name="fallback"/>.</summary>
+        static int NearestIndex(int count, Func<int, float> valueAt, float value, int fallback)
+        {
+            for (int i = 0; i < count; i++)
+                if (Mathf.Abs(valueAt(i) - value) < 0.001f) return i;
+            return fallback;
         }
 
         public void Hide()

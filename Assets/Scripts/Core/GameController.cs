@@ -60,6 +60,7 @@ namespace IronMeridian.Core
         UavStrikeSystem _uavStrike;
         MissileStrikeSystem _missiles;
         NavalStrikeSystem _naval;
+        AirDefenceSystem _airDefence;
         StrikeAftermath _aftermath;
 
         // Latest countdown reported by each strike system. A null title means
@@ -126,9 +127,11 @@ namespace IronMeridian.Core
             IronMeridian.Audio.AudioManager.Apply();
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             UnitRegistry.Clear();
-            // Static, so it survives a scene load: a fresh scenario opening with
-            // half its strikes already spent would be inexplicable.
+            // Both static, so they survive a scene load: a fresh scenario
+            // opening with half its strikes already spent, or with the last
+            // one's casualty list still in it, would be inexplicable.
             StrikeBudget.Reset();
+            LossLedger.Clear();
 
             // Up first, on its own high-sorting canvas, so it covers the map and
             // the HUD built below while Cesium streams the terrain in.
@@ -241,6 +244,11 @@ namespace IronMeridian.Core
             _uavStrike = gameObject.AddComponent<UavStrikeSystem>();
             _uavStrike.Init(_map, _rig.Cam);
 
+            // Ground-based air defence. It answers the UAV sorties above, so it
+            // has to exist before one can be flown — see docs/24-AIR-DEFENCE.md.
+            _airDefence = gameObject.AddComponent<AirDefenceSystem>();
+            _airDefence.Init(_map.Georeference);
+
             // Missile systems — see docs/20-MISSILE-SYSTEMS.md.
             _missiles = gameObject.AddComponent<MissileStrikeSystem>();
             _missiles.Init(_map, _rig.Cam);
@@ -254,6 +262,7 @@ namespace IronMeridian.Core
             _selection = gameObject.AddComponent<SelectionManager>();
             _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                             ConfirmDialog.IsOpen ||
+                                            LossesDialog.IsOpen ||
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
                                             _airStrike.IsArmed ||
@@ -299,6 +308,7 @@ namespace IronMeridian.Core
             _uavStrike.Flash = _hud.Flash;
             _missiles.Flash = _hud.Flash;
             _naval.Flash = _hud.Flash;
+            _airDefence.Flash = _hud.Flash;
 
             // Both strike systems report their countdown every frame, and there
             // is one banner. Left to themselves they would fight over it — the
@@ -522,6 +532,7 @@ namespace IronMeridian.Core
 
                 // DEPLOYED list.
                 _palette.SelectUnitRequested = u => _selection.Select(u);
+                _palette.FocusUnitRequested = FlyToUnit;
                 _palette.RemoveUnitRequested = u =>
                 {
                     RecordRemoval(u);
@@ -653,6 +664,7 @@ namespace IronMeridian.Core
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
                 _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                           ConfirmDialog.IsOpen ||
+                                          LossesDialog.IsOpen ||
                                           _pauseMenu.IsOpen;
             });
 
@@ -1243,17 +1255,50 @@ namespace IronMeridian.Core
             _rig.SetDistance(altitudeMeters);
         }
 
+        /// <summary>
+        /// Double-click on a DEPLOYED row: select the formation and travel to it.
+        ///
+        /// Selecting first is what makes the arrival mean something — the
+        /// camera stops over a counter that is ringed, outlined and open in the
+        /// info panel, rather than over a patch of terrain the player then has
+        /// to find the unit on. The standoff is close enough to read the
+        /// counter's neighbours but not so close that the formation fills the
+        /// screen; a unit already being looked at from closer in keeps that
+        /// view rather than being pulled back out to a standard one.
+        /// </summary>
+        void FlyToUnit(UnitActor unit)
+        {
+            if (unit == null || !unit.IsAlive) return;
+
+            _selection.Select(unit);
+
+            var focus = GeoUtils.GeoToUnity(_map.Georeference,
+                unit.State.latitude, unit.State.longitude, 300);
+            _rig.FlyTo(focus, Mathf.Min(_rig.Distance, UnitFocusDistanceMeters));
+
+            _hud.Flash($"{(string.IsNullOrEmpty(unit.State.customName) ? unit.Def.name : unit.State.customName)}" +
+                       " — flying to its position.");
+        }
+
+        /// <summary>Standoff a double-clicked formation is shown at, metres.</summary>
+        const float UnitFocusDistanceMeters = 4500f;
+
         /// <summary>Takes every unit, effect and undo step off the map, ready for a fresh load.</summary>
         void ClearMapContents()
         {
             _combat.SetRunning(false);
             _attacks.CancelAll();
             _recon.CancelAll();
+            if (_airDefence != null) _airDefence.CancelAll();
             _selection.Select(null);
 
             foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
                 if (a != null) Destroy(a.gameObject);
             UnitRegistry.Clear();
+
+            // A casualty list carried over from the scenario being replaced
+            // would be worse than none — it would be a wrong one.
+            LossLedger.Clear();
 
             if (_vfx != null) _vfx.StopAll();
             if (_aftermath != null) _aftermath.ClearAll();
@@ -1372,6 +1417,7 @@ namespace IronMeridian.Core
             foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
                 if (a != null) Destroy(a.gameObject);
             UnitRegistry.Clear();
+            LossLedger.Clear();
             if (_vfx != null) _vfx.StopAll();
             // StopAll kills the effects; this is what stops the bookkeeping
             // outliving them and trying to swap a dead fire for smoke.
@@ -1399,6 +1445,7 @@ namespace IronMeridian.Core
             foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
                 if (a != null) Destroy(a.gameObject);
             UnitRegistry.Clear();
+            LossLedger.Clear();
             // World-anchored wreck fires and smoke outlive their units by design,
             // so they have to be cleared explicitly on a reload.
             if (_vfx != null) _vfx.StopAll();
@@ -1431,6 +1478,20 @@ namespace IronMeridian.Core
 
             if (Input.GetKeyDown(KeyCode.F5)) SaveMap();
             if (Input.GetKeyDown(KeyCode.F9)) LoadMap();
+
+            // TAB — the casualty list. Toggled from here alone: the dialog also
+            // watches Escape, but two behaviours reading TAB in an undefined
+            // order would close and reopen it in the same frame.
+            //
+            // Battle mode only, or once a battle has been fought: in a fresh
+            // editor nothing has been lost, and a key that opened an empty page
+            // would read as broken rather than as informative.
+            if (Input.GetKeyDown(KeyCode.Tab))
+            {
+                if (LossesDialog.IsOpen) LossesDialog.Close();
+                else if (_combat.Running || LossLedger.Any) LossesDialog.Open(_canvas);
+                else _hud.Flash("No battle has been fought yet — start one to keep a casualty list.");
+            }
 
             bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) ||
                         Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);

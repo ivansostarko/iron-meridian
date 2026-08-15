@@ -27,6 +27,9 @@ Assets/Scripts/Vfx/
   UavCatalog.cs           the unmanned types — see docs/19-UAV-STRIKES.md
   UavStrikeSystem.cs      tasked UAV sortie; DroneRun.cs flies an attack,
                           ReconDroneRun.cs flies the reconnaissance orbit
+  AirTarget.cs            the air picture: a track a flight puts itself on
+  InterceptorRun.cs       the surface-to-air missile — see docs/24-AIR-DEFENCE.md
+  DroneFall.cs            a drone coming down after being hit
   StrikeAftermath.cs      what a strike leaves: 30 min of fire, then 2 h of smoke
   StrikeBudget.cs         the 99 called strikes a scenario has, shared by all four
   RotorSpinner.cs         spins rotors/propellers on unrigged models
@@ -47,7 +50,12 @@ fire.Stop();
 
 // Composite: detonation + a wreck that burns and smokes, then goes out.
 VfxSystem.PlayWreck(lat, lon, severity01);
+
+// One-shot in the AIR, at a height above the terrain rather than on it.
+VfxSystem.PlayAloft(VfxId.AirInterceptBurst, lat, lon, heightAboveGround, scaleMultiplier);
 ```
+
+`PlayAloft` exists because everything the game blew up used to be standing on the ground, so `Play` sampling the terrain and clamping to it was the only behaviour worth having. An air-defence interception is not: the warhead goes off where the drone is, and a burst that dropped four hundred metres to the ground would be reporting a crash rather than a kill. See docs/24-AIR-DEFENCE.md.
 
 `VfxSystem` is a no-op when it has not been initialised, so effects are safe to call from any scene and non-game scenes cost nothing.
 
@@ -121,6 +129,10 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `StrikeAftermathFire` | Ground burning where a strike landed — **30 scenario minutes** | 200 m | loops | 35 | `VFX_Fire_Floor_01_Smoke` |
 | `StrikeAftermathSmoke` | Smoke over a burnt-out impact site — **2 scenario hours** | 260 m | loops | 32 | procedural |
 | `ReconMarker` | Objective a reconnaissance drone is working — pale motes inside the search ring | 900 m | loops | 38 | procedural |
+| `InterceptorLaunch` | Surface-to-air missile leaving the rail — flame and back-blast at the launcher | 130 m | 1.2 s | 118 | procedural |
+| `InterceptorTrail` | Motor plume behind an interceptor in flight | 55 m | loops | 30 | procedural |
+| `AirInterceptBurst` | The kill — a warhead against a drone, **in the air** | 120 m | 1.8 s | 145 | procedural |
+| `DroneFallTrail` | Burning airframe coming down after being hit | 70 m | loops | 58 | procedural |
 
 The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -217,6 +229,18 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Kamikaze warhead | `UavWarheadBurst` + `UavWarheadSmoke` | Once, where the drone reaches the ground | `DroneRun.Update` → `UavStrikeSystem.Detonate` |
 | Shahed warhead | `ShahedWarheadBurst` + `ShahedWarheadSmoke` + `ShahedWreckFire` | Same, for the heavier one-way type | `UavStrikeSystem.Detonate` |
 | Reconnaissance drone's objective | `ReconMarker` under the search ring | Played when the sortie is flown, stopped when the drone has gone home | `UavStrikeSystem.RunReconnaissance` |
+
+### Air defence
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| Interceptor leaves the rail | `InterceptorLaunch` at the launcher | Two seconds after a battery acquires a drone | `InterceptorRun.Launch` |
+| Interceptor in flight | `InterceptorTrail` attached to the missile | For the whole flight; killed on intercept | `InterceptorRun.Launch` / `Update` |
+| Drone shot down | `AirInterceptBurst`, **aloft**, at the drone's own altitude | Once, on intercept | `AirDefenceSystem.Fire` → `InterceptorRun.Intercept` |
+| Wreck coming down | `DroneFallTrail` attached to the falling airframe | From the hit to the ground | `DroneFall.Begin` |
+| Wreck lands | `UavWarheadBurst` at 0.6 scale + `StrikeAftermath` at 0.5 | Once, where it hits the terrain | `DroneFall.Impact` |
+
+Everything here is deliberately **small**: an interception is a precise event a long way up, competing on screen with the strikes landing below it. The wreck's burst is a *fraction* of the warhead the drone was carrying, because a loitering munition shot down short of its target has not delivered its attack. Full detail in **docs/24-AIR-DEFENCE.md**.
 
 **UAV STRIKES** panel → pick a type → click the terrain → a 10 s countdown → the drone launches and flies in. The kamikaze drone is deliberately the smallest blast of any strike here; the Shahed is closer to a 155 mm shell and leaves the ground burning. The **reconnaissance drone** has no warhead at all: it orbits the point for five operational minutes with `ReconMarker` on the ground under it, lifts the fog off a 10 km circle, and flies home. Full detail in **docs/19-UAV-STRIKES.md**.
 

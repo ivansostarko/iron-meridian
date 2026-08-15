@@ -38,8 +38,9 @@ namespace IronMeridian.UI
     /// affiliation and echelon, then DRAG a card onto the terrain. A live
     /// ground marker tracks the real 3D drop point during the drag, so what you
     /// see is exactly where the unit lands. Its list has two modes: AVAILABLE
-    /// (the draggable catalogue) and DEPLOYED (what is actually on the map,
-    /// click to select).
+    /// (the draggable catalogue, an accordion of one section per arm of
+    /// service) and DEPLOYED (what is actually on the map — click a row to
+    /// select that formation, double-click to fly the camera to it).
     /// </summary>
     public class UnitPaletteUI : MonoBehaviour
     {
@@ -65,6 +66,8 @@ namespace IronMeridian.UI
 
         // Deployed list.
         public System.Action<UnitActor> SelectUnitRequested;
+        /// <summary>Double-click on a DEPLOYED row: select it *and* fly the camera to it.</summary>
+        public System.Action<UnitActor> FocusUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
 
         enum Section
@@ -167,6 +170,24 @@ namespace IronMeridian.UI
         Section _section = Section.Units;
         ListMode _listMode = ListMode.Available;
         string _search = "";
+
+        /// <summary>
+        /// Which arms of service are expanded in the AVAILABLE list.
+        ///
+        /// Empty to start: 117 unit types under nine headings is a list you
+        /// scroll rather than one you read, and the arms are what a player is
+        /// actually choosing between first — "I want an armoured battalion"
+        /// comes before "which one". Collapsed, the whole order of battle fits
+        /// on one screen and picking a category is one click.
+        ///
+        /// A search overrides this and opens everything (see
+        /// <see cref="PopulateAvailable"/>): typing a name is already a
+        /// statement about which unit you want, and making the results wait
+        /// behind a second click would be the control fighting the query.
+        /// </summary>
+        readonly HashSet<UnitBranch> _openBranches = new HashSet<UnitBranch>();
+        /// <summary>Scratch list for one branch's matching types — reused, not reallocated per branch per keystroke.</summary>
+        readonly List<UnitDefinition> _branchMatches = new List<UnitDefinition>();
 
         RectTransform _listContent;
         Button _blueTab, _redTab;
@@ -904,50 +925,98 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// The draggable catalogue, grouped under a heading per
-        /// <see cref="UnitBranch"/>.
+        /// The draggable catalogue, as an **accordion** of one section per
+        /// <see cref="UnitBranch"/>: infantry, armour, artillery and the rest,
+        /// each opening to the unit types inside it.
         ///
         /// Flat, this list is 117 cards deep and finding the mortar in it means
-        /// scrolling past the ships. Walking the branches in declaration order
+        /// scrolling past the ships. Even with headings it was a single column
+        /// of cards several screens long. Collapsed sections turn it into a
+        /// menu: the nine arms fit on one screen, and the one you open is the
+        /// only one taking space. Walking the branches in declaration order
         /// puts manoeuvre first and the tail last, which is the order an order
-        /// of battle is written in — and an empty branch prints no heading, so a
-        /// search never leaves a bare label behind.
+        /// of battle is written in — and an empty branch prints no heading at
+        /// all, so a search never leaves a bare label behind.
         /// </summary>
         int PopulateAvailable()
         {
             string folder = _team == Team.User ? "Friendly" : "Enemy";
+            // A search is already a statement of what you want; making the hits
+            // wait behind a click would be the accordion fighting the query.
+            bool searching = !string.IsNullOrEmpty(_search);
             int count = 0;
 
             foreach (var branch in UnitBranchInfo.All)
             {
-                bool headed = false;
+                // Walked into a list first because the heading carries the
+                // count, and the count is only known once the branch is walked.
+                _branchMatches.Clear();
                 foreach (var def in UnitDatabase.All)
                 {
                     if (def.Branch != branch) continue;
                     if (!Matches(def.name, def.id, def.ammoType)) continue;
-
-                    if (!headed)
-                    {
-                        BranchHeader(UnitBranchInfo.DisplayName(branch));
-                        headed = true;
-                    }
-                    CreateAvailableCard(def, folder);
-                    count++;
+                    _branchMatches.Add(def);
                 }
+                if (_branchMatches.Count == 0) continue;
+
+                count += _branchMatches.Count;
+
+                bool open = searching || _openBranches.Contains(branch);
+                BranchHeader(branch, _branchMatches.Count, open);
+                if (!open) continue;
+
+                foreach (var def in _branchMatches) CreateAvailableCard(def, folder);
             }
 
             if (count == 0) EmptyRow("No unit type matches that search.");
             return count;
         }
 
-        /// <summary>Divider row naming the arm the cards under it belong to.</summary>
-        void BranchHeader(string label)
+        /// <summary>Opens or closes one arm's section, and redraws the list around it.</summary>
+        void ToggleBranch(UnitBranch branch)
         {
-            var row = UIFactory.CreateGroup(_listContent, "Branch_" + label);
-            row.sizeDelta = new Vector2(0, 24);
+            if (!_openBranches.Remove(branch)) _openBranches.Add(branch);
+            Populate();
+        }
 
-            var text = UIFactory.CreateSectionHeader(row, label.ToUpperInvariant(), UiTheme.Accent);
-            UIFactory.PlaceTopLeft(text.rectTransform, CardIconX, 8f, CardTextWidth + CardIconSize, 14f);
+        /// <summary>
+        /// One accordion header: a chevron saying which way it will go, the arm's
+        /// name, and how many types are inside it.
+        ///
+        /// The count is on the header because it is the answer to the question a
+        /// closed section raises: is there anything in there worth opening, and
+        /// how much of the list am I about to unfold?
+        /// </summary>
+        void BranchHeader(UnitBranch branch, int count, bool open)
+        {
+            var row = UIFactory.CreateBorderedPanel(_listContent, "Branch_" + branch,
+                open ? UiTheme.AccentWash : UiTheme.Surface, UiTheme.Border);
+            row.sizeDelta = new Vector2(0, 30);
+
+            var btn = row.gameObject.AddComponent<Button>();
+            btn.targetGraphic = row.GetComponent<Image>();
+            btn.onClick.AddListener(() => ToggleBranch(branch));
+
+            var chevron = UIFactory.CreateText(row, open ? "▾" : "▸", UiTheme.FontSmall,
+                open ? UiTheme.Accent : UiTheme.TextDim, TextAnchor.MiddleCenter);
+            chevron.raycastTarget = false;
+            UIFactory.Place(chevron.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(14f, 0f), new Vector2(16f, 16f));
+
+            var text = UIFactory.CreateSectionHeader(row,
+                UnitBranchInfo.DisplayName(branch).ToUpperInvariant(),
+                open ? UiTheme.Accent : UiTheme.Text);
+            text.raycastTarget = false;
+            text.alignment = TextAnchor.MiddleLeft;
+            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(30f, 0f), new Vector2(InnerWidth - 90f, 16f));
+            UIFactory.Fit(text, 8);
+
+            var badge = UIFactory.CreateText(row, count.ToString(), UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
+            badge.raycastTarget = false;
+            UIFactory.Place(badge.rectTransform, new Vector2(1f, 0.5f),
+                new Vector2(-10f, 0f), new Vector2(40f, 16f));
         }
 
         int PopulateDeployed()
@@ -1013,9 +1082,24 @@ namespace IronMeridian.UI
                 UiTheme.Surface, UiTheme.Border);
             card.sizeDelta = new Vector2(0, DeployedCardHeight);
 
-            var btn = card.gameObject.AddComponent<Button>();
-            btn.targetGraphic = card.GetComponent<Image>();
-            btn.onClick.AddListener(() => SelectUnitRequested?.Invoke(actor));
+            // Click selects the formation on the map; double-click also flies
+            // the camera to it.
+            //
+            // A PointerClick trigger rather than a Button, because uGUI's
+            // Button has no notion of a second click and
+            // <see cref="PointerEventData.clickCount"/> already carries one —
+            // timing clicks by hand here would be a worse copy of what the
+            // event system has counted. The single-click path still runs on the
+            // first click of a pair, which is right: flying to a formation you
+            // have not selected would leave the map somewhere new with nothing
+            // to show for it.
+            var trigger = card.gameObject.AddComponent<EventTrigger>();
+            AddEvent(trigger, EventTriggerType.PointerClick, e =>
+            {
+                var pointer = (PointerEventData)e;
+                if (pointer.clickCount >= 2) FocusUnitRequested?.Invoke(actor);
+                else SelectUnitRequested?.Invoke(actor);
+            });
 
             string folder = s.TeamEnum == Team.User ? "Friendly" : "Enemy";
             CardIcon(card, folder, actor.Def.id);

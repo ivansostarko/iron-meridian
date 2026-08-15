@@ -573,7 +573,14 @@ namespace IronMeridian.Units
 
         public void ApplyDamage(float dmg)
         {
+            // Booked from the strength actually removed rather than from the
+            // damage asked for: a guaranteed kill arrives as a value well above
+            // 1, and the casualty list must not report more men than the
+            // formation had. See LossLedger.
+            float before = State.strength;
             State.strength = Mathf.Max(0f, State.strength - dmg);
+            LossLedger.RecordAttrition(this, before - State.strength);
+
             State.morale = Mathf.Max(0f, State.morale - dmg * 40f);
 
             // Rounds landing. Throttled hard: combat ticks once a second against
@@ -647,6 +654,10 @@ namespace IronMeridian.Units
         void Die()
         {
             State.status = UnitStatus.Destroyed.ToString();
+
+            // The counter is off the board — the operational half of the
+            // casualty list. Its people were booked as the strength came off.
+            LossLedger.RecordDestroyed(this);
 
             // Drop the selection outline before the fade starts. It is a marker
             // for a formation the player is commanding, and this one has just

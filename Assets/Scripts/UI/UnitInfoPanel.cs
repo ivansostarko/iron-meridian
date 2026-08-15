@@ -33,13 +33,36 @@ namespace IronMeridian.UI
         /// table lives inside a scroll viewport, and a narrow inset put the
         /// first character of every label and the last digit of every value
         /// hard against the viewport's clipping edge — legible on paper, shaved
-        /// in practice. A generous, *equal* gutter on both sides is also what
-        /// makes the block read as a page of data rather than as text pinned to
-        /// the edge of the screen; every value is best-fitted
-        /// (<see cref="UIFactory.Fit"/>), so the width this costs is paid in
-        /// type size rather than in truncation.
+        /// in practice. A generous gutter is also what makes the block read as a
+        /// page of data rather than as text pinned to the edge of the screen;
+        /// every value is best-fitted (<see cref="UIFactory.Fit"/>), so the
+        /// width this costs is paid in type size rather than in truncation.
+        ///
+        /// This is the *base* gutter, before <see cref="ContentShift"/> slides
+        /// the block sideways. <see cref="TableLeftInset"/> and
+        /// <see cref="TableRightInset"/> are what the rows actually use.
         /// </summary>
         const float TableInset = 50f;
+
+        /// <summary>
+        /// How far the whole content block — the tab strip, the section
+        /// headings and every label/value row — is shifted **left** inside the
+        /// panel.
+        ///
+        /// It is a shift rather than extra padding on both sides: the panel is
+        /// 300 px wide and the row is already split into two columns, so taking
+        /// 25 px off each edge would cost the label column a third of its width
+        /// and best-fit would pay for it in type size. Moving the block instead
+        /// leaves every column exactly as wide as it was, gives the values a
+        /// deeper margin against the screen edge, and closes the gap on the map
+        /// side where the panel meets the terrain.
+        /// </summary>
+        const float ContentShift = 25f;
+
+        /// <summary>Inset from the panel's left edge to the content — the table's own gutter, shifted.</summary>
+        const float TableLeftInset = TableInset - ContentShift;
+        /// <summary>Inset from the panel's right edge. The 25 px the left gave up ends up here.</summary>
+        const float TableRightInset = TableInset + ContentShift;
 
         /// <summary>
         /// Clear space between the label column and the value column. Without
@@ -131,15 +154,22 @@ namespace IronMeridian.UI
 
         void BuildTabs()
         {
+            // The strip keeps its left edge and gives up ContentShift on the
+            // right, so all four tabs sit that much further left — the same
+            // move the table below makes. It is not offset to a negative x:
+            // the panel has no mask, and a strip hanging past its left edge
+            // would draw its fill and its underline over the map.
+            float stripWidth = PanelWidth - ContentShift;
+
             var strip = UIFactory.CreateGroup(_panel, "Tabs");
-            UIFactory.Place(strip, new Vector2(0f, 1f), new Vector2(0, -84), new Vector2(PanelWidth, 52));
+            UIFactory.Place(strip, new Vector2(0f, 1f), new Vector2(0, -84), new Vector2(stripWidth, 52));
 
             var rule = UIFactory.CreateDivider(strip, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 0); rule.anchorMax = new Vector2(1, 0);
             rule.pivot = new Vector2(0.5f, 0);
             rule.anchoredPosition = Vector2.zero;
 
-            float w = PanelWidth / 4f;
+            float w = stripWidth / 4f;
             // Captions are abbreviated where the full word does not fit a
             // quarter of the panel. "EQUIPMENT" at 75 px was being best-fitted
             // down to an unreadable 7 pt to squeeze in; "EQUIP" is shorter than
@@ -479,7 +509,8 @@ namespace IronMeridian.UI
 
             var h = UIFactory.CreateSectionHeader(holder, label);
             UIFactory.Place(h.rectTransform, new Vector2(0f, 0f),
-                new Vector2(TableInset, 4), new Vector2(PanelWidth - TableInset * 2f, 18));
+                new Vector2(TableLeftInset, 4),
+                new Vector2(PanelWidth - TableLeftInset - TableRightInset, 18));
         }
 
         void Row(string label, string value, Color? valueColour = null)
@@ -501,8 +532,8 @@ namespace IronMeridian.UI
             var rule = UIFactory.CreateDivider(row, new Color(1f, 1f, 1f, 0.045f));
             rule.anchorMin = new Vector2(0, 0); rule.anchorMax = new Vector2(1, 0);
             rule.pivot = new Vector2(0.5f, 0);
-            rule.offsetMin = new Vector2(TableInset, 0);
-            rule.offsetMax = new Vector2(-TableInset, 1);
+            rule.offsetMin = new Vector2(TableLeftInset, 0);
+            rule.offsetMax = new Vector2(-TableRightInset, 1);
 
             // The row is split into a label column and a value column with a
             // gutter between them, all measured from the *actual* row width
@@ -520,7 +551,7 @@ namespace IronMeridian.UI
             var lr = lbl.rectTransform;
             lr.anchorMin = new Vector2(0f, 0f);
             lr.anchorMax = new Vector2(LabelShare, 1f);
-            lr.offsetMin = new Vector2(TableInset, 0);
+            lr.offsetMin = new Vector2(TableLeftInset, 0);
             lr.offsetMax = new Vector2(-ColumnGutter * 0.5f, 0);
             UIFactory.Fit(lbl, 8);
 
@@ -530,7 +561,7 @@ namespace IronMeridian.UI
             vr.anchorMin = new Vector2(LabelShare, 0f);
             vr.anchorMax = new Vector2(1f, 1f);
             vr.offsetMin = new Vector2(ColumnGutter * 0.5f, 0);
-            vr.offsetMax = new Vector2(-TableInset, 0);
+            vr.offsetMax = new Vector2(-TableRightInset, 0);
             UIFactory.Fit(val, 8);
 
             _values[label] = val;

@@ -98,7 +98,11 @@ Click a row to open it; click the **same** row again, or the **✕** in the pane
 
 ### Deploying units (drag & drop)
 
-Open **UNITS** in the left rail — the panel lists all 117 unit types with their icons, grouped under a heading per arm of service (Infantry, Armour, Mechanised, Artillery, Anti-Aircraft, Air, Navy, Logistics, Other).
+Open **UNITS** in the left rail — the panel lists all 117 unit types with their icons as an **accordion**, one section per arm of service (Infantry, Armour, Mechanised, Artillery, Anti-Aircraft, Air, Navy, Logistics, Other). Click a heading to open it; click it again to close it.
+
+**Everything starts closed.** 117 cards under nine headings is a list you scroll rather than one you read, and the arm is what you are actually choosing between first — *"I want an armoured battalion"* comes before *"which one"*. Collapsed, the whole order of battle fits on one screen and picking a category is one click. Each heading carries the number of types inside it, which is the answer to the question a closed section raises.
+
+**Searching opens everything.** Typing a name is already a statement of which unit you want, so the hits are not made to wait behind a second click. An arm with no matches prints no heading at all, so a search never leaves a bare label behind.
 
 **There is no echelon picker.** Units deploy at **battalion**, which is the echelon an operational map is actually drawn at — brigades are too coarse to manoeuvre and companies too many to command. A dropdown listing every size from section to army, sitting above a list of 117 types, made deploying one unit a two-control operation and put the rarely-wanted choice in front of the always-wanted one; a formation's size is changed after the fact from the info panel, where the rest of its details are edited anyway.
 
@@ -111,6 +115,19 @@ The drop is ground-checked twice: the cursor must be over the terrain **and** th
 The cards carry drag handlers, which means dragging one *deploys* rather than
 scrolls the list. Use the wheel or the scrollbar on the right of the list to
 reach the units past the fold.
+
+### The DEPLOYED list
+
+The other tab lists what is actually on the map — call sign, type, size, strength and status, with a side stripe down the card's left edge:
+
+| Input | Action |
+|---|---|
+| **Click** a row | Selects that formation on the map: ring, outline, heading arrow and the info panel on the right |
+| **Double-click** a row | Selects it **and flies the camera to it** — an eased travel to its position, not a cut |
+
+A cut would leave you to work out where on the globe you had landed; watching the ground slide past carries the relationship between where you were and where you now are, which is the whole value of *"fly to this formation"* over *"show me this formation"*. Selecting first is what makes the arrival mean something — the camera stops over a counter that is already marked, rather than over a patch of terrain you then have to find the unit on. Any pan or zoom cancels the flight immediately: an animation that has to be waited out is a camera that has stopped answering.
+
+A formation the fog has taken off the map is not listed here, since the list would hand back exactly what the fog is withholding.
 
 ### Commanding units (mouse)
 
@@ -364,16 +381,20 @@ It is solved as an **influence field**. Every living formation pulls on it, weig
 
 The two sides' weighted front edges are then interpolated by their local strength, so **a stronger side pushes the line into the weaker one** — advance, rout or die and the front moves. The solve runs in metres in a local east-north-up frame, and the result is subdivided by Chaikin corner-cutting into a few hundred vertices, which is what makes it read as a front rather than as a set of measurements.
 
-Settings, from clicking the line:
+**The line spans every formation on the map.** It used to be trimmed back to the bands where both sides had real influence, and then trimmed again at the ends — so on any map wider than the fighting it was a short segment hanging in the middle of a deployment that ran well past both of its shoulders, and a formation on the flank sat *outside* the line that was supposed to describe where it stood. Now the span is set by the outermost formation on either side plus the influence width, and no band is dropped: past the last band both sides could be solved for, the front **runs straight on out** to the flank, and a gap between two separate engagements is **bridged** by interpolating across it, so a two-battle map reads as one continuous front.
+
+Settings, from clicking the line (shipped defaults in **bold**):
 
 | Control | What it does |
 |---|---|
 | **SHOW ON MAP** / **AUTO-UPDATE** | Draw it or not; keep solving or freeze the current snapshot |
-| **COLOUR** / **WIDTH** | Red by default — deliberately not the yellow used for hand-drawn boundaries, so the two never read as the same kind of object |
-| **RESOLUTION** | Bands solved across the front, 17 to 121 |
-| **SMOOTHING** | Chaikin passes, 0 to 3 |
-| **INFLUENCE WIDTH** | 2.5 to 28 km |
+| **COLOUR** / **WIDTH** | Red at **Standard** width by default — deliberately not the yellow used for hand-drawn boundaries, so the two never read as the same kind of object |
+| **RESOLUTION** | Bands solved across the front: Coarse 17 / **Standard 41** / Fine 73 / Very fine 121 |
+| **SMOOTHING** | Chaikin passes: Raw 0 / Light 1 / Smooth 2 / **Silk 3** |
+| **INFLUENCE WIDTH** | Tight 2.5 / **Standard 6** / Broad 14 / Sweeping 28 km |
 | **RECOMPUTE NOW** | Solve immediately, useful with AUTO-UPDATE frozen |
+
+Smoothing ships at **Silk** rather than Smooth because of the change above: the extrapolated shoulders out past the flanks meet the solved middle at a corner that is visible at two passes, and a third pass rounds it for one more doubling of a vertex list that is only a few hundred long. The panel reads its buttons back off the system when it opens, so RESET and the shipped defaults can never disagree with what is lit.
 
 The readout at the top of the panel states the line's length, its vertex count and how many formations on each side contributed — or why there is no line, when one side has left the field or the two are not in contact anywhere.
 
@@ -392,6 +413,25 @@ Press **▶ START BATTLE**. Every second, opposing units within weapon range exc
 **Range is measured edge to edge, not pin to pin.** Two thirds of each formation's footprint is subtracted from the gap, so a brigade whose leading elements are inside a battalion's weapon range is in range of it. Measuring counter to counter said otherwise by a kilometre or more, which is why formations could stand visibly overlapping without engaging.
 
 **Contact stops the march.** A formation exchanging fire is fighting, not marching through the fight — its move order is *kept*, not cancelled, so breaking contact resumes it. Contact is mutual even when only one side can shoot: being under fire you cannot answer is still being in a battle, and walking away from rounds that are still landing is not a thing a column gets to do.
+
+### Losses — TAB
+
+Press **TAB** during a battle for the casualty list: both sides side by side, a row per unit type, heaviest first.
+
+| Column | What it counts |
+|---|---|
+| **FORM** | Formations destroyed outright — the operational cost, what you have stopped being able to command |
+| **MEN** | Manpower behind every point of strength lost, in **surviving** formations as well as dead ones — the human cost, and the number that keeps climbing during an exchange where nothing on the map has died yet |
+
+The two halves of the page are deliberately identical, because the whole question it answers is a comparison: anything that made your side read differently from theirs would make them incomparable. Above each table is that side's total, and how many of its formations are still on the map — *"eleven destroyed"* means nothing without *"of thirty-four"*.
+
+Losses are booked **as they are inflicted** rather than reconstructed by comparing the map with the save file, which would break the moment anything was reinforced or deployed mid-battle and could say nothing at all about the formations that are still alive but half gone. The ledger is per-scenario: loading, resetting or re-entering the map clears it. TAB again, or Escape, closes the page.
+
+### Air defence
+
+Anti-aircraft formations defend the airspace around themselves automatically — deploying the launcher **is** the order. A drone entering the envelope is tracked (a ring appears under it, and the HUD names the battery), a missile leaves the rail two seconds later, and it never misses. The drone comes down burning and its mission does not happen.
+
+Today only *hostile* batteries have anything to shoot at, because every UAV sortie is called by the player. Full detail — which unit types qualify, why the envelope is absolute, and what the intercepted sortie reports — in [24-AIR-DEFENCE.md](24-AIR-DEFENCE.md).
 
 ### Marching
 

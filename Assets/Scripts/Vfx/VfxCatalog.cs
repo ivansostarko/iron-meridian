@@ -124,7 +124,18 @@ namespace IronMeridian.Vfx
         /// off the ground inside the search ring — looping, stopped when the
         /// drone leaves station.
         /// </summary>
-        ReconMarker
+        ReconMarker,
+
+        // --- air defence (see docs/24-AIR-DEFENCE.md) ---
+
+        /// <summary>Interceptor leaving the rail — flame and back-blast at the launcher.</summary>
+        InterceptorLaunch,
+        /// <summary>Motor plume behind an interceptor in flight — looping, killed on intercept.</summary>
+        InterceptorTrail,
+        /// <summary>The kill: a warhead going off against a drone, in the air.</summary>
+        AirInterceptBurst,
+        /// <summary>Burning airframe coming down — looping, attached to the wreck, killed on landing.</summary>
+        DroneFallTrail
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -446,7 +457,42 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.ReconMarker, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 900f, lifeSeconds = 0f,
                          tint = new Color(0.62f, 0.82f, 0.95f), priority = 38,
-                         sound = EffectSound.None }
+                         sound = EffectSound.None },
+
+            // --- air defence (docs/24-AIR-DEFENCE.md) ---
+            // Everything here is deliberately *small*. An interception is a
+            // precise event a long way up, and it competes on screen with the
+            // strikes landing on the ground below it — a burst sized like a
+            // 155 mm round going off at four hundred metres would read as the
+            // sky itself exploding and would say the wrong thing about how much
+            // ordnance was involved.
+
+            new VfxDef { id = VfxId.InterceptorLaunch, prefabPath = null,
+                         fallback = VfxFallback.Impact,    scaleMeters = 130f, lifeSeconds = 1.2f,
+                         tint = new Color(1.00f, 0.80f, 0.40f), priority = 118,
+                         sound = EffectSound.MissileLight },
+
+            // Attached to the missile and killed on intercept, so it has no life
+            // of its own — the same arrangement MissileTrail uses, and the same
+            // low priority: losing a plume costs a flourish, losing the burst
+            // would cost the event.
+            new VfxDef { id = VfxId.InterceptorTrail, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 55f,  lifeSeconds = 0f,
+                         tint = new Color(0.86f, 0.86f, 0.88f), priority = 30,
+                         sound = EffectSound.None },
+
+            // Priority above the drone warhead it is stopping: if the budget has
+            // to choose between showing the strike arriving and showing it being
+            // stopped, the interception is the news.
+            new VfxDef { id = VfxId.AirInterceptBurst, prefabPath = null,
+                         fallback = VfxFallback.ArtilleryAirBurst, scaleMeters = 120f, lifeSeconds = 1.8f,
+                         tint = new Color(1.00f, 0.92f, 0.62f), priority = 145,
+                         sound = EffectSound.MissileLight },
+
+            new VfxDef { id = VfxId.DroneFallTrail, prefabPath = null,
+                         fallback = VfxFallback.Fire,      scaleMeters = 70f,  lifeSeconds = 0f,
+                         tint = new Color(1.00f, 0.52f, 0.16f), priority = 58,
+                         sound = EffectSound.Fire }
         };
 
         static Dictionary<VfxId, VfxDef> _byId;

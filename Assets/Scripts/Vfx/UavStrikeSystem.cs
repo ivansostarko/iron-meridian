@@ -83,10 +83,12 @@ namespace IronMeridian.Vfx
             float heading = Random.Range(0f, 360f);
 
             var run = DroneRun.Launch(Map.Georeference, def, lat, lon, heading);
+            bool shotDown = false;
 
             if (run != null)
             {
                 run.Impact = (impactLat, impactLon) => Detonate(def, impactLat, impactLon);
+                run.Aborted = () => shotDown = true;
 
                 // The drone destroys itself on impact, so a null check is the
                 // completion test.
@@ -102,10 +104,21 @@ namespace IronMeridian.Vfx
                 Detonate(def, lat, lon);
             }
 
+            if (marker != null) Destroy(marker.gameObject);
+
+            // Intercepted short of the objective. Nothing is left on the target
+            // — no warhead, no burning ground, no report of a strike complete —
+            // because nothing happened there. The wreck and its fire are where
+            // the drone came down, and DroneFall owns those. See
+            // docs/24-AIR-DEFENCE.md.
+            if (shotDown)
+            {
+                Flash?.Invoke($"{def.name} was shot down short of the objective — target untouched.");
+                yield break;
+            }
+
             // Thirty minutes of fire, then two hours of smoke. See StrikeAftermath.
             StrikeAftermath.Play(lat, lon, def.burstScale);
-
-            if (marker != null) Destroy(marker.gameObject);
 
             Flash?.Invoke($"Strike complete — {def.name} expended on target.");
         }
@@ -142,6 +155,7 @@ namespace IronMeridian.Vfx
 
             float heading = Random.Range(0f, 360f);
             var run = ReconDroneRun.Launch(Map.Georeference, def, lat, lon, heading);
+            bool shotDown = false;
 
             FogOfWarSystem.Sensor sensor = null;
 
@@ -169,6 +183,7 @@ namespace IronMeridian.Vfx
             {
                 run.OnStation = Begin;
                 run.OffStation = End;
+                run.Aborted = () => shotDown = true;
 
                 // The drone destroys itself once it has flown home, so a null
                 // check is the completion test.
@@ -199,8 +214,14 @@ namespace IronMeridian.Vfx
             if (motes != null) motes.Stop();
             if (marker != null) Destroy(marker.gameObject);
 
-            Flash?.Invoke($"{def.name} off station — the drone is returning. " +
-                          "What it saw is on the map as last-known contacts.");
+            // What it managed to see before it was hit still counts — explored
+            // ground and last-known contacts are already on the map, and taking
+            // them back would be un-learning something the player was shown.
+            // Only the drone is lost.
+            Flash?.Invoke(shotDown
+                ? $"{def.name} was shot down over the objective. What it had already seen stands."
+                : $"{def.name} off station — the drone is returning. " +
+                  "What it saw is on the map as last-known contacts.");
         }
 
         /// <summary>The warhead: burst, lingering smoke, report and damage.</summary>
