@@ -217,6 +217,23 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// One side's stock of one resource — see docs/27-SUSTAINMENT.md.
+    ///
+    /// Only the *stocks* are saved. Consumption is derived from the units on
+    /// the map every time it is asked for, so a scenario can never carry a burn
+    /// rate that disagrees with its own order of battle.
+    /// </summary>
+    [Serializable]
+    public class ResourceStockData
+    {
+        /// <summary>Owning side, a <see cref="Team"/> name.</summary>
+        public string team;
+        /// <summary>ResourceKind name — see <see cref="ResourceCatalog"/>.</summary>
+        public string kind;
+        public double quantity;
+    }
+
+    /// <summary>
     /// A complete scenario/map save. Serialized to JSON, one file per map, in
     /// persistentDataPath/Maps (user saves) or StreamingAssets/Maps (shipped defaults).
     /// </summary>
@@ -263,6 +280,13 @@ namespace IronMeridian.Data
         /// as "this scenario has no rear area" — see docs/26-LOGISTICS.md.
         /// </summary>
         public List<LogisticsSiteData> logistics = new List<LogisticsSiteData>();
+        /// <summary>
+        /// What each side has in stock — fuel, ammunition natures, replacements
+        /// and the rest. Empty on an older map, which reads as a force with
+        /// nothing behind it; the panel's STOCK FROM FORCE fills it in one
+        /// click. See docs/27-SUSTAINMENT.md.
+        /// </summary>
+        public List<ResourceStockData> resources = new List<ResourceStockData>();
         /// <summary>
         /// The order of battle above the units: who commands what, on both
         /// sides. Empty on a map saved before commanders existed, which reads

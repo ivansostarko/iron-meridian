@@ -68,6 +68,12 @@ namespace IronMeridian.Units
         /// </summary>
         System.Action<double, double> _groundPick;
         string _groundPickCancelMessage;
+        /// <summary>
+        /// True for a pick that only makes sense while a battle is running —
+        /// every order. False for the editor's own picks, which are authoring
+        /// actions and belong to scenario mode. See <see cref="ArmGroundPick"/>.
+        /// </summary>
+        bool _groundPickBattleOnly = true;
 
         /// <summary>Raised when a ground pick is placed or cancelled, so the order bar can un-latch.</summary>
         public System.Action GroundPickResolved;
@@ -78,12 +84,26 @@ namespace IronMeridian.Units
         /// <summary>
         /// Arms a ground pick: the next click on the map calls
         /// <paramref name="onPicked"/> with its geodetic position.
+        ///
+        /// **Two flavours, and the defaults are the order one.** An order needs
+        /// something to order and only means anything in a battle, so by default
+        /// a pick is refused with an empty selection and disarms itself the
+        /// moment battle mode ends. The editor's own picks are neither — putting
+        /// a mission's headquarters on the map has no selection behind it and is
+        /// done with the clock stopped — so they turn both guards off. Getting
+        /// this wrong is silent: the pick is simply never armed, or is disarmed
+        /// on the next frame, and the click lands as an ordinary selection.
         /// </summary>
-        public void ArmGroundPick(System.Action<double, double> onPicked, string cancelMessage)
+        /// <param name="requireSelection">False for a pick that acts on the map rather than on a formation.</param>
+        /// <param name="battleOnly">False for an authoring pick, which belongs to scenario mode.</param>
+        public void ArmGroundPick(System.Action<double, double> onPicked, string cancelMessage,
+            bool requireSelection = true, bool battleOnly = true)
         {
-            if (_selection.Count == 0 || onPicked == null) return;
+            if (onPicked == null) return;
+            if (requireSelection && _selection.Count == 0) return;
             _groundPick = onPicked;
             _groundPickCancelMessage = cancelMessage;
+            _groundPickBattleOnly = battleOnly;
         }
 
         void ResolveGroundPick(string message)
@@ -258,7 +278,11 @@ namespace IronMeridian.Units
             // whatever order asked for one, instead of a selection change.
             if (_groundPick != null)
             {
-                if (BattleRunning != null && !BattleRunning()) { ResolveGroundPick(null); return; }
+                if (_groundPickBattleOnly && BattleRunning != null && !BattleRunning())
+                {
+                    ResolveGroundPick(null);
+                    return;
+                }
                 if (Input.GetKeyDown(KeyCode.Escape)) { ResolveGroundPick(_groundPickCancelMessage); return; }
                 if (Input.GetMouseButtonDown(1)) { ResolveGroundPick(_groundPickCancelMessage); return; }
                 if (!blocked && Input.GetMouseButtonDown(0)) HandleGroundPick();

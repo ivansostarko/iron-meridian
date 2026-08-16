@@ -115,10 +115,19 @@ namespace IronMeridian.Map
         /// Cesium streams tiles in, so an early sample legitimately misses and
         /// must be retried rather than baked in as the unit's height.
         ///
-        /// Unit icons carry colliders (they are click targets), so a plain
-        /// raycast can come back with a nearby formation's billboard instead of
-        /// the ground. Those hits are skipped — otherwise units standing close
-        /// together shove each other into the sky.
+        /// **Only the ground counts.** Anything else in the world with a
+        /// collider on it will otherwise be reported as terrain, and whatever is
+        /// being clamped will be placed a clearance above it:
+        ///
+        /// • Unit icons carry colliders (they are click targets), so a plain
+        ///   raycast comes back with a nearby formation's billboard and units
+        ///   standing close together shove each other into the sky.
+        /// • A graphic clamped to the ground *and* carrying a collider feeds on
+        ///   itself. The automatic front line does both — its click ribbon is a
+        ///   400 m-wide collider lying along the line — so every re-clamp found
+        ///   its own ribbon thirty metres up and re-drew the line thirty metres
+        ///   above *that*, every three seconds, until the front was hanging in
+        ///   the air. That is what <see cref="Core.NonTerrain"/> is for.
         /// </summary>
         public static bool TrySampleTerrainHeight(CesiumGeoreference geo, double lat, double lon,
             out double height)
@@ -136,6 +145,7 @@ namespace IronMeridian.Map
                 var hit = _terrainHits[i];
                 if (hit.distance >= nearest) continue;
                 if (hit.collider.GetComponentInParent<IronMeridian.Units.UnitActor>() != null) continue;
+                if (hit.collider.GetComponentInParent<Core.NonTerrain>() != null) continue;
                 nearest = hit.distance;
                 UnityToGeo(geo, hit.point, out _, out _, out height);
                 found = true;

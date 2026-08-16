@@ -12,8 +12,8 @@ namespace IronMeridian.UI
     /// Right-side panel shown instead of <see cref="UnitInfoPanel"/> whenever
     /// 2+ units are selected. It does four things:
     ///
-    ///  • **Names the current selection as a group**, so it can be recalled later.
-    ///  • **Renames the group it is already in** — see <see cref="RenameGroup"/>.
+    ///  • **Makes the current selection a group**, so it can be recalled later.
+    ///    The group names itself — see <see cref="NextDesignation"/>.
     ///  • **Lists what is selected**, with each formation's current group beside
     ///    it and a way to move it to another one.
     ///  • **Lists the existing groups** — click one to select its members,
@@ -81,16 +81,14 @@ namespace IronMeridian.UI
         const float ScopeTop = 56f, ScopeHeight = 16f;
         const float ScopeNoteTop = 72f, ScopeNoteHeight = 14f;
 
-        const float HintTop = 92f;
-        const float NameInputTop = 112f;
-        const float ButtonsTop = 156f, ButtonsHeight = 40f;
+        const float ButtonsTop = 96f, ButtonsHeight = 40f;
         /// <summary>Heading sits a clear <see cref="UnitsLabelMargin"/> below the button row.</summary>
         const float UnitsLabelTop = ButtonsTop + ButtonsHeight + UnitsLabelMargin;
         const float UnitsLabelHeight = 24f;
         const float UnitsScrollTop = UnitsLabelTop + UnitsLabelHeight + 4f;
 
-        /// <summary>Button row: CREATE · RENAME · UNGROUP, meeting exactly at <see cref="Inner"/>.</summary>
-        const float CreateWidth = 104f, RenameWidth = 74f, UngroupWidth = 78f, ButtonGap = 4f;
+        /// <summary>Button row: GROUP SELECTION · UNGROUP, meeting exactly at <see cref="Inner"/>.</summary>
+        const float CreateWidth = 166f, UngroupWidth = 94f, ButtonGap = 4f;
 
         /// <summary>
         /// Where the selected-units list stops and the saved-groups list begins,
@@ -105,15 +103,11 @@ namespace IronMeridian.UI
 
         RectTransform _panel;
         Text _title;
-        InputField _nameInput;
         RectTransform _listContent;      // existing groups
         RectTransform _unitsContent;     // units in the current selection
         RectTransform _unitsScroll;
-        Text _hint, _scope, _scopeNote;
-        Button _rename;
+        Text _scope, _scopeNote;
         RectTransform _picker;           // the per-unit group chooser, when open
-        /// <summary>Group the name field was last filled for — see <see cref="RefreshNaming"/>.</summary>
-        string _scopeGroupId;
 
         IReadOnlyList<UnitActor> _currentSelection = new List<UnitActor>();
 
@@ -154,36 +148,15 @@ namespace IronMeridian.UI
                 new Vector2(0, -ScopeNoteTop), new Vector2(Inner, ScopeNoteHeight));
             UIFactory.Fit(_scopeNote, 8);
 
-            _hint = UIFactory.CreateText(_panel, "Name this selection as a group:", 13,
-                UiTheme.TextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(_hint.rectTransform, new Vector2(0.5f, 1f),
-                new Vector2(0, -HintTop), new Vector2(Inner, 22));
-
-            _nameInput = UIFactory.CreateInputField(_panel, "Group name…", 16);
-            UIFactory.Place((RectTransform)_nameInput.transform, new Vector2(0.5f, 1f),
-                new Vector2(0, -NameInputTop), new Vector2(Inner, 36));
-
-            // CREATE · RENAME · UNGROUP share a row: the three things that can
-            // be done to a group's membership and its name, in the order they
-            // are reached for. One field feeds both of the naming buttons —
-            // asking for the name twice, once to create and once to rename,
-            // would be two inputs for one piece of information.
+            // GROUP SELECTION · UNGROUP. Two buttons, no text field: a group is
+            // made and unmade here, and it names itself — see NextDesignation.
             float x = -Inner * 0.5f;
-            var create = UIFactory.CreateButton(_panel, "CREATE GROUP", CreateGroup,
+            var create = UIFactory.CreateButton(_panel, "GROUP SELECTION", CreateGroup,
                 UiTheme.Accent, new Color(0.1f, 0.1f, 0.1f), 14);
             UIFactory.Place((RectTransform)create.transform, new Vector2(0.5f, 1f),
                 new Vector2(x + CreateWidth * 0.5f, -ButtonsTop), new Vector2(CreateWidth, ButtonsHeight));
             UIFactory.Fit(create.GetComponentInChildren<Text>(), 9);
             x += CreateWidth + ButtonGap;
-
-            _rename = UIFactory.CreateButton(_panel, "RENAME", RenameGroup,
-                UiTheme.Surface, UiTheme.Text, 13);
-            UIFactory.Place((RectTransform)_rename.transform, new Vector2(0.5f, 1f),
-                new Vector2(x + RenameWidth * 0.5f, -ButtonsTop), new Vector2(RenameWidth, ButtonsHeight));
-            UIFactory.Fit(_rename.GetComponentInChildren<Text>(), 9);
-            UiTooltip.Attach(_rename.gameObject,
-                "Rename the group these formations belong to", UiTooltip.Side.Left);
-            x += RenameWidth + ButtonGap;
 
             var ungroup = UIFactory.CreateButton(_panel, "UNGROUP", UngroupSelection,
                 UiTheme.Surface, UiTheme.TextDim, 13);
@@ -248,51 +221,38 @@ namespace IronMeridian.UI
         // ------------------------------------------------------------ naming
 
         /// <summary>
-        /// Renames the group the selection belongs to.
+        /// The next free group designation — GROUP 1, GROUP 2, and so on.
         ///
-        /// **Every member is renamed, not just the selected ones.** A group's
-        /// name is stored on each formation in it, so renaming only what happens
-        /// to be selected would split one group into two that share an id and
-        /// disagree about what they are called — and the group list, which reads
-        /// the name off whichever member it meets first, would then show one
-        /// name or the other depending on registry order. The button is about
-        /// the *group*, so it acts on the group.
+        /// **A group names itself.** The panel used to carry a text field and a
+        /// RENAME button beside CREATE, which is three controls and a decision
+        /// for something that exists to be *pointed at*: what a player needs of
+        /// a group is a handle short enough to read on a row and on the order
+        /// bar, and any handle will do so long as it is unique and stable. So
+        /// the panel assigns one and gives the space back to the lists, which
+        /// are what the player is actually reading.
+        ///
+        /// The lowest unused number rather than a running count, so deleting
+        /// GROUP 2 and making another gets GROUP 2 back instead of leaving a
+        /// hole and climbing forever.
         /// </summary>
-        void RenameGroup()
+        static string NextDesignation()
         {
-            string id = SharedGroupIdOfSelection();
-            if (string.IsNullOrEmpty(id))
-            {
-                Flash?.Invoke(_currentSelection.Count == 0
-                    ? "Nothing selected."
-                    : "These formations are not all in one group — CREATE GROUP makes them one.");
-                return;
-            }
-
-            string name = _nameInput.text.Trim();
-            if (string.IsNullOrEmpty(name))
-            {
-                Flash?.Invoke("Type the new name in the field above first.");
-                return;
-            }
-
-            int count = 0;
+            var taken = new HashSet<string>();
             foreach (var u in UnitRegistry.All)
-            {
-                if (u == null || u.State.groupId != id) continue;
-                u.State.groupName = name;
-                count++;
-            }
+                if (u != null && !string.IsNullOrEmpty(u.State.groupName))
+                    taken.Add(u.State.groupName);
 
-            Flash?.Invoke($"Group renamed to '{name}' ({count} formations).");
-            Regrouped();
+            for (int n = 1; n < 1000; n++)
+            {
+                string candidate = "GROUP " + n;
+                if (!taken.Contains(candidate)) return candidate;
+            }
+            return "GROUP";
         }
 
         /// <summary>
-        /// Repaints the header block for what is currently selected: which group
-        /// it is (or that it is not one yet), and whether RENAME can do
-        /// anything. A button that looks live and refuses on click is a worse
-        /// answer than one that plainly says it is not available.
+        /// Repaints the header block: which group this selection is, or that it
+        /// is not one yet.
         /// </summary>
         void RefreshNaming()
         {
@@ -306,31 +266,7 @@ namespace IronMeridian.UI
 
             _scopeNote.text = grouped
                 ? "Orders for this group are on the bar below the map."
-                : "Name it below to recall it later. Orders are on the bar below the map.";
-
-            _hint.text = grouped
-                ? "Rename this group, or name it as a new one:"
-                : "Name this selection as a group:";
-
-            // Pre-filled with the current name: renaming is nearly always an
-            // edit of what is there rather than a fresh word, and an empty box
-            // above a RENAME button asks the player to remember it.
-            //
-            // Refilled when the *group* changes rather than whenever the box is
-            // empty. Leaving a name behind from the last selection would leave
-            // RENAME pointed at one group carrying another one's name — and
-            // half-typed text must survive a repaint of this panel, which is
-            // what happens on every membership change.
-            string id = SharedGroupIdOfSelection();
-            if (id != _scopeGroupId)
-            {
-                _scopeGroupId = id;
-                _nameInput.text = grouped ? groupName : "";
-            }
-
-            _rename.interactable = grouped;
-            var caption = _rename.GetComponentInChildren<Text>(true);
-            if (caption != null) caption.color = grouped ? UiTheme.Text : UiTheme.TextFaint;
+                : "GROUP SELECTION makes these one, so they can be recalled together.";
         }
 
         // --------------------------------------------------------- selection
@@ -481,12 +417,7 @@ namespace IronMeridian.UI
 
         void CreateGroup()
         {
-            string name = _nameInput.text.Trim();
-            if (string.IsNullOrEmpty(name))
-            {
-                Flash?.Invoke("Type a name for the group first.");
-                return;
-            }
+            string name = NextDesignation();
             string id = System.Guid.NewGuid().ToString("N").Substring(0, 8);
             int count = 0;
             foreach (var u in _currentSelection)
@@ -496,7 +427,8 @@ namespace IronMeridian.UI
                 u.State.groupName = name;
                 count++;
             }
-            Flash?.Invoke($"Group '{name}' created ({count} units).");
+
+            Flash?.Invoke($"{name} formed — {count} formation(s). Its orders are on the bar below the map.");
             Regrouped();
         }
 

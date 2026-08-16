@@ -81,6 +81,10 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
     }
   ],
 
+  "resources": [
+    { "team": "User", "kind": "Fuel", "quantity": 84000.0 }
+  ],
+
   "teams": [
     { "id": "team-blue", "name": "Blue Force", "side": "User" },
     { "id": "team-red",  "name": "Red Force",  "side": "Enemy" }
@@ -99,6 +103,12 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
 Unlike `markers`, these belong to the *scenario* rather than to a unit, so
 nothing sweeps them off the map when a formation dies. Empty on any map saved
 before they existed, which reads correctly as "this scenario has no rear area".
+
+`resources` is what each side has in stock — see
+[27-SUSTAINMENT.md](27-SUSTAINMENT.md). Only stocks are written; consumption is
+derived from the units on the map every time it is asked for, so a scenario
+cannot carry a burn rate that disagrees with its own order of battle. Zero
+stocks are omitted.
 
 `teams` and `players` say who is fighting the scenario — see
 [25-PLAYERS.md](25-PLAYERS.md). A file with neither (anything saved before they

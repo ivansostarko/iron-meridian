@@ -69,7 +69,7 @@ namespace IronMeridian.UI
 
         enum Section
         {
-            General, Units, Players, Commanders, Logistics, Effects, Missions,
+            General, Units, Players, Commanders, Logistics, Sustainment, Effects, Missions,
             Weather, Map, DateTime,
             /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
             Groups
@@ -140,7 +140,7 @@ namespace IronMeridian.UI
         /// </summary>
         const float ListTop = -90f;
         /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 446f;
+        const float HeaderHeight = 482f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -264,7 +264,8 @@ namespace IronMeridian.UI
             ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
             UavStrikeSystem uavStrike, NavalStrikeSystem naval,
             MapControlsUI mapControls, StrikeDockUI strikeDock,
-            IronMeridian.Logistics.LogisticsSystem logistics)
+            IronMeridian.Logistics.LogisticsSystem logistics,
+            IronMeridian.Logistics.SustainmentSystem sustainment)
         {
             _canvas = canvas;
             _map = map;
@@ -280,6 +281,7 @@ namespace IronMeridian.UI
             _mapControls = mapControls;
             _strikeDock = strikeDock;
             _logistics = logistics;
+            _sustainment = sustainment;
 
             // The section panel is created first so it draws *behind* the rail —
             // uGUI paints in hierarchy order, and the closed position tucks the
@@ -307,6 +309,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Players] = MakeSectionContent(body, "Players");
             _sectionContent[Section.Commanders] = MakeSectionContent(body, "Commanders");
             _sectionContent[Section.Logistics] = MakeSectionContent(body, "Logistics");
+            _sectionContent[Section.Sustainment] = MakeSectionContent(body, "Sustainment");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Missions] = MakeSectionContent(body, "Missions");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
@@ -319,6 +322,7 @@ namespace IronMeridian.UI
             BuildPlayersSection(_sectionContent[Section.Players]);
             BuildCommandersSection(_sectionContent[Section.Commanders]);
             BuildLogisticsSection(_sectionContent[Section.Logistics]);
+            BuildSustainmentSection(_sectionContent[Section.Sustainment]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildMissionsSection(_sectionContent[Section.Missions]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
@@ -450,6 +454,7 @@ namespace IronMeridian.UI
             // they are rebuilt on the way in rather than kept in step while shut.
             if (section == Section.Groups) RefreshGroups();
             if (section == Section.Logistics) RefreshLogistics();
+            if (section == Section.Sustainment) RefreshSustainment();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -586,19 +591,20 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Players, "PLAYERS", UiIcons.Shield, -116);
             AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -152);
             AddNavRow(panel, Section.Logistics, "LOGISTICS", UiIcons.Pallet, -188);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -224);
+            AddNavRow(panel, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop, -224);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -260);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -260);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -296);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -332);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -368);
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -296);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -332);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -368);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -404);
 
             // Last, and hidden until a battle starts — see SetBattleMode. A
             // group is something you command, not something you author, so the
             // row appears with the rest of the battle chrome rather than
             // sitting greyed out through the whole of a scenario's layout.
-            _groupsNavRow = AddNavRow(panel, Section.Groups, "GROUPS", UiIcons.Group, -404);
+            _groupsNavRow = AddNavRow(panel, Section.Groups, "GROUPS", UiIcons.Group, -440);
             _groupsNavRow.gameObject.SetActive(false);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
@@ -889,6 +895,7 @@ namespace IronMeridian.UI
             // side control of its own — see BuildLogisticsSection.
             if (_logistics != null) _logistics.Team = team;
             RefreshLogistics();
+            RefreshSustainment();
             Populate();
         }
 
@@ -898,6 +905,10 @@ namespace IronMeridian.UI
             // A group is a property of the units in it, so the group list has
             // nothing else to hear about a formation joining, leaving or dying.
             RefreshGroups();
+            // Every burn rate on the sustainment page is read off the deployed
+            // force, so the force changing is the only thing that moves them.
+            if (_sectionContent.TryGetValue(Section.Sustainment, out var page) &&
+                page.gameObject.activeSelf) RefreshSustainment();
         }
 
         // ------------------------------------------------------------ list
@@ -1260,6 +1271,265 @@ namespace IronMeridian.UI
         /// how they are drawn is an implementation detail, and the same section
         /// would hold a decal or a mesh effect later.
         /// </summary>
+        // ------------------------------------------------- sustainment section
+
+        IronMeridian.Logistics.SustainmentSystem _sustainment;
+
+        /// <summary>Fill the shown side's stocks from what it has deployed.</summary>
+        public System.Action<Team, float> StockFromForceRequested;
+
+        /// <summary>The period the consumption column is stated over.</summary>
+        enum BurnPeriod { Day, Week, Month }
+        BurnPeriod _burnPeriod = BurnPeriod.Day;
+
+        static float BurnDays(BurnPeriod p) => p == BurnPeriod.Day ? 1f : p == BurnPeriod.Week ? 7f : 30f;
+        static string BurnWord(BurnPeriod p) => p == BurnPeriod.Day ? "day" : p == BurnPeriod.Week ? "week" : "month";
+
+        readonly List<(ResourceKind kind, InputField field, Text detail)> _resourceRows =
+            new List<(ResourceKind, InputField, Text)>();
+        readonly List<(BurnPeriod period, Image fill, Text label)> _burnTabs =
+            new List<(BurnPeriod, Image, Text)>();
+        Text _manpowerFigure, _manpowerDetail, _sustainSide, _sustainVerdict;
+        /// <summary>Suppresses the write-back while the fields are being filled from the model.</summary>
+        bool _sustainSyncing;
+
+        /// <summary>Height of the SUSTAINMENT page inside its scroll view.</summary>
+        const float SustainmentPageHeight = 236f + 9f * 58f + 120f;
+
+        /// <summary>
+        /// The force's stocks, its burn rate and how long it can go on.
+        ///
+        /// **Called SUSTAINMENT rather than RESOURCES.** Resources is what a
+        /// strategy game calls the numbers in the corner of the screen;
+        /// sustainment is what an army calls keeping a force in the field, and
+        /// it is the right word for a panel that is about fuel, ammunition
+        /// natures, replacements and rations. It also keeps the two logistic
+        /// sections distinct at a glance: LOGISTICS is *where the supply is*,
+        /// SUSTAINMENT is *how much of it there is*.
+        ///
+        /// **Stocks are typed; burn rates are not.** Every consumption figure on
+        /// this page is arithmetic over the units on the map — see
+        /// <see cref="IronMeridian.Logistics.SustainmentSystem"/>. Nobody can
+        /// type a rate, so a scenario cannot state a burn that disagrees with
+        /// its own order of battle.
+        ///
+        /// See docs/27-SUSTAINMENT.md.
+        /// </summary>
+        void BuildSustainmentSection(RectTransform section)
+        {
+            var content = ScrollableSection(section, SustainmentPageHeight);
+
+            SectionLabel(content, "FORCE ON THE MAP", -8);
+
+            _sustainSide = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextDim,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_sustainSide.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad + InnerWidth - 110f, -8), new Vector2(110, 18));
+
+            // The head count is the one figure on this page that is not a stock
+            // at all, so it gets its own card rather than a row in the table.
+            var head = UIFactory.CreateBorderedPanel(content, "Manpower", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(head, new Vector2(0f, 1f), new Vector2(Pad, -28), new Vector2(InnerWidth, 58));
+
+            _manpowerFigure = UIFactory.CreateText(head, "—", 26, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_manpowerFigure.rectTransform, new Vector2(0f, 1f),
+                new Vector2(12, -6), new Vector2(InnerWidth - 24f, 30));
+            UIFactory.Fit(_manpowerFigure, 14);
+
+            _manpowerDetail = UIFactory.CreateText(head, "", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            UIFactory.Place(_manpowerDetail.rectTransform, new Vector2(0f, 1f),
+                new Vector2(12, -38), new Vector2(InnerWidth - 24f, 14));
+            UIFactory.Fit(_manpowerDetail, 8);
+
+            // Period tabs rather than three columns: the panel is 250 px wide,
+            // and a day / week / month figure side by side would be three
+            // unreadable numbers instead of one legible one.
+            SectionLabel(content, "CONSUMPTION PER", -96);
+            float third = (InnerWidth - 8f) / 3f;
+            BurnTab(content, BurnPeriod.Day, "DAY", 0, third, -116);
+            BurnTab(content, BurnPeriod.Week, "WEEK", 1, third, -116);
+            BurnTab(content, BurnPeriod.Month, "MONTH", 2, third, -116);
+
+            SectionLabel(content, "STOCKS", -160);
+
+            float y = -180f;
+            foreach (var def in ResourceCatalog.All)
+            {
+                ResourceRow(content, def, y);
+                y -= 58f;
+            }
+
+            _sustainVerdict = UIFactory.CreateText(content, "", UiTheme.FontSmall, UiTheme.Accent,
+                TextAnchor.UpperLeft);
+            UIFactory.Place(_sustainVerdict.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 34));
+
+            var fill = UIFactory.CreateBorderedPanel(content, "StockFromForce", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(fill, new Vector2(0f, 1f), new Vector2(Pad, y - 44f), new Vector2(InnerWidth, 32));
+            var fillBtn = UIFactory.CreateButton(fill, "STOCK 7 DAYS FROM FORCE",
+                () => StockFromForceRequested?.Invoke(_team, 7f),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)fillBtn.transform);
+            UiTooltip.Attach(fillBtn.gameObject,
+                "Fills every stock with a week of this side's current burn", UiTooltip.Side.Left);
+
+            var hint = UIFactory.CreateText(content,
+                "Stocks are yours to set and are saved with the map. Consumption is not typed — it is " +
+                "worked out from the formations this side has deployed, at their echelon and current " +
+                "strength, so it moves the moment the order of battle does.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 84f),
+                new Vector2(InnerWidth, 76));
+
+            RefreshSustainment();
+        }
+
+        void BurnTab(RectTransform content, BurnPeriod period, string label, int index,
+            float width, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Burn_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f),
+                new Vector2(Pad + index * (width + 4f), y), new Vector2(width, 28));
+
+            var captured = period;
+            var btn = UIFactory.CreateButton(frame, label,
+                () => { _burnPeriod = captured; RefreshSustainment(); },
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+            UIFactory.Stretch((RectTransform)btn.transform);
+
+            _burnTabs.Add((period, frame.Find("Fill").GetComponent<Image>(),
+                btn.GetComponentInChildren<Text>(true)));
+        }
+
+        /// <summary>
+        /// One stock line: what it is, an editable figure, and what it costs.
+        /// The stock field is on the right where every editable value in this
+        /// interface is, and the derived numbers sit under the name as prose —
+        /// a table of six columns at this width would be six columns of nothing.
+        /// </summary>
+        void ResourceRow(RectTransform content, ResourceDef def, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Res_" + def.kind, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+            var pip = UIFactory.CreatePanel(frame, "Pip", def.tint);
+            pip.anchorMin = new Vector2(0, 0); pip.anchorMax = new Vector2(0, 1);
+            pip.pivot = new Vector2(0, 0.5f);
+            pip.sizeDelta = new Vector2(3, -10);
+            pip.GetComponent<Image>().raycastTarget = false;
+
+            var title = UIFactory.CreateText(frame, def.name, UiTheme.FontSmall, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(title.rectTransform, 12f, 6f, InnerWidth - 122f, 16f);
+            UIFactory.Fit(title, 8);
+
+            var detail = UIFactory.CreateText(frame, "", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            UIFactory.PlaceTopLeft(detail.rectTransform, 12f, 24f, InnerWidth - 122f, 24f);
+            UIFactory.Fit(detail, 7);
+
+            var field = UIFactory.CreateInputField(frame, "0", 13);
+            UIFactory.Place((RectTransform)field.transform, new Vector2(1f, 0.5f),
+                new Vector2(-10, 0), new Vector2(96, 28));
+            field.contentType = InputField.ContentType.DecimalNumber;
+
+            var kind = def.kind;
+            field.onEndEdit.AddListener(text =>
+            {
+                if (_sustainSyncing || _sustainment == null) return;
+                // A malformed number leaves the stock alone rather than zeroing
+                // it — half-typed input is not an instruction to empty a depot.
+                if (!double.TryParse(text, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out double value))
+                {
+                    RefreshSustainment();
+                    return;
+                }
+                _sustainment.SetStock(_team, kind, value);
+            });
+
+            _resourceRows.Add((kind, field, detail));
+        }
+
+        /// <summary>
+        /// Repaints every figure on the page from the system and the team tab.
+        /// Public because the controller's own actions — filling stocks, loading
+        /// a map — change what it shows.
+        /// </summary>
+        public void RefreshSustainment()
+        {
+            if (_sustainment == null || _manpowerFigure == null) return;
+
+            bool enemy = _team == Team.Enemy;
+            if (_sustainSide != null)
+            {
+                _sustainSide.text = enemy ? "ENEMY" : "FRIENDLY";
+                _sustainSide.color = enemy ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            }
+
+            int onField = _sustainment.ManpowerOnField(_team);
+            int establishment = _sustainment.EstablishmentOnField(_team);
+            int formations = _sustainment.FormationsOnField(_team);
+
+            _manpowerFigure.text = $"{onField:n0} ON FIELD";
+            _manpowerDetail.text = formations == 0
+                ? "Nothing deployed for this side."
+                : $"{formations} formation(s)  ·  {establishment:n0} at establishment  ·  " +
+                  $"{(establishment > 0 ? onField * 100f / establishment : 0f):0}% strength";
+
+            foreach (var (period, fill, label) in _burnTabs)
+            {
+                bool on = period == _burnPeriod;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+
+            float days = BurnDays(_burnPeriod);
+            string word = BurnWord(_burnPeriod);
+
+            _sustainSyncing = true;
+            foreach (var (kind, field, detail) in _resourceRows)
+            {
+                var def = ResourceCatalog.Get(kind);
+                double stock = _sustainment.Stock(_team, kind);
+                double burn = _sustainment.DailyUse(_team, kind) * days;
+                double left = _sustainment.DaysOfSupply(_team, kind);
+
+                field.text = stock.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                detail.text = $"{def.measure}  ·  {burn:n0} per {word}\n{DaysLeftText(left, burn)}";
+            }
+            _sustainSyncing = false;
+
+            var (worst, worstDays) = _sustainment.BindingConstraint(_team);
+            if (_sustainVerdict == null) return;
+
+            if (worst == null || double.IsPositiveInfinity(worstDays))
+            {
+                _sustainVerdict.text = "Nothing deployed is consuming anything.";
+                _sustainVerdict.color = UiTheme.TextFaint;
+            }
+            else
+            {
+                // The binding constraint is the whole point of the page: a force
+                // is sustained for as long as its *shortest* stock lasts, and
+                // nine figures without that sentence is nine figures.
+                _sustainVerdict.text =
+                    $"Sustained for {worstDays:0.#} day(s) — {ResourceCatalog.Get(worst.Value).name} runs out first.";
+                _sustainVerdict.color = worstDays < 2.0 ? UiTheme.Danger
+                    : worstDays < 7.0 ? UiTheme.Warning : UiTheme.Success;
+            }
+        }
+
+        static string DaysLeftText(double days, double burn)
+        {
+            if (burn <= 0.0) return "not consumed by this force";
+            if (double.IsPositiveInfinity(days)) return "not consumed by this force";
+            if (days < 0.05) return "EXHAUSTED";
+            return $"{days:0.#} day(s) of supply";
+        }
+
         // ------------------------------------------------------ groups section
 
         /// <summary>Select every formation in a group.</summary>

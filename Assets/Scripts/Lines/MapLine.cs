@@ -473,6 +473,11 @@ namespace IronMeridian.Lines
                 var go = new GameObject("Picker");
                 go.transform.SetParent(transform, false);
                 _picker = go.AddComponent<MeshCollider>();
+                // This ribbon lies along a line that is itself clamped to the
+                // ground, so terrain sampling must not mistake it for ground —
+                // it would re-clamp the line onto its own collider and the line
+                // would climb a clearance every rebuild. See Core.NonTerrain.
+                Core.NonTerrain.Mark(go);
                 _pickMesh = new Mesh { name = "MapLinePicker" };
                 _picker.sharedMesh = _pickMesh;
             }

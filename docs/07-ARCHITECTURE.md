@@ -18,6 +18,10 @@ Assets/Scripts/
     ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
     SceneLoader.cs       async scene load behind the loading overlay
                           (docs/12-LOADERS.md §3.1)
+    NonTerrain.cs        marks a collider as NOT ground, so terrain sampling
+                          steps over it. Anything that clamps to the ground AND
+                          carries a collider otherwise re-clamps onto itself and
+                          climbs — see GeoUtils.TrySampleTerrainHeight
   Data/
     Enums.cs             Team, Echelon(+multipliers), UnitCategory/UnitBranch(+info),
                           UnitStatus, ViewMode, AttackTask, ReconTask
@@ -122,6 +126,7 @@ Assets/Scripts/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
     CameraRig.cs         3D orbit & 2D top-down strategy camera
     GeoUtils.cs          lat/lon <-> Unity, distance/bearing, terrain sampling
+                          (only real ground counts — see Core/NonTerrain.cs)
     RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)
   Units/
     UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
@@ -185,6 +190,9 @@ Assets/Scripts/
                           point, the arm-then-click placement tool, save/load
     LogisticsSite.cs     the map graphic: side-coloured ground ring, the
                           function's billboarded symbol, caption
+    SustainmentSystem.cs stocks per side, consumption derived from the deployed
+                          force, days of supply, manpower on field
+                          (docs/27-SUSTAINMENT.md)
   Models/                3D models — see docs/09-3D-MODELS.md
     UnitModelLibrary.cs  unit definition -> model prefab, source candidates, clips
     ModelPreview.cs      renders a model into a uGUI panel (RenderTexture rig)

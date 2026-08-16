@@ -70,6 +70,7 @@ The editor's left chrome is in two pieces:
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
+| **SUSTAINMENT** | What the force fights on: fuel, ammunition natures, manpower, rations and the rest — with the burn rate its own order of battle implies. See [27-SUSTAINMENT.md](27-SUSTAINMENT.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
@@ -77,7 +78,7 @@ The editor's left chrome is in two pieces:
 | **DATE AND TIME** | Scenario H-hour and presets |
 | **GROUPS** | *Battle mode only.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
 
-**Ten rows, and an eleventh in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
+**Eleven rows, and a twelfth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
 
@@ -199,15 +200,15 @@ Select **two or more** formations — box-select by dragging, or shift-click the
 | Block | What it is |
 |---|---|
 | **GROUP · &lt;name&gt;** | Which group this selection is — or *NOT A GROUP YET* — and a reminder that its orders are on the bar below the map |
-| Name field + **CREATE GROUP** / **RENAME** / **UNGROUP** | Names the selection as a new group, renames the group it is already in, or takes it out of whatever group it is in |
+| **GROUP SELECTION** / **UNGROUP** | Makes the selection a group, or takes it out of whatever group it is in |
 | **SELECTED UNITS** | A row per selected formation: icon, name, echelon, and the group it currently belongs to. **⇄** moves that one formation to another group; **✕** deletes it from the map |
 | **EXISTING GROUPS** | Every group with a living member, with its size |
 
-#### Renaming a group
+#### A group names itself
 
-Select any part of the group, type the new name in the field, press **RENAME**. The field is **pre-filled with the current name**, because a rename is nearly always an edit of what is there rather than a fresh word, and one field feeds both naming buttons — asking for the name twice, once to create and once to rename, would be two inputs for one piece of information.
+Press **GROUP SELECTION** and the group is formed and designated in one step — `GROUP 1`, `GROUP 2`, and so on, taking the lowest unused number so that deleting one and making another reuses it rather than climbing forever.
 
-**Every member is renamed, not just the selected ones.** The name is stored on each formation, so renaming only the selection would split one group into two that share an id and disagree about what they are called. RENAME is greyed out unless everything selected is in one group: a button that looks live and refuses on click is a worse answer than one that says it is unavailable.
+**There is no name field and no rename.** What a player needs of a group is a handle short enough to read on a row and on the order bar, and any handle will do as long as it is unique and stable. A text field, a RENAME button and the decision of what to type are three controls for something that exists to be pointed at; the space goes to the two lists instead, which are what is actually being read.
 
 #### The group's orders are on the order bar
 
@@ -616,6 +617,8 @@ The shoulder is the largest of the influence width, **15% of the deployment's ow
 - The ribbon is **aligned to the ground plane** rather than billboarded at the camera. A `LineRenderer` at its default `View` alignment rotates to face the viewer, so a 70 m-wide line tilts up out of the terrain as soon as the view comes off vertical — draped in position, but standing up on screen. Flat kinds are aligned to their own transform's Z, which is pointed along the local geodetic up.
 
 The same applies to every kind in `MapLine.FlatOnly`: lateral and rear boundaries, phase lines, and the front line. Defensive lines and battle positions still float clear of the ground, because they mark ground that is being physically held.
+
+**Why it used to climb into the sky.** Height on this map is measured by raycasting straight down and taking the first thing hit. The front line is the one line that is *clickable*, so it carries an invisible 400 m-wide ribbon collider lying along it — and every re-clamp hit that ribbon, read it as the ground, and re-drew the line thirty metres above its own previous position. Every three seconds. The fix is `Core/NonTerrain`, a marker that says "this collider is not ground"; `GeoUtils.TrySampleTerrainHeight` steps over anything carrying one. The same bug was quietly shoving unit icons and map captions upward wherever they stood near the front line.
 
 Settings, from clicking the line (shipped defaults in **bold**):
 

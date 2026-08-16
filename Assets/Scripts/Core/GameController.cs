@@ -105,6 +105,7 @@ namespace IronMeridian.Core
         ConnectivityWatcher _connectivity;
         UnitInfoPanel _infoPanel;
         IronMeridian.Logistics.LogisticsSystem _logistics;
+        IronMeridian.Logistics.SustainmentSystem _sustainment;
         MiniMapUI _minimap;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -275,6 +276,10 @@ namespace IronMeridian.Core
             // repair and medical points — see docs/26-LOGISTICS.md.
             _logistics = gameObject.AddComponent<IronMeridian.Logistics.LogisticsSystem>();
             _logistics.Init(_map, _rig.Cam);
+
+            // What the force fights on: stocks typed by the designer, burn rates
+            // derived from the order of battle — see docs/27-SUSTAINMENT.md.
+            _sustainment = gameObject.AddComponent<IronMeridian.Logistics.SustainmentSystem>();
 
             EditHistory.Clear();
 
@@ -466,7 +471,7 @@ namespace IronMeridian.Core
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
                     _artillery, _airStrike, _uavStrike, _naval, _mapControls, _strikeDock,
-                    _logistics);
+                    _logistics, _sustainment);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -564,6 +569,15 @@ namespace IronMeridian.Core
                     var focus = GeoUtils.GeoToUnity(_map.Georeference,
                         site.Data.latitude, site.Data.longitude, 300);
                     _rig.FlyTo(focus, Mathf.Min(_rig.Distance, UnitFocusDistanceMeters));
+                };
+
+                // SUSTAINMENT section — the stocks behind the force.
+                _sustainment.Changed += _palette.RefreshSustainment;
+                _palette.StockFromForceRequested = (team, days) =>
+                {
+                    _sustainment.StockFromForce(team, days);
+                    _hud.Flash($"{(team == Team.Enemy ? "Enemy" : "Friendly")} stocks filled with " +
+                               $"{days:0} day(s) of its current consumption.");
                 };
 
                 // GROUPS section — battle-mode only, see UnitPaletteUI.
@@ -1378,12 +1392,16 @@ namespace IronMeridian.Core
             var picked = _palette != null ? _palette.CurrentMission : _mission;
             if (picked == null)
             {
-                _hud.Flash("Select or create a mission before setting its area.");
+                // Wording kept general: this guard now stands in front of the
+                // HQ zones as well as the area, and a message about "its area"
+                // in answer to a click on SET HQ is a message about the wrong
+                // thing.
+                _hud.Flash("Select or create a mission first — this belongs to a mission record.");
                 return false;
             }
             if (_mission != picked)
             {
-                _hud.Flash($"Open '{picked.name}' in the editor first — an area is drawn on its own ground.");
+                _hud.Flash($"Open '{picked.name}' in the editor first — this is drawn on its own ground.");
                 return false;
             }
 
@@ -1416,6 +1434,10 @@ namespace IronMeridian.Core
             string side = team == Team.User ? "friendly" : "enemy";
             _hud.Flash($"Click the ground for the {side} headquarters (Esc or RMB cancels).");
 
+            // An authoring pick, not an order: it acts on the map rather than on
+            // a formation, and it is done in the editor with the clock stopped.
+            // Both of the order guards would otherwise swallow it silently —
+            // see SelectionManager.ArmGroundPick.
             _selection.ArmGroundPick((lat, lon) =>
             {
                 var zone = HqFor(team);
@@ -1426,7 +1448,7 @@ namespace IronMeridian.Core
                 RefreshHqZones();
                 _hud.Flash($"{char.ToUpperInvariant(side[0]) + side.Substring(1)} HQ set — " +
                            $"{_mission.hqRadiusKm:0.#} km zone. SAVE MISSION + MAP to keep it.");
-            }, "HQ placement cancelled.");
+            }, "HQ placement cancelled.", requireSelection: false, battleOnly: false);
         }
 
         /// <summary>
@@ -1832,6 +1854,7 @@ namespace IronMeridian.Core
             _save.lines = _lines.Serialize();
             _save.markers = _markers.Serialize();
             _save.logistics = _logistics.Serialize();
+            _save.resources = _sustainment.Serialize();
             _save.commanders = CommanderRegistry.Serialize();
             _save.teams = PlayerRegistry.SaveTeams();
             _save.players = PlayerRegistry.SavePlayers();
@@ -1987,6 +2010,7 @@ namespace IronMeridian.Core
             // Independent of the units: an installation belongs to the scenario
             // and outlives every formation that draws on it.
             _logistics.LoadFrom(data.logistics);
+            _sustainment.LoadFrom(data.resources);
             // Commanders last. They are referenced by id from the units that are
             // already down, so loading them earlier would have the roster point
             // at formations that did not exist yet.
