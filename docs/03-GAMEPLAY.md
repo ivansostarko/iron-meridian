@@ -188,10 +188,28 @@ A formation the fog has taken off the map is not listed here, since the list wou
 |---|---|
 | **Left-click** a unit icon | Select it — pulsing team-colour ring, **ground arrow showing its heading**, and full data panel on the right |
 | **Right-click** terrain | Reposition (scenario mode) or march order (battle mode) — see *Movement* below |
-| **Shift + right-click** terrain | **Adds a waypoint** to the end of the current march instead of replacing it (battle mode) |
+| **Right-click** a friendly unit | Opens that formation's menu — **REMOVE UNIT**. See *The right-click menu* below |
+| **Right-click** a logistic site | Opens that site's menu — **REMOVE SITE** |
+| **Shift + right-click** terrain | **Adds a waypoint** to the end of the current march instead of replacing it (battle mode). Shift also bypasses the menu, so a counter in the way does not stop you extending a march over it |
 | `C` | Aim the selection's facing: move the mouse to swing every selected unit onto a bearing. The heading arrows brighten and the status line reads the live bearing. LMB/Enter confirms, `Esc` cancels |
 | `Esc` | Deselect |
 | **Hover** a unit icon | Hover card beside the counter — see *Hovering costs nothing* below |
+
+#### The right-click menu
+
+Right-click **a friendly formation** or **a logistic site** and a small menu opens at the cursor, headed with that object's own name, carrying what can be done to it. Today that is one entry each — **REMOVE UNIT** and **REMOVE SITE** — and both are undoable with `Ctrl+Z` in the unit's case.
+
+**Why a menu and not another shortcut.** Removing a counter used to mean finding it again in the rail's DEPLOYED list, or selecting it and reaching for the panel on the far side of the screen. Both are a trip away from the thing you are already pointing at. Right-click is the one gesture on this map that means "about *this*", and a menu is the affordance that can grow: a second and third entry cost nothing, where a second and third shortcut would each need learning.
+
+| Rule | Why |
+|---|---|
+| **Friendly formations only** | An enemy counter is not yours to remove, so right-click on one still means the ground under it |
+| **Formations win over sites** | A counter is the thing you are looking at; a depot underneath it is scenery by comparison. Same precedence left-click uses for units over control measures |
+| **Both modes** | A right-click that produced a menu in battle and silently moved a formation in the editor would be a trap rather than a mode |
+| **Bare ground is unchanged** | Right-click on terrain is still reposition-or-march, exactly as before |
+| `Esc`, another right-click, or a click outside | Closes it. The dismissing click is swallowed, so it cannot also land on the terrain behind the menu |
+
+Sites are picked in **screen space** rather than with a collider: a site's marker is drawn at a constant *apparent* size — the same number of pixels across at 500 m and at 50 km — so a collider would have to be resized every frame to keep matching it, and a pick that disagreed with what is on screen is worse than no pick at all.
 
 ### Groups
 
@@ -593,49 +611,15 @@ separated fronts those are different directions and only the first is "forward"
 for that group. A group of fewer than two formations is left alone: it has no
 adjacent pair to bound and no forward edge worth calling a FEBA.
 
-### The front line
+### The front line (FLOT)
 
-The red line running between the two sides is not a control measure anyone drew — it is **where the fighting currently is**, recomputed every few seconds from where the formations actually stand. Click it to open its settings on the right.
+**The FLOT is a gameplay object, not a drawing** — full register in [28-FLOT.md](28-FLOT.md). The one-paragraph version:
 
-It is solved as an **influence field**. Every living formation pulls on it, weighted three ways:
+Each side gets its **own forward edge**, solved every few seconds from its **combat formations only** — infantry, mechanised and armour that are still combat-effective. Logistics, artillery, air and broken units do not move the line, and an isolated group either becomes a **POCKET** ring (real combat power) or is ignored (a lone probe). The ground between the two edges is **contested**. Each stretch carries a live state — `STABLE · ADVANCING · RETREATING · CONTESTED · BREACHED · COLLAPSING · ISOLATED` — read out in the line's own panel, and an enemy force established more than 2 km behind an edge with real combat power raises a **FLOT BREACHED** alert.
 
-| Weight | Effect |
-|---|---|
-| Combat power | A battalion moves the line further than a supply point does |
-| Distance along the front (Gaussian, **INFLUENCE WIDTH**) | How far along the front one formation is allowed to speak for |
-| Distance behind its own leading edge (exponential, 4 km) | The units in contact decide the line; the rear area does not |
+Three modes, switched in the panel (click any FLOT line): **AUTO** (solved from the force), **MANUAL** (drawn by the designer, click by click), **HYBRID** (drawn first, solved once the battle starts). With fog of war on, the enemy edge you see is an **estimate** from visible formations only, drawn broken.
 
-The two sides' weighted front edges are then interpolated by their local strength, so **a stronger side pushes the line into the weaker one** — advance, rout or die and the front moves. The solve runs in metres in a local east-north-up frame, and the result is subdivided by Chaikin corner-cutting into a few hundred vertices, which is what makes it read as a front rather than as a set of measurements.
-
-**The line spans every formation on the map.** It used to be trimmed back to the bands where both sides had real influence, and then trimmed again at the ends — so on any map wider than the fighting it was a short segment hanging in the middle of a deployment that ran well past both of its shoulders, and a formation on the flank sat *outside* the line that was supposed to describe where it stood. Now the span is set by the outermost formation on either side plus a shoulder, and no band is dropped: past the last band both sides could be solved for, the front **runs straight on out** to the flank, and a gap between two separate engagements is **bridged** by interpolating across it, so a two-battle map reads as one continuous front.
-
-The shoulder is the largest of the influence width, **15% of the deployment's own frontage** and **2.5 km**. Taking it from the influence width alone was not enough: that is a setting, and at its 1 km floor the line finished on top of the flank battalion's own counter, which reads as a front that has run out rather than one that continues beyond contact.
-
-**It is a 2D graphic, painted on the ground.** The FLOT states a fact about a piece of terrain, so it is drawn flat and clamped to the ground the whole way along, in the tilted view as well as the top-down one — never as a curtain standing in the world. Two things make that true, and both are needed:
-
-- Every vertex is **draped**: sampled onto the terrain at 150 m spacing (up to 768 rendered points), so the line runs down into re-entrants and over spurs instead of bridging them and disappearing inside the ridge in between. The front line arrives with its own vertices about 125 m apart, so in practice every one of them is clamped and nothing is bridged.
-- The ribbon is **aligned to the ground plane** rather than billboarded at the camera. A `LineRenderer` at its default `View` alignment rotates to face the viewer, so a 70 m-wide line tilts up out of the terrain as soon as the view comes off vertical — draped in position, but standing up on screen. Flat kinds are aligned to their own transform's Z, which is pointed along the local geodetic up.
-
-The same applies to every kind in `MapLine.FlatOnly`: lateral and rear boundaries, phase lines, and the front line. Defensive lines and battle positions still float clear of the ground, because they mark ground that is being physically held.
-
-**Why it used to climb into the sky.** Height on this map is measured by raycasting straight down and taking the first thing hit. The front line is the one line that is *clickable*, so it carries an invisible 400 m-wide ribbon collider lying along it — and every re-clamp hit that ribbon, read it as the ground, and re-drew the line thirty metres above its own previous position. Every three seconds. The fix is `Core/NonTerrain`, a marker that says "this collider is not ground"; `GeoUtils.TrySampleTerrainHeight` steps over anything carrying one. The same bug was quietly shoving unit icons and map captions upward wherever they stood near the front line.
-
-Settings, from clicking the line (shipped defaults in **bold**):
-
-| Control | What it does |
-|---|---|
-| **SHOW ON MAP** / **AUTO-UPDATE** | Draw it or not; keep solving or freeze the current snapshot |
-| **COLOUR** / **WIDTH** | Red at **Standard** width by default — deliberately not the yellow used for hand-drawn boundaries, so the two never read as the same kind of object |
-| **RESOLUTION** | Bands solved across the front: Coarse 17 / **Standard 41** / Fine 73 / Very fine 121 |
-| **SMOOTHING** | Chaikin passes: Raw 0 / Light 1 / Smooth 2 / **Silk 3** |
-| **INFLUENCE WIDTH** | Tight 2.5 / **Standard 6** / Broad 14 / Sweeping 28 km |
-| **RECOMPUTE NOW** | Solve immediately, useful with AUTO-UPDATE frozen |
-
-Smoothing ships at **Silk** rather than Smooth because of the change above: the extrapolated shoulders out past the flanks meet the solved middle at a corner that is visible at two passes, and a third pass rounds it for one more doubling of a vertex list that is only a few hundred long. The panel reads its buttons back off the system when it opens, so RESET and the shipped defaults can never disagree with what is lit.
-
-The readout at the top of the panel states the line's length, its vertex count and how many formations on each side contributed — or why there is no line, when one side has left the field or the two are not in contact anywhere.
-
-If the solve fails the line is **removed** rather than left standing: a stale front that no longer matches the units on the map is worse than no front at all.
+The lines are flat, draped and painted on the terrain in both view modes — the mechanics of that (and of why they can never climb into the sky) are unchanged from before and live in `MapLine`.
 
 ### Combat
 

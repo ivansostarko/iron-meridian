@@ -84,6 +84,12 @@ button whose side is decided on another page is a button you press to find out.
 with **◎** to fly to one and **✕** to remove it; **REMOVE ALL SITES** clears the
 lot. The count line reads `DEPLOYED — n FRIENDLY · n ENEMY`.
 
+**Or remove one on the map**: right-click the site's marker and pick **REMOVE
+SITE**. The panel is the right place when you are working through a laydown; the
+map is the right place when you are looking at the thing you want gone. Sites are
+picked in screen space against the marker you can see — see docs/03-GAMEPLAY.md
+§ *The right-click menu*.
+
 ---
 
 ## 4. On the map

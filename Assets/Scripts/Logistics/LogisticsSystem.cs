@@ -189,6 +189,47 @@ namespace IronMeridian.Logistics
             Changed?.Invoke();
         }
 
+        /// <summary>
+        /// The site under a screen position, or null.
+        ///
+        /// **Screen space rather than a collider**, which is what every other
+        /// click target on this map uses. A site's marker is drawn at a constant
+        /// *apparent* size — it is the same number of pixels across at 500 m and
+        /// at 50 km — so a collider would have to be resized every frame to keep
+        /// matching it, and a pick that disagreed with what is on screen is
+        /// worse than no pick at all. Projecting the anchor and measuring
+        /// pixels is the same test the eye is making.
+        ///
+        /// Nearest wins, so two sites laid on top of each other are removed one
+        /// at a time from the top rather than at random.
+        /// </summary>
+        public LogisticsSite PickAt(Camera cam, Vector2 screenPos, float radiusPx = 26f)
+        {
+            if (cam == null) return null;
+
+            LogisticsSite best = null;
+            float bestDistance = radiusPx;
+
+            foreach (var site in _sites)
+            {
+                if (site == null) continue;
+                Vector3 anchor = site.Anchor;
+                if (anchor.sqrMagnitude < 1e-6f) continue;      // ground not sampled yet
+
+                // Behind the camera projects to a point in front of it, which
+                // would make a site on the far side of the globe clickable.
+                Vector3 view = cam.WorldToViewportPoint(anchor);
+                if (view.z <= 0f) continue;
+
+                float distance = Vector2.Distance(screenPos, cam.WorldToScreenPoint(anchor));
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                best = site;
+            }
+
+            return best;
+        }
+
         /// <summary>How many sites one side has on the map — the panel's readout.</summary>
         public int CountFor(Team team)
         {

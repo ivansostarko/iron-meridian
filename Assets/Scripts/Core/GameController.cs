@@ -186,7 +186,7 @@ namespace IronMeridian.Core
             _areaTool.Init(_map, _rig.Cam);
 
             _frontline = gameObject.AddComponent<FrontlineSystem>();
-            _frontline.Init(_lines);
+            _frontline.Init(_lines, _map, _rig.Cam);
 
             _sectors = gameObject.AddComponent<SectorSystem>();
             _sectors.Init(_lines, _map.Georeference);
@@ -226,6 +226,8 @@ namespace IronMeridian.Core
 
             // Clock runs only in game mode; the editor is timeless.
             _clock = gameObject.AddComponent<GameClock>();
+            // The FLOT's history snapshots run on the scenario clock.
+            _frontline.Clock = _clock;
             _combat.RunningChanged += _clock.SetRunning;
 
             // Limited intelligence, and the recon tasks that are the only way to
@@ -287,6 +289,7 @@ namespace IronMeridian.Core
             _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                             ConfirmDialog.IsOpen ||
                                             LossesDialog.IsOpen ||
+                                            ContextMenuUI.IsOpen ||
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
                                             _airStrike.IsArmed ||
@@ -294,8 +297,12 @@ namespace IronMeridian.Core
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
                                             _logistics.IsArmed ||
+                                            _frontline.Drawing ||
                                             _areaTool.Drawing;
             _selection.BattleRunning = () => _combat.Running;
+            // Right-click on a formation or a logistic site opens its own menu
+            // instead of ordering a move — see OpenMapContextMenu.
+            _selection.ContextMenuRequested = OpenMapContextMenu;
 
             // --- UI ---
             var canvas = UIFactory.CreateCanvas("GameCanvas");
@@ -405,13 +412,27 @@ namespace IronMeridian.Core
             BuildStep("front line options", () =>
             {
                 _frontlinePanel = FrontlinePanelUI.Create(canvas, _frontline);
+                _frontline.Flash = _hud.Flash;
+
+                // FLOT_BREACH: an enemy force with real combat power is
+                // established behind the line. The alert is the event's first
+                // consumer; reserves, counterattacks and victory conditions
+                // are the others when they exist.
+                _frontline.Breach += (victim, lat, lon, depth) =>
+                {
+                    bool ours = victim == Team.User;
+                    _hud.ShowAlert(ours
+                        ? $"FLOT BREACHED — enemy force {depth:0.#} km behind the line."
+                        : $"Breakthrough — friendly force {depth:0.#} km behind the enemy FLOT.",
+                        6f, warning: ours);
+                };
                 _frontlinePanel.Opened = () =>
                 {
                     if (_strikeDock != null) _strikeDock.Hide();
                 };
                 _selection.LineClicked = line =>
                 {
-                    if (line == null || line.Data.id != FrontlineSystem.LineId) return;
+                    if (line == null || !FrontlineSystem.IsFlotLine(line.Data.id)) return;
                     _frontlinePanel.Show();
                     _hud.Flash("Front line — derived from where the formations stand.");
                 };
@@ -605,12 +626,7 @@ namespace IronMeridian.Core
                 // DEPLOYED list.
                 _palette.SelectUnitRequested = u => _selection.Select(u);
                 _palette.FocusUnitRequested = FlyToUnit;
-                _palette.RemoveUnitRequested = u =>
-                {
-                    RecordRemoval(u);
-                    _selection.Select(null);
-                    u.RemoveFromMap();
-                };
+                _palette.RemoveUnitRequested = RemoveUnitFromMap;
 
                 // The rail's battle-only chrome — the GROUPS row.
                 _combat.RunningChanged += running => _palette.SetBattleMode(running);
@@ -642,12 +658,7 @@ namespace IronMeridian.Core
             {
                 _infoPanel = gameObject.AddComponent<UnitInfoPanel>();
                 _infoPanel.Build(canvas);
-                _infoPanel.RemoveRequested = u =>
-                {
-                    RecordRemoval(u);
-                    _selection.Select(null);
-                    u.RemoveFromMap();
-                };
+                _infoPanel.RemoveRequested = RemoveUnitFromMap;
                 _infoPanel.CycleRequested = CycleSelection;
             });
 
@@ -809,6 +820,7 @@ namespace IronMeridian.Core
                 _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                           ConfirmDialog.IsOpen ||
                                           LossesDialog.IsOpen ||
+                                          ContextMenuUI.IsOpen ||
                                           _pauseMenu.IsOpen;
             });
 
@@ -1609,6 +1621,96 @@ namespace IronMeridian.Core
         /// <summary>Standoff a double-clicked formation is shown at, metres.</summary>
         const float UnitFocusDistanceMeters = 4500f;
 
+        // ------------------------------------------------- map context menus
+
+        /// <summary>
+        /// Answers a right-click on the map: opens the menu for whatever is
+        /// under the cursor, or lets the click through as a move order.
+        ///
+        /// **What gets a menu, and why only these.** A friendly formation and a
+        /// logistic site are the two things on this map that a player owns and
+        /// may want gone. An enemy formation is not yours to remove, and bare
+        /// ground already means something on this button — so both fall through
+        /// to the move order, which is what right-click has always done.
+        ///
+        /// Formations win over sites when the two overlap: a counter is the
+        /// thing you are looking at, and a depot underneath it is scenery by
+        /// comparison. Same precedence the left-click pick uses for units over
+        /// control measures.
+        ///
+        /// Both modes. The menu is about what is *on* the map rather than about
+        /// what the map is for, and a right-click that produced a menu while a
+        /// battle ran and silently moved a formation while it did not would be a
+        /// trap rather than a mode.
+        /// </summary>
+        bool OpenMapContextMenu(Vector2 screenPos)
+        {
+            if (_canvas == null) return false;
+
+            var unit = _selection.UnitAt(screenPos);
+            if (unit != null && unit.IsAlive && unit.State.TeamEnum == Team.User)
+            {
+                string name = string.IsNullOrEmpty(unit.State.customName)
+                    ? unit.Def.name : unit.State.customName;
+
+                ContextMenuUI.Open(_canvas, screenPos, $"{name}  ·  {unit.State.echelon}",
+                    new System.Collections.Generic.List<ContextMenuUI.Item>
+                    {
+                        new ContextMenuUI.Item("REMOVE UNIT", () => RemoveUnitFromMap(unit), destructive: true)
+                    });
+                return true;
+            }
+
+            var site = _logistics != null
+                ? _logistics.PickAt(_rig.Cam, screenPos)
+                : null;
+            if (site != null)
+            {
+                var def = LogisticsCatalog.Get(site.Kind);
+                bool enemy = site.Data.team == Team.Enemy.ToString();
+
+                ContextMenuUI.Open(_canvas, screenPos,
+                    $"{def.name}  ·  {(enemy ? "ENEMY" : "FRIENDLY")}",
+                    new System.Collections.Generic.List<ContextMenuUI.Item>
+                    {
+                        new ContextMenuUI.Item("REMOVE SITE", () =>
+                        {
+                            _logistics.Remove(site);
+                            _hud.Flash($"{def.name} removed.");
+                        }, destructive: true)
+                    });
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Takes a formation off the map, from wherever the request came — the
+        /// rail's DEPLOYED list, the group panel, or the map's own right-click
+        /// menu. One path, so a removal is recorded for undo and drops the
+        /// selection in every case.
+        /// </summary>
+        void RemoveUnitFromMap(UnitActor unit)
+        {
+            if (unit == null || !unit.IsAlive) return;
+
+            string name = string.IsNullOrEmpty(unit.State.customName)
+                ? unit.Def.name : unit.State.customName;
+
+            RecordRemoval(unit);
+
+            // Drop it from the selection first, so nothing is left pointing at a
+            // formation that is about to leave the map — the info panel would
+            // keep reporting it and the order bar would keep offering it orders.
+            bool wasSelected = false;
+            foreach (var s in _selection.Selection) if (s == unit) { wasSelected = true; break; }
+            if (wasSelected) _selection.Select(null);
+
+            unit.RemoveFromMap();
+            _hud.Flash($"{name} removed. Ctrl+Z puts it back.");
+        }
+
         /// <summary>Every living formation in a group, in registry order.</summary>
         System.Collections.Generic.List<UnitActor> GroupMembers(string groupId)
         {
@@ -1647,8 +1749,9 @@ namespace IronMeridian.Core
                 return;
             }
 
-            var line = _frontline.Line;
-            var pts = line != null ? line.Data.points : null;
+            // The group mans its own side's forward edge — not the enemy's,
+            // and not a pocket ring.
+            var pts = _frontline.PointsForManning(members[0].State.TeamEnum);
             if (pts == null || pts.Count < 2)
             {
                 _hud.Flash("There is no front line to hold — both sides need formations in contact.");
@@ -1853,6 +1956,7 @@ namespace IronMeridian.Core
                 if (a != null && a.IsAlive) _save.units.Add(a.Snapshot());
             _save.lines = _lines.Serialize();
             _save.markers = _markers.Serialize();
+            _save.flotMode = _frontline.Mode.ToString();
             _save.logistics = _logistics.Serialize();
             _save.resources = _sustainment.Serialize();
             _save.commanders = CommanderRegistry.Serialize();
@@ -2004,6 +2108,9 @@ namespace IronMeridian.Core
             foreach (var u in data.units)
                 UnitActor.Spawn(_map.Georeference, u);
             _lines.LoadFrom(data.lines);
+            // Before the first solve, so a manual-mode map comes back manual
+            // and adopts its drawn line rather than overwriting it.
+            _frontline.SetMode(System.Enum.TryParse(data.flotMode, out FlotMode fm) ? fm : FlotMode.Automatic);
             // After the units: a task marker whose owning unit is not on the map
             // is swept away, and during a load that is briefly all of them.
             _markers.LoadFrom(data.markers);

@@ -287,6 +287,14 @@ namespace IronMeridian.Data
         /// click. See docs/27-SUSTAINMENT.md.
         /// </summary>
         public List<ResourceStockData> resources = new List<ResourceStockData>();
+
+        /// <summary>
+        /// FlotMode name — how the front line is produced (Automatic, Manual,
+        /// Hybrid). The manual trace itself is an ordinary line in
+        /// <see cref="lines"/> (id "flot-manual"), so only the mode needs its
+        /// own field. Empty on an older map reads as Automatic.
+        /// </summary>
+        public string flotMode = "";
         /// <summary>
         /// The order of battle above the units: who commands what, on both
         /// sides. Empty on a map saved before commanders existed, which reads

@@ -78,6 +78,21 @@ namespace IronMeridian.Units
         /// <summary>Raised when a ground pick is placed or cancelled, so the order bar can un-latch.</summary>
         public System.Action GroundPickResolved;
 
+        /// <summary>
+        /// Offered the screen position of a right-click before it becomes a move
+        /// order. Return true to say the click was taken — the map object under
+        /// the cursor opened its own menu — and the move order is skipped.
+        ///
+        /// A hook rather than the menu itself, because what is on the map is not
+        /// this class's business: it knows about formations and control
+        /// measures, and the answer also has to cover logistic sites and
+        /// whatever is added next.
+        /// </summary>
+        public System.Func<Vector2, bool> ContextMenuRequested;
+
+        /// <summary>The formation at a screen position, for whoever is answering that hook.</summary>
+        public UnitActor UnitAt(Vector2 screenPos) => UnitUnderMouse(screenPos);
+
         /// <summary>True while the player is picking a point for an order.</summary>
         public bool IsPickingGround => _groundPick != null;
 
@@ -392,7 +407,20 @@ namespace IronMeridian.Units
             // Shift + right-click extends the march instead of replacing it, the
             // convention every RTS uses. Shift is free on this button — it is
             // left-click that already means "add to selection".
-            if (Input.GetMouseButtonDown(1)) HandleMoveOrder(append: shift);
+            if (Input.GetMouseButtonDown(1))
+            {
+                // Right-click on *something* opens that thing's own menu; on
+                // bare ground it is a move order. The handler decides which by
+                // looking at what is under the cursor, and says whether it took
+                // the click — see GameController.OpenMapContextMenu.
+                //
+                // Shift bypasses it deliberately: shift-right-click means "the
+                // ground here, append it to the march", and having a counter in
+                // the way should not turn that into a menu.
+                bool taken = !shift && ContextMenuRequested != null &&
+                             ContextMenuRequested(Input.mousePosition);
+                if (!taken) HandleMoveOrder(append: shift);
+            }
 
             if (Input.GetKeyDown(KeyCode.Escape)) Select(null);
         }
@@ -640,9 +668,9 @@ namespace IronMeridian.Units
         // terrain colliders that is a per-frame garbage spike.
         static readonly RaycastHit[] _hitBuffer = new RaycastHit[32];
 
-        UnitActor UnitUnderMouse()
+        UnitActor UnitUnderMouse(Vector2? screenPos = null)
         {
-            var ray = _cam.ScreenPointToRay(Input.mousePosition);
+            var ray = _cam.ScreenPointToRay(screenPos ?? (Vector2)Input.mousePosition);
             int count = Physics.RaycastNonAlloc(ray, _hitBuffer, 500000f);
             UnitActor best = null;
             float bestDist = float.MaxValue;

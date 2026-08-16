@@ -7,198 +7,242 @@ using IronMeridian.Units;
 
 namespace IronMeridian.Lines
 {
+    /// <summary>How the FLOT is produced — see <see cref="FrontlineSystem"/>.</summary>
+    public enum FlotMode
+    {
+        /// <summary>The game calculates the line from unit positions and battlefield state.</summary>
+        Automatic,
+        /// <summary>The scenario designer draws and controls the line.</summary>
+        Manual,
+        /// <summary>Designer draws the initial line; the game takes over when the battle starts.</summary>
+        Hybrid
+    }
+
+    /// <summary>What a stretch of the front is currently doing.</summary>
+    public enum FlotState { Stable, Advancing, Retreating, Contested, Breached, Collapsing, Isolated }
+
+    /// <summary>Who holds a piece of ground, as the front lines read it.</summary>
+    public enum TerritoryOwner { Blue, Red, Contested }
+
     /// <summary>
-    /// The automatic front line between the two sides — where the fighting
-    /// currently is, redrawn as formations move, fight and die.
+    /// One published stretch of front: a side's forward edge in one engagement,
+    /// a pocket ring, or the manual line.
+    /// </summary>
+    public class FlotSegment
+    {
+        public string Id;
+        public Team Team;
+        public FlotState State;
+        public List<GeoPoint> Points = new List<GeoPoint>();
+        public double LengthKm;
+        /// <summary>A closed ring around an isolated cluster rather than a forward edge.</summary>
+        public bool Pocket;
+        /// <summary>Drawn from what the player can see rather than from the truth — fog is on.</summary>
+        public bool Estimated;
+        /// <summary>The designer's hand-drawn line, in Manual/Hybrid mode.</summary>
+        public bool Manual;
+        /// <summary>Formations contributing to this stretch.</summary>
+        public int Contributors;
+        /// <summary>Km the stretch moved toward the enemy since the last solve. Negative = giving ground.</summary>
+        public float AdvanceKm;
+    }
+
+    /// <summary>
+    /// The FLOT — the forward line of own troops, per side, as a gameplay
+    /// object rather than a drawing.
     ///
-    /// **This was rewritten because the old one did not describe the battle.**
-    /// It took nine samples across the front; at each one it found the single
-    /// nearest blue unit and the single nearest red unit and put a point on the
-    /// segment between them. Three consequences, all visible:
+    /// **The key rule: the line represents effective control by combat
+    /// formations, not the physical position of the most advanced unit.**
+    /// Everything below serves that sentence.
     ///
-    /// • **Nine points is not a line, it is a zig-zag.** Every sample jumped to
-    ///   whichever unit happened to be nearest, so the line kinked hard between
-    ///   bands and bore no relation to the shape of either force.
-    /// • **Only two units out of a hundred were ever consulted.** A brigade
-    ///   massed behind its lead battalion had no effect on the line at all —
-    ///   the front went where one unit stood, not where the weight was.
-    /// • **"Nearest" was measured in degrees.** A degree of longitude is a third
-    ///   shorter than a degree of latitude at Lyon, so the search was stretched
-    ///   east-west and picked the wrong unit whenever two were close.
+    /// The pipeline, each stage a method in this file:
     ///
-    /// What replaces it is an **influence field**. Every living formation
-    /// contributes, weighted by its combat power, by how close it is to the band
-    /// being sampled (a Gaussian across the front), and by how far forward it is
-    /// (an exponential toward the enemy, so the lead battalions decide the line
-    /// and the field bakery does not). The two sides' weighted front edges are
-    /// then interpolated by their local strength, so the stronger side pushes
-    /// the line into the weaker one — the one part of the old model worth
-    /// keeping. Everything is done in **metres**, in a local east-north-up frame
-    /// about the centre of the battle.
+    ///     units → eligibility (FlotEligibility: only frontline-capable,
+    ///             combat-effective formations vote)
+    ///           → clustering (mutually supporting groups, per side)
+    ///           → outlier filtering (a lone recon car deep in enemy ground
+    ///             does not drag the front with it; a cluster with real combat
+    ///             power becomes a pocket instead)
+    ///           → engagements (each friendly cluster paired with the enemy
+    ///             cluster it faces — the operational direction comes from the
+    ///             pairing, so two separated battles get two axes)
+    ///           → per-band forward edges, one per side (influence field,
+    ///             Gaussian across the front, exponential toward the enemy)
+    ///           → smoothing, stability damping, terrain projection (MapLine
+    ///             drapes and grounds every flat kind)
+    ///           → segments with states, breach detection, territory answers,
+    ///             history snapshots
     ///
-    /// The result is subdivided by Chaikin's corner-cutting into a smooth
-    /// polyline of a few hundred vertices, which is what makes it read as a
-    /// front rather than as a set of measurements.
+    /// **Two lines, not one.** Each side has its own forward edge; the ground
+    /// between them is contested. That is what makes territory a query the
+    /// game can answer (<see cref="TerritoryAt"/>) instead of a colour, and a
+    /// breach a definable event (<see cref="Breach"/>) instead of a feeling.
     ///
-    /// **The line spans every formation on the map.** The solved bands are the
-    /// ones where both sides have influence; the rest — out past the flanks,
-    /// and any gap between two separate engagements — are filled rather than
-    /// dropped (see <see cref="FillUnsolved"/>). A boundary that stopped short
-    /// of the units it is drawn between is not a boundary. The band range is
-    /// taken from the outermost formation on either side and then carried a
-    /// shoulder further (<see cref="FlankPadFraction"/>), so the front runs past
-    /// the flanks rather than terminating on the flank unit's own counter.
+    /// **Three modes.** Automatic solves from the force; Manual publishes the
+    /// designer's drawn line and uses it for the same queries; Hybrid is
+    /// manual until the battle starts and automatic after — the designer sets
+    /// the opening trace, the fight redraws it.
     ///
-    /// **It is a 2D graphic, painted on the ground.** The FLOT states where the
-    /// fighting is, which is a fact about a piece of terrain — so it is drawn
-    /// flat and clamped to the ground the whole way along, in both the top-down
-    /// and the tilted view, and never as a curtain standing in the world. That
-    /// is <see cref="LineKind.Boundary"/>'s membership of <c>MapLine.FlatOnly</c>
-    /// plus the ground-plane ribbon alignment described there; this class only
-    /// has to publish the geometry and say <c>is3D = false</c>.
+    /// **Fog.** The enemy's *published* edge is computed only from enemy
+    /// formations the player can currently see, and drawn broken, because an
+    /// estimate should look like one. The internal line — breach detection,
+    /// territory, states — always uses the truth, because the simulation is
+    /// not the player.
     ///
-    /// All of the shaping constants are settings rather than constants, driven
-    /// from <see cref="UI.FrontlinePanelUI"/> — the line is clickable and opens
-    /// its own panel.
+    /// The shaping settings (resolution, smoothing, influence width) are
+    /// driven from <see cref="UI.FrontlinePanelUI"/> — any FLOT line is
+    /// clickable and opens the panel.
     /// </summary>
     public class FrontlineSystem : MonoBehaviour
     {
-        public const string LineId = "boundary-auto";
+        public const string LineIdPrefix = "flot-";
+        public const string ManualLineId = "flot-manual";
+        /// <summary>The single midline the old solver published; removed from old saves on the first solve.</summary>
+        public const string LegacyLineId = "boundary-auto";
+
+        /// <summary>True for any line this system owns — the panel opens from a click on any of them.</summary>
+        public static bool IsFlotLine(string id) =>
+            !string.IsNullOrEmpty(id) && (id.StartsWith(LineIdPrefix) || id == LegacyLineId);
 
         /// <summary>Recompute as the battle moves. Off means the line is a snapshot.</summary>
         public bool AutoUpdate = true;
 
+        /// <summary>User-facing messages (drawing instructions, mode changes).</summary>
+        public System.Action<string> Flash;
+
         // ------------------------------------------------------------ settings
 
-        /// <summary>Bands sampled across the front before smoothing. More = more faithful and more jagged.</summary>
-        /// <remarks>41 is the panel's STANDARD setting — see <see cref="UI.FrontlinePanelUI"/>.</remarks>
-        public int Resolution { get; private set; } = DefaultResolution;
-        /// <summary>Chaikin corner-cutting passes. Each roughly doubles the vertex count.</summary>
-        /// <remarks>
-        /// Three — the panel's SILK setting — rather than two. The line now runs
-        /// the whole width of the deployment (see <see cref="Recompute"/>), and
-        /// the extrapolated shoulders out past the flanks meet the solved middle
-        /// at a visible corner at two passes. A third pass rounds it, and costs
-        /// one more doubling of a vertex list that is a few hundred long.
-        /// </remarks>
-        public int SmoothingPasses { get; private set; } = DefaultSmoothing;
+        public FlotMode Mode { get; private set; } = FlotMode.Automatic;
 
-        /// <summary>Shipped settings, shared by the field initialisers and <see cref="ResetToDefaults"/>.</summary>
+        /// <summary>Bands sampled across each engagement before smoothing.</summary>
+        public int Resolution { get; private set; } = DefaultResolution;
+        /// <summary>Chaikin corner-cutting passes.</summary>
+        public int SmoothingPasses { get; private set; } = DefaultSmoothing;
+        /// <summary>Gaussian width across the front, km — how far along it one formation speaks for.</summary>
+        public float InfluenceWidthKm { get; private set; } = DefaultInfluenceWidthKm;
+        /// <summary>Whether the lines are drawn at all.</summary>
+        public bool Visible { get; private set; } = true;
+
         public const int DefaultResolution = 41;
         public const int DefaultSmoothing = 3;
         public const float DefaultInfluenceWidthKm = 6f;
-        /// <summary>
-        /// Gaussian width across the front, in km. How far along the front a
-        /// formation's influence reaches: small values make the line hug each
-        /// unit, large values make it a broad sweep through the whole force.
-        /// </summary>
-        public float InfluenceWidthKm { get; private set; } = DefaultInfluenceWidthKm;
 
-        /// <summary>Whether the line is drawn at all.</summary>
-        public bool Visible { get; private set; } = true;
+        // ------------------------------------------------------------- tuning
+
+        /// <summary>Depth bias, km: weight falls by e per this many km behind the side's leading edge.</summary>
+        const float ForwardBiasKm = 4f;
+        /// <summary>Units this close support each other — the clustering link distance.</summary>
+        const float ClusterLinkKm = 12f;
+        /// <summary>A cluster this far from its side's main body is on its own.</summary>
+        const float IsolationKm = 30f;
+        /// <summary>Share of the side's power below which an isolated cluster is an outlier, not a pocket.</summary>
+        const float OutlierPowerFraction = 0.05f;
+        /// <summary>Share of the *victim's* power an intruding cluster needs before it registers as a breach.</summary>
+        const float BreachPowerFraction = 0.08f;
+        /// <summary>Km past the victim's edge an intruder must be to count as a breach.</summary>
+        const float BreachDepthKm = 2f;
+        /// <summary>Mean gap between the two edges below which a stretch reads as contested, km.</summary>
+        const float ContestGapKm = 1.0f;
+        /// <summary>Mean movement below this is jitter and is not republished, metres.</summary>
+        const float MinMoveM = 50f;
+        /// <summary>Advance/retreat below this is stable, km per solve.</summary>
+        const float StateMoveKm = 0.1f;
+        /// <summary>A retreat past this in one solve is a collapse, km.</summary>
+        const float CollapseKm = 1.0f;
+        /// <summary>Shoulder carried past the flanks: fraction of frontage, with a floor.</summary>
+        const float FlankPadFraction = 0.15f;
+        const float MinFlankPadM = 2500f;
+        /// <summary>Metres per degree of latitude.</summary>
+        const double MetresPerDegLat = 111132.0;
+        /// <summary>Game-seconds between history snapshots (5 scenario minutes).</summary>
+        const double HistoryGameSeconds = 300.0;
+        /// <summary>Snapshots kept — 4 hours of scenario time at the cadence above.</summary>
+        const int HistoryCap = 48;
 
         // ------------------------------------------------------------ readout
 
-        /// <summary>Length of the line as last drawn, in km. For the settings panel.</summary>
         public double LengthKm { get; private set; }
-        /// <summary>Formations that contributed to the last solve.</summary>
+        /// <summary>Eligible (not merely living) formations in the last solve.</summary>
         public int BlueCount { get; private set; }
         public int RedCount { get; private set; }
-        /// <summary>Why the last solve produced nothing, or null when it succeeded.</summary>
         public string LastFailure { get; private set; }
-
-        // ------------------------------------------------- the group holding it
-
-        /// <summary>
-        /// The group that has been put on the line, if any — its id and its
-        /// name at the time it was assigned.
-        ///
-        /// **Why the line knows.** Manning the FLOT is an order given to
-        /// formations, and the orders themselves live on the units; but "who is
-        /// holding the front" is a fact about the *front*, and it has to
-        /// survive every recompute of the geometry. Keeping it here is what
-        /// lets the line caption itself with the group's name rather than a
-        /// bare "FLOT", and what lets the GROUPS panel say which group is on it
-        /// without interrogating every formation on the map.
-        /// </summary>
-        public string HoldingGroupId { get; private set; } = "";
-        public string HoldingGroupName { get; private set; } = "";
-
-        /// <summary>
-        /// Records which group holds the line, or clears it with an empty id.
-        /// Re-captions the line; the deployment itself is the caller's business
-        /// — see <c>GameController.ManTheFlot</c>.
-        /// </summary>
-        public void SetHoldingGroup(string groupId, string groupName)
-        {
-            HoldingGroupId = groupId ?? "";
-            HoldingGroupName = string.IsNullOrEmpty(groupId) ? "" : (groupName ?? "");
-            ApplyLabel();
-            Recomputed?.Invoke();
-        }
-
-        /// <summary>
-        /// The line's caption: "FLOT", or "FLOT — 1ST BRIGADE" once a group has
-        /// been put on it. Re-applied after every publish, because a line
-        /// rebuilt from a save comes back with whatever label the file carried.
-        /// </summary>
-        void ApplyLabel()
-        {
-            var line = Line;
-            if (line == null) return;
-
-            string label = string.IsNullOrEmpty(HoldingGroupName)
-                ? "FLOT"
-                : "FLOT — " + HoldingGroupName.ToUpperInvariant();
-            if (line.Data.label == label) return;
-
-            line.Data.label = label;
-            line.RefreshStyle();       // rebuilds the captions from Data.label
-        }
-        /// <summary>Raised after every recompute, so the panel can refresh its readout.</summary>
         public event System.Action Recomputed;
 
-        // ------------------------------------------------------------ internals
-
         /// <summary>
-        /// Depth bias, in km. Weight falls off by e for every this-many km a
-        /// formation sits behind its side's leading edge, which is what stops
-        /// the rear area voting on where the front is.
+        /// FLOT_BREACH: an enemy force with real combat power is established
+        /// behind a side's forward edge. (victim, lat, lon, penetration km).
+        /// Raised once per intrusion, not once per solve.
         /// </summary>
-        const float ForwardBiasKm = 4f;
-        /// <summary>Metres per degree of latitude. Good to a fraction of a percent anywhere a scenario is fought.</summary>
-        const double MetresPerDegLat = 111132.0;
-        /// <summary>Share of the deployment's frontage carried out past each flank.</summary>
-        const float FlankPadFraction = 0.15f;
-        /// <summary>Floor on that shoulder, metres — see <see cref="Recompute"/>.</summary>
-        const float MinFlankPadM = 2500f;
+        public event System.Action<Team, double, double, double> Breach;
+
+        /// <summary>Everything currently published, for the minimap and the panel.</summary>
+        public IReadOnlyList<FlotSegment> Segments => _segments;
+
+        /// <summary>One history record: when, and where each side's main edge stood.</summary>
+        public struct HistoryEntry
+        {
+            public string Time;
+            public double BlueLat, BlueLon, RedLat, RedLon;
+        }
+        /// <summary>Periodic snapshots of the front, oldest first. For AAR and movement readouts.</summary>
+        public IReadOnlyList<HistoryEntry> History => _history;
+
+        /// <summary>The scenario clock, for history cadence. Set by the controller; null = no snapshots.</summary>
+        public GameClock Clock;
+
+        // ---------------------------------------------------------- internals
 
         LineManager _lines;
+        MapManager _map;
+        Camera _cam;
         float _timer;
 
-        /// <summary>A unit reduced to the local frame, so the solve never touches lat/lon again.</summary>
-        struct Node
+        readonly List<FlotSegment> _segments = new List<FlotSegment>();
+        readonly HashSet<string> _publishedIds = new HashSet<string>();
+        readonly Dictionary<string, List<GeoPoint>> _prevPoints = new Dictionary<string, List<GeoPoint>>();
+        readonly Dictionary<string, float> _prevMeanDepth = new Dictionary<string, float>();
+        readonly HashSet<string> _activeBreaches = new HashSet<string>();
+        readonly List<HistoryEntry> _history = new List<HistoryEntry>();
+        double _lastHistoryGameSecond = double.MinValue;
+
+        struct Node { public float Lateral, Depth, Power; }
+
+        class Cluster
         {
-            public float Lateral;    // metres along the front
-            public float Depth;      // metres toward the enemy
+            public readonly List<UnitActor> Units = new List<UnitActor>();
             public float Power;
+            public double Lat, Lon;
+            public bool Isolated;
         }
 
-        readonly List<Node> _blue = new List<Node>();
-        readonly List<Node> _red = new List<Node>();
+        /// <summary>One solved battle: the frame and the influence nodes, kept for queries.</summary>
+        class Engagement
+        {
+            public double Lat0, Lon0;
+            public Vector2 Axis, Cross;
+            public float MinLat, MaxLat, Sigma;
+            public float BlueLead, RedLead;
+            public List<Node> Blue, Red;
+        }
+        readonly List<Engagement> _engagements = new List<Engagement>();
 
-        public void Init(LineManager lines)
+        // --------------------------------------------------------- lifecycle
+
+        public void Init(LineManager lines, MapManager map, Camera cam)
         {
             _lines = lines;
+            _map = map;
+            _cam = cam;
             UnitRegistry.Changed += OnUnitsChanged;
         }
 
         void OnDestroy() => UnitRegistry.Changed -= OnUnitsChanged;
-
-        void OnUnitsChanged() => _timer = GameConfig.FrontlineUpdateSeconds; // recompute soon
+        void OnUnitsChanged() => _timer = GameConfig.FrontlineUpdateSeconds;
 
         void Update()
         {
+            HandleDrawing();
+
             if (!AutoUpdate) return;
             _timer += Time.deltaTime;
             if (_timer < GameConfig.FrontlineUpdateSeconds) return;
@@ -206,273 +250,504 @@ namespace IronMeridian.Lines
             Recompute();
         }
 
-        // ------------------------------------------------------------ settings API
+        // ------------------------------------------------------ settings API
 
-        public void SetResolution(int bands)
+        public void SetMode(FlotMode mode)
         {
-            Resolution = Mathf.Clamp(bands, 9, 129);
+            if (Mode == mode) return;
+            Mode = mode;
+            CancelDrawing();
             Recompute();
         }
 
-        public void SetSmoothing(int passes)
-        {
-            SmoothingPasses = Mathf.Clamp(passes, 0, 4);
-            Recompute();
-        }
-
-        public void SetInfluenceWidthKm(float km)
-        {
-            InfluenceWidthKm = Mathf.Clamp(km, 1f, 40f);
-            Recompute();
-        }
+        public void SetResolution(int bands) { Resolution = Mathf.Clamp(bands, 9, 129); Recompute(); }
+        public void SetSmoothing(int passes) { SmoothingPasses = Mathf.Clamp(passes, 0, 4); Recompute(); }
+        public void SetInfluenceWidthKm(float km) { InfluenceWidthKm = Mathf.Clamp(km, 1f, 40f); Recompute(); }
 
         public void SetVisible(bool visible)
         {
             Visible = visible;
-            var line = _lines != null ? _lines.Find(LineId) : null;
-            if (line != null) line.gameObject.SetActive(visible);
+            foreach (var id in _publishedIds)
+            {
+                var line = _lines.Find(id);
+                if (line != null) line.gameObject.SetActive(visible);
+            }
         }
 
-        /// <summary>Colour and width, from the settings panel. Persisted with the line.</summary>
+        /// <summary>Custom colour/width from the panel, applied to every published line.</summary>
         public void SetStyle(string colorHex, float widthMeters)
         {
-            var line = _lines != null ? _lines.Find(LineId) : null;
-            if (line == null) return;
-            line.Data.colorHex = colorHex;
-            line.Data.widthMeters = widthMeters;
-            line.RefreshStyle();
+            _customHex = colorHex; _customWidth = widthMeters;
+            foreach (var id in _publishedIds)
+            {
+                var line = _lines.Find(id);
+                if (line == null) continue;
+                if (!string.IsNullOrEmpty(colorHex)) line.Data.colorHex = colorHex;
+                if (widthMeters > 0f) line.Data.widthMeters = widthMeters;
+                line.RefreshStyle();
+            }
+        }
+        string _customHex = "";
+        float _customWidth;
+
+        /// <summary>The blue main edge, or whatever is published first. Kept for older callers.</summary>
+        public MapLine Line
+        {
+            get
+            {
+                var seg = MainSegment(Team.User) ?? (_segments.Count > 0 ? _segments[0] : null);
+                return seg != null && _lines != null ? _lines.Find(seg.Id) : null;
+            }
         }
 
-        public MapLine Line => _lines != null ? _lines.Find(LineId) : null;
+        /// <summary>A side's main (largest, non-pocket) segment.</summary>
+        public FlotSegment MainSegment(Team team)
+        {
+            FlotSegment best = null;
+            foreach (var s in _segments)
+            {
+                if (s.Pocket) continue;
+                if (!s.Manual && s.Team != team) continue;
+                if (best == null || s.LengthKm > best.LengthKm) best = s;
+            }
+            return best;
+        }
 
-        /// <summary>
-        /// Back to how the line behaves in a fresh scenario. Called by the
-        /// editor's RESET, which puts every panel's settings back — a front line
-        /// still drawn "Raw / Sweeping / violet" after a reset would be the one
-        /// thing on the map still carrying the last session.
-        /// </summary>
+        /// <summary>The trace a group manning the front should distribute along.</summary>
+        public List<GeoPoint> PointsForManning(Team team)
+        {
+            var seg = MainSegment(team);
+            return seg?.Points;
+        }
+
         public void ResetToDefaults()
         {
             AutoUpdate = true;
             Visible = true;
+            Mode = FlotMode.Automatic;
             HoldingGroupId = "";
             HoldingGroupName = "";
             Resolution = DefaultResolution;
             SmoothingPasses = DefaultSmoothing;
             InfluenceWidthKm = DefaultInfluenceWidthKm;
-
-            var line = Line;
-            if (line != null)
-            {
-                line.Data.colorHex = "";
-                line.Data.widthMeters = 0f;
-                line.RefreshStyle();
-                line.gameObject.SetActive(true);
-            }
+            _customHex = ""; _customWidth = 0f;
+            _manual.Clear();
+            CancelDrawing();
+            _history.Clear();
+            _activeBreaches.Clear();
             Recompute();
         }
 
-        // ------------------------------------------------------------ solve
+        // ------------------------------------------------- the holding group
+
+        public string HoldingGroupId { get; private set; } = "";
+        public string HoldingGroupName { get; private set; } = "";
+
+        public void SetHoldingGroup(string groupId, string groupName)
+        {
+            HoldingGroupId = groupId ?? "";
+            HoldingGroupName = string.IsNullOrEmpty(groupId) ? "" : (groupName ?? "");
+            Recompute();
+        }
+
+        // ------------------------------------------------------------- solve
+
+        /// <summary>Hybrid is manual until the battle starts — the fight takes over the trace.</summary>
+        FlotMode EffectiveMode =>
+            Mode == FlotMode.Hybrid ? (CombatSystem.BattleRunning ? FlotMode.Automatic : FlotMode.Manual) : Mode;
 
         public void Recompute()
         {
             if (_lines == null) return;
 
-            if (!Gather(out double lat0, out double lon0,
-                        out Vector2 axis, out Vector2 cross))
+            _segments.Clear();
+            _engagements.Clear();
+            LastFailure = null;
+
+            if (EffectiveMode == FlotMode.Manual) SolveManual();
+            else SolveAutomatic();
+
+            Publish();
+            DetectBreaches();
+            TakeHistorySnapshot();
+            Recomputed?.Invoke();
+        }
+
+        // -------------------------------------------------------- automatic
+
+        void SolveAutomatic()
+        {
+            // 1. Eligibility — only frontline-capable, combat-effective units.
+            var blue = new List<UnitActor>();
+            var red = new List<UnitActor>();
+            foreach (var u in UnitRegistry.All)
             {
-                Publish(null);
+                if (!FlotEligibility.CanInfluence(u)) continue;
+                (u.State.TeamEnum == Team.User ? blue : red).Add(u);
+            }
+            BlueCount = blue.Count; RedCount = red.Count;
+
+            if (blue.Count == 0 || red.Count == 0)
+            {
+                LastFailure = "Both sides need at least one combat-effective frontline formation.";
                 return;
             }
 
-            // Span across the front, from the outermost formation on either
-            // side, padded so the line does not stop dead at the last unit's
-            // shoulder. Every unit on the map is inside this span by
-            // construction, and — since nothing is trimmed off the ends any
-            // more — inside the drawn line too.
-            float minLat = float.MaxValue, maxLat = float.MinValue;
-            foreach (var n in _blue) { minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral); }
-            foreach (var n in _red) { minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral); }
+            // 2. Clustering — mutually supporting groups, per side.
+            var blueClusters = BuildClusters(blue);
+            var redClusters = BuildClusters(red);
 
-            float sigma = InfluenceWidthKm * 1000f;
+            // 3. Outlier filtering. The strongest cluster is the main body;
+            // anything far from it either becomes a pocket (real combat power)
+            // or is dropped from the solve entirely (a lone probing unit must
+            // not pull the whole front with it).
+            float bluePower = SidePower(blueClusters), redPower = SidePower(redClusters);
+            MarkIsolation(blueClusters, bluePower);
+            MarkIsolation(redClusters, redPower);
 
-            // The shoulder past the outermost formation. The influence width is
-            // a *setting* — at its 1 km floor it would leave the line finishing
-            // on top of the flank battalion's counter, which reads as a front
-            // that runs out rather than one that continues beyond contact. So
-            // the pad is the largest of the influence width, a share of the
-            // deployment's own frontage, and a fixed minimum: whichever the
-            // scenario is, the line covers every unit on the map with ground to
-            // spare on both flanks.
-            float pad = Mathf.Max(sigma,
-                Mathf.Max((maxLat - minLat) * FlankPadFraction, MinFlankPadM));
-            minLat -= pad; maxLat += pad;
-            if (maxLat - minLat < 1f)
+            // 4. Engagements — each main friendly cluster faces the nearest
+            // main enemy cluster. The pairing *is* the operational direction:
+            // two separated battles get two axes, which is what makes curved
+            // and multi-directional fronts come out right.
+            var pairs = PairEngagements(blueClusters, redClusters);
+            if (pairs.Count == 0)
             {
-                LastFailure = "The force has no width across the front.";
-                Publish(null);
-                return;
+                LastFailure = "No main bodies face each other — only isolated groups.";
             }
 
-            // Leading edges: the most-forward blue and the most-forward red, in
-            // the axis's own terms. These anchor the exponential below so it
-            // cannot overflow whatever scale the battle is at.
-            float blueLead = float.MinValue, redLead = float.MaxValue;
-            foreach (var n in _blue) blueLead = Mathf.Max(blueLead, n.Depth);
-            foreach (var n in _red) redLead = Mathf.Min(redLead, n.Depth);
+            // Strongest engagement first, so index 0 is the main front and the
+            // holding-group caption lands on it.
+            pairs.Sort((a, b) =>
+                (b.blue.Power + b.red.Power).CompareTo(a.blue.Power + a.red.Power));
 
-            int bands = Mathf.Max(3, Resolution);
-            var lateral = new float[bands];
-            var depth = new float[bands];
-            var solved = new bool[bands];
-            int firstSolved = -1, lastSolved = -1;
+            for (int e = 0; e < pairs.Count; e++)
+                SolveEngagement(pairs[e].blue, pairs[e].red, e);
 
-            for (int i = 0; i < bands; i++)
+            // 6. Pockets: an isolated cluster with real power is its own
+            // stretch of front — a closed ring, because it is surrounded in
+            // every direction that matters.
+            int pocketIndex = 0;
+            foreach (var c in blueClusters) if (c.Isolated) AddPocket(c, Team.User, pocketIndex++);
+            foreach (var c in redClusters) if (c.Isolated) AddPocket(c, Team.Enemy, pocketIndex++);
+        }
+
+        List<Cluster> BuildClusters(List<UnitActor> units)
+        {
+            var clusters = new List<Cluster>();
+            var assigned = new bool[units.Count];
+
+            for (int i = 0; i < units.Count; i++)
             {
-                float t = Mathf.Lerp(minLat, maxLat, i / (float)(bands - 1));
-                lateral[i] = t;
+                if (assigned[i]) continue;
+                var cluster = new Cluster();
+                var queue = new Queue<int>();
+                queue.Enqueue(i); assigned[i] = true;
 
-                float bDepth = Edge(_blue, t, sigma, blueLead, forward: true, out float bWeight);
-                float rDepth = Edge(_red, t, sigma, redLead, forward: false, out float rWeight);
-                if (bWeight <= 0f || rWeight <= 0f) continue;
-
-                // Power-weighted midpoint between the two front edges: the
-                // stronger side pushes the line towards the weaker one, which
-                // is the whole reason the front moves when a battle is won.
-                float share = bWeight / (bWeight + rWeight);
-                depth[i] = Mathf.Lerp(bDepth, rDepth, share);
-                solved[i] = true;
-
-                if (firstSolved < 0) firstSolved = i;
-                lastSolved = i;
-            }
-
-            if (firstSolved < 0)
-            {
-                LastFailure = "The two sides are not in contact anywhere along the front.";
-                Publish(null);
-                return;
-            }
-
-            FillUnsolved(depth, solved, firstSolved, lastSolved);
-
-            var points = new List<Vector2>(bands);
-            for (int i = 0; i < bands; i++)
-                points.Add(new Vector2(lateral[i], depth[i]));
-
-            for (int pass = 0; pass < SmoothingPasses; pass++) points = Chaikin(points);
-
-            // Back to geodetic. The frame is east-north-up about the battle's
-            // centre, so this is the exact inverse of the projection in Gather.
-            double mPerDegLon = MetresPerDegLat * System.Math.Cos(lat0 * System.Math.PI / 180.0);
-            var geo = new List<GeoPoint>(points.Count);
-            foreach (var p in points)
-            {
-                float east = cross.x * p.x + axis.x * p.y;
-                float north = cross.y * p.x + axis.y * p.y;
-                geo.Add(new GeoPoint
+                while (queue.Count > 0)
                 {
-                    latitude = lat0 + north / MetresPerDegLat,
-                    longitude = lon0 + east / System.Math.Max(1.0, mPerDegLon)
-                });
-            }
+                    int k = queue.Dequeue();
+                    cluster.Units.Add(units[k]);
+                    for (int j = 0; j < units.Count; j++)
+                    {
+                        if (assigned[j]) continue;
+                        if (GeoUtils.DistanceKm(units[k].State.latitude, units[k].State.longitude,
+                                units[j].State.latitude, units[j].State.longitude) > ClusterLinkKm) continue;
+                        assigned[j] = true; queue.Enqueue(j);
+                    }
+                }
 
-            Publish(geo);
+                double lat = 0, lon = 0; float power = 0f;
+                foreach (var u in cluster.Units)
+                {
+                    float w = FlotEligibility.Weight(u);
+                    lat += u.State.latitude * w; lon += u.State.longitude * w; power += w;
+                }
+                if (power <= 0f) continue;
+                cluster.Lat = lat / power; cluster.Lon = lon / power; cluster.Power = power;
+                clusters.Add(cluster);
+            }
+            return clusters;
+        }
+
+        static float SidePower(List<Cluster> clusters)
+        {
+            float p = 0f;
+            foreach (var c in clusters) p += c.Power;
+            return p;
+        }
+
+        void MarkIsolation(List<Cluster> clusters, float sidePower)
+        {
+            Cluster main = null;
+            foreach (var c in clusters) if (main == null || c.Power > main.Power) main = c;
+            if (main == null) return;
+
+            for (int i = clusters.Count - 1; i >= 0; i--)
+            {
+                var c = clusters[i];
+                if (c == main) continue;
+                double km = GeoUtils.DistanceKm(c.Lat, c.Lon, main.Lat, main.Lon);
+                if (km <= IsolationKm) continue;      // detached but supported — solves normally
+
+                if (c.Power < sidePower * OutlierPowerFraction)
+                    clusters.RemoveAt(i);              // an outlier: no vote at all
+                else
+                    c.Isolated = true;                 // a pocket: its own stretch of front
+            }
+        }
+
+        List<(Cluster blue, Cluster red)> PairEngagements(List<Cluster> blues, List<Cluster> reds)
+        {
+            var pairs = new List<(Cluster, Cluster)>();
+            foreach (var b in blues)
+            {
+                if (b.Isolated) continue;
+                Cluster nearest = null; double best = double.MaxValue;
+                foreach (var r in reds)
+                {
+                    if (r.Isolated) continue;
+                    double km = GeoUtils.DistanceKm(b.Lat, b.Lon, r.Lat, r.Lon);
+                    if (km < best) { best = km; nearest = r; }
+                }
+                if (nearest == null) continue;
+                bool duplicate = false;
+                foreach (var (pb, pr) in pairs) if (pr == nearest && pb == b) duplicate = true;
+                if (!duplicate) pairs.Add((b, nearest));
+            }
+            return pairs;
         }
 
         /// <summary>
-        /// Projects every living formation into a local east-north-up frame and
-        /// works out which way the front runs. Returns false when there is no
-        /// front to speak of — one side absent, or both stacked on one point.
+        /// Solves one battle: both sides' forward edges across the band span,
+        /// published as one segment per side. The frame and the nodes are kept
+        /// so territory and breach queries can re-ask it later.
         /// </summary>
-        bool Gather(out double lat0, out double lon0, out Vector2 axis, out Vector2 cross)
+        void SolveEngagement(Cluster blue, Cluster red, int index)
         {
-            lat0 = lon0 = 0; axis = Vector2.up; cross = Vector2.right;
+            var eng = new Engagement { Blue = new List<Node>(), Red = new List<Node>() };
 
-            _blue.Clear(); _red.Clear();
-            var blues = new List<UnitActor>(UnitRegistry.OfTeam(Team.User));
-            var reds = new List<UnitActor>(UnitRegistry.OfTeam(Team.Enemy));
-            BlueCount = blues.Count; RedCount = reds.Count;
+            // Local ENU frame about the engagement's own centre.
+            eng.Lat0 = (blue.Lat * blue.Power + red.Lat * red.Power) / (blue.Power + red.Power);
+            eng.Lon0 = (blue.Lon * blue.Power + red.Lon * red.Power) / (blue.Power + red.Power);
+            double mPerDegLon = MetresPerDegLat * System.Math.Cos(eng.Lat0 * System.Math.PI / 180.0);
 
-            if (blues.Count == 0 || reds.Count == 0)
-            {
-                LastFailure = "Both sides need at least one formation on the map.";
-                return false;
-            }
+            Vector2 ToLocal(double lat, double lon) => new Vector2(
+                (float)((lon - eng.Lon0) * mPerDegLon),
+                (float)((lat - eng.Lat0) * MetresPerDegLat));
 
-            // Origin at the midpoint of the two forces, so the local frame's
-            // flat-earth approximation is centred on the battle rather than on
-            // whichever unit happened to be first in the registry.
-            foreach (var u in blues) { lat0 += u.State.latitude; lon0 += u.State.longitude; }
-            foreach (var u in reds) { lat0 += u.State.latitude; lon0 += u.State.longitude; }
-            lat0 /= blues.Count + reds.Count;
-            lon0 /= blues.Count + reds.Count;
-
-            double mPerDegLon = MetresPerDegLat * System.Math.Cos(lat0 * System.Math.PI / 180.0);
-
-            // Power-weighted centroids define the axis: a battalion should move
-            // the front more than a supply point does.
-            Vector2 bC = Vector2.zero, rC = Vector2.zero;
-            float bP = 0f, rP = 0f;
-
-            var blueXY = new List<(Vector2 pos, float power)>(blues.Count);
-            var redXY = new List<(Vector2 pos, float power)>(reds.Count);
-
-            foreach (var u in blues)
-            {
-                var p = Project(u, lat0, lon0, mPerDegLon, out float power);
-                blueXY.Add((p, power)); bC += p * power; bP += power;
-            }
-            foreach (var u in reds)
-            {
-                var p = Project(u, lat0, lon0, mPerDegLon, out float power);
-                redXY.Add((p, power)); rC += p * power; rP += power;
-            }
-
-            if (bP <= 0f || rP <= 0f)
-            {
-                LastFailure = "No formation on one side has any combat power left.";
-                return false;
-            }
-            bC /= bP; rC /= rP;
-
-            Vector2 d = rC - bC;
+            // Operational direction: this cluster toward the enemy cluster it
+            // faces. Per engagement, so a two-front battle has two forwards.
+            Vector2 d = ToLocal(red.Lat, red.Lon) - ToLocal(blue.Lat, blue.Lon);
             if (d.sqrMagnitude < 1f)
             {
-                LastFailure = "The two sides are on top of each other — no front to draw.";
-                return false;
+                LastFailure = "Two opposing forces are on top of each other — no front to draw.";
+                return;
             }
-            axis = d.normalized;                              // blue → red
-            cross = new Vector2(-axis.y, axis.x);             // along the front
+            eng.Axis = d.normalized;
+            eng.Cross = new Vector2(-eng.Axis.y, eng.Axis.x);
 
-            foreach (var (pos, power) in blueXY)
-                _blue.Add(new Node { Lateral = Vector2.Dot(pos, cross), Depth = Vector2.Dot(pos, axis), Power = power });
-            foreach (var (pos, power) in redXY)
-                _red.Add(new Node { Lateral = Vector2.Dot(pos, cross), Depth = Vector2.Dot(pos, axis), Power = power });
+            float minLat = float.MaxValue, maxLat = float.MinValue;
+            void AddNodes(List<UnitActor> units, List<Node> into)
+            {
+                foreach (var u in units)
+                {
+                    var p = ToLocal(u.State.latitude, u.State.longitude);
+                    var n = new Node
+                    {
+                        Lateral = Vector2.Dot(p, eng.Cross),
+                        Depth = Vector2.Dot(p, eng.Axis),
+                        Power = FlotEligibility.Weight(u)
+                    };
+                    into.Add(n);
+                    minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral);
+                }
+            }
+            AddNodes(blue.Units, eng.Blue);
+            AddNodes(red.Units, eng.Red);
 
-            LastFailure = null;
-            return true;
+            eng.Sigma = InfluenceWidthKm * 1000f;
+            float pad = Mathf.Max(eng.Sigma, Mathf.Max((maxLat - minLat) * FlankPadFraction, MinFlankPadM));
+            eng.MinLat = minLat - pad; eng.MaxLat = maxLat + pad;
+
+            eng.BlueLead = float.MinValue; eng.RedLead = float.MaxValue;
+            foreach (var n in eng.Blue) eng.BlueLead = Mathf.Max(eng.BlueLead, n.Depth);
+            foreach (var n in eng.Red) eng.RedLead = Mathf.Min(eng.RedLead, n.Depth);
+
+            _engagements.Add(eng);
+
+            // Per-band forward edges. The blue edge is where blue's effective
+            // control ends toward red; the red edge the reverse; the ground
+            // between them is contested.
+            int bands = Mathf.Max(3, Resolution);
+            var blueDepth = new float[bands]; var blueSolved = new bool[bands];
+            var redDepth = new float[bands]; var redSolved = new bool[bands];
+            int bFirst = -1, bLast = -1, rFirst = -1, rLast = -1;
+            float gapSum = 0f; int gapCount = 0;
+
+            for (int i = 0; i < bands; i++)
+            {
+                float t = Mathf.Lerp(eng.MinLat, eng.MaxLat, i / (float)(bands - 1));
+                float b = Edge(eng.Blue, t, eng.Sigma, eng.BlueLead, forward: true, out float bW);
+                float r = Edge(eng.Red, t, eng.Sigma, eng.RedLead, forward: false, out float rW);
+
+                if (bW > 0f)
+                {
+                    blueDepth[i] = b; blueSolved[i] = true;
+                    if (bFirst < 0) bFirst = i;
+                    bLast = i;
+                }
+                if (rW > 0f)
+                {
+                    redDepth[i] = r; redSolved[i] = true;
+                    if (rFirst < 0) rFirst = i;
+                    rLast = i;
+                }
+                if (bW > 0f && rW > 0f) { gapSum += (r - b) / 1000f; gapCount++; }
+            }
+
+            float meanGap = gapCount > 0 ? gapSum / gapCount : float.MaxValue;
+
+            if (bFirst >= 0)
+                AddEdgeSegment(eng, blueDepth, blueSolved, bFirst, bLast, bands,
+                    Team.User, index, blue.Units.Count, meanGap, estimated: false);
+
+            if (rFirst >= 0)
+            {
+                // The published enemy edge respects the fog: computed from the
+                // formations the player can actually see, drawn broken because
+                // an estimate should look like one. Breach detection and
+                // territory keep using the true nodes stored on the engagement.
+                bool fogged = FogOfWarSystem.Active != null && FogOfWarSystem.Active.InEffect;
+                if (fogged)
+                {
+                    var visible = new List<Node>();
+                    int k = 0;
+                    foreach (var u in red.Units)
+                    {
+                        if (!u.HiddenByFog) visible.Add(eng.Red[k]);
+                        k++;
+                    }
+                    if (visible.Count == 0) return;      // nothing seen — no estimate to draw
+
+                    for (int i = 0; i < bands; i++)
+                    {
+                        float t = Mathf.Lerp(eng.MinLat, eng.MaxLat, i / (float)(bands - 1));
+                        float r = Edge(visible, t, eng.Sigma, eng.RedLead, forward: false, out float rW);
+                        redSolved[i] = rW > 0f;
+                        if (redSolved[i]) redDepth[i] = r;
+                    }
+                    rFirst = -1; rLast = -1;
+                    for (int i = 0; i < bands; i++)
+                        if (redSolved[i]) { if (rFirst < 0) rFirst = i; rLast = i; }
+                    if (rFirst < 0) return;
+
+                    AddEdgeSegment(eng, redDepth, redSolved, rFirst, rLast, bands,
+                        Team.Enemy, index, visible.Count, meanGap, estimated: true);
+                }
+                else
+                {
+                    AddEdgeSegment(eng, redDepth, redSolved, rFirst, rLast, bands,
+                        Team.Enemy, index, red.Units.Count, meanGap, estimated: false);
+                }
+            }
         }
 
-        static Vector2 Project(UnitActor u, double lat0, double lon0, double mPerDegLon,
-            out float power)
+        void AddEdgeSegment(Engagement eng, float[] depth, bool[] solved, int first, int last,
+            int bands, Team team, int engagementIndex, int contributors, float meanGap, bool estimated)
         {
-            power = Mathf.Max(0.01f, u.CurrentPower());
-            return new Vector2(
-                (float)((u.State.longitude - lon0) * mPerDegLon),
-                (float)((u.State.latitude - lat0) * MetresPerDegLat));
+            FillUnsolved(depth, solved, first, last);
+
+            var pts = new List<Vector2>(bands);
+            float meanDepth = 0f;
+            for (int i = 0; i < bands; i++)
+            {
+                float t = Mathf.Lerp(eng.MinLat, eng.MaxLat, i / (float)(bands - 1));
+                pts.Add(new Vector2(t, depth[i]));
+                meanDepth += depth[i];
+            }
+            meanDepth /= bands;
+
+            for (int pass = 0; pass < SmoothingPasses; pass++) pts = Chaikin(pts);
+
+            var seg = new FlotSegment
+            {
+                Id = $"{LineIdPrefix}{(team == Team.User ? "user" : "enemy")}-{engagementIndex}",
+                Team = team,
+                Points = ToGeo(eng, pts),
+                Contributors = contributors,
+                Estimated = estimated
+            };
+
+            // §7 stability, and §11 state. Advance is measured against this
+            // segment's own previous mean depth: toward the enemy is positive
+            // for both sides, so the sign reads the same on both lines.
+            float prev = _prevMeanDepth.TryGetValue(seg.Id, out float p) ? p : meanDepth;
+            float advance = (team == Team.User ? meanDepth - prev : prev - meanDepth) / 1000f;
+            _prevMeanDepth[seg.Id] = meanDepth;
+            seg.AdvanceKm = advance;
+
+            seg.State =
+                advance <= -CollapseKm ? FlotState.Collapsing
+                : meanGap < ContestGapKm ? FlotState.Contested
+                : advance >= StateMoveKm ? FlotState.Advancing
+                : advance <= -StateMoveKm ? FlotState.Retreating
+                : FlotState.Stable;
+
+            _segments.Add(seg);
+        }
+
+        List<GeoPoint> ToGeo(Engagement eng, List<Vector2> pts)
+        {
+            double mPerDegLon = MetresPerDegLat * System.Math.Cos(eng.Lat0 * System.Math.PI / 180.0);
+            var geo = new List<GeoPoint>(pts.Count);
+            foreach (var p in pts)
+            {
+                float east = eng.Cross.x * p.x + eng.Axis.x * p.y;
+                float north = eng.Cross.y * p.x + eng.Axis.y * p.y;
+                geo.Add(new GeoPoint
+                {
+                    latitude = eng.Lat0 + north / MetresPerDegLat,
+                    longitude = eng.Lon0 + east / System.Math.Max(1.0, mPerDegLon)
+                });
+            }
+            return geo;
+        }
+
+        void AddPocket(Cluster cluster, Team team, int index)
+        {
+            // A ring at the cluster's own footprint plus a stand-off: the
+            // pocket's edge is where its control ends, not where its units are.
+            double maxKm = 1.0;
+            foreach (var u in cluster.Units)
+                maxKm = System.Math.Max(maxKm,
+                    GeoUtils.DistanceKm(cluster.Lat, cluster.Lon, u.State.latitude, u.State.longitude));
+            double radiusKm = maxKm + 2.0;
+
+            const int Steps = 28;
+            var pts = new List<GeoPoint>(Steps + 1);
+            for (int i = 0; i <= Steps; i++)
+            {
+                GeoUtils.Destination(cluster.Lat, cluster.Lon, i * 360.0 / Steps, radiusKm,
+                    out double lat, out double lon);
+                pts.Add(new GeoPoint { latitude = lat, longitude = lon });
+            }
+
+            _segments.Add(new FlotSegment
+            {
+                Id = $"{LineIdPrefix}pocket-{(team == Team.User ? "user" : "enemy")}-{index}",
+                Team = team,
+                Points = pts,
+                Pocket = true,
+                State = FlotState.Isolated,
+                Contributors = cluster.Units.Count
+            });
         }
 
         /// <summary>
-        /// One side's front edge at a point along the front: a weighted mean of
-        /// its formations' depths.
-        ///
-        /// Three factors multiply into each formation's weight — its combat
-        /// power, a Gaussian in how far along the front it sits from the band
-        /// being sampled, and an exponential in how far forward it is. The last
-        /// is what makes this a *front* rather than a centre of mass: the
-        /// battalions in contact dominate, and everything behind them fades out
-        /// over <see cref="ForwardBiasKm"/>.
+        /// One side's forward edge at a point along the front: a weighted mean
+        /// of its formations' depths — power × Gaussian across the front ×
+        /// exponential toward the enemy, so the battalions in contact decide
+        /// the line and the rear does not.
         /// </summary>
         static float Edge(List<Node> side, float lateral, float sigma, float lead,
             bool forward, out float weight)
@@ -487,8 +762,6 @@ namespace IronMeridian.Lines
                 float lateralW = Mathf.Exp(-dl * dl);
                 if (lateralW < 1e-4f) continue;
 
-                // Measured from the side's own leading edge, so the exponent is
-                // always <= 0 and cannot blow up on a large map.
                 float behind = forward ? lead - n.Depth : n.Depth - lead;
                 float depthW = Mathf.Exp(-Mathf.Max(0f, behind) / bias);
 
@@ -496,30 +769,10 @@ namespace IronMeridian.Lines
                 sum += n.Depth * w;
                 weight += w;
             }
-
             return weight > 0f ? sum / weight : 0f;
         }
 
-        /// <summary>
-        /// Gives every band a depth, including the ones no solve could reach.
-        ///
-        /// **This is what makes the line cover the whole map rather than only
-        /// the part of it that is fighting.** A band is only solved where both
-        /// sides have some influence; out past either flank, and in any gap
-        /// between two separate engagements, one side's weight is zero and the
-        /// midpoint is undefined. The old code dropped those bands and then
-        /// trimmed the ends harder still, so the front was a short segment
-        /// hanging in the middle of a deployment that ran well past both of its
-        /// ends — a formation on the flank was outside the line that was
-        /// supposed to describe where it stood.
-        ///
-        /// So nothing is dropped. Past the outermost solved band the last
-        /// solved depth is **carried out** to the flank — the front runs
-        /// straight on out of contact, which is what a front does. Gaps in the
-        /// middle are **bridged** by interpolating between the solved bands on
-        /// either side, so a two-battle map reads as one continuous front
-        /// rather than as two disconnected pieces.
-        /// </summary>
+        /// <summary>Carries the edge out past the flanks and bridges gaps, so nothing is dropped.</summary>
         static void FillUnsolved(float[] depth, bool[] solved, int first, int last)
         {
             for (int i = 0; i < first; i++) depth[i] = depth[first];
@@ -528,29 +781,17 @@ namespace IronMeridian.Lines
             for (int i = first + 1; i < last; i++)
             {
                 if (solved[i]) continue;
-
-                // depth[i - 1] is already final: either it was solved, or an
-                // earlier pass of this loop filled it.
                 int a = i - 1, b = i + 1;
                 while (b < last && !solved[b]) b++;
-
                 for (int k = i; k < b; k++)
                     depth[k] = Mathf.Lerp(depth[a], depth[b], (k - a) / (float)(b - a));
-
                 i = b - 1;
             }
         }
 
-        /// <summary>
-        /// Chaikin corner-cutting: replaces each segment with its quarter and
-        /// three-quarter points, keeping the two ends. One pass roughly doubles
-        /// the vertex count and rounds every corner; two is enough to turn a
-        /// band-by-band solve into something that reads as a drawn front.
-        /// </summary>
         static List<Vector2> Chaikin(List<Vector2> pts)
         {
             if (pts.Count < 3) return pts;
-
             var result = new List<Vector2>(pts.Count * 2) { pts[0] };
             for (int i = 0; i + 1 < pts.Count; i++)
             {
@@ -561,56 +802,442 @@ namespace IronMeridian.Lines
             return result;
         }
 
-        // ------------------------------------------------------------ output
+        // ------------------------------------------------------------ manual
 
-        /// <summary>
-        /// Pushes the solved line onto the map, or takes it down when there is
-        /// nothing to draw. A failed solve removes the line rather than leaving
-        /// the last good one standing: a stale front that no longer matches the
-        /// units on the map is worse than no front at all.
-        /// </summary>
-        void Publish(List<GeoPoint> points)
+        readonly List<GeoPoint> _manual = new List<GeoPoint>();
+
+        /// <summary>True while the designer is clicking the line onto the map.</summary>
+        public bool Drawing { get; private set; }
+
+        public void StartDrawing()
         {
-            var line = _lines.Find(LineId);
-
-            if (points == null || points.Count < 2)
+            if (EffectiveMode != FlotMode.Manual)
             {
-                LengthKm = 0;
-                if (line != null) _lines.Remove(line);
-                Recomputed?.Invoke();
+                Flash?.Invoke("Switch the FLOT to MANUAL or HYBRID (before battle) to draw it.");
+                return;
+            }
+            Drawing = true;
+            _manual.Clear();
+            Flash?.Invoke("Drawing the FLOT — click along the line. Enter/RMB finishes (min 2), " +
+                          "Backspace undoes, Esc cancels.");
+        }
+
+        public void CancelDrawing() => Drawing = false;
+
+        void HandleDrawing()
+        {
+            if (!Drawing) return;
+
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                Drawing = false;
+                _manual.Clear();
+                Recompute();
+                Flash?.Invoke("FLOT drawing cancelled.");
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.Backspace) && _manual.Count > 0)
+            {
+                _manual.RemoveAt(_manual.Count - 1);
+                Recompute();
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetMouseButtonDown(1))
+            {
+                if (_manual.Count < 2) { Flash?.Invoke("A line needs at least two points."); return; }
+                Drawing = false;
+                Recompute();
+                Flash?.Invoke($"FLOT drawn — {_manual.Count} points.");
                 return;
             }
 
-            if (line == null)
+            if (!Input.GetMouseButtonDown(0)) return;
+            if (UnityEngine.EventSystems.EventSystem.current != null &&
+                UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+            if (_map == null || !_map.RaycastGround(_cam, Input.mousePosition, out Vector3 world))
             {
-                line = _lines.Add(new MapLineData
-                {
-                    id = LineId,
-                    kind = LineKind.Boundary.ToString(),
-                    team = "",
-                    // The front line is a map graphic, never a fence standing in
-                    // the world: it is drawn flat on the terrain in both view
-                    // modes. MapLine normalises this for every FlatOnly kind, so
-                    // this is the record of intent rather than the enforcement.
-                    is3D = false,
-                    autoGenerated = true,
-                    label = "FLOT",
-                    points = points
-                });
-                // The one line on the map with settings worth opening.
-                line.SetPickable(true);
+                Flash?.Invoke("Terrain not loaded there yet — try again in a moment.");
+                return;
             }
-            else line.SetPoints(points);
 
-            // Also applied to a line restored from a save, which was rebuilt by
-            // LineManager rather than created here and would otherwise come
-            // back un-clickable.
-            line.SetPickable(true);
-            ApplyLabel();
-            line.gameObject.SetActive(Visible);
-            LengthKm = line.LengthKm;
-            LastFailure = null;
-            Recomputed?.Invoke();
+            GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out _);
+            _manual.Add(new GeoPoint { latitude = lat, longitude = lon });
+            Recompute();      // live preview: the line grows as it is clicked
+        }
+
+        void SolveManual()
+        {
+            BlueCount = RedCount = 0;
+
+            // A map saved in manual mode carries the drawn line as an ordinary
+            // MapLine; adopt its points so the trace survives a reload.
+            if (_manual.Count < 2)
+            {
+                var saved = _lines.Find(ManualLineId);
+                if (saved != null && saved.Data.points.Count >= 2)
+                    foreach (var p in saved.Data.points)
+                        _manual.Add(new GeoPoint { latitude = p.latitude, longitude = p.longitude });
+            }
+
+            if (_manual.Count < 2)
+            {
+                if (!Drawing) LastFailure = "No FLOT drawn yet — DRAW FLOT in the panel puts one down.";
+                return;
+            }
+
+            var pts = new List<GeoPoint>(_manual.Count);
+            foreach (var p in _manual) pts.Add(new GeoPoint { latitude = p.latitude, longitude = p.longitude });
+
+            _segments.Add(new FlotSegment
+            {
+                Id = ManualLineId,
+                Team = Team.User,
+                Manual = true,
+                Points = pts,
+                State = FlotState.Stable,
+                Contributors = 0
+            });
+
+            // Queries against a manual line share the automatic machinery: one
+            // synthetic engagement whose two edges are both the drawn trace.
+            BuildManualEngagement(pts);
+        }
+
+        void BuildManualEngagement(List<GeoPoint> pts)
+        {
+            // Forward still has to mean something: from the blue force's centre
+            // toward the red force's. Without both sides on the map there is
+            // nothing to breach and no territory to assign, and skipping the
+            // engagement is the honest answer.
+            double bLat = 0, bLon = 0, rLat = 0, rLon = 0; float bP = 0, rP = 0;
+            foreach (var u in UnitRegistry.All)
+            {
+                if (u == null || !u.IsAlive || u.Def == null) continue;
+                float w = Mathf.Max(0.01f, u.CurrentPower());
+                if (u.State.TeamEnum == Team.User) { bLat += u.State.latitude * w; bLon += u.State.longitude * w; bP += w; }
+                else { rLat += u.State.latitude * w; rLon += u.State.longitude * w; rP += w; }
+            }
+            if (bP <= 0f || rP <= 0f) return;
+            bLat /= bP; bLon /= bP; rLat /= rP; rLon /= rP;
+
+            var eng = new Engagement { Blue = new List<Node>(), Red = new List<Node>() };
+            var mid = pts[pts.Count / 2];
+            eng.Lat0 = mid.latitude; eng.Lon0 = mid.longitude;
+            double mPerDegLon = MetresPerDegLat * System.Math.Cos(eng.Lat0 * System.Math.PI / 180.0);
+
+            Vector2 ToLocal(double lat, double lon) => new Vector2(
+                (float)((lon - eng.Lon0) * mPerDegLon),
+                (float)((lat - eng.Lat0) * MetresPerDegLat));
+
+            Vector2 d = ToLocal(rLat, rLon) - ToLocal(bLat, bLon);
+            if (d.sqrMagnitude < 1f) return;
+            eng.Axis = d.normalized;
+            eng.Cross = new Vector2(-eng.Axis.y, eng.Axis.x);
+            eng.Sigma = InfluenceWidthKm * 1000f;
+            eng.BlueLead = 0f; eng.RedLead = 0f;
+
+            // The drawn trace becomes both edges: heavy synthetic nodes along
+            // it, so Edge() reproduces the line and the same breach/territory
+            // code runs unchanged.
+            float minLat = float.MaxValue, maxLat = float.MinValue;
+            foreach (var p in pts)
+            {
+                var local = ToLocal(p.latitude, p.longitude);
+                var n = new Node
+                {
+                    Lateral = Vector2.Dot(local, eng.Cross),
+                    Depth = Vector2.Dot(local, eng.Axis),
+                    Power = 1000f
+                };
+                eng.Blue.Add(n); eng.Red.Add(n);
+                minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral);
+            }
+            eng.MinLat = minLat; eng.MaxLat = maxLat;
+            foreach (var n in eng.Blue) { eng.BlueLead = Mathf.Max(eng.BlueLead, n.Depth); }
+            eng.RedLead = float.MaxValue;
+            foreach (var n in eng.Red) { eng.RedLead = Mathf.Min(eng.RedLead, n.Depth); }
+
+            _engagements.Add(eng);
+        }
+
+        // ----------------------------------------------------------- publish
+
+        void Publish()
+        {
+            // The old solver's single midline, if this map was saved before
+            // per-side edges existed.
+            var legacy = _lines.Find(LegacyLineId);
+            if (legacy != null) _lines.Remove(legacy);
+
+            var newIds = new HashSet<string>();
+            double userLength = 0;
+
+            foreach (var seg in _segments)
+            {
+                newIds.Add(seg.Id);
+
+                // §7 stability: below the movement threshold the previous
+                // geometry is kept (no shaking); above it but nearby, the line
+                // blends halfway per solve rather than snapping.
+                if (_prevPoints.TryGetValue(seg.Id, out var prev) && prev.Count == seg.Points.Count)
+                {
+                    double meanM = 0;
+                    for (int i = 0; i < prev.Count; i++)
+                        meanM += GeoUtils.DistanceKm(prev[i].latitude, prev[i].longitude,
+                            seg.Points[i].latitude, seg.Points[i].longitude) * 1000.0;
+                    meanM /= prev.Count;
+
+                    if (meanM < MinMoveM) seg.Points = prev;
+                    else if (meanM < 3000.0)
+                        for (int i = 0; i < prev.Count; i++)
+                        {
+                            seg.Points[i].latitude = (prev[i].latitude + seg.Points[i].latitude) * 0.5;
+                            seg.Points[i].longitude = (prev[i].longitude + seg.Points[i].longitude) * 0.5;
+                        }
+                }
+                _prevPoints[seg.Id] = ClonePoints(seg.Points);
+
+                var line = _lines.Find(seg.Id);
+                if (line == null)
+                {
+                    line = _lines.Add(new MapLineData
+                    {
+                        id = seg.Id,
+                        kind = LineKind.Boundary.ToString(),
+                        team = seg.Team.ToString(),
+                        is3D = false,
+                        autoGenerated = true,
+                        points = seg.Points
+                    });
+                }
+                else line.SetPoints(seg.Points);
+
+                line.Data.label = LabelFor(seg);
+                line.Data.planned = seg.Estimated;      // an estimate draws broken
+                line.Data.colorHex = !string.IsNullOrEmpty(_customHex) ? _customHex
+                    : seg.Team == Team.User && !seg.Manual
+                        ? "#" + ColorUtility.ToHtmlStringRGB(GameConfig.BlueTeam)
+                        : "";                            // red/manual: the system default
+                if (_customWidth > 0f) line.Data.widthMeters = _customWidth;
+                line.RefreshStyle();
+                line.SetPickable(true);
+                line.gameObject.SetActive(Visible);
+
+                seg.LengthKm = line.LengthKm;
+                if (seg.Team == Team.User && !seg.Pocket) userLength += seg.LengthKm;
+            }
+
+            // Anything published last solve and absent now comes down — a
+            // pocket that broke out, an engagement that ended.
+            foreach (var id in _publishedIds)
+            {
+                if (newIds.Contains(id)) continue;
+                var stale = _lines.Find(id);
+                if (stale != null) _lines.Remove(stale);
+                _prevPoints.Remove(id);
+                _prevMeanDepth.Remove(id);
+            }
+            _publishedIds.Clear();
+            foreach (var id in newIds) _publishedIds.Add(id);
+
+            LengthKm = userLength;
+        }
+
+        string LabelFor(FlotSegment seg)
+        {
+            if (seg.Pocket) return "POCKET";
+            if (seg.Manual || seg.Team == Team.User)
+                return string.IsNullOrEmpty(HoldingGroupName) || seg.Id != MainSegment(Team.User)?.Id
+                    ? "FLOT"
+                    : "FLOT — " + HoldingGroupName.ToUpperInvariant();
+            return seg.Estimated ? "ENEMY FLOT (EST)" : "ENEMY FLOT";
+        }
+
+        static List<GeoPoint> ClonePoints(List<GeoPoint> pts)
+        {
+            var copy = new List<GeoPoint>(pts.Count);
+            foreach (var p in pts)
+                copy.Add(new GeoPoint { latitude = p.latitude, longitude = p.longitude, heightMeters = p.heightMeters });
+            return copy;
+        }
+
+        // ------------------------------------------------------------ breach
+
+        /// <summary>
+        /// FLOT_BREACH: an enemy *cluster* — not a lone probing unit — standing
+        /// more than <see cref="BreachDepthKm"/> behind a side's forward edge
+        /// with at least <see cref="BreachPowerFraction"/> of the victim's own
+        /// power. A real breakthrough moves the alarm; a scout does not.
+        /// </summary>
+        void DetectBreaches()
+        {
+            var current = new HashSet<string>();
+
+            void Check(Team victim)
+            {
+                // Intruders: eligible enemy formations clustered, so power is
+                // judged per force rather than per counter.
+                var intruders = new List<UnitActor>();
+                float victimPower = 0f;
+                foreach (var u in UnitRegistry.All)
+                {
+                    float w = FlotEligibility.Weight(u);
+                    if (w <= 0f) continue;
+                    if (u.State.TeamEnum == victim) victimPower += w;
+                    else intruders.Add(u);
+                }
+                if (victimPower <= 0f || intruders.Count == 0) return;
+
+                foreach (var cluster in BuildClusters(intruders))
+                {
+                    if (cluster.Power < victimPower * BreachPowerFraction) continue;
+
+                    double penetration = PenetrationKm(victim, cluster.Lat, cluster.Lon);
+                    if (penetration < BreachDepthKm) continue;
+
+                    string key = $"{victim}:{cluster.Lat:0.00}:{cluster.Lon:0.00}";
+                    current.Add(key);
+                    if (_activeBreaches.Contains(key)) continue;
+
+                    _activeBreaches.Add(key);
+                    MarkBreached(victim, cluster.Lat, cluster.Lon);
+                    Breach?.Invoke(victim, cluster.Lat, cluster.Lon, penetration);
+                }
+            }
+
+            Check(Team.User);
+            Check(Team.Enemy);
+
+            // A breach that no longer exists may fire again if it re-happens.
+            _activeBreaches.RemoveWhere(k => !current.Contains(k));
+        }
+
+        /// <summary>Km a point stands past a side's forward edge, 0 if in front of it or off every span.</summary>
+        double PenetrationKm(Team victim, double lat, double lon)
+        {
+            double worst = 0;
+            foreach (var eng in _engagements)
+            {
+                double mPerDegLon = MetresPerDegLat * System.Math.Cos(eng.Lat0 * System.Math.PI / 180.0);
+                var p = new Vector2(
+                    (float)((lon - eng.Lon0) * mPerDegLon),
+                    (float)((lat - eng.Lat0) * MetresPerDegLat));
+                float lateral = Vector2.Dot(p, eng.Cross);
+                float depth = Vector2.Dot(p, eng.Axis);
+                if (lateral < eng.MinLat || lateral > eng.MaxLat) continue;
+
+                if (victim == Team.User)
+                {
+                    float edge = Edge(eng.Blue, lateral, eng.Sigma, eng.BlueLead, forward: true, out float w);
+                    if (w > 0f && depth < edge) worst = System.Math.Max(worst, (edge - depth) / 1000.0);
+                }
+                else
+                {
+                    float edge = Edge(eng.Red, lateral, eng.Sigma, eng.RedLead, forward: false, out float w);
+                    if (w > 0f && depth > edge) worst = System.Math.Max(worst, (depth - edge) / 1000.0);
+                }
+            }
+            return worst;
+        }
+
+        void MarkBreached(Team victim, double lat, double lon)
+        {
+            // The breached stretch is the victim's segment nearest the
+            // intrusion — its state is overridden until the intruder is gone.
+            FlotSegment nearest = null; double best = double.MaxValue;
+            foreach (var seg in _segments)
+            {
+                if (seg.Team != victim || seg.Pocket || seg.Points.Count == 0) continue;
+                var mid = seg.Points[seg.Points.Count / 2];
+                double km = GeoUtils.DistanceKm(mid.latitude, mid.longitude, lat, lon);
+                if (km < best) { best = km; nearest = seg; }
+            }
+            if (nearest != null) nearest.State = FlotState.Breached;
+        }
+
+        // --------------------------------------------------------- territory
+
+        /// <summary>
+        /// Who holds a point on the map, as the front lines read it: behind the
+        /// blue edge is blue, behind the red edge red, between them contested.
+        /// Off every engagement's span, the nearer force's side wins — depth
+        /// without a front is just distance.
+        /// </summary>
+        public TerritoryOwner TerritoryAt(double lat, double lon)
+        {
+            foreach (var eng in _engagements)
+            {
+                double mPerDegLon = MetresPerDegLat * System.Math.Cos(eng.Lat0 * System.Math.PI / 180.0);
+                var p = new Vector2(
+                    (float)((lon - eng.Lon0) * mPerDegLon),
+                    (float)((lat - eng.Lat0) * MetresPerDegLat));
+                float lateral = Vector2.Dot(p, eng.Cross);
+                float depth = Vector2.Dot(p, eng.Axis);
+                if (lateral < eng.MinLat || lateral > eng.MaxLat) continue;
+
+                float blue = Edge(eng.Blue, lateral, eng.Sigma, eng.BlueLead, forward: true, out float bW);
+                float red = Edge(eng.Red, lateral, eng.Sigma, eng.RedLead, forward: false, out float rW);
+                if (bW <= 0f && rW <= 0f) continue;
+                if (bW <= 0f) return depth > red ? TerritoryOwner.Red : TerritoryOwner.Contested;
+                if (rW <= 0f) return depth < blue ? TerritoryOwner.Blue : TerritoryOwner.Contested;
+
+                if (blue > red) return TerritoryOwner.Contested;    // interpenetration
+                if (depth <= blue) return TerritoryOwner.Blue;
+                if (depth >= red) return TerritoryOwner.Red;
+                return TerritoryOwner.Contested;
+            }
+
+            // No front covers this ground: nearest force decides.
+            double bestBlue = double.MaxValue, bestRed = double.MaxValue;
+            foreach (var u in UnitRegistry.All)
+            {
+                if (u == null || !u.IsAlive) continue;
+                double km = GeoUtils.DistanceKm(lat, lon, u.State.latitude, u.State.longitude);
+                if (u.State.TeamEnum == Team.User) bestBlue = System.Math.Min(bestBlue, km);
+                else bestRed = System.Math.Min(bestRed, km);
+            }
+            if (bestBlue == double.MaxValue && bestRed == double.MaxValue) return TerritoryOwner.Contested;
+            return bestBlue <= bestRed ? TerritoryOwner.Blue : TerritoryOwner.Red;
+        }
+
+        // ----------------------------------------------------------- history
+
+        void TakeHistorySnapshot()
+        {
+            if (Clock == null) return;
+            double now = Clock.Now.Ticks / (double)System.TimeSpan.TicksPerSecond;
+            if (now - _lastHistoryGameSecond < HistoryGameSeconds) return;
+            _lastHistoryGameSecond = now;
+
+            var blue = MainSegment(Team.User);
+            var red = MainSegment(Team.Enemy);
+            if (blue == null && red == null) return;
+
+            var entry = new HistoryEntry { Time = Clock.TimeText };
+            if (blue != null) MeanOf(blue.Points, out entry.BlueLat, out entry.BlueLon);
+            if (red != null) MeanOf(red.Points, out entry.RedLat, out entry.RedLon);
+
+            _history.Add(entry);
+            if (_history.Count > HistoryCap) _history.RemoveAt(0);
+        }
+
+        static void MeanOf(List<GeoPoint> pts, out double lat, out double lon)
+        {
+            lat = lon = 0;
+            if (pts.Count == 0) return;
+            foreach (var p in pts) { lat += p.latitude; lon += p.longitude; }
+            lat /= pts.Count; lon /= pts.Count;
+        }
+
+        /// <summary>Km the blue main edge has moved since the oldest kept snapshot. For the panel.</summary>
+        public double MovementSinceKm()
+        {
+            var blue = MainSegment(Team.User);
+            if (blue == null || _history.Count == 0) return 0;
+            MeanOf(blue.Points, out double lat, out double lon);
+            var oldest = _history[0];
+            if (oldest.BlueLat == 0 && oldest.BlueLon == 0) return 0;
+            return GeoUtils.DistanceKm(oldest.BlueLat, oldest.BlueLon, lat, lon);
         }
     }
 }

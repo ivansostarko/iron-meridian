@@ -349,23 +349,31 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// The FLOT, read straight off the line the front-line system published
-        /// — so the minimap can never disagree with the map about where the
-        /// fighting is.
+        /// Every published stretch of front — both sides' edges, pockets and
+        /// the manual trace — read straight off the front-line system's own
+        /// segments, so the minimap can never disagree with the map about
+        /// where the fighting is. Blue edge blue, red edge red, the manual
+        /// line in the front-line red.
         /// </summary>
         void DrawFrontline()
         {
-            var line = _frontline != null ? _frontline.Line : null;
-            if (line == null || !line.gameObject.activeSelf) return;
+            var segments = _frontline != null ? _frontline.Segments : null;
+            if (segments == null) return;
 
-            var pts = line.Data.points;
-            var colour = (Color32)GameConfig.FrontlineRed;
-
-            for (int i = 0; i + 1 < pts.Count; i++)
+            foreach (var seg in segments)
             {
-                Project(pts[i].latitude, pts[i].longitude, out int x0, out int y0);
-                Project(pts[i + 1].latitude, pts[i + 1].longitude, out int x1, out int y1);
-                Line(x0, y0, x1, y1, colour);
+                var pts = seg.Points;
+                if (pts == null || pts.Count < 2) continue;
+
+                var colour = (Color32)(seg.Manual ? GameConfig.FrontlineRed
+                    : seg.Team == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam);
+
+                for (int i = 0; i + 1 < pts.Count; i++)
+                {
+                    Project(pts[i].latitude, pts[i].longitude, out int x0, out int y0);
+                    Project(pts[i + 1].latitude, pts[i + 1].longitude, out int x1, out int y1);
+                    Line(x0, y0, x1, y1, colour);
+                }
             }
         }
 

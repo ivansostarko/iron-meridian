@@ -31,6 +31,14 @@ namespace IronMeridian.Logistics
         public LogisticsSiteData Data { get; private set; }
         public LogisticsKind Kind { get; private set; }
 
+        /// <summary>
+        /// Where the marker stands, in world space — what a screen-space pick
+        /// projects to find it. Zero until the ground under it has been sampled,
+        /// which is the honest answer: a site whose terrain has not streamed in
+        /// is not on the map yet either. See <c>LogisticsSystem.PickAt</c>.
+        /// </summary>
+        public Vector3 Anchor => _base;
+
         /// <summary>Metres above the sampled ground.</summary>
         const double ClearanceM = 10.0;
         const float ReclampSeconds = 1.2f;

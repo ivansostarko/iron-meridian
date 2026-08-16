@@ -89,6 +89,9 @@ Assets/Scripts/
                          font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
                          TaskMarker and RangeRing captions
     ConfirmDialog.cs     modal are-you-sure for destructive actions (RESET)
+    ContextMenuUI.cs     the map's right-click menu: opened at the cursor for a
+                          friendly formation or a logistic site, own sorting
+                          canvas, backdrop that swallows the dismissing click
     LossesDialog.cs      the casualty list, TAB in battle mode: both sides'
                           losses side by side, from Units/LossLedger
     GroupPanelUI.cs      right panel for a 2+ selection: name it as a group,
@@ -160,6 +163,8 @@ Assets/Scripts/
     ReconOrderSystem.cs  recon lifecycle + the sensors the fog reads
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
+    FlotEligibility.cs   which formations move the front line, and how much
+                          (docs/28-FLOT.md §2)
     RangeRing.cs         range rings: line of sight, weapon range, fog and air
                           contacts, and a mission's two HQ zones (docs/22). A FLAT feathered band draped on the terrain
                           with cardinal ticks — a range is a distance measured
@@ -182,8 +187,10 @@ Assets/Scripts/
     MissionAreaTool.cs   click-to-draw a mission's boundary, and the overlay that
                           shows it. Deliberately NOT a LineManager line — the area
                           belongs to the mission record, not the map file
-    FrontlineSystem.cs   the front line: influence field over every formation,
-                          solved in metres and smoothed (docs/03-GAMEPLAY.md).
+    FrontlineSystem.cs   the FLOT as a gameplay object: eligibility →
+                          clustering → outliers/pockets → per-engagement,
+                          per-side forward edges → states, breach events,
+                          territory queries, modes, history (docs/28-FLOT.md).
                           Also records which GROUP has been put on the line
   Logistics/             the scenario's rear area — see docs/26-LOGISTICS.md
     LogisticsSystem.cs   owns every depot and supply/fuel/ammo/repair/medical

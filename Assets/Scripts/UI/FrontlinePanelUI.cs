@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using IronMeridian.Core;
+using IronMeridian.Data;
 using IronMeridian.Lines;
 
 namespace IronMeridian.UI
@@ -75,10 +76,17 @@ namespace IronMeridian.UI
 
         FrontlineSystem _front;
 
+        static readonly (string name, FlotMode mode)[] Modes =
+        {
+            ("AUTO", FlotMode.Automatic), ("MANUAL", FlotMode.Manual), ("HYBRID", FlotMode.Hybrid)
+        };
+
         RectTransform _panel;
-        Text _readout, _statusLabel;
+        Text _readout, _statusLabel, _segmentsLabel;
         RectTransform _autoLamp, _visibleLamp;
         Text _autoLabel, _visibleLabel;
+        readonly List<(int index, Image fill, Text label)> _modeButtons = new List<(int, Image, Text)>();
+        Button _drawBtn;
 
         // Standard width, standard resolution, standard influence width and
         // SILK smoothing — the shipped settings. They are indices into the
@@ -149,17 +157,39 @@ namespace IronMeridian.UI
             // change it: a panel about a computed object has to say what the
             // computation produced or the settings are being adjusted blind.
             var frame = UIFactory.CreateBorderedPanel(_panel, "Readout", UiTheme.Surface, UiTheme.BorderStrong);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -48), new Vector2(inner, 62));
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -48), new Vector2(inner, 92));
 
             _readout = UIFactory.CreateText(frame, "", UiTheme.FontSmall, UiTheme.Text,
                 TextAnchor.UpperLeft);
-            UIFactory.PlaceTopLeft(_readout.rectTransform, 10f, 8f, inner - 20f, 24f);
+            UIFactory.PlaceTopLeft(_readout.rectTransform, 10f, 8f, inner - 20f, 20f);
 
             _statusLabel = UIFactory.CreateText(frame, "", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.UpperLeft);
-            UIFactory.PlaceTopLeft(_statusLabel.rectTransform, 10f, 32f, inner - 20f, 24f);
+            UIFactory.PlaceTopLeft(_statusLabel.rectTransform, 10f, 30f, inner - 20f, 30f);
 
-            float y = -120f;
+            // What each stretch of front is *doing* — the states are the whole
+            // point of the line being a gameplay object rather than a drawing.
+            _segmentsLabel = UIFactory.CreateText(frame, "", UiTheme.FontLabel, UiTheme.Accent,
+                TextAnchor.UpperLeft);
+            UIFactory.PlaceTopLeft(_segmentsLabel.rectTransform, 10f, 62f, inner - 20f, 26f);
+            UIFactory.Fit(_segmentsLabel, 7);
+
+            float y = -150f;
+
+            Label("MODE", ref y, inner);
+            BuildSegments(_modeButtons, Modes.Length, i => Modes[i].name, y, inner,
+                i => { _front.SetMode(Modes[i].mode); Refresh(); });
+            y -= 36f;
+
+            // Drawing only means anything in MANUAL (or HYBRID before the
+            // battle); the button says so instead of silently refusing.
+            var drawFrame = UIFactory.CreateBorderedPanel(_panel, "DrawFlot", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(drawFrame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(inner, 30));
+            _drawBtn = UIFactory.CreateButton(drawFrame, "DRAW FLOT ON MAP",
+                () => { _front.StartDrawing(); Refresh(); },
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)_drawBtn.transform);
+            y -= 38f;
 
             _visibleLamp = ToggleRow("SHOW ON MAP", y, inner, () =>
             {
@@ -207,15 +237,13 @@ namespace IronMeridian.UI
             y -= 44f;
 
             var hint = UIFactory.CreateText(_panel,
-                "The front line is derived from where the formations actually stand. Every living unit " +
-                "pulls on it, weighted by its combat power, how near it is along the front and how far " +
-                "forward it has got — so the line bends towards whichever side is winning.\n\n" +
-                "RESOLUTION is how many bands are solved across the front, SMOOTHING how hard the " +
-                "corners are rounded afterwards, and INFLUENCE WIDTH how far along the front one " +
-                "formation is allowed to speak for.",
+                "Each side gets its own forward edge, solved from its combat formations only — " +
+                "logistics, artillery and broken units do not move the line, and an isolated group " +
+                "becomes a POCKET rather than dragging the front to it. The ground between the two " +
+                "edges is contested.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y),
-                new Vector2(inner, 190));
+                new Vector2(inner, 110));
 
             _panel.gameObject.SetActive(false);
         }
@@ -378,6 +406,14 @@ namespace IronMeridian.UI
             _visibleLamp.GetComponent<Image>().color = _front.Visible ? UiTheme.Success : UiTheme.TextFaint;
             _visibleLabel.text = _front.Visible ? "SHOWN" : "HIDDEN";
 
+            for (int i = 0; i < _modeButtons.Count; i++)
+            {
+                bool on = Modes[_modeButtons[i].index].mode == _front.Mode;
+                _modeButtons[i].fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                _modeButtons[i].label.color = on ? UiTheme.Accent : UiTheme.TextDim;
+            }
+            if (_drawBtn != null) _drawBtn.interactable = _front.Mode != FlotMode.Automatic;
+
             RefreshReadout();
         }
 
@@ -404,14 +440,29 @@ namespace IronMeridian.UI
                 return;
             }
 
-            var line = _front.Line;
-            int vertices = line != null ? line.Data.points.Count : 0;
-
-            _readout.text = $"{_front.LengthKm:0.#} km  ·  {vertices} vertices";
+            _readout.text = $"{_front.LengthKm:0.#} km of friendly FLOT  ·  {_front.Segments.Count} segment(s)";
             _readout.color = UiTheme.Text;
+
+            double moved = _front.MovementSinceKm();
             _statusLabel.text =
-                $"{_front.BlueCount} friendly / {_front.RedCount} hostile formations contributing";
+                $"{_front.BlueCount} friendly / {_front.RedCount} hostile formations eligible" +
+                (moved > 0.05 ? $"  ·  moved {moved:0.#} km" : "");
             _statusLabel.color = UiTheme.TextFaint;
+
+            // One clause per stretch: "FRIENDLY ADVANCING · ENEMY RETREATING ·
+            // POCKET ISOLATED". The states are compared solve to solve, so
+            // this line is where the battle's direction is read.
+            var sb = new System.Text.StringBuilder();
+            foreach (var seg in _front.Segments)
+            {
+                if (sb.Length > 0) sb.Append("  ·  ");
+                sb.Append(seg.Pocket ? "POCKET"
+                    : seg.Manual ? "DRAWN"
+                    : seg.Team == Team.User ? "FRIENDLY" : "ENEMY");
+                sb.Append(' ').Append(seg.State.ToString().ToUpperInvariant());
+                if (seg.Estimated) sb.Append(" (EST)");
+            }
+            if (_segmentsLabel != null) _segmentsLabel.text = sb.ToString();
         }
 
         /// <summary>
