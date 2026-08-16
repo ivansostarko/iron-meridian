@@ -110,6 +110,7 @@ namespace IronMeridian.Core
         IronMeridian.Logistics.LogisticsSystem _logistics;
         IronMeridian.Logistics.SustainmentSystem _sustainment;
         ReinforcementSystem _reinforcements;
+        IronMeridian.Lines.ObstacleSystem _obstacles;
         MiniMapUI _minimap;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -297,6 +298,11 @@ namespace IronMeridian.Core
             // Formations that arrive after the battle starts — docs/30.
             _reinforcements = gameObject.AddComponent<ReinforcementSystem>();
 
+            // Mines and obstacles: the barrier plan, as control measures on the
+            // ground — see docs/31-OBSTACLES.md.
+            _obstacles = gameObject.AddComponent<IronMeridian.Lines.ObstacleSystem>();
+            _obstacles.Init(_map, _rig.Cam);
+
             // What the force fights on: stocks typed by the designer, burn rates
             // derived from the order of battle — see docs/27-SUSTAINMENT.md.
             _sustainment = gameObject.AddComponent<IronMeridian.Logistics.SustainmentSystem>();
@@ -316,6 +322,7 @@ namespace IronMeridian.Core
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
                                             _logistics.IsArmed ||
+                                            _obstacles.IsArmed ||
                                             _frontline.Drawing ||
                                             _areaTool.Drawing;
             _selection.BattleRunning = () => _combat.Running;
@@ -521,7 +528,7 @@ namespace IronMeridian.Core
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
                     _artillery, _airStrike, _airSupply, _uavStrike, _naval, _mapControls, _strikeDock,
-                    _logistics, _sustainment, _reinforcements);
+                    _logistics, _sustainment, _reinforcements, _obstacles);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -631,6 +638,32 @@ namespace IronMeridian.Core
                                $"{days:0} day(s) of its current consumption.");
                 };
 
+                // MINES AND OBSTACLES section — the barrier plan.
+                _obstacles.Flash = _hud.Flash;
+                _obstacles.Changed += _palette.RefreshObstacles;
+                _palette.ObstaclesClearRequested = () =>
+                {
+                    int n = _obstacles.Markers.Count;
+                    _obstacles.Clear();
+                    _hud.Flash(n == 0
+                        ? "There are no obstacle graphics on the map."
+                        : $"{n} mine and obstacle graphic(s) removed.");
+                };
+                _palette.ObstacleRemoveRequested = marker =>
+                {
+                    if (marker == null) return;
+                    string name = ObstacleCatalog.Get(marker.Kind).name;
+                    _obstacles.Remove(marker);
+                    _hud.Flash($"{name} removed.");
+                };
+                _palette.ObstacleFocusRequested = marker =>
+                {
+                    if (marker == null) return;
+                    var focus = GeoUtils.GeoToUnity(_map.Georeference,
+                        marker.Data.latitude, marker.Data.longitude, 300);
+                    _rig.FlyTo(focus, Mathf.Min(_rig.Distance, UnitFocusDistanceMeters));
+                };
+
                 // GROUPS section — battle-mode only, see UnitPaletteUI.
                 _palette.GroupSelectRequested = id => _selection.SetSelection(GroupMembers(id));
                 _palette.GroupFlyRequested = id => FlyToGroup(GroupMembers(id));
@@ -672,6 +705,15 @@ namespace IronMeridian.Core
                 _palette.SelectUnitRequested = u => _selection.Select(u);
                 _palette.FocusUnitRequested = FlyToUnit;
                 _palette.RemoveUnitRequested = RemoveUnitFromMap;
+
+                // The minimap shares the left edge with the rail now, so it
+                // rides the section panel's slide exactly as the zoom cluster
+                // does.
+                _palette.LeftInsetChanged = edge =>
+                {
+                    if (_minimap != null) _minimap.SetLeftInset(edge);
+                };
+                if (_minimap != null) _minimap.SetLeftInset(_palette.LeftChromeEdge);
 
                 // The rail's battle-only chrome — the GROUPS row.
                 _combat.RunningChanged += running => _palette.SetBattleMode(running);
@@ -1413,10 +1455,9 @@ namespace IronMeridian.Core
             if (_strikeDock != null) _strikeDock.SetChromeVisible(false);
 
             // The minimap stays — it is the operational picture, which is
-            // gameplay rather than authoring — but with the fire-menu cluster
-            // gone it moves up under the top bar rather than hanging below a
-            // gap where the cluster used to be.
-            if (_minimap != null) _minimap.SetTopOffset(UiTheme.TopBarHeight + 4f);
+            // gameplay rather than authoring. With the rail gone it slides back
+            // to the screen's own left margin.
+            if (_minimap != null) _minimap.SetLeftInset(0f);
         }
 
         /// <summary>
@@ -1810,6 +1851,25 @@ namespace IronMeridian.Core
                 return true;
             }
 
+            var obstacle = _obstacles != null ? _obstacles.PickAt(_rig.Cam, screenPos) : null;
+            if (obstacle != null)
+            {
+                var obsDef = ObstacleCatalog.Get(obstacle.Kind);
+                bool hostile = obstacle.Data.team == Team.Enemy.ToString();
+
+                ContextMenuUI.Open(_canvas, screenPos,
+                    $"{obsDef.name}  ·  {(hostile ? "ENEMY" : "FRIENDLY")}",
+                    new System.Collections.Generic.List<ContextMenuUI.Item>
+                    {
+                        new ContextMenuUI.Item("REMOVE GRAPHIC", () =>
+                        {
+                            _obstacles.Remove(obstacle);
+                            _hud.Flash($"{obsDef.name} removed.");
+                        }, destructive: true)
+                    });
+                return true;
+            }
+
             var site = _logistics != null
                 ? _logistics.PickAt(_rig.Cam, screenPos)
                 : null;
@@ -2107,6 +2167,7 @@ namespace IronMeridian.Core
             _save.markers = _markers.Serialize();
             _save.flotMode = _frontline.Mode.ToString();
             _save.logistics = _logistics.Serialize();
+            _save.obstacles = _obstacles.Serialize();
             _save.resources = _sustainment.Serialize();
             _save.reinforcements = _reinforcements.Serialize();
             _save.commanders = CommanderRegistry.Serialize();
@@ -2172,6 +2233,7 @@ namespace IronMeridian.Core
             if (_planner != null) _planner.ClearAll();
             _effects.Cancel();
             _logistics.Cancel();
+            _obstacles.Cancel();
             _airSupply.Cancel();
             _missiles.Cancel();
             _naval.Cancel();
@@ -2268,15 +2330,43 @@ namespace IronMeridian.Core
             // Independent of the units: an installation belongs to the scenario
             // and outlives every formation that draws on it.
             _logistics.LoadFrom(data.logistics);
+            _obstacles.LoadFrom(data.obstacles);
             _sustainment.LoadFrom(data.resources);
             _reinforcements.LoadFrom(data.reinforcements);
             // Commanders last. They are referenced by id from the units that are
             // already down, so loading them earlier would have the roster point
             // at formations that did not exist yet.
             CommanderRegistry.LoadFrom(data.commanders);
+            EnsureCommanders();
             // Who is playing which side. Fills in the two-team, two-player
             // default when the map carries none — see docs/25-PLAYERS.md.
             PlayerRegistry.LoadFrom(data.teams, data.players);
+        }
+
+        /// <summary>
+        /// Gives a side a chain of command if the map brought none.
+        ///
+        /// **Why this is automatic now.** It used to be a SEED button in the
+        /// COMMANDERS panel, which meant every scenario started with two empty
+        /// rosters and every formation reading as unassigned until somebody
+        /// found the button and pressed it twice. A chain of command is not an
+        /// optional extra: an army has one, and a map that does not is a map
+        /// missing something rather than a map exercising a choice.
+        ///
+        /// **Only when empty.** A saved scenario's own roster is the designer's
+        /// work and is never overwritten — including a deliberately emptied one
+        /// for the side that was cleared, which is why CLEAR ALL still means
+        /// something. The seed runs per side, so a map that names a friendly
+        /// chain and no enemy one gets the enemy filled in and its own left
+        /// alone.
+        /// </summary>
+        void EnsureCommanders()
+        {
+            foreach (var team in new[] { Team.User, Team.Enemy })
+            {
+                if (CommanderRegistry.CountOfTeam(team) > 0) continue;
+                CommanderRegistry.Seed(team);
+            }
         }
 
         void Update()
@@ -2572,41 +2662,18 @@ namespace IronMeridian.Core
         float _lastRightInset = -1f;
 
         /// <summary>
-        /// How tall a right-hand panel has to be left before the minimap is
-        /// allowed to push it down. Below this the panel would have less room
-        /// than its own header block needs and its lists would collapse to
-        /// nothing.
-        /// </summary>
-        const float MinRightPanelHeight = 460f;
-
-        float _lastRightDockTop = -1f;
-
-        /// <summary>
-        /// Where the right-hand panels' top edge sits.
+        /// Where the right-hand panels' top edge sits: below the fire-menu
+        /// cluster, always.
         ///
-        /// Four things dock on that edge — the unit inspector, the group panel,
-        /// the front-line options and a fire menu — and above all of them sit
-        /// the fire-menu icon cluster and, in battle, the minimap. They all have
-        /// to start below whatever is up there, and one place deciding it for
-        /// all of them is what stops a panel being built to clear a block that
-        /// has since moved.
-        ///
-        /// **It gives way on a short screen.** At 1280×720 the minimap's block
-        /// plus a panel does not fit: pushing the panel below the minimap would
-        /// leave it shorter than its own header. There the panel keeps its
-        /// normal top and covers the minimap while it is open, which is the
-        /// right trade — the panel was opened deliberately, the minimap is
-        /// ambient.
+        /// This used to also have to clear the minimap, which hung under that
+        /// cluster and left a panel on a short screen with less room than its
+        /// own header needed. The minimap has moved to the bottom left — see
+        /// MiniMapUI — so the right edge is back to one rule with no
+        /// adaptive clamp behind it.
         /// </summary>
         void RefreshRightDockTop()
         {
             float top = UiTheme.TopBarHeight + UiTheme.StrikeDockHeight;
-
-            if (_minimap != null && _minimap.Visible)
-            {
-                float below = _minimap.BottomEdge + 6f;
-                if (Screen.height - below >= MinRightPanelHeight) top = below;
-            }
 
             if (Mathf.Approximately(top, _lastRightDockTop)) return;
             _lastRightDockTop = top;
@@ -2616,6 +2683,8 @@ namespace IronMeridian.Core
             if (_frontlinePanel != null) _frontlinePanel.SetTopInset(top);
             if (_strikeDock != null) _strikeDock.SetTopInset(top);
         }
+
+        float _lastRightDockTop = -1f;
 
         /// <summary>GENERAL → LINE OF SIGHT. Repaints the current selection immediately.</summary>
         void SetLineOfSightVisible(bool on)

@@ -192,6 +192,31 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// One mine or obstacle graphic on the map — see docs/31-OBSTACLES.md.
+    ///
+    /// A control measure rather than a unit or a task marker: it states
+    /// something about the ground, belongs to the scenario, and outlives every
+    /// formation that walks past it.
+    /// </summary>
+    [Serializable]
+    public class ObstacleSiteData
+    {
+        public string id;
+        /// <summary>ObstacleKind name — see <see cref="ObstacleCatalog"/>.</summary>
+        public string kind;
+        /// <summary>Owning side, a <see cref="Team"/> name.</summary>
+        public string team;
+        /// <summary>Caption drawn under the graphic; empty takes the catalogue's name.</summary>
+        public string label = "";
+
+        public double latitude;
+        public double longitude;
+        public double heightMeters;
+        /// <summary>Direction the graphic is laid along, degrees from north.</summary>
+        public float headingDeg;
+    }
+
+    /// <summary>
     /// One logistic installation on the map — a depot, a supply point, or one
     /// of the four function-specific points. See docs/26-LOGISTICS.md.
     ///
@@ -329,6 +354,13 @@ namespace IronMeridian.Data
         /// on it" — see docs/30-REINFORCEMENTS.md.
         /// </summary>
         public List<ReinforcementEntry> reinforcements = new List<ReinforcementEntry>();
+
+        /// <summary>
+        /// Mine and obstacle graphics — the barrier plan. Empty on a map saved
+        /// before they existed, which reads correctly as "nothing is mined".
+        /// See docs/31-OBSTACLES.md.
+        /// </summary>
+        public List<ObstacleSiteData> obstacles = new List<ObstacleSiteData>();
         /// <summary>
         /// The order of battle above the units: who commands what, on both
         /// sides. Empty on a map saved before commanders existed, which reads

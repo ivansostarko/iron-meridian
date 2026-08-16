@@ -86,3 +86,23 @@ Cesium ion's free tier covers development use. Shipping a game requires complyin
 - API reference: https://cesium.com/learn/cesium-unity/ref-doc/
 - Change log: https://cesium.com/learn/cesium-unity/ref-doc/changes.html
 - Cesium ion asset catalogue: https://ion.cesium.com/assetdepot
+
+
+---
+
+## The credit overlay
+
+Cesium for Unity creates its own screen-space canvas for the ion attribution -
+a logo and a credit line - lazily, the first time a tileset has something to
+attribute. Left alone it lands on top of the game's HUD, because it is created
+after our canvas and sorts above it.
+
+`Map/CesiumCreditStyler.cs` shrinks it to 45%, drops it to 16% opacity, stops it
+taking clicks, and sorts it at -500 so every canvas the game draws is in front of
+it. It retries for twenty seconds, because the credit system does not exist when
+the map is built.
+
+**It is deliberately not removed.** Cesium ion's terms of service require the
+attribution to be present, and a build that deleted it would be shipping in
+breach of the licence its terrain streams under. What is adjustable is how loudly
+it shouts.

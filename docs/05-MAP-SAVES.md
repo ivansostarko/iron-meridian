@@ -81,6 +81,12 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
     }
   ],
 
+  "obstacles": [
+    { "id": "obs-91c4ab02", "kind": "AntiTankMines", "team": "User",
+      "label": "", "latitude": 45.76, "longitude": 4.82,
+      "heightMeters": 214.0, "headingDeg": 94.0 }
+  ],
+
   "reinforcements": [
     { "defId": "mech_infantry_bn", "team": "User",
       "echelon": "Battalion", "arrivalMinutes": 40 }
@@ -108,6 +114,10 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
 Unlike `markers`, these belong to the *scenario* rather than to a unit, so
 nothing sweeps them off the map when a formation dies. Empty on any map saved
 before they existed, which reads correctly as "this scenario has no rear area".
+
+`obstacles` is the barrier plan - mines, wire, ditches and roadblocks as NATO
+graphics on the ground. See [31-OBSTACLES.md](31-OBSTACLES.md). Nothing enforces
+them yet; they are drawn, saved and readable.
 
 `reinforcements` are formations that arrive after the battle starts — see
 [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md). Minutes after H-hour rather than an

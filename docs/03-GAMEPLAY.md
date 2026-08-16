@@ -71,6 +71,7 @@ The editor's left chrome is in two pieces:
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
 | **REINFORCEMENTS** | The same panel as UNITS, for formations that are not here yet: pick a type and it arrives at H+n in its side's deployment zone. See [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) |
+| **MINES AND OBSTACLES** | The barrier plan: mines, minefields, AP/AT mines, wire, AT ditch, obstacles and roadblocks, laid as NATO graphics on the ground. See [31-OBSTACLES.md](31-OBSTACLES.md) |
 | **SUSTAINMENT** | What the force fights on: fuel, ammunition natures, manpower, rations and the rest — with the burn rate its own order of battle implies. See [27-SUSTAINMENT.md](27-SUSTAINMENT.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
@@ -80,7 +81,7 @@ The editor's left chrome is in two pieces:
 
 The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
 
-**Eleven rows, and a twelfth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
+**Twelve rows, and a thirteenth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
 
@@ -109,7 +110,9 @@ Six icons under the top bar's right-hand end: five ways of putting explosives on
 
 ### The minimap
 
-Docked under the strike cluster, same width, so the two read as one block of top-right chrome. **Battle mode only**, for the same reason the fire menus are: it is the picture of a fight.
+Docked at the **bottom left**, beside the map's own zoom cluster and riding the section panel's edge as that slides. **Battle mode only**, for the same reason the fire menus are: it is the picture of a fight.
+
+It used to hang under the fire-menu cluster on the right. That edge is three panels deep already — the unit inspector, the group panel, the fire menus — so the minimap was either covering one of them or being covered by it, and on a 720p screen the two could not both fit. The bottom left carries nothing but map controls, which is what a minimap is.
 
 The map is played at a few kilometres across while a scenario is tens of kilometres wide, so for most of a battle you are looking at one part of something whose shape you cannot see. Zooming out to find it costs the detail you were using; zooming back in costs the position you had. The minimap is the second, fixed-scale view that always shows the whole thing.
 

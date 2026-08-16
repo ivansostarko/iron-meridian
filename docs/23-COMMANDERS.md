@@ -81,7 +81,7 @@ Map editor → left rail → **COMMANDERS** (`UI/CommanderPanel.cs`).
 | Control | What it does |
 |---|---|
 | **FRIENDLY / ENEMY** | Which side's order of battle the panel shows. Command never crosses the line |
-| **SEED 20** | Builds a chain of command for that side — see below |
+| **the automatic seed** | Builds a chain of command for that side — see below |
 | **CLEAR ALL** | Removes every officer on that side and releases their formations |
 | Roster rows | Rank, surname, and how many formations he holds. The lamp is green in post with an intact chain, amber when the chain above him is broken, red when he is out of action |
 | Name field | His surname |
@@ -161,3 +161,21 @@ Loaded **after** the units, because the roster is referenced by id from formatio
 ## Related
 
 `docs/03-GAMEPLAY.md` (combat) · `docs/04-UNITS.md` (what is being commanded) · `docs/05-MAP-SAVES.md` (the file this lives in) · `docs/07-ARCHITECTURE.md` (script map)
+
+
+---
+
+## Seeding is automatic
+
+There is no SEED button. Both sides are given a chain of command - one army
+commander, two corps, four divisions, six brigades, seven battalions - **when a
+map comes up with none of its own**, per side, in `GameController.EnsureCommanders`.
+
+A chain of command is not an optional extra a player might press a button for:
+every formation on the map belongs under somebody, and a scenario with an empty
+roster was one where this whole panel had nothing to say and every unit read as
+unassigned until someone found the button.
+
+A saved scenario's own roster is never overwritten - including a deliberately
+emptied one, which is why **CLEAR ALL** still means something. Reloading the map
+rebuilds it.

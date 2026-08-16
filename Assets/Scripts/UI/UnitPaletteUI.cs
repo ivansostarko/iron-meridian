@@ -70,7 +70,7 @@ namespace IronMeridian.UI
         enum Section
         {
             General, Units, Players, Commanders, Logistics, Sustainment, Reinforcements,
-            Effects, Missions, Environment, Map,
+            Obstacles, Effects, Missions, Environment, Map,
             /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
             Groups
         }
@@ -140,7 +140,7 @@ namespace IronMeridian.UI
         /// </summary>
         const float ListTop = -90f;
         /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 482f;
+        const float HeaderHeight = 518f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -266,7 +266,7 @@ namespace IronMeridian.UI
             MapControlsUI mapControls, StrikeDockUI strikeDock,
             IronMeridian.Logistics.LogisticsSystem logistics,
             IronMeridian.Logistics.SustainmentSystem sustainment,
-            ReinforcementSystem reinforcements)
+            ReinforcementSystem reinforcements, IronMeridian.Lines.ObstacleSystem obstacles)
         {
             _canvas = canvas;
             _map = map;
@@ -285,6 +285,7 @@ namespace IronMeridian.UI
             _logistics = logistics;
             _sustainment = sustainment;
             _reinforcements = reinforcements;
+            _obstacles = obstacles;
 
             // The section panel is created first so it draws *behind* the rail —
             // uGUI paints in hierarchy order, and the closed position tucks the
@@ -318,6 +319,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Environment] = MakeSectionContent(body, "Environment");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.Reinforcements] = MakeSectionContent(body, "Reinforcements");
+            _sectionContent[Section.Obstacles] = MakeSectionContent(body, "Obstacles");
             _sectionContent[Section.Groups] = MakeSectionContent(body, "Groups");
 
             BuildGeneralSection(_sectionContent[Section.General]);
@@ -331,6 +333,7 @@ namespace IronMeridian.UI
             BuildEnvironmentSection(_sectionContent[Section.Environment]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildReinforcementSection(_sectionContent[Section.Reinforcements]);
+            BuildObstacleSection(_sectionContent[Section.Obstacles]);
             BuildGroupsSection(_sectionContent[Section.Groups]);
 
             // The four fire menus live in the strike dock's pages rather than in
@@ -460,6 +463,7 @@ namespace IronMeridian.UI
             if (section == Section.Logistics) RefreshLogistics();
             if (section == Section.Sustainment) RefreshSustainment();
             if (section == Section.Reinforcements) PopulateReinforcements();
+            if (section == Section.Obstacles) RefreshObstacles();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -547,12 +551,22 @@ namespace IronMeridian.UI
             _sectionPanel.anchoredPosition = new Vector2(x, -UiTheme.TopBarHeight * 0.5f);
 
             // The on-map zoom cluster rides the panel's edge so it is never
-            // buried underneath it.
+            // buried underneath it — and so does anything else docked on this
+            // side, which since the minimap moved over here is not only the
+            // cluster.
             LeftChromeEdge = x + PanelWidth;
             if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
+            LeftInsetChanged?.Invoke(LeftChromeEdge);
 
             if (_slide <= 0f) _sectionPanel.gameObject.SetActive(false);
         }
+
+        /// <summary>
+        /// Raised with the rail's right-hand edge as the section panel slides.
+        /// The on-map controls are driven directly; anything else that has to
+        /// keep clear of the editor's left chrome hangs off this.
+        /// </summary>
+        public System.Action<float> LeftInsetChanged;
 
         /// <summary>
         /// Where the rail and its section panel currently end, in canvas pixels.
@@ -570,6 +584,7 @@ namespace IronMeridian.UI
         public void ReassertMapInset()
         {
             if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
+            LeftInsetChanged?.Invoke(LeftChromeEdge);
         }
 
         // ------------------------------------------------------------ header
@@ -609,21 +624,22 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Logistics, "LOGISTICS", UiIcons.Pallet, -188);
             AddNavRow(panel, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop, -224);
             AddNavRow(panel, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute, -260);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -296);
+            AddNavRow(panel, Section.Obstacles, "MINES AND OBSTACLES", UiIcons.Obstacles, -296);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -332);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -332);
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -368);
             // Time and weather are one section, not two: they are the same
             // decision — what the light and the going are like — and a designer
             // who sets a night attack is choosing both in the same breath.
-            AddNavRow(panel, Section.Environment, "ENVIRONMENT", UiIcons.Cloud, -368);
-            AddNavRow(panel, Section.Map, "MAP CONFIG", UiIcons.Layers, -404);
+            AddNavRow(panel, Section.Environment, "ENVIRONMENT", UiIcons.Cloud, -404);
+            AddNavRow(panel, Section.Map, "MAP CONFIG", UiIcons.Layers, -440);
 
             // Last, and hidden until a battle starts — see SetBattleMode. A
             // group is something you command, not something you author, so the
             // row appears with the rest of the battle chrome rather than
             // sitting greyed out through the whole of a scenario's layout.
-            _groupsNavRow = AddNavRow(panel, Section.Groups, "GROUPS", UiIcons.Group, -440);
+            _groupsNavRow = AddNavRow(panel, Section.Groups, "GROUPS", UiIcons.Group, -476);
             _groupsNavRow.gameObject.SetActive(false);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
@@ -916,8 +932,10 @@ namespace IronMeridian.UI
             // An airdrop lands supplies for the same side the panel is working
             // for — see BuildAirSupplySection.
             if (_airSupply != null) _airSupply.Team = team;
+            if (_obstacles != null) _obstacles.Team = team;
             RefreshLogistics();
             RefreshSustainment();
+            RefreshObstacles();
             PopulateReinforcements();
             Populate();
         }
@@ -2111,6 +2129,205 @@ namespace IronMeridian.UI
 
             if (running) RefreshGroups();
             else if (_section == Section.Groups && _panelOpen) ClosePanel();
+        }
+
+        // ------------------------------------------- mines and obstacles section
+
+        IronMeridian.Lines.ObstacleSystem _obstacles;
+        readonly List<(ObstacleKind kind, Image fill, Text label)> _obstacleButtons =
+            new List<(ObstacleKind, Image, Text)>();
+        RectTransform _obstacleList;
+        Text _obstacleCount, _obstacleSide;
+
+        /// <summary>Drop every mine and obstacle graphic on the map.</summary>
+        public System.Action ObstaclesClearRequested;
+        /// <summary>Fly the camera to one.</summary>
+        public System.Action<IronMeridian.Lines.ObstacleMarker> ObstacleFocusRequested;
+        /// <summary>Take one off the map.</summary>
+        public System.Action<IronMeridian.Lines.ObstacleMarker> ObstacleRemoveRequested;
+
+        /// <summary>Height of the MINES AND OBSTACLES page inside its scroll view.</summary>
+        const float ObstaclePageHeight = 8 * 50f + 2 * 24f + 520f;
+
+        /// <summary>
+        /// The barrier plan: mines, and the obstacles they are tied into.
+        ///
+        /// **Driven entirely from <see cref="ObstacleCatalog"/>**, under two
+        /// headings — mines, then constructed obstacles. The split is not
+        /// decoration: they are laid by different people at different times, and
+        /// a designer thinking about a minefield is not thinking about a
+        /// roadblock.
+        ///
+        /// Each button lays that type's **doctrinal graphic** on the ground:
+        /// flat, sized in metres, and aligned on the bearing the camera is
+        /// looking along — see <c>ObstacleMarker</c> for why flat and why
+        /// metres. The team tab decides whose barrier it is, exactly as it does
+        /// for the rear area.
+        ///
+        /// See docs/31-OBSTACLES.md.
+        /// </summary>
+        void BuildObstacleSection(RectTransform section)
+        {
+            var content = ScrollableSection(section, ObstaclePageHeight);
+
+            SectionLabel(content, "LAY ON MAP", -8);
+
+            _obstacleSide = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextDim,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_obstacleSide.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad + InnerWidth - 110f, -8), new Vector2(110, 18));
+
+            float y = -34f;
+            bool started = false;
+            ObstacleFamily family = ObstacleFamily.Mines;
+
+            foreach (var def in ObstacleCatalog.All)
+            {
+                if (!started || family != def.family)
+                {
+                    family = def.family;
+                    started = true;
+                    SectionLabel(content, family == ObstacleFamily.Mines ? "MINES" : "OBSTACLES", y);
+                    y -= 24f;
+                }
+
+                ObstacleButton(content, def, y);
+                y -= 50f;
+            }
+
+            var stop = UIFactory.CreateBorderedPanel(content, "StopLaying", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 4f), new Vector2(InnerWidth, 30));
+            var stopBtn = UIFactory.CreateButton(stop, "STOP LAYING",
+                () => { if (_obstacles != null) _obstacles.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)stopBtn.transform);
+
+            _obstacleCount = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            UIFactory.Place(_obstacleCount.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, y - 44f), new Vector2(InnerWidth, 16));
+
+            var scroll = UIFactory.CreateScrollView(content, out _obstacleList, withScrollbar: true);
+            UIFactory.Place((RectTransform)scroll.transform, new Vector2(0f, 1f),
+                new Vector2(Pad, y - 64f), new Vector2(InnerWidth, 180f));
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var layout = _obstacleList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 3; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            var clear = UIFactory.CreateBorderedPanel(content, "ClearObstacles", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(clear, new Vector2(0f, 1f), new Vector2(Pad, y - 252f), new Vector2(InnerWidth, 30));
+            var clearBtn = UIFactory.CreateButton(clear, "REMOVE ALL",
+                () => ObstaclesClearRequested?.Invoke(),
+                new Color(0, 0, 0, 0), UiTheme.Danger, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)clearBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                "Pick a type, then click the ground. The graphic is laid along the bearing the camera " +
+                "is looking, so face the way the belt runs before placing it. The tool stays armed, " +
+                "because a barrier is several graphics rather than one. Right-click or Esc stops. " +
+                "Nothing enforces these yet: they are the barrier plan, drawn and saved with the map.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 290f),
+                new Vector2(InnerWidth, 120));
+
+            RefreshObstacles();
+        }
+
+        void ObstacleButton(RectTransform content, ObstacleDef def, float y)
+        {
+            var kind = def.kind;
+            var frame = UIFactory.CreateBorderedPanel(content, "Obs_" + kind, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 46));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_obstacles != null) _obstacles.Toggle(kind); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, UiIcons.GlyphFor(kind), "Glyph");
+            icon.color = def.tint;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
+                new Vector2(12, 0), new Vector2(26, 26));
+
+            var (name, _) = UIFactory.CreateStackedLabels(frame, def.name, def.detail,
+                48f, InnerWidth - 100f, topInset: 6f);
+
+            // The ground it covers, on the button: it is the figure that decides
+            // whether one graphic or three are wanted.
+            var width = UIFactory.CreateText(frame, $"{def.widthMeters:0} m", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight);
+            width.raycastTarget = false;
+            UIFactory.Place(width.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(48, 14));
+
+            _obstacleButtons.Add((kind, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>Repaints from the system's own state — it owns what is armed and what is laid.</summary>
+        public void RefreshObstacles()
+        {
+            if (_obstacles == null) return;
+
+            foreach (var (kind, fill, label) in _obstacleButtons)
+            {
+                bool on = _obstacles.Armed.HasValue && _obstacles.Armed.Value == kind;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+
+            if (_obstacleSide != null)
+            {
+                bool enemySide = _team == Team.Enemy;
+                _obstacleSide.text = enemySide ? "FOR ENEMY" : "FOR FRIENDLY";
+                _obstacleSide.color = enemySide ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            }
+
+            if (_obstacleList == null) return;
+
+            int blue = _obstacles.CountFor(Team.User), red = _obstacles.CountFor(Team.Enemy);
+            if (_obstacleCount != null)
+                _obstacleCount.text = $"LAID — {blue} FRIENDLY · {red} ENEMY";
+
+            ClearChildren(_obstacleList);
+
+            foreach (var marker in _obstacles.Markers)
+            {
+                if (marker == null) continue;
+                var def = ObstacleCatalog.Get(marker.Kind);
+                bool enemy = marker.Data.team == Team.Enemy.ToString();
+
+                var row = UIFactory.CreatePanel(_obstacleList, "ObsRow_" + marker.Data.id, UiTheme.SurfaceSubtle);
+                row.sizeDelta = new Vector2(0, 30);
+
+                var pip = UIFactory.CreateImage(row, UiIcons.GlyphFor(marker.Kind), "Glyph");
+                pip.color = def.tint;
+                pip.raycastTarget = false;
+                UIFactory.Place((RectTransform)pip.transform, new Vector2(0f, 0.5f),
+                    new Vector2(8, 0), new Vector2(16, 16));
+
+                var label = UIFactory.CreateText(row,
+                    $"{def.name}   ·   {marker.Data.headingDeg:000}°",
+                    UiTheme.FontLabel, enemy ? GameConfig.RedTeam : GameConfig.BlueTeam,
+                    TextAnchor.MiddleLeft);
+                var lr = label.rectTransform;
+                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                lr.offsetMin = new Vector2(30, 0);
+                lr.offsetMax = new Vector2(-58, 0);
+                UIFactory.Fit(label, 8);
+
+                var captured = marker;
+                var focus = UIFactory.CreateButton(row, "◎", () => ObstacleFocusRequested?.Invoke(captured),
+                    UiTheme.SurfaceHover, UiTheme.Text, 12);
+                UIFactory.Place((RectTransform)focus.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-30, 0), new Vector2(24, 24));
+
+                var del = UIFactory.CreateButton(row, "✕", () => ObstacleRemoveRequested?.Invoke(captured),
+                    new Color(0.55f, 0.18f, 0.18f), UiTheme.Text, 12);
+                UIFactory.Place((RectTransform)del.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-4, 0), new Vector2(24, 24));
+            }
         }
 
         // -------------------------------------------------- logistics section

@@ -62,6 +62,12 @@ namespace IronMeridian.Map
             Georeference = geoGo.AddComponent<CesiumGeoreference>();
             Georeference.SetOriginLongitudeLatitudeHeight(lon, lat, 0);
 
+            // Cesium's own credit overlay is created lazily and lands on top of
+            // the HUD; this shrinks it and sorts it behind everything the game
+            // draws. Not removed — ion's terms require the attribution to be
+            // there. See CesiumCreditStyler and docs/02-CESIUM.md.
+            CesiumCreditStyler.Attach(gameObject);
+
             // Cesium World Terrain (ion asset 1)
             Terrain = CreateTileset("CesiumWorldTerrain", 1, _token);
 

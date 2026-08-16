@@ -128,6 +128,8 @@ Assets/Scripts/
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
     CameraRig.cs         3D orbit & 2D top-down strategy camera
+    CesiumCreditStyler.cs  shrinks Cesium's credit overlay and sorts it behind
+                          the HUD. NOT removed - ion's terms require it
     GeoUtils.cs          lat/lon <-> Unity, distance/bearing, terrain sampling
                           (only real ground counts — see Core/NonTerrain.cs)
     RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)
@@ -183,6 +185,11 @@ Assets/Scripts/
                           Boundary kinds are FlatOnly: always draped, drape-
                           sampled at 90 m, and aligned to the GROUND PLANE
                           rather than billboarded, so they never stand up
+    ObstacleSystem.cs    the barrier plan: mines and obstacles as NATO ground
+                          graphics, pick-then-click placement, save/load
+                          (docs/31-OBSTACLES.md)
+    ObstacleMarker.cs    one graphic: flat symbol sized in METRES, clamped to
+                          the terrain, laid on its own bearing
     LineManager.cs       line collection <-> save data
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground

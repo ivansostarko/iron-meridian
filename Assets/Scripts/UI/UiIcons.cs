@@ -575,6 +575,104 @@ namespace IronMeridian.UI
             return Mathf.Max(load, Mathf.Max(deck, Mathf.Max(legL, legR)));
         });
 
+        // ------------------------------------------------ mines and obstacles
+        // MIL-STD-2525 / APP-6 obstacle graphics, drawn to the same rule as the
+        // rest of this set: the *silhouette* has to survive being 20 px on a
+        // rail button and whatever the camera makes of it on the ground. The
+        // doctrinal forms are already silhouettes, which is why they have
+        // lasted — see docs/31-OBSTACLES.md.
+
+        /// <summary>Mine, general — the doctrinal filled circle.</summary>
+        public static Sprite MineGeneral => Get(nameof(MineGeneral), (u, v) =>
+            DiscAt(u, v, 0.5f, 0.5f, 0.30f));
+
+        /// <summary>Anti-personnel mine — the circle on its two prongs.</summary>
+        public static Sprite MineAntiPersonnel => Get(nameof(MineAntiPersonnel), (u, v) =>
+        {
+            float body = DiscAt(u, v, 0.5f, 0.56f, 0.26f);
+            float legL = Seg(u, v, 0.40f, 0.34f, 0.30f, 0.12f, 0.075f);
+            float legR = Seg(u, v, 0.60f, 0.34f, 0.70f, 0.12f, 0.075f);
+            return Mathf.Max(body, Mathf.Max(legL, legR));
+        });
+
+        /// <summary>Anti-tank mine — the circle with its bar, the heavier of the two.</summary>
+        public static Sprite MineAntiTank => Get(nameof(MineAntiTank), (u, v) =>
+        {
+            float body = DiscAt(u, v, 0.5f, 0.46f, 0.30f);
+            float bar = Rect(u, v, 0.16f, 0.80f, 0.84f, 0.92f);
+            float stem = Rect(u, v, 0.455f, 0.72f, 0.545f, 0.84f);
+            return Mathf.Max(body, Mathf.Max(bar, stem));
+        });
+
+        /// <summary>Minefield — three mines inside their boundary.</summary>
+        public static Sprite Minefield => Get(nameof(Minefield), (u, v) =>
+        {
+            float frame = RectOutline(u, v, 0.06f, 0.20f, 0.94f, 0.80f, 0.055f);
+            float a = DiscAt(u, v, 0.28f, 0.50f, 0.10f);
+            float b = DiscAt(u, v, 0.50f, 0.50f, 0.10f);
+            float c = DiscAt(u, v, 0.72f, 0.50f, 0.10f);
+            return Mathf.Max(frame, Mathf.Max(a, Mathf.Max(b, c)));
+        });
+
+        /// <summary>Wire obstacle — the line with its crosses.</summary>
+        public static Sprite WireFence => Get(nameof(WireFence), (u, v) =>
+        {
+            float line = Rect(u, v, 0.04f, 0.46f, 0.96f, 0.54f);
+            float shape = line;
+            for (int i = 0; i < 3; i++)
+            {
+                float cx = 0.22f + i * 0.28f;
+                shape = Mathf.Max(shape, Seg(u, v, cx - 0.10f, 0.26f, cx + 0.10f, 0.74f, 0.065f));
+                shape = Mathf.Max(shape, Seg(u, v, cx - 0.10f, 0.74f, cx + 0.10f, 0.26f, 0.065f));
+            }
+            return shape;
+        });
+
+        /// <summary>Anti-tank ditch — the line with its teeth on the enemy side.</summary>
+        public static Sprite AntiTankDitch => Get(nameof(AntiTankDitch), (u, v) =>
+        {
+            float line = Rect(u, v, 0.04f, 0.36f, 0.96f, 0.46f);
+            float shape = line;
+            for (int i = 0; i < 4; i++)
+            {
+                float cx = 0.14f + i * 0.24f;
+                shape = Mathf.Max(shape, InPoly(u, v, new[]
+                {
+                    cx - 0.09f, 0.46f, cx, 0.80f, cx + 0.09f, 0.46f
+                }));
+            }
+            return shape;
+        });
+
+        /// <summary>Obstacle, general — the doctrinal crossed belt.</summary>
+        public static Sprite ObstacleGeneral => Get(nameof(ObstacleGeneral), (u, v) =>
+        {
+            float top = Rect(u, v, 0.04f, 0.72f, 0.96f, 0.80f);
+            float bottom = Rect(u, v, 0.04f, 0.20f, 0.96f, 0.28f);
+            float diagA = Seg(u, v, 0.10f, 0.24f, 0.90f, 0.76f, 0.075f);
+            float diagB = Seg(u, v, 0.10f, 0.76f, 0.90f, 0.24f, 0.075f);
+            return Mathf.Max(Mathf.Max(top, bottom), Mathf.Max(diagA, diagB));
+        });
+
+        /// <summary>Roadblock — the bar across the route, with its two posts.</summary>
+        public static Sprite Roadblock => Get(nameof(Roadblock), (u, v) =>
+        {
+            float road = Rect(u, v, 0.04f, 0.44f, 0.96f, 0.56f);
+            float postL = Rect(u, v, 0.26f, 0.20f, 0.36f, 0.80f);
+            float postR = Rect(u, v, 0.64f, 0.20f, 0.74f, 0.80f);
+            return Mathf.Max(road, Mathf.Max(postL, postR));
+        });
+
+        /// <summary>The rail row for MINES AND OBSTACLES.</summary>
+        public static Sprite Obstacles => Get(nameof(Obstacles), (u, v) =>
+        {
+            float belt = Rect(u, v, 0.04f, 0.60f, 0.96f, 0.70f);
+            float mineA = DiscAt(u, v, 0.24f, 0.30f, 0.13f);
+            float mineB = DiscAt(u, v, 0.52f, 0.30f, 0.13f);
+            float mineC = DiscAt(u, v, 0.80f, 0.30f, 0.13f);
+            return Mathf.Max(belt, Mathf.Max(mineA, Mathf.Max(mineB, mineC)));
+        });
+
         /// <summary>Air supply — a canopy over its load. The one aircraft menu that gives rather than takes.</summary>
         public static Sprite Parachute => Get(nameof(Parachute), (u, v) =>
         {
@@ -611,6 +709,23 @@ namespace IronMeridian.UI
             Data.LogisticsKind.AmmoPoint => Rounds,
             Data.LogisticsKind.RepairPoint => Tools,
             _ => MedicalCross
+        };
+
+        /// <summary>
+        /// The doctrinal symbol for a mine or obstacle. One mapping, read by
+        /// the panel's buttons, the placement ghost and the map graphic — three
+        /// pictures of the same thing that must never disagree.
+        /// </summary>
+        public static Sprite GlyphFor(Data.ObstacleKind kind) => kind switch
+        {
+            Data.ObstacleKind.MinesGeneral => MineGeneral,
+            Data.ObstacleKind.Minefield => Minefield,
+            Data.ObstacleKind.AntiPersonnelMines => MineAntiPersonnel,
+            Data.ObstacleKind.AntiTankMines => MineAntiTank,
+            Data.ObstacleKind.WireFence => WireFence,
+            Data.ObstacleKind.AntiTankDitch => AntiTankDitch,
+            Data.ObstacleKind.ObstacleGeneral => ObstacleGeneral,
+            _ => Roadblock
         };
 
         static float ArcX(float t) => Mathf.Lerp(0.08f, 0.92f, t);

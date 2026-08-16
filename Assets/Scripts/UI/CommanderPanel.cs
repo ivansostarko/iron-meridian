@@ -161,22 +161,25 @@ namespace IronMeridian.UI
             }
         }
 
+        /// <summary>
+        /// The roster's one action.
+        ///
+        /// **SEED is gone.** A chain of command is not an optional extra a
+        /// player might press a button for — every formation on the map belongs
+        /// under somebody, and a scenario with an empty roster was a scenario
+        /// where the COMMANDERS panel had nothing to say and every unit read as
+        /// unassigned. Both sides are now seeded automatically when a map comes
+        /// up with no chain of its own (see
+        /// <c>GameController.EnsureCommanders</c>), so the button had become a
+        /// way of doing again what had already been done.
+        ///
+        /// CLEAR ALL stays: emptying the roster deliberately is still a thing a
+        /// designer may want, and it is the one action here that cannot be
+        /// undone by looking away.
+        /// </summary>
         void BuildRoster()
         {
             Label("ROSTER");
-
-            float half = (InnerWidth - 4f) / 2f;
-
-            var seed = UIFactory.CreateButton(_page, $"SEED {CommanderRegistry.SeedCount}", () =>
-            {
-                CommanderRegistry.Seed(_team);
-                _selected = null;
-                Flash?.Invoke($"Seeded {CommanderRegistry.SeedCount} {SideWord()} commanders " +
-                              "in a chain of command. Assign formations from the DEPLOYED list.");
-            }, UiTheme.Surface, UiTheme.Text, UiTheme.FontSmall);
-            UIFactory.Place((RectTransform)seed.transform, new Vector2(0f, 1f),
-                new Vector2(Pad, -_y), new Vector2(half, 32));
-            UIFactory.Fit(seed.GetComponentInChildren<Text>(), 9);
 
             var clear = UIFactory.CreateButton(_page, "CLEAR ALL", () =>
             {
@@ -185,7 +188,7 @@ namespace IronMeridian.UI
                 Flash?.Invoke($"Cleared the {SideWord()} chain of command. Every formation is now unassigned.");
             }, UiTheme.Danger, Color.white, UiTheme.FontSmall);
             UIFactory.Place((RectTransform)clear.transform, new Vector2(0f, 1f),
-                new Vector2(Pad + half + 4f, -_y), new Vector2(half, 32));
+                new Vector2(Pad, -_y), new Vector2(InnerWidth, 32));
             UIFactory.Fit(clear.GetComponentInChildren<Text>(), 9);
 
             _y += 32f + Gap * 2f;
@@ -337,7 +340,7 @@ namespace IronMeridian.UI
 
             if (roster.Count == 0)
             {
-                Note($"No {SideWord()} commanders. SEED {CommanderRegistry.SeedCount} builds a " +
+                Note($"No {SideWord()} commanders — CLEAR ALL emptied the roster. Reload the map to rebuild a " +
                      "chain of command — one army commander, two corps, four divisions, " +
                      "six brigades and seven battalions.");
                 return;

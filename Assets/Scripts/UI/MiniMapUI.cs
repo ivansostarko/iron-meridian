@@ -11,8 +11,8 @@ using IronMeridian.Units;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// The battle minimap: the whole engagement at a glance, docked under the
-    /// fire-menu cluster at the top right.
+    /// The battle minimap: the whole engagement at a glance, docked at the
+    /// **bottom left**, beside the map's own zoom cluster.
     ///
     /// **Why it exists.** The map is played at a few kilometres across while a
     /// scenario is tens of kilometres wide, so for most of a battle the player
@@ -96,7 +96,18 @@ namespace IronMeridian.UI
 
         float _timer;
         bool _visible;
-        float _topOffset = UiTheme.TopBarHeight + UiTheme.StrikeDockHeight + 4f;
+
+        /// <summary>
+        /// Distance from the left edge of the screen. Rides the editor's left
+        /// chrome, like the zoom cluster does, so the panel sliding out does not
+        /// bury it - see <see cref="SetLeftInset"/>.
+        /// </summary>
+        float _leftInset = DefaultLeftInset;
+
+        /// <summary>Clear of the rail, the zoom cluster beside it, and a margin.</summary>
+        const float DefaultLeftInset = UiTheme.LeftPanelWidth + 16f + 36f + 12f;
+        /// <summary>Clears the unit action bar and the shortcut hint line, as the compass does.</summary>
+        const float BottomInset = 74f;
 
         // ------------------------------------------------------------ colours
 
@@ -117,8 +128,14 @@ namespace IronMeridian.UI
             _centreLat = centreLat;
             _centreLon = centreLon;
 
+            // Bottom-left, beside the zoom cluster. The right-hand edge is
+            // three panels deep already - the unit inspector, the group panel,
+            // the fire menus - and a minimap there was either covering one of
+            // them or being covered by it. The bottom left is the one corner of
+            // this screen that carries nothing but map controls, which is what
+            // a minimap is.
             _panel = UIFactory.CreateBorderedPanel(canvas.transform, "MiniMap", UiTheme.Chrome, UiTheme.Border);
-            UIFactory.Place(_panel, new Vector2(1f, 1f), new Vector2(-Pad, -_topOffset),
+            UIFactory.Place(_panel, new Vector2(0f, 0f), new Vector2(_leftInset, BottomInset),
                 new Vector2(PanelWidth, BlockHeight));
 
             var caption = UIFactory.CreateSectionHeader(_panel, "TACTICAL OVERVIEW", UiTheme.TextFaint);
@@ -161,21 +178,19 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// How far below the top of the screen the panel hangs. The editor puts
-        /// it under the fire-menu cluster; a mission, which has no cluster,
-        /// pulls it up under the top bar rather than leaving a hole.
+        /// Keeps the block clear of the editor's left chrome as the section
+        /// panel slides in and out - the same treatment the zoom cluster gets,
+        /// and for the same reason: a control the panel slides over is a control
+        /// that is missing for as long as the panel is open.
         /// </summary>
-        public void SetTopOffset(float pixels)
+        public void SetLeftInset(float chromeRight)
         {
-            _topOffset = pixels;
-            if (_panel != null) _panel.anchoredPosition = new Vector2(-Pad, -_topOffset);
+            _leftInset = Mathf.Max(DefaultLeftInset, chromeRight + 16f + 36f + 12f);
+            if (_panel != null) _panel.anchoredPosition = new Vector2(_leftInset, BottomInset);
         }
 
         /// <summary>Whether the block is on the screen, so the panels below it know whether to clear it.</summary>
         public bool Visible => _visible;
-
-        /// <summary>Pixels from the top of the screen to the bottom of the block.</summary>
-        public float BottomEdge => _topOffset + BlockHeight;
 
         /// <summary>Battle mode on or off. Redraws at once when it comes back.</summary>
         public void SetVisible(bool visible)
