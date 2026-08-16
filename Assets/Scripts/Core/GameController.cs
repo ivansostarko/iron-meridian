@@ -62,6 +62,7 @@ namespace IronMeridian.Core
         EffectPlacementTool _effects;
         ArtilleryStrikeSystem _artillery;
         AirStrikeSystem _airStrike;
+        AirSupplySystem _airSupply;
         UavStrikeSystem _uavStrike;
         MissileStrikeSystem _missiles;
         NavalStrikeSystem _naval;
@@ -72,6 +73,7 @@ namespace IronMeridian.Core
         // that system has nothing in the air; see RefreshStrikeBanner.
         (string title, float remaining, float total, Color colour) _artilleryBanner;
         (string title, float remaining, float total, Color colour) _airStrikeBanner;
+        (string title, float remaining, float total, Color colour) _airSupplyBanner;
         (string title, float remaining, float total, Color colour) _uavStrikeBanner;
         (string title, float remaining, float total, Color colour) _missileBanner;
         (string title, float remaining, float total, Color colour) _navalBanner;
@@ -84,7 +86,8 @@ namespace IronMeridian.Core
         {
             var pick = _artilleryBanner;
 
-            foreach (var other in new[] { _airStrikeBanner, _uavStrikeBanner, _missileBanner, _navalBanner })
+            foreach (var other in new[] { _airStrikeBanner, _airSupplyBanner, _uavStrikeBanner,
+                                          _missileBanner, _navalBanner })
             {
                 bool sooner = other.title != null &&
                               (pick.title == null || other.remaining < pick.remaining);
@@ -257,6 +260,11 @@ namespace IronMeridian.Core
             _airStrike = gameObject.AddComponent<AirStrikeSystem>();
             _airStrike.Init(_map, _rig.Cam);
 
+            // Air supply drops — the one called mission that leaves something
+            // standing on the ground. See docs/29-AIR-SUPPLY.md.
+            _airSupply = gameObject.AddComponent<AirSupplySystem>();
+            _airSupply.Init(_map, _rig.Cam);
+
             // Tasked UAV strikes — see docs/19-UAV-STRIKES.md.
             _uavStrike = gameObject.AddComponent<UavStrikeSystem>();
             _uavStrike.Init(_map, _rig.Cam);
@@ -279,6 +287,12 @@ namespace IronMeridian.Core
             _logistics = gameObject.AddComponent<IronMeridian.Logistics.LogisticsSystem>();
             _logistics.Init(_map, _rig.Cam);
 
+            // Where a landed bundle registers itself. Assigned here rather than
+            // where the supply system is built, because that is above this line:
+            // a drop is a logistics event, and the logistics system has to exist
+            // before anything can hand it one.
+            _airSupply.Logistics = _logistics;
+
             // What the force fights on: stocks typed by the designer, burn rates
             // derived from the order of battle — see docs/27-SUSTAINMENT.md.
             _sustainment = gameObject.AddComponent<IronMeridian.Logistics.SustainmentSystem>();
@@ -293,6 +307,7 @@ namespace IronMeridian.Core
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
                                             _airStrike.IsArmed ||
+                                            _airSupply.IsArmed ||
                                             _uavStrike.IsArmed ||
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
@@ -336,6 +351,10 @@ namespace IronMeridian.Core
             _effects.Flash = _hud.Flash;
             _artillery.Flash = _hud.Flash;
             _airStrike.Flash = _hud.Flash;
+            _airSupply.Flash = _hud.Flash;
+            // Dropped supplies belong to whichever side the palette is working
+            // for, the same rule the LOGISTICS panel's own placements follow.
+            _airSupply.Team = Data.Team.User;
             _uavStrike.Flash = _hud.Flash;
             _missiles.Flash = _hud.Flash;
             _naval.Flash = _hud.Flash;
@@ -354,6 +373,11 @@ namespace IronMeridian.Core
             _airStrike.CountdownChanged = (title, remaining, total, colour) =>
             {
                 _airStrikeBanner = (title, remaining, total, colour);
+                RefreshStrikeBanner();
+            };
+            _airSupply.CountdownChanged = (title, remaining, total, colour) =>
+            {
+                _airSupplyBanner = (title, remaining, total, colour);
                 RefreshStrikeBanner();
             };
             _uavStrike.CountdownChanged = (title, remaining, total, colour) =>
@@ -464,6 +488,7 @@ namespace IronMeridian.Core
                     {
                         case StrikeDockUI.Menu.Artillery: _artillery.Cancel(); break;
                         case StrikeDockUI.Menu.AirStrike: _airStrike.Cancel(); break;
+                        case StrikeDockUI.Menu.AirSupply: _airSupply.Cancel(); break;
                         case StrikeDockUI.Menu.UavStrike: _uavStrike.Cancel(); break;
                         case StrikeDockUI.Menu.Missiles: _missiles.Cancel(); break;
                         case StrikeDockUI.Menu.NavalStrike: _naval.Cancel(); break;
@@ -491,7 +516,7 @@ namespace IronMeridian.Core
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _artillery, _airStrike, _uavStrike, _naval, _mapControls, _strikeDock,
+                    _artillery, _airStrike, _airSupply, _uavStrike, _naval, _mapControls, _strikeDock,
                     _logistics, _sustainment);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
@@ -2022,6 +2047,7 @@ namespace IronMeridian.Core
             if (_planner != null) _planner.ClearAll();
             _effects.Cancel();
             _logistics.Cancel();
+            _airSupply.Cancel();
             _missiles.Cancel();
             _naval.Cancel();
             _artillery.Cancel();

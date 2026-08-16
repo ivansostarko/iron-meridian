@@ -137,6 +137,7 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `TaskAreaAttack` | Ground a formation is attacking onto | 260 m | loops | 24 | procedural |
 | `TaskAreaRecon` | Ground a formation is searching | 260 m | loops | 22 | procedural |
 | `TaskAreaMove` | A move objective, a withdrawal line or a rally point | 260 m | loops | 22 | procedural |
+| `SupplyLandingDust` | An air-dropped bundle touching down — half the generic `Dust`'s size and life, because the drop's whole character is that it arrives gently (docs/29-AIR-SUPPLY.md) | 70 m | 1.1 s | 8 | procedural |
 
 The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -242,6 +243,7 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Attack onto ground | `TaskAreaAttack` | as above | `GameController.OrderAreaAttack` |
 | Recon area placed | `TaskAreaRecon` | as above | `GameController.OrderRecon` |
 | Move / withdraw / retreat placed | `TaskAreaMove` | as above | `ManoeuvreOrderSystem.Order` |
+| Supply bundle lands | `SupplyLandingDust` | at the bundle | `AirSupplySystem.Deliver` (docs/29-AIR-SUPPLY.md) |
 
 **Attached to the area, not played at it.** A one-shot puff says something
 happened; a task area is a standing state, so the motes loop for as long as the

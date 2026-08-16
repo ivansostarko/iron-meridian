@@ -84,6 +84,11 @@ button whose side is decided on another page is a button you press to find out.
 with **◎** to fly to one and **✕** to remove it; **REMOVE ALL SITES** clears the
 lot. The count line reads `DEPLOYED — n FRIENDLY · n ENEMY`.
 
+**Or drop one from the air.** The strike dock's **AIR SUPPLY** menu tasks a
+transport to parachute ammunition, fuel or medical stores onto a zone, and every
+bundle that lands becomes one of these sites — captioned `AIRDROP · AMMO` and so
+on, but otherwise identical to a hand-placed one. See docs/29-AIR-SUPPLY.md.
+
 **Or remove one on the map**: right-click the site's marker and pick **REMOVE
 SITE**. The panel is the right place when you are working through a laydown; the
 map is the right place when you are looking at the thing you want gone. Sites are

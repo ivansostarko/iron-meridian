@@ -221,6 +221,11 @@ Assets/Scripts/
     ArtilleryStrikeSystem.cs  call for fire: countdown, then a five-round salvo
     AirStrikeCatalog.cs  the strike airframes — see docs/18-AIR-STRIKES.md
     AirStrikeSystem.cs   tasked strike: countdown, then a bombing run
+    AirSupplyCatalog.cs  the three air-dropped loads — docs/29-AIR-SUPPLY.md
+    AirSupplySystem.cs   the drop mission; each landed bundle becomes a
+                          LogisticsSystem supply point
+    SupplyRun.cs         the transport's pass and its release schedule
+    ParachuteDrop.cs     one bundle: free fall, canopy, descent, landing
     BomberRun.cs         the flying aircraft and its bomb release (code-animated)
     RotorSpinner.cs      spins rotors/propellers on unrigged models by mesh name
     NavalCatalog.cs      the naval guns — see docs/21-NAVAL-GUNFIRE.md

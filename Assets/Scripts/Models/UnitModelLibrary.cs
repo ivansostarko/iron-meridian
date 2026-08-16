@@ -91,6 +91,17 @@ namespace IronMeridian.Models
         public const string StrikeFighter = "strike_fighter";
         public const string KamikazeDrone = "kamikaze_drone";
         public const string ShahedDrone = "shahed_drone";
+        /// <summary>
+        /// The airlifter that flies a supply drop — docs/29-AIR-SUPPLY.md.
+        ///
+        /// Deliberately *not* called "transport_aircraft": that string is
+        /// already a **unit type** in units.json, and one identifier meaning
+        /// both a model and a formation is how a lookup ends up pointing at the
+        /// wrong one of them.
+        /// </summary>
+        public const string TransportAircraft = "airlift_transport";
+        /// <summary>One palletised load under canopy, as dropped by the above.</summary>
+        public const string SupplyBundle = "supply_bundle";
         public const string ReconDrone = "recon_drone";
 
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
@@ -257,6 +268,28 @@ namespace IronMeridian.Models
                 animated = true
             },
 
+            // The airlifter that flies a supply drop, and the load it drops.
+            // Both built in code for the same reason as the drones above: a
+            // supply run must not be able to lose its aeroplane to a pack
+            // somebody removed — see docs/29-AIR-SUPPLY.md.
+            [TransportAircraft] = new UnitModelDef
+            {
+                resourcePath = null,
+                sourceAsset = "Iron Meridian — built in code (ProceduralModels)",
+                proceduralId = ProceduralModels.TransportAircraft,
+                idleClip = ModelClips.CombatIdle,
+                animated = true
+            },
+
+            [SupplyBundle] = new UnitModelDef
+            {
+                resourcePath = null,
+                sourceAsset = "Iron Meridian — built in code (ProceduralModels)",
+                proceduralId = ProceduralModels.SupplyBundle,
+                idleClip = ModelClips.CombatIdle,
+                animated = true
+            },
+
             [ShahedDrone] = new UnitModelDef
             {
                 resourcePath = "Models/ShahedDrone",
@@ -342,7 +375,11 @@ namespace IronMeridian.Models
             ["fighter_aircraft"] = StrikeFighter,
             ["isr_aircraft"] = StrikeFighter,
             ["aewc"] = StrikeFighter,
-            ["transport_aircraft"] = StrikeFighter,
+            // The airlift formation flies the airlifter, now that the game owns
+            // one. It was a strike fighter only because there was nothing else
+            // with wings — a transport drawn as a fast jet is exactly the kind
+            // of stand-in this library exists to retire.
+            ["transport_aircraft"] = TransportAircraft,
             ["aerial_refuelling"] = StrikeFighter,
             ["ew_aircraft"] = StrikeFighter,
 

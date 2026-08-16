@@ -33,6 +33,8 @@ namespace IronMeridian.Models
         /// <summary>Model ids this class can build. Matched against <see cref="UnitModelDef.proceduralId"/>.</summary>
         public const string KamikazeDrone = "kamikaze_drone";
         public const string ReconDrone = "recon_drone";
+        public const string TransportAircraft = "airlift_transport";
+        public const string SupplyBundle = "supply_bundle";
 
         /// <summary>
         /// Builds a model, or returns null if the id is not one of ours.
@@ -42,6 +44,8 @@ namespace IronMeridian.Models
         {
             KamikazeDrone => BuildKamikazeDrone(),
             ReconDrone => BuildReconDrone(),
+            TransportAircraft => BuildTransportAircraft(),
+            SupplyBundle => BuildSupplyBundle(),
             _ => null
         };
 
@@ -57,6 +61,15 @@ namespace IronMeridian.Models
         static readonly Color Turret = new Color(0.16f, 0.17f, 0.18f);
         /// <summary>Its window. The one bright thing on the model, and the end that is looking.</summary>
         static readonly Color Lens = new Color(0.42f, 0.78f, 1.00f);
+        /// <summary>Transport grey — a lighter, flatter paint than a combat airframe's.</summary>
+        static readonly Color Transport = new Color(0.52f, 0.55f, 0.57f);
+        /// <summary>Canopy silk. Deliberately near-white: a chute has to be findable in the sky.</summary>
+        static readonly Color Canopy = new Color(0.90f, 0.91f, 0.88f);
+        /// <summary>The band round the canopy's skirt, so the open mouth reads from above.</summary>
+        static readonly Color CanopyBand = new Color(0.66f, 0.68f, 0.64f);
+        static readonly Color Rigging = new Color(0.35f, 0.36f, 0.34f);
+        /// <summary>Cargo crate — olive, the one warm thing in the drop.</summary>
+        static readonly Color Crate = new Color(0.38f, 0.40f, 0.26f);
 
         // ------------------------------------------------------- kamikaze drone
 
@@ -192,6 +205,200 @@ namespace IronMeridian.Models
 
             AttachReconAnimation(root);
             return root;
+        }
+
+        // --------------------------------------------------- transport aircraft
+
+        /// <summary>
+        /// The airlifter that flies a supply drop: a high-wing, four-turboprop,
+        /// T-tailed transport, nose along **+Z**.
+        ///
+        /// **Why this silhouette.** Everything that has flown over this map so
+        /// far has been something arriving to kill: a flying wing, a strike
+        /// fighter, a gunship, a one-way drone. A supply drop has to read as the
+        /// opposite from the first frame, and at map zoom the only thing the
+        /// player can actually see is the outline — a fat slab fuselage, a
+        /// straight high wing, four visibly turning propellers and an upswept
+        /// tail with the ramp under it. Nobody mistakes that for an attack.
+        ///
+        /// Authored about 30 m long and 40 m across, which is roughly a C-130.
+        /// <see cref="Vfx.SupplyRun"/> scales it from its own bounds, so the
+        /// absolute figures matter only in keeping the proportions honest.
+        /// </summary>
+        static GameObject BuildTransportAircraft()
+        {
+            var root = new GameObject("TransportAircraft_Procedural");
+
+            // Everything that moves hangs off this child, for the reason set out
+            // on AttachAnimation: the run writes the root's own rotation.
+            var sway = new GameObject("Sway");
+            sway.transform.SetParent(root.transform, false);
+
+            // Fuselage: a long box with a rounded nose cone and an upswept tail.
+            Box(sway, "Fuselage", new Vector3(0f, 0f, 0f), new Vector3(3.4f, 3.6f, 22f), Transport);
+            var nose = Cone(sway, "Nose", new Vector3(0f, 0f, 11f), 1.75f, 4.5f, Transport);
+            nose.transform.localRotation = Quaternion.identity;      // cone already runs +Z
+
+            // The upswept rear and the ramp under it — the one detail that says
+            // "this one opens at the back".
+            var tailCone = Box(sway, "TailCone", new Vector3(0f, 1.1f, -13f),
+                new Vector3(3.0f, 2.6f, 6f), Transport);
+            tailCone.transform.localRotation = Quaternion.Euler(-14f, 0f, 0f);
+            Box(sway, "Ramp", new Vector3(0f, -1.2f, -12.4f), new Vector3(2.6f, 0.35f, 4.6f), Panel);
+
+            // High wing, straight, sitting on the spine.
+            Box(sway, "Wing", new Vector3(0f, 2.0f, 1.2f), new Vector3(40f, 0.7f, 5.2f), Transport);
+
+            // Four engine nacelles with propellers. Named so RotorSpinner cannot
+            // grab the blades individually — the hub is what turns.
+            for (int i = 0; i < 4; i++)
+            {
+                float side = i < 2 ? -1f : 1f;
+                float out1 = (i % 2 == 0) ? 6.5f : 12.5f;
+                float x = side * out1;
+
+                Box(sway, $"Nacelle{i}", new Vector3(x, 1.8f, 2.2f),
+                    new Vector3(2.0f, 1.8f, 6.5f), Panel);
+
+                var hub = new GameObject($"Propeller{i}");
+                hub.transform.SetParent(sway.transform, false);
+                hub.transform.localPosition = new Vector3(x, 1.8f, 5.6f);
+                Box(hub, "BladeA", Vector3.zero, new Vector3(7.0f, 0.22f, 0.14f), Blade);
+                Box(hub, "BladeB", Vector3.zero, new Vector3(0.14f, 7.0f, 0.14f), Blade);
+            }
+
+            // T-tail: fin up the back, tailplane across its top.
+            Box(sway, "Fin", new Vector3(0f, 4.4f, -13.4f), new Vector3(0.5f, 6.0f, 5.0f), Transport);
+            Box(sway, "Tailplane", new Vector3(0f, 7.2f, -13.8f), new Vector3(14f, 0.5f, 3.4f), Transport);
+
+            // Undercarriage blisters down the fuselage sides — cheap, and they
+            // stop the belly reading as a flat plank.
+            Box(sway, "SponsonLeft", new Vector3(-1.9f, -1.2f, 0f), new Vector3(1.0f, 1.4f, 8f), Panel);
+            Box(sway, "SponsonRight", new Vector3(1.9f, -1.2f, 0f), new Vector3(1.0f, 1.4f, 8f), Panel);
+
+            AttachTransportAnimation(root);
+            return root;
+        }
+
+        /// <summary>
+        /// The transport's idle clip: four propellers turning, and a very slight
+        /// roll.
+        ///
+        /// Slower and shallower than the drones'. A loaded airlifter on a drop
+        /// run is holding the steadiest line it can — that *is* the flying — so
+        /// the sway is barely there, and its job is only to stop the model
+        /// reading as a rigid prop sliding along a rail.
+        /// </summary>
+        static void AttachTransportAnimation(GameObject root)
+        {
+            var clip = new AnimationClip
+            {
+                name = ModelClips.CombatIdle,
+                legacy = true,
+                wrapMode = WrapMode.Loop
+            };
+
+            // A turboprop turns far slower than a model aircraft's pusher, and
+            // at 45° steps a 0.5 s revolution still reads as a disc.
+            for (int i = 0; i < 4; i++)
+                SpinCurves(clip, $"Sway/Propeller{i}", Vector3.forward, 0.5f, steps: 8);
+
+            SwayCurves(clip, "Sway", rollPeriod: 5.2f, rollDegrees: 1.6f,
+                pitchPeriod: 6.7f, pitchDegrees: 0.6f);
+
+            var animation = root.AddComponent<Animation>();
+            animation.AddClip(clip, ModelClips.CombatIdle);
+            animation.clip = clip;
+            animation.wrapMode = WrapMode.Loop;
+            animation.playAutomatically = true;
+            animation.Play(ModelClips.CombatIdle);
+        }
+
+        // ------------------------------------------------------ supply bundle
+
+        /// <summary>
+        /// One air-dropped load under canopy: a palletised crate, four rigging
+        /// lines, and an open parachute above it. Built **+Y up**, hanging from
+        /// its own origin at the canopy's apex, because that is the point a
+        /// falling bundle swings about.
+        ///
+        /// **A cone, not a dome.** A real canopy is a hemisphere, and at the
+        /// zoom this map is played at a hemisphere and a cone are the same
+        /// twelve pixels — but the cone's silhouette has a *point*, which is
+        /// what makes it read as a parachute rather than as a ball. The same
+        /// argument the loitering munition's delta body makes.
+        ///
+        /// The rocking is a clip rather than per-frame code so it plays wherever
+        /// the model is shown, including standing still on a preview turntable.
+        /// See <see cref="Vfx.ParachuteDrop"/> for the descent itself.
+        /// </summary>
+        static GameObject BuildSupplyBundle()
+        {
+            var root = new GameObject("SupplyBundle_Procedural");
+
+            // The swinging part. The drop writes the root's rotation to face the
+            // canopy into the drift, so the pendulum lives one level down.
+            var swing = new GameObject("Swing");
+            swing.transform.SetParent(root.transform, false);
+
+            // Canopy: a cone with its apex up. Cone() builds along +Z from the
+            // base, so it is stood up and pushed down by its own length.
+            var canopy = Cone(swing, "Canopy", new Vector3(0f, 0f, 0f), 2.6f, 1.9f, Canopy);
+            canopy.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+
+            // A skirt band in the darker shade, so the open mouth of the chute
+            // is visible against the canopy from directly above — which is the
+            // angle this game is usually looked at from.
+            var skirt = Cone(swing, "Skirt", new Vector3(0f, 0.12f, 0f), 2.75f, 0.45f, CanopyBand);
+            skirt.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+
+            // Rigging: four lines from the skirt to the load.
+            for (int i = 0; i < 4; i++)
+            {
+                float a = (i * 90f + 45f) * Mathf.Deg2Rad;
+                float x = Mathf.Cos(a) * 1.25f, z = Mathf.Sin(a) * 1.25f;
+                var line = Box(swing, $"Rigging{i}", new Vector3(x, -1.5f, z),
+                    new Vector3(0.09f, 3.0f, 0.09f), Rigging);
+                // Splayed out to the skirt, so the lines form a cone rather than
+                // a cage.
+                line.transform.localRotation = Quaternion.Euler(Mathf.Sin(a) * 16f, 0f, -Mathf.Cos(a) * 16f);
+            }
+
+            // The load: a crate on a pallet.
+            Box(swing, "Crate", new Vector3(0f, -3.4f, 0f), new Vector3(1.9f, 1.5f, 1.9f), Crate);
+            Box(swing, "Pallet", new Vector3(0f, -4.25f, 0f), new Vector3(2.2f, 0.25f, 2.2f), Panel);
+            // Banding across the crate, the universal read for "cargo".
+            Box(swing, "StrapX", new Vector3(0f, -3.4f, 0f), new Vector3(2.0f, 0.22f, 0.22f), Panel);
+            Box(swing, "StrapZ", new Vector3(0f, -3.4f, 0f), new Vector3(0.22f, 0.22f, 2.0f), Panel);
+
+            AttachBundleAnimation(root);
+            return root;
+        }
+
+        /// <summary>
+        /// The bundle's pendulum. A load under canopy swings — that is the whole
+        /// visual signature of a parachute, and a crate descending in a dead
+        /// straight line reads as a lift rather than a drop. Two out-of-phase
+        /// periods, so it never settles into a metronome.
+        /// </summary>
+        static void AttachBundleAnimation(GameObject root)
+        {
+            var clip = new AnimationClip
+            {
+                name = ModelClips.CombatIdle,
+                legacy = true,
+                wrapMode = WrapMode.Loop
+            };
+
+            SwayCurves(clip, "Swing", rollPeriod: 3.1f, rollDegrees: 9f,
+                pitchPeriod: 4.3f, pitchDegrees: 6f);
+
+            var animation = root.AddComponent<Animation>();
+            animation.AddClip(clip, ModelClips.CombatIdle);
+            animation.clip = clip;
+            animation.wrapMode = WrapMode.Loop;
+            animation.playAutomatically = true;
+            animation.Play(ModelClips.CombatIdle);
         }
 
         static void Boom(GameObject parent, string name, float side)

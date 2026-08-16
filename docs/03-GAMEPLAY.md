@@ -86,7 +86,7 @@ The tool strip along the bottom is down to three: the **cursor**, **generate sec
 
 ### The strike dock
 
-The five ways of putting explosives on a piece of ground — **artillery, air, UAV, missile, naval** — are a cluster of five icons under the top bar's right-hand end. Click one to open its menu, docked on the right beneath the icons; click it again, or the **✕**, to close it.
+Six icons under the top bar's right-hand end: five ways of putting explosives on a piece of ground — **artillery, air, UAV, missile, naval** — and one of putting supplies on it, **air supply**, next to the air strike it is flown alongside. Click one to open its menu, docked on the right beneath the icons; click it again, or the **✕**, to close it.
 
 **Why they left the rail.** They were five of the rail's fifteen rows, and the other ten are things you *set up* a scenario with. These are not that: they are things you *do* during one, they are all the same verb, and mixing them into the authoring nav made the rail read as a settings menu with weapons in it. Pulling them into their own cluster says what they have in common and gets them to one click from anywhere.
 
@@ -98,6 +98,7 @@ The five ways of putting explosives on a piece of ground — **artillery, air, U
 |---|---|---|
 | Artillery piece | **ARTILLERY STRIKE** | NATO / Enemy tabs, 14 natures. docs/17-ARTILLERY.md |
 | Flying wing | **AIR STRIKE** | Bomber, fighter or helicopter. docs/18-AIR-STRIKES.md |
+| Parachute | **AIR SUPPLY** | Ammunition, fuel or medical stores, dropped by transport. The one menu here that *gives* — each bundle that lands becomes a supply point. docs/29-AIR-SUPPLY.md |
 | Quadcopter | **UAV STRIKES** | Loitering munition, Shahed-class, reconnaissance. docs/19-UAV-STRIKES.md |
 | Interceptor | **MISSILE SYSTEMS** | Ten launchers, NATO and enemy. docs/20-MISSILE-SYSTEMS.md |
 | Warship | **NAVY STRIKE** | Nine mountings, NATO and enemy. docs/21-NAVAL-GUNFIRE.md |

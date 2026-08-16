@@ -261,7 +261,7 @@ namespace IronMeridian.UI
 
         public void Build(Canvas canvas, MapManager map, Camera worldCam, CameraRig rig,
             GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
-            ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
+            ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike, AirSupplySystem airSupply,
             UavStrikeSystem uavStrike, NavalStrikeSystem naval,
             MapControlsUI mapControls, StrikeDockUI strikeDock,
             IronMeridian.Logistics.LogisticsSystem logistics,
@@ -276,6 +276,7 @@ namespace IronMeridian.UI
             _effects = effects;
             _artillery = artillery;
             _airStrike = airStrike;
+            _airSupply = airSupply;
             _uavStrike = uavStrike;
             _naval = naval;
             _mapControls = mapControls;
@@ -338,6 +339,7 @@ namespace IronMeridian.UI
             {
                 BuildArtillerySection(_strikeDock.PageFor(StrikeDockUI.Menu.Artillery));
                 BuildAirStrikeSection(_strikeDock.PageFor(StrikeDockUI.Menu.AirStrike));
+                BuildAirSupplySection(_strikeDock.PageFor(StrikeDockUI.Menu.AirSupply));
                 BuildUavStrikeSection(_strikeDock.PageFor(StrikeDockUI.Menu.UavStrike));
                 BuildNavalStrikeSection(_strikeDock.PageFor(StrikeDockUI.Menu.NavalStrike));
             }
@@ -894,6 +896,9 @@ namespace IronMeridian.UI
             // The rear area follows the team tab rather than carrying a second
             // side control of its own — see BuildLogisticsSection.
             if (_logistics != null) _logistics.Team = team;
+            // An airdrop lands supplies for the same side the panel is working
+            // for — see BuildAirSupplySection.
+            if (_airSupply != null) _airSupply.Team = team;
             RefreshLogistics();
             RefreshSustainment();
             Populate();
@@ -2244,6 +2249,110 @@ namespace IronMeridian.UI
             foreach (var (aircraft, fill, label) in _airStrikeButtons)
             {
                 bool on = _airStrike.Armed.HasValue && _airStrike.Armed.Value == aircraft;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
+        // --------------------------------------------------- air supply section
+
+        AirSupplySystem _airSupply;
+        readonly List<(SupplyKind kind, Image fill, Text label)> _airSupplyButtons =
+            new List<(SupplyKind, Image, Text)>();
+
+        /// <summary>The load's own glyph — the same three the LOGISTICS panel uses.</summary>
+        static Sprite SupplyGlyph(SupplyKind kind) => kind switch
+        {
+            SupplyKind.Ammo => UiIcons.Rounds,
+            SupplyKind.Oil => UiIcons.FuelDrop,
+            _ => UiIcons.MedicalCross
+        };
+
+        /// <summary>
+        /// The airdrop menu, driven entirely from <see cref="AirSupplyCatalog"/>.
+        ///
+        /// **The one page in this dock that gives something.** It sits beside
+        /// AIR STRIKE because the two are flown by the same kind of thing and
+        /// tasked in exactly the same way — pick, place, wait, watch — and the
+        /// pairing is the clearest way of saying that an aircraft overhead is
+        /// not always bad news.
+        ///
+        /// The three loads carry the **same glyphs as the LOGISTICS panel's**
+        /// ammunition, fuel and medical points, because that is precisely what a
+        /// drop leaves on the ground: not an effect, a supply point that was not
+        /// there before. See docs/29-AIR-SUPPLY.md.
+        /// </summary>
+        void BuildAirSupplySection(RectTransform content)
+        {
+            SectionLabel(content, "DROP SUPPLIES", -8);
+            StrikeBudgetRow(content, -28f);
+
+            float y = -64f;
+            foreach (var def in AirSupplyCatalog.All)
+            {
+                AirSupplyButton(content, def, y);
+                y -= 58f;
+            }
+
+            var abort = UIFactory.CreateBorderedPanel(content, "AbortSupply", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(abort, new Vector2(0f, 1f), new Vector2(Pad, y - 6f), new Vector2(InnerWidth, 32));
+            var abortBtn = UIFactory.CreateButton(abort, "ABORT TASKING",
+                () => { if (_airSupply != null) _airSupply.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)abortBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                $"Pick a load, then click the map to place the drop zone. A " +
+                $"{AirSupplyCatalog.CountdownSeconds:0} second countdown runs in the HUD, then a transport " +
+                "runs in low and pushes its bundles out over the zone. Each canopy that lands leaves a " +
+                "supply point on the map — the same object the LOGISTICS panel places by hand, with the " +
+                "same icon, and removable the same way. The run-in heading is different every time.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 48f),
+                new Vector2(InnerWidth, 170));
+
+            RefreshAirSupply();
+        }
+
+        void AirSupplyButton(RectTransform content, SupplyDropDef def, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Supply_" + def.kind, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 52));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_airSupply != null) _airSupply.Toggle(def.kind); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, SupplyGlyph(def.kind), "Glyph");
+            icon.color = def.markerColor;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f), new Vector2(12, 0), new Vector2(24, 24));
+
+            var (name, _) = UIFactory.CreateStackedLabels(frame, def.label, def.detail,
+                46f, InnerWidth - 92f, topInset: 9f);
+
+            // Bundles, not a beaten zone: the figure that matters here is how
+            // many supply points the mission leaves behind.
+            var bundles = UIFactory.CreateText(frame, $"{def.bundles} bundles", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight);
+            bundles.raycastTarget = false;
+            UIFactory.Place(bundles.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 7), new Vector2(60, 14));
+
+            AllowanceLabel(frame, AirSupplyCatalog.BudgetKey(def.kind), def.missions);
+
+            _airSupplyButtons.Add((def.kind, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>Repaints from the system's state — it owns what is armed, not the panel.</summary>
+        void RefreshAirSupply()
+        {
+            if (_airSupply == null) return;
+            foreach (var (kind, fill, label) in _airSupplyButtons)
+            {
+                bool on = _airSupply.Armed.HasValue && _airSupply.Armed.Value == kind;
                 fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
                 label.color = on ? UiTheme.Accent : UiTheme.Text;
             }

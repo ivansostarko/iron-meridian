@@ -152,7 +152,18 @@ namespace IronMeridian.Vfx
         /// <summary>Ground a formation is searching — looping.</summary>
         TaskAreaRecon,
         /// <summary>A move objective, a withdrawal line or a rally point — looping.</summary>
-        TaskAreaMove
+        TaskAreaMove,
+
+        // --- air supply (see docs/29-AIR-SUPPLY.md) ---
+
+        /// <summary>
+        /// A parachuted bundle touching down — a short, low puff of dust.
+        /// Deliberately not the generic <see cref="Dust"/>: this one is smaller,
+        /// paler and shorter, because a crate landing under canopy is not a
+        /// vehicle skidding to a halt, and the drop's whole character is that it
+        /// arrives *gently*.
+        /// </summary>
+        SupplyLandingDust
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -277,6 +288,12 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.Dust,        prefabPath = null,
                          fallback = VfxFallback.Dust,      scaleMeters = 140f, lifeSeconds = 1.5f,
                          tint = new Color(0.68f, 0.62f, 0.52f), priority = 10 },
+
+            // A bundle touching down. Half the generic dust's size and life:
+            // gentle is the point — see docs/29-AIR-SUPPLY.md.
+            new VfxDef { id = VfxId.SupplyLandingDust, prefabPath = null,
+                         fallback = VfxFallback.Dust,      scaleMeters = 70f,  lifeSeconds = 1.1f,
+                         tint = new Color(0.74f, 0.70f, 0.62f), priority = 8 },
 
             // --- artillery bursts (docs/17-ARTILLERY.md) ---
             // Priority above a plain explosion: a called fire mission is the

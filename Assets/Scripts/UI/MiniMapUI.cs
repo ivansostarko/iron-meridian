@@ -57,8 +57,12 @@ namespace IronMeridian.UI
 
         /// <summary>Raster size. Square, and near 1:1 with the drawn size.</summary>
         const int Tex = 256;
-        /// <summary>On-screen size of the picture, px. Matches the fire-menu cluster's width.</summary>
-        const float MapSize = 244f;
+        /// <summary>
+        /// On-screen size of the picture, px. Matches the fire-menu cluster's
+        /// width — six buttons at 44 px with 6 px gaps — so the two read as one
+        /// block of chrome. Grew with the cluster when AIR SUPPLY joined it.
+        /// </summary>
+        const float MapSize = 294f;
         const float Pad = UiTheme.PanelPadding;
         const float HeaderHeight = 22f, FooterHeight = 16f;
 

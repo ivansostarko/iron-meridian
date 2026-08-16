@@ -575,6 +575,20 @@ namespace IronMeridian.UI
             return Mathf.Max(load, Mathf.Max(deck, Mathf.Max(legL, legR)));
         });
 
+        /// <summary>Air supply — a canopy over its load. The one aircraft menu that gives rather than takes.</summary>
+        public static Sprite Parachute => Get(nameof(Parachute), (u, v) =>
+        {
+            // Canopy: a dome, drawn as the top half of a disc.
+            float dome = v >= 0.56f ? DiscAt(u, v, 0.5f, 0.56f, 0.40f) : 0f;
+            // Its skirt, so the mouth of the chute reads at button size.
+            float skirt = Rect(u, v, 0.10f, 0.52f, 0.90f, 0.58f);
+            // Rigging down to the load.
+            float lineL = Seg(u, v, 0.14f, 0.54f, 0.44f, 0.22f, 0.05f);
+            float lineR = Seg(u, v, 0.86f, 0.54f, 0.56f, 0.22f, 0.05f);
+            float load = Rect(u, v, 0.40f, 0.06f, 0.60f, 0.24f);
+            return Mathf.Max(Mathf.Max(dome, skirt), Mathf.Max(Mathf.Max(lineL, lineR), load));
+        });
+
         /// <summary>The rail row for GROUPS — three counters standing together.</summary>
         public static Sprite Group => Get(nameof(Group), (u, v) =>
         {

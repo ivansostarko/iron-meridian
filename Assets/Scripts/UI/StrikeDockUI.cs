@@ -47,8 +47,15 @@ namespace IronMeridian.UI
     /// </summary>
     public class StrikeDockUI : MonoBehaviour
     {
-        /// <summary>The five ways of putting explosives on a piece of ground.</summary>
-        public enum Menu { Artillery, AirStrike, UavStrike, Missiles, NavalStrike }
+        /// <summary>
+        /// What can be called down onto a piece of ground: five ways of putting
+        /// explosives on it, and one of putting supplies on it.
+        ///
+        /// AIR SUPPLY sits next to AIR STRIKE deliberately — they are flown by
+        /// the same kind of thing, tasked the same way, and the pairing is the
+        /// clearest statement that the aircraft overhead is not always bad news.
+        /// </summary>
+        public enum Menu { Artillery, AirStrike, AirSupply, UavStrike, Missiles, NavalStrike }
 
         /// <summary>True while a fire menu is showing, so the map's input guards can read it.</summary>
         public static bool IsOpen { get; private set; }
@@ -76,6 +83,7 @@ namespace IronMeridian.UI
         {
             (Menu.Artillery,   "ARTILLERY STRIKE", "Artillery — call for fire"),
             (Menu.AirStrike,   "AIR STRIKE",       "Air strike — task an airframe"),
+            (Menu.AirSupply,   "AIR SUPPLY",       "Air supply — drop ammunition, fuel or medical stores"),
             (Menu.UavStrike,   "UAV STRIKES",      "UAV — task an unmanned sortie"),
             (Menu.Missiles,    "MISSILE SYSTEMS",  "Missile systems — ten launchers"),
             (Menu.NavalStrike, "NAVY STRIKE",      "Naval gunfire support")
@@ -85,6 +93,7 @@ namespace IronMeridian.UI
         {
             Menu.Artillery => UiIcons.Artillery,
             Menu.AirStrike => UiIcons.FlyingWing,
+            Menu.AirSupply => UiIcons.Parachute,
             Menu.UavStrike => UiIcons.Quadcopter,
             Menu.Missiles => UiIcons.Interceptor,
             _ => UiIcons.Warship
