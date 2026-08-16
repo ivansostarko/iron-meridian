@@ -2667,8 +2667,8 @@ namespace IronMeridian.Core
         ///
         /// This used to also have to clear the minimap, which hung under that
         /// cluster and left a panel on a short screen with less room than its
-        /// own header needed. The minimap has moved to the bottom left — see
-        /// MiniMapUI — so the right edge is back to one rule with no
+        /// own header needed. The minimap has moved to the opposite corner —
+        /// see MiniMapUI — so the right edge is back to one rule with no
         /// adaptive clamp behind it.
         /// </summary>
         void RefreshRightDockTop()

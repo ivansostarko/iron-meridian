@@ -97,12 +97,19 @@ a logo and a credit line - lazily, the first time a tileset has something to
 attribute. Left alone it lands on top of the game's HUD, because it is created
 after our canvas and sorts above it.
 
-`Map/CesiumCreditStyler.cs` shrinks it to 45%, drops it to 16% opacity, stops it
-taking clicks, and sorts it at -500 so every canvas the game draws is in front of
-it. It retries for twenty seconds, because the credit system does not exist when
-the map is built.
+`Map/CesiumCreditStyler.cs` scales the logo and its line down to **0.4%** — about
+a pixel square — drops them to 5% opacity, stops them taking clicks, and sorts
+the canvas at -500 so every canvas the game draws is in front of it. It retries
+for twenty seconds, because the credit system does not exist when the map is
+built.
+
+The scale is applied as a `localScale` on the credit's own children, **not** as
+the canvas's `scaleFactor`. A scale factor that small asks uGUI's dynamic font
+for a zero-point glyph and blows the canvas rect up to a hundred thousand units;
+scaling the transform draws the same mesh smaller and asks nothing of the font.
 
 **It is deliberately not removed.** Cesium ion's terms of service require the
 attribution to be present, and a build that deleted it would be shipping in
 breach of the licence its terrain streams under. What is adjustable is how loudly
-it shouts.
+it shouts — and at a pixel it is as quiet as a thing can be while still being on
+the screen, which is worth knowing if the project's ion licence is ever reviewed.

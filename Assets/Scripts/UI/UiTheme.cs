@@ -67,7 +67,13 @@ namespace IronMeridian.UI
         /// a fire menu has needed, for whenever one earns its own dock again.
         /// </summary>
         public const float MissilePanelWidth = 320f;
-        public const float RightPanelWidth = 300f;
+        /// <summary>
+        /// Every panel docked on the right-hand edge — the unit inspector, the
+        /// group panel, the front-line options. One value, because the three
+        /// swap places with each other and a right edge that moved as they did
+        /// would read as the map resizing.
+        /// </summary>
+        public const float RightPanelWidth = 330f;
         /// <summary>
         /// Height of the strike dock's icon strip, which sits under the top bar
         /// at the right-hand end. Every panel that docks on the right starts

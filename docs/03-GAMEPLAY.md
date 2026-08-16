@@ -110,9 +110,9 @@ Six icons under the top bar's right-hand end: five ways of putting explosives on
 
 ### The minimap
 
-Docked at the **bottom left**, beside the map's own zoom cluster and riding the section panel's edge as that slides. **Battle mode only**, for the same reason the fire menus are: it is the picture of a fight.
+Docked at the **top left**, under the command bar and riding the section panel's edge as that slides. **Battle mode only**, for the same reason the fire menus are: it is the picture of a fight.
 
-It used to hang under the fire-menu cluster on the right. That edge is three panels deep already — the unit inspector, the group panel, the fire menus — so the minimap was either covering one of them or being covered by it, and on a 720p screen the two could not both fit. The bottom left carries nothing but map controls, which is what a minimap is.
+It used to hang under the fire-menu cluster on the right. That edge is three panels deep already — the unit inspector, the group panel, the fire menus — so the minimap was either covering one of them or being covered by it, and on a 720p screen the two could not both fit. It then spent a while in the bottom left, which is where the zoom cluster and the order bar live. The top left is the one corner of the map this screen leaves empty, and a picture read at a glance belongs where the eye already starts.
 
 The map is played at a few kilometres across while a scenario is tens of kilometres wide, so for most of a battle you are looking at one part of something whose shape you cannot see. Zooming out to find it costs the detail you were using; zooming back in costs the position you had. The minimap is the second, fixed-scale view that always shows the whole thing.
 
@@ -126,15 +126,17 @@ The map is played at a few kilometres across while a scenario is tens of kilomet
 
 **North is up and stays up** — it is a map, not a repeat of the camera. **Click anywhere on it to fly the camera there.**
 
+**It folds away.** The ▼ at the end of the header collapses the picture to its caption bar; ► brings it back. A minimap is ambient, and ambient chrome that cannot be put away is chrome you have to play around when the fight moves under it. The control stays where it was, so the way back is in the same place as the way out — and a folded minimap stops redrawing as well as stops drawing. The state survives the battle stopping and starting again.
+
 **It obeys the fog.** An enemy formation hidden by fog of war is not drawn. A minimap showing the whole red laydown would be a way round the fog rather than a convenience — see `docs/16-FOG-OF-WAR.md`.
 
 **No terrain imagery, deliberately.** At 244 px a satellite thumbnail is a brown-green smear that hides the blips, and the map itself is right there for anyone who wants to look at ground.
 
 The picture is rasterised into a texture a few times a second rather than built from uGUI rects: a hundred formations would be a hundred `Image` components rebuilt on every move, and the front line is a polyline of several hundred vertices that uGUI cannot draw at all. See `Assets/Scripts/UI/MiniMapUI.cs`.
 
-A single-player mission keeps the minimap — it is gameplay feedback, not editor chrome — and it moves up under the top bar there, because a mission has no strike cluster above it.
+A single-player mission keeps the minimap — it is gameplay feedback, not editor chrome — where the editor's rail would have been.
 
-**Sharing the right edge.** The four panels that dock on that edge — unit inspector, group panel, front-line options, fire menu — start below the minimap while it is up, so both are readable at once. On a screen too short for that (1280×720), pushing a panel below the minimap would leave it shorter than its own header, so there the panel keeps its normal top and covers the minimap while it is open: the panel was opened deliberately, the minimap is ambient. One place decides it for all four — `GameController.RefreshRightDockTop`.
+**The right edge is free of it.** The four panels that dock there — unit inspector, group panel, front-line options, fire menu — all start below the fire-menu cluster and nothing else, now that the minimap is on the opposite side. One place still decides it for all four: `GameController.RefreshRightDockTop`. They share one width, `UiTheme.RightPanelWidth`, so a panel replacing another does not read as the map resizing.
 
 ### Missions per weapon, not per scenario
 

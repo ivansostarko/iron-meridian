@@ -18,7 +18,10 @@ namespace IronMeridian.Map
     /// the attribution to be present, and a game that deleted it would be
     /// shipping in breach of the licence it streams its terrain under. What is
     /// adjustable is how loudly it shouts: the credit stays on screen, findable,
-    /// and behind the interface rather than in front of it.
+    /// and behind the interface rather than in front of it. It is currently
+    /// drawn at about **one pixel** and near-transparent, which is as quiet as a
+    /// thing can be while still being on the screen — worth knowing if the
+    /// project's ion licence is ever reviewed.
     ///
     /// **It retries.** The credit system is created lazily — the first time a
     /// tileset has something to attribute — so it does not exist when the map is
@@ -33,14 +36,24 @@ namespace IronMeridian.Map
         /// <summary>The GameObject Cesium gives its default credit system.</summary>
         const string CreditSystemName = "CesiumCreditSystemDefault";
 
-        /// <summary>Scale the credit canvas is drawn at. Small enough to read as a mark, not a banner.</summary>
-        const float Scale = 0.45f;
         /// <summary>
-        /// Opacity. Low enough to disappear into the terrain at a glance and
-        /// high enough to still be an attribution — which is the line this class
-        /// has to walk, see the remarks.
+        /// Scale the credit's contents are drawn at. The logo and its line are
+        /// a couple of hundred pixels across at scale 1, so this lands the whole
+        /// block at roughly a pixel square — present, and no longer a watermark
+        /// over the terrain.
+        ///
+        /// Applied as a **localScale on the credit's own children** rather than
+        /// as the canvas's <c>scaleFactor</c>. A scale factor this small would
+        /// ask uGUI's dynamic font for a zero-point glyph and blow the canvas's
+        /// own rect up to a hundred thousand units; scaling the transform draws
+        /// the same mesh smaller and asks nothing of the font at all.
         /// </summary>
-        const float Alpha = 0.16f;
+        const float Scale = 0.004f;
+        /// <summary>
+        /// Opacity. At a pixel across this is belt and braces — it stops the
+        /// mark reading as a stuck dead pixel on a dark sky.
+        /// </summary>
+        const float Alpha = 0.05f;
         /// <summary>Behind every canvas the game creates, all of which sort at 0 or above.</summary>
         const int SortingOrder = -500;
 
@@ -87,11 +100,17 @@ namespace IronMeridian.Map
                     canvas.sortingOrder = SortingOrder;
                 }
 
-                // The scaler would otherwise fight the scale factor set below —
-                // it recomputes it from the window size every frame.
+                // The scaler would otherwise re-derive a scale factor from the
+                // window size every frame, on top of the one below.
                 var scaler = canvas.GetComponent<CanvasScaler>();
                 if (scaler != null && scaler.enabled) scaler.enabled = false;
-                canvas.scaleFactor = Scale;
+                canvas.scaleFactor = 1f;
+
+                // Every direct child, because the package has put the logo and
+                // the line in siblings before now. Shrinking them about their
+                // own pivots leaves each where its corner anchor put it.
+                foreach (RectTransform child in canvas.transform)
+                    child.localScale = new Vector3(Scale, Scale, 1f);
 
                 var group = canvas.GetComponent<CanvasGroup>();
                 if (group == null) group = canvas.gameObject.AddComponent<CanvasGroup>();

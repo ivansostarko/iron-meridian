@@ -211,7 +211,11 @@ namespace IronMeridian.Units
                 id = System.Guid.NewGuid().ToString("N").Substring(0, 10),
                 team = team.ToString(),
                 name = name,
-                rank = rank
+                rank = rank,
+                // Rolled once, here, and saved with him. Picking a face when the
+                // panel draws one would give an officer a new head every time a
+                // row was rebuilt — see CommanderPortraits.
+                portrait = CommanderPortraits.Pick()
             };
             _all.Add(c);
             Changed?.Invoke();

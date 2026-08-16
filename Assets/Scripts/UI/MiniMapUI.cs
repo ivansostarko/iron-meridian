@@ -12,7 +12,7 @@ namespace IronMeridian.UI
 {
     /// <summary>
     /// The battle minimap: the whole engagement at a glance, docked at the
-    /// **bottom left**, beside the map's own zoom cluster.
+    /// **top left**, under the command bar and clear of the left rail.
     ///
     /// **Why it exists.** The map is played at a few kilometres across while a
     /// scenario is tens of kilometres wide, so for most of a battle the player
@@ -35,10 +35,16 @@ namespace IronMeridian.UI
     /// whole red laydown would be a way of cheating past the fog, not a
     /// convenience.
     ///
-    /// **Battle mode only**, like the fire menus above it — see
+    /// **Battle mode only**, like the fire menus opposite it — see
     /// <see cref="SetVisible"/>. In scenario mode nothing is moving, the left
     /// rail's DEPLOYED list already lists everything on the map, and the corner
     /// is better spent on the editor.
+    ///
+    /// **It folds away.** The header carries a toggle that collapses the picture
+    /// to its caption bar and back — see <see cref="SetCollapsed"/>. A minimap is
+    /// ambient, and ambient chrome that cannot be put away is chrome the player
+    /// has to play around when the fight moves under it. Collapsed, it stops
+    /// redrawing as well as stops drawing.
     ///
     /// The picture is rasterised into a <see cref="Texture2D"/> a few times a
     /// second rather than built from uGUI rects: a hundred formations would be
@@ -70,6 +76,10 @@ namespace IronMeridian.UI
         public const float PanelWidth = MapSize + Pad * 2f;
         /// <summary>Overall height of the docked block, so the panels below it know what to clear.</summary>
         public const float BlockHeight = HeaderHeight + MapSize + FooterHeight + Pad;
+        /// <summary>Height of the caption bar left behind when the picture is folded away.</summary>
+        const float CollapsedHeight = HeaderHeight + 4f;
+        /// <summary>Side of the header's fold control.</summary>
+        const float ToggleSize = 18f;
 
         /// <summary>Seconds between redraws. Fast enough to read as live, cheap enough to ignore.</summary>
         const float RefreshSeconds = 0.15f;
@@ -80,7 +90,7 @@ namespace IronMeridian.UI
         RawImage _image;
         Texture2D _texture;
         Color32[] _pixels;
-        Text _scaleLabel;
+        Text _scaleLabel, _north, _toggleGlyph;
 
         MapManager _map;
         CameraRig _rig;
@@ -96,6 +106,8 @@ namespace IronMeridian.UI
 
         float _timer;
         bool _visible;
+        /// <summary>Folded to its caption bar. Survives the battle stopping and starting again.</summary>
+        bool _collapsed;
 
         /// <summary>
         /// Distance from the left edge of the screen. Rides the editor's left
@@ -104,10 +116,15 @@ namespace IronMeridian.UI
         /// </summary>
         float _leftInset = DefaultLeftInset;
 
-        /// <summary>Clear of the rail, the zoom cluster beside it, and a margin.</summary>
-        const float DefaultLeftInset = UiTheme.LeftPanelWidth + 16f + 36f + 12f;
-        /// <summary>Clears the unit action bar and the shortcut hint line, as the compass does.</summary>
-        const float BottomInset = 74f;
+        /// <summary>Clear of the rail and a margin — where it sits until told otherwise.</summary>
+        const float DefaultLeftInset = UiTheme.LeftPanelWidth + 16f;
+        /// <summary>
+        /// The screen's own margin. The floor for <see cref="SetLeftInset"/>,
+        /// which is what a mission — with no rail at all — gets.
+        /// </summary>
+        const float MinLeftInset = 16f;
+        /// <summary>Clears the command bar across the top of the screen.</summary>
+        const float TopInset = UiTheme.TopBarHeight + 12f;
 
         // ------------------------------------------------------------ colours
 
@@ -128,25 +145,38 @@ namespace IronMeridian.UI
             _centreLat = centreLat;
             _centreLon = centreLon;
 
-            // Bottom-left, beside the zoom cluster. The right-hand edge is
-            // three panels deep already - the unit inspector, the group panel,
-            // the fire menus - and a minimap there was either covering one of
-            // them or being covered by it. The bottom left is the one corner of
-            // this screen that carries nothing but map controls, which is what
-            // a minimap is.
+            // Top-left, under the command bar. The right-hand edge is three
+            // panels deep already - the unit inspector, the group panel, the
+            // fire menus - and a minimap there was either covering one of them
+            // or being covered by it. The bottom left belongs to the zoom
+            // cluster and the order bar; the top left is the one corner of the
+            // map this screen leaves empty, and a picture that is read at a
+            // glance belongs where the eye already starts.
             _panel = UIFactory.CreateBorderedPanel(canvas.transform, "MiniMap", UiTheme.Chrome, UiTheme.Border);
-            UIFactory.Place(_panel, new Vector2(0f, 0f), new Vector2(_leftInset, BottomInset),
+            UIFactory.Place(_panel, new Vector2(0f, 1f), new Vector2(_leftInset, -TopInset),
                 new Vector2(PanelWidth, BlockHeight));
 
+            // Header: caption, the north note, and the fold control at the end
+            // of the row. Widths are measured back from the right-hand edge so
+            // the three meet rather than overlap.
+            float toggleX = PanelWidth - Pad - ToggleSize;
+            float northX = toggleX - 6f - 40f;
+
             var caption = UIFactory.CreateSectionHeader(_panel, "TACTICAL OVERVIEW", UiTheme.TextFaint);
-            UIFactory.PlaceTopLeft(caption.rectTransform, Pad, 6f, MapSize - 60f, 14f);
+            UIFactory.PlaceTopLeft(caption.rectTransform, Pad, 6f, northX - Pad - 6f, 14f);
             UIFactory.Fit(caption, 8);
 
             // North is up and stays up: the picture is a map, not a repeat of
             // the camera. Saying so once is cheaper than a rotating rose.
-            var north = UIFactory.CreateText(_panel, "N ▲", UiTheme.FontLabel, UiTheme.TextDim,
+            _north = UIFactory.CreateText(_panel, "N ▲", UiTheme.FontLabel, UiTheme.TextDim,
                 TextAnchor.MiddleRight, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(north.rectTransform, MapSize - 44f + Pad, 6f, 44f, 14f);
+            UIFactory.PlaceTopLeft(_north.rectTransform, northX, 6f, 40f, 14f);
+
+            var toggle = UIFactory.CreateButton(_panel, "", () => SetCollapsed(!_collapsed),
+                UiTheme.Surface, UiTheme.TextDim, UiTheme.FontLabel);
+            UIFactory.PlaceTopLeft((RectTransform)toggle.transform, toggleX, 4f, ToggleSize, ToggleSize);
+            _toggleGlyph = toggle.GetComponentInChildren<Text>(true);
+            UiTooltip.Attach(toggle.gameObject, "Show or hide the tactical overview", UiTooltip.Side.Right);
 
             _texture = new Texture2D(Tex, Tex, TextureFormat.RGBA32, false)
             {
@@ -167,14 +197,43 @@ namespace IronMeridian.UI
             var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             entry.callback.AddListener(e => OnPictureClicked((PointerEventData)e));
             trigger.triggers.Add(entry);
-            UiTooltip.Attach(_image.gameObject, "Click to move the camera there", UiTooltip.Side.Left);
+            // To the right: the panel is against the left edge now, so a caption
+            // on that side would be clamped back over the picture it describes.
+            UiTooltip.Attach(_image.gameObject, "Click to move the camera there", UiTooltip.Side.Right);
 
             _scaleLabel = UIFactory.CreateText(_panel, "", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.MiddleLeft);
             UIFactory.PlaceTopLeft(_scaleLabel.rectTransform, Pad, HeaderHeight + MapSize + 3f,
                 MapSize, FooterHeight);
 
+            ApplyCollapsed();
             SetVisible(false);
+        }
+
+        /// <summary>
+        /// Folds the picture away, leaving the caption bar and its control — so
+        /// the way back is in the same place the way out was, which a panel that
+        /// vanished entirely could not manage.
+        /// </summary>
+        public void SetCollapsed(bool collapsed)
+        {
+            if (_collapsed == collapsed) return;
+            _collapsed = collapsed;
+            ApplyCollapsed();
+            if (!_collapsed && _visible) Redraw();
+        }
+
+        void ApplyCollapsed()
+        {
+            if (_panel == null) return;
+
+            _panel.sizeDelta = new Vector2(PanelWidth, _collapsed ? CollapsedHeight : BlockHeight);
+            if (_image != null) _image.gameObject.SetActive(!_collapsed);
+            if (_scaleLabel != null) _scaleLabel.gameObject.SetActive(!_collapsed);
+            if (_north != null) _north.gameObject.SetActive(!_collapsed);
+            // ▼ folds it away, ► brings it back — the arrow points at what
+            // pressing it does, not at the state it is in.
+            if (_toggleGlyph != null) _toggleGlyph.text = _collapsed ? "►" : "▼";
         }
 
         /// <summary>
@@ -185,8 +244,8 @@ namespace IronMeridian.UI
         /// </summary>
         public void SetLeftInset(float chromeRight)
         {
-            _leftInset = Mathf.Max(DefaultLeftInset, chromeRight + 16f + 36f + 12f);
-            if (_panel != null) _panel.anchoredPosition = new Vector2(_leftInset, BottomInset);
+            _leftInset = Mathf.Max(MinLeftInset, chromeRight + 16f);
+            if (_panel != null) _panel.anchoredPosition = new Vector2(_leftInset, -TopInset);
         }
 
         /// <summary>Whether the block is on the screen, so the panels below it know whether to clear it.</summary>
@@ -197,7 +256,7 @@ namespace IronMeridian.UI
         {
             _visible = visible;
             if (_panel != null) _panel.gameObject.SetActive(visible);
-            if (visible)
+            if (visible && !_collapsed)
             {
                 _framed = false;      // re-frame on the laydown as it stands now
                 Redraw();
@@ -208,7 +267,7 @@ namespace IronMeridian.UI
         public void SetSelection(IReadOnlyList<UnitActor> selection)
         {
             _selection = selection ?? new List<UnitActor>();
-            if (_visible) Redraw();
+            if (_visible && !_collapsed) Redraw();
         }
 
         void OnDestroy()
@@ -218,7 +277,7 @@ namespace IronMeridian.UI
 
         void Update()
         {
-            if (!_visible) return;
+            if (!_visible || _collapsed) return;
             _timer += Time.unscaledDeltaTime;
             if (_timer < RefreshSeconds) return;
             _timer = 0f;

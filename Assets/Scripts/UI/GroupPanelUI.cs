@@ -57,9 +57,10 @@ namespace IronMeridian.UI
 
         // ------------------------------------------------------------ layout
 
-        const float PanelWidth = 300f;
+        /// <summary>Shared with the other right-hand docks — see <see cref="UiTheme.RightPanelWidth"/>.</summary>
+        const float PanelWidth = UiTheme.RightPanelWidth;
         /// <summary>Content width — the panel less an equal margin either side.</summary>
-        const float Inner = 264f;
+        const float Inner = PanelWidth - 36f;
 
         /// <summary>
         /// Left inset of a selected-unit row's contents — the icon and the
@@ -87,8 +88,13 @@ namespace IronMeridian.UI
         const float UnitsLabelHeight = 24f;
         const float UnitsScrollTop = UnitsLabelTop + UnitsLabelHeight + 4f;
 
-        /// <summary>Button row: GROUP SELECTION · UNGROUP, meeting exactly at <see cref="Inner"/>.</summary>
-        const float CreateWidth = 166f, UngroupWidth = 94f, ButtonGap = 4f;
+        /// <summary>
+        /// Button row: GROUP SELECTION · UNGROUP, meeting exactly at
+        /// <see cref="Inner"/>. GROUP SELECTION takes whatever the panel's width
+        /// leaves, so the two always fill the row rather than ending short of it.
+        /// </summary>
+        const float UngroupWidth = 94f, ButtonGap = 4f;
+        const float CreateWidth = Inner - ButtonGap - UngroupWidth;
 
         /// <summary>
         /// Where the selected-units list stops and the saved-groups list begins,
@@ -614,8 +620,8 @@ namespace IronMeridian.UI
         /// A mini-modal inside the panel rather than a popup beside the row: the
         /// row lives inside a scroll viewport, so anchoring to it would mean
         /// converting between the viewport's space and the panel's and then
-        /// keeping the popup on screen as the list scrolled underneath it. At
-        /// 300 px wide the panel is small enough that covering it *is* the
+        /// keeping the popup on screen as the list scrolled underneath it. The
+        /// panel is narrow enough that covering it *is* the
         /// popup — and it keeps the answer to "which group?" in one place
         /// instead of two.
         /// </summary>

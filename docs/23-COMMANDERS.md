@@ -28,7 +28,8 @@ That last line is the point. It is the reason armies are shaped like this, and t
 |---|---|
 | `RankDef` | One rank on one side's ladder: name, abbreviation, the echelon it typically commands, and its tier |
 | `RankCatalog` | The two ladders, and the lookups over them |
-| `CommanderState` | One officer: id, side, surname, rank, in-post flag, superior |
+| `CommanderState` | One officer: id, side, surname, rank, in-post flag, superior, portrait |
+| `CommanderPortraits` | The photographs, and which one an officer wears (`Data/CommanderPortraits.cs`) |
 | `CommanderRegistry` | The live list, the chain walk, assignment, seeding, save/load and the combat bonus |
 
 **A commander is a record, not a unit.** He is not on the map, cannot be shot at and occupies no ground. What he does is *own* formations, and own other commanders.
@@ -49,6 +50,25 @@ Not one shared enum. NATO and the enemy do not have the same ranks, and folding 
 The enemy ladder is **transliterated, not translated**, for the same reason: giving the enemy its own words is most of what makes the two orders of battle read as two armies.
 
 A commander's rank is stored as the rank's **name**, not an index, so a saved order of battle survives a ladder gaining an entry. An unrecognised name falls back to the foot of the ladder rather than throwing.
+
+### Portraits
+
+Every officer has a face. A roster of twenty is otherwise twenty rows of rank and surname, and a chain of command read that way is a spreadsheet — once a face is attached to a name, "the division commander is out of action" is a thing that happened to a person rather than a flag that flipped.
+
+| Side | Files |
+|---|---|
+| Friendly | `Assets/Resources/Graphics/Commanders/Friendly/friendly_general_1…5.png` |
+| Enemy | `Assets/Resources/Graphics/Commanders/Enemy/enemy_general_1…5.png` |
+
+Five per side, square, and **the sides do not share a set** — they are two armies' uniforms. The side chooses the folder; the index only chooses within it, and since a commander never crosses sides an index never has to be re-picked.
+
+**The index is rolled once and stored.** `CommanderState.portrait` is written in `CommanderRegistry.Add` and saved in the map file, so the same officer comes back with the same face. Picking at display time would give him a new head every time the panel rebuilt, which is the one thing a portrait must never do.
+
+**`portrait = -1` means "never chosen"** — what every roster saved before portraits existed loads as. Those fall back to an index derived from the officer's id (`CommanderPortraits.IndexOf`), so an old scenario opens with a spread of faces that is nevertheless the *same* spread every time. The hash is spelled out in the catalogue rather than taken from `string.GetHashCode`, which is not guaranteed stable across runtimes.
+
+Where they appear: the **selected officer's card** at the top of the detail block, and a thumbnail on **every roster row**. An officer out of action is greyed rather than hidden — he is still in the order of battle, which is the point of the switch. A missing file leaves an empty frame and one console warning, not a hole in the panel.
+
+To add more faces: drop the files in beside the others, following the same naming, and raise `CommanderPortraits.Count`.
 
 ---
 
@@ -83,7 +103,8 @@ Map editor → left rail → **COMMANDERS** (`UI/CommanderPanel.cs`).
 | **FRIENDLY / ENEMY** | Which side's order of battle the panel shows. Command never crosses the line |
 | **the automatic seed** | Builds a chain of command for that side — see below |
 | **CLEAR ALL** | Removes every officer on that side and releases their formations |
-| Roster rows | Rank, surname, and how many formations he holds. The lamp is green in post with an intact chain, amber when the chain above him is broken, red when he is out of action |
+| Roster rows | His photograph, rank, surname, and how many formations he holds. The lamp is green in post with an intact chain, amber when the chain above him is broken, red when he is out of action |
+| **Profile card** | The selected officer's photograph with his rank, his full rank name, his standing and what he holds. It repeats what the stepper and the lamp below say, deliberately: those are controls, read for what they will do next, and this is read for who is being looked at |
 | Name field | His surname |
 | Rank stepper | Walks his own side's ladder |
 | **REPORTS TO** stepper | Nobody, or another officer on the same side. Choices that would make a loop are skipped |
@@ -128,6 +149,7 @@ Loaded **after** the units, because the roster is referenced by id from formatio
 | File | Role |
 |---|---|
 | `Assets/Scripts/Data/CommanderData.cs` | `RankDef`, `RankCatalog`, `CommanderState` |
+| `Assets/Scripts/Data/CommanderPortraits.cs` | The photograph register: paths, the count per side, and which face an officer wears |
 | `Assets/Scripts/Units/CommanderRegistry.cs` | The live list, chain walk, assignment, seeding, save/load, `CommandBonus` |
 | `Assets/Scripts/UI/CommanderPanel.cs` | The COMMANDERS section |
 | `Assets/Scripts/UI/UnitPaletteUI.cs` | The nav row and the section's hooks |
@@ -155,6 +177,7 @@ Loaded **after** the units, because the roster is referenced by id from formatio
 4. **Every chain walk is bounded.** A cycle must degrade, never hang.
 5. **New `CommanderState` fields must default harmlessly** — `JsonUtility` leaves missing fields at their initialiser values, and old maps must keep loading.
 6. **Record ladder and bonus changes in §2 and §3**, in the same commit.
+7. **A portrait is picked once, at creation, and never at draw time.** Adding, replacing or removing a photograph is recorded in §2 in the same change, and `CommanderPortraits.Count` must match what is on disk for both sides.
 
 ---
 

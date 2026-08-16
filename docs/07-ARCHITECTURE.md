@@ -62,10 +62,11 @@ Assets/Scripts/
     StrikeDockUI.cs      the five fire menus: an icon cluster under the top
                           bar's right end and one right-docked panel behind it.
                           Battle mode only — see docs/03-GAMEPLAY.md
-    MiniMapUI.cs         the battle minimap under that cluster: blips, front
-                          line, mission boundary and the camera's view box,
-                          rasterised into a texture. Click to fly the camera.
-                          Battle mode only; obeys the fog
+    MiniMapUI.cs         the battle minimap, top-left under the command bar:
+                          blips, front line, mission boundary and the camera's
+                          view box, rasterised into a texture. Click to fly the
+                          camera, ▼ to fold it away. Battle mode only; obeys
+                          the fog
     MissilePanelUI.cs    the missile board, built into a StrikeDockUI page
                           (docs/20-MISSILE-SYSTEMS.md)
     PlayerPanel.cs       the rail's PLAYERS section: teams, players, computer

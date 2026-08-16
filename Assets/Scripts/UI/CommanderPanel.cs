@@ -28,8 +28,15 @@ namespace IronMeridian.UI
     {
         const float Pad = UiTheme.PanelPadding;
         const float InnerWidth = UiTheme.SectionPanelWidth - Pad * 2f;
-        const float RowHeight = 34f;
+        /// <summary>A roster row — tall enough to carry a face beside the name.</summary>
+        const float RowHeight = 46f;
         const float Gap = 4f;
+
+        /// <summary>The selected officer's card: photograph, name, rank, standing.</summary>
+        const float ProfileHeight = 96f;
+        const float ProfilePortrait = 80f;
+        /// <summary>Thumbnail on a roster row.</summary>
+        const float RowPortrait = 34f;
 
         /// <summary>Assign the map's current selection to the chosen officer.</summary>
         public System.Action<CommanderState> AssignSelectionRequested;
@@ -212,6 +219,8 @@ namespace IronMeridian.UI
 
             Label("SELECTED OFFICER");
 
+            BuildProfile(c, rank);
+
             // --- name ---
             var name = UIFactory.CreateInputField(_page, "surname", UiTheme.FontSmall);
             UIFactory.Place((RectTransform)name.transform, new Vector2(0f, 1f),
@@ -302,6 +311,87 @@ namespace IronMeridian.UI
             }
         }
 
+        /// <summary>
+        /// The officer's own card: his photograph, who he is, and where he
+        /// stands — read before any of the controls under it.
+        ///
+        /// It repeats his rank and standing, which the stepper and the lamp
+        /// below also carry. That is deliberate: those are *controls*, read for
+        /// what they will do next, and a profile is read for who is being
+        /// looked at. The card is the answer to "who is this", in one block,
+        /// beside the face.
+        /// </summary>
+        void BuildProfile(CommanderState c, RankDef rank)
+        {
+            var card = UIFactory.CreateBorderedPanel(_page, "Profile", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(card, new Vector2(0f, 1f), new Vector2(Pad, -_y),
+                new Vector2(InnerWidth, ProfileHeight));
+
+            Portrait(card, c, 8f, 8f, ProfilePortrait);
+
+            float x = 8f + ProfilePortrait + 10f;
+            float w = InnerWidth - x - 8f;
+
+            var title = UIFactory.CreateText(card, Short(c), UiTheme.FontBody,
+                c.active ? UiTheme.Text : UiTheme.TextFaint, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(title.rectTransform, x, 12f, w, 18f);
+            UIFactory.Fit(title, 9);
+
+            var ladder = UIFactory.CreateText(card, rank.name, UiTheme.FontLabel,
+                UiTheme.TextDim, TextAnchor.MiddleLeft);
+            UIFactory.PlaceTopLeft(ladder.rectTransform, x, 32f, w, 14f);
+            UIFactory.Fit(ladder, 8);
+
+            bool intact = CommanderRegistry.ChainIntact(c);
+            var status = UIFactory.CreateText(card,
+                !c.active ? "OUT OF ACTION" : intact ? "IN POST" : "IN POST · CHAIN BROKEN",
+                UiTheme.FontLabel,
+                !c.active ? UiTheme.Danger : intact ? UiTheme.Success : UiTheme.Warning,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(status.rectTransform, x, 50f, w, 14f);
+            UIFactory.Fit(status, 8);
+
+            int held = CommanderRegistry.UnitsOf(c).Count;
+            var commands = UIFactory.CreateText(card,
+                held == 1 ? "1 formation" : $"{held} formations",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            UIFactory.PlaceTopLeft(commands.rectTransform, x, 66f, w, 14f);
+            UIFactory.Fit(commands, 8);
+
+            _y += ProfileHeight + Gap * 2f;
+        }
+
+        /// <summary>
+        /// One officer's photograph in a hairline frame — see
+        /// <see cref="CommanderPortraits"/> for which face he gets and why it
+        /// does not change between rebuilds.
+        ///
+        /// Nothing here takes a raycast: the frame sits on top of the row's own
+        /// click target, and a photograph that swallowed the click would make
+        /// the most obvious part of the row the one part that does nothing.
+        /// A missing file leaves the empty frame, which reads as a portrait not
+        /// yet taken rather than as a hole in the panel.
+        /// </summary>
+        static void Portrait(RectTransform parent, CommanderState c, float x, float top, float size)
+        {
+            var frame = UIFactory.CreateBorderedPanel(parent, "Portrait", UiTheme.Panel, UiTheme.BorderStrong);
+            UIFactory.PlaceTopLeft(frame, x, top, size, size);
+            frame.GetComponent<Image>().raycastTarget = false;
+
+            var sprite = UIFactory.LoadSprite(CommanderPortraits.PathFor(c));
+            if (sprite == null) return;          // LoadSprite has already warned
+
+            var photo = UIFactory.CreateImage(frame, sprite, "Photo");
+            photo.raycastTarget = false;
+            // An officer out of action is greyed rather than hidden: he is still
+            // in the order of battle, which is the whole point of the switch.
+            photo.color = c.active ? Color.white : new Color(0.5f, 0.54f, 0.6f, 1f);
+            var rt = (RectTransform)photo.transform;
+            UIFactory.Stretch(rt);
+            rt.offsetMin = new Vector2(2, 2);
+            rt.offsetMax = new Vector2(-2, -2);
+        }
+
         void Step(CommanderState c, int by)
         {
             c.rank = RankCatalog.Step(c.TeamEnum, c.rank, by).name;
@@ -369,13 +459,18 @@ namespace IronMeridian.UI
                 // selection.
                 var lamp = UIFactory.CreatePanel(frame, "Lamp",
                     !c.active ? UiTheme.Danger : intact ? UiTheme.Success : UiTheme.Warning);
-                UIFactory.Place(lamp, new Vector2(0f, 0.5f), new Vector2(9, 0), new Vector2(7, 7));
+                UIFactory.Place(lamp, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(7, 7));
                 lamp.GetComponent<Image>().raycastTarget = false;
 
+                // The face, between the lamp and the name — twenty rows of rank
+                // and surname are a spreadsheet; twenty faces are an army.
+                Portrait(frame, captured, 20f, (RowHeight - RowPortrait) * 0.5f, RowPortrait);
+
+                float textX = 20f + RowPortrait + 8f;
                 var text = UIFactory.CreateText(frame, Short(c), UiTheme.FontSmall,
                     c.active ? UiTheme.Text : UiTheme.TextFaint, TextAnchor.MiddleLeft);
-                UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(24, 0),
-                    new Vector2(InnerWidth - 24f - 46f, 16));
+                UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(textX, 0),
+                    new Vector2(InnerWidth - textX - 46f, 16));
                 UIFactory.Fit(text, 8);
                 text.raycastTarget = false;
 

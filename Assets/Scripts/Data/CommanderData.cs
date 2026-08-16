@@ -165,12 +165,24 @@ namespace IronMeridian.Data
         /// <summary>Immediate superior, or "" for the top of the chain.</summary>
         public string superiorId = "";
 
+        /// <summary>
+        /// Which of his side's photographs he wears — an index into
+        /// <see cref="CommanderPortraits"/>, picked once when he is created and
+        /// saved with him so the same face comes back.
+        ///
+        /// **-1 means "never chosen"**, which is what every roster saved before
+        /// portraits existed deserializes to. It is not a missing face: the
+        /// catalogue derives one from his id instead, so an old scenario opens
+        /// with a spread of faces that are stable across loads.
+        /// </summary>
+        public int portrait = -1;
+
         public Team TeamEnum => team == Team.Enemy.ToString() ? Team.Enemy : Team.User;
 
         public CommanderState Clone() => new CommanderState
         {
             id = id, team = team, name = name, rank = rank,
-            active = active, superiorId = superiorId
+            active = active, superiorId = superiorId, portrait = portrait
         };
     }
 }

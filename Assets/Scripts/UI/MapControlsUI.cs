@@ -76,7 +76,7 @@ namespace IronMeridian.UI
         /// Keeps the compass clear of the right-hand chrome. The unit info panel
         /// only exists while something is selected, so the compass sits in the
         /// true bottom-right corner most of the time and steps aside when the
-        /// panel opens — rather than being permanently parked 300 px inboard for
+        /// panel opens — rather than being permanently parked a panel's width inboard for
         /// a panel that is usually not there.
         /// </summary>
         public void SetRightInset(float chromeWidth)

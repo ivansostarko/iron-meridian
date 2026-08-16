@@ -50,7 +50,7 @@ namespace IronMeridian.UI
         /// panel.
         ///
         /// It is a shift rather than extra padding on both sides: the panel is
-        /// 300 px wide and the row is already split into two columns, so taking
+        /// narrow and the row is already split into two columns, so taking
         /// 25 px off each edge would cost the label column a third of its width
         /// and best-fit would pay for it in type size. Moving the block instead
         /// leaves every column exactly as wide as it was, gives the values a
