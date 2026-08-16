@@ -234,6 +234,33 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// One formation that is not on the map yet, and when it arrives — see
+    /// docs/30-REINFORCEMENTS.md.
+    ///
+    /// Scenario **minutes after the battle starts**, not an absolute clock
+    /// time: a designer thinks in "forty minutes in", the figure survives
+    /// changing H-hour, and it means the same thing at every game speed.
+    /// </summary>
+    [Serializable]
+    public class ReinforcementEntry
+    {
+        /// <summary>UnitDefinition id — the type that arrives.</summary>
+        public string defId;
+        /// <summary>Owning side, a <see cref="Team"/> name.</summary>
+        public string team;
+        /// <summary>Echelon name — the size it arrives at.</summary>
+        public string echelon = "Battalion";
+        /// <summary>Minutes after the battle starts.</summary>
+        public int arrivalMinutes = 30;
+
+        /// <summary>
+        /// Runtime only: whether this arrival has come on in the battle now
+        /// being fought. Never saved — a scenario file is a starting state.
+        /// </summary>
+        [NonSerialized] public bool arrived;
+    }
+
+    /// <summary>
     /// A complete scenario/map save. Serialized to JSON, one file per map, in
     /// persistentDataPath/Maps (user saves) or StreamingAssets/Maps (shipped defaults).
     /// </summary>
@@ -295,6 +322,13 @@ namespace IronMeridian.Data
         /// own field. Empty on an older map reads as Automatic.
         /// </summary>
         public string flotMode = "";
+
+        /// <summary>
+        /// Formations scheduled to arrive after the battle starts. Empty on an
+        /// older map, which reads as "everything this scenario has is already
+        /// on it" — see docs/30-REINFORCEMENTS.md.
+        /// </summary>
+        public List<ReinforcementEntry> reinforcements = new List<ReinforcementEntry>();
         /// <summary>
         /// The order of battle above the units: who commands what, on both
         /// sides. Empty on a map saved before commanders existed, which reads

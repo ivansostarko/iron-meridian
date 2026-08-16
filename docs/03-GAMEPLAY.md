@@ -70,17 +70,21 @@ The editor's left chrome is in two pieces:
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
+| **REINFORCEMENTS** | The same panel as UNITS, for formations that are not here yet: pick a type and it arrives at H+n in its side's deployment zone. See [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) |
 | **SUSTAINMENT** | What the force fights on: fuel, ammunition natures, manpower, rations and the rest — with the burn rate its own order of battle implies. See [27-SUSTAINMENT.md](27-SUSTAINMENT.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
-| **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
-| **MAP** | Tile style, 2D/3D, layers, unit-label size |
-| **DATE AND TIME** | Scenario H-hour and presets |
+| **ENVIRONMENT** | Scenario H-hour and presets, sky phase, auto day/night, weather condition — **one section**, because they are one decision: a designer setting a night attack is choosing the hour *and* the sky in the same breath |
+| **MAP CONFIG** | Tile style, 2D/3D, layers, unit-label size |
 | **GROUPS** | *Battle mode only.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
+
+The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
 
 **Eleven rows, and a twelfth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
+
+**Hand-placed effects are permanent.** A fire, smoke column or explosion put down from the EFFECTS section burns until it is cleared — never evicted by the concurrent-effect budget, never given a lifetime, in battle mode or out of it. Two things used to end one and both looked like a bug: the budget is 48 effects and an incoming explosion outranks a standing fire, so the marker a player put down vanished exactly when the fighting got interesting; and a placed explosion left a wreck on a timer that went out by itself. Effects the *game* creates still burn out and are still evictable — otherwise a long battle ends up carpeted in permanent fires.
 
 The tool strip along the bottom is down to three: the **cursor**, **generate sectors** and the **2D/3D toggle**. The pencil and the square drew control measures by hand.
 

@@ -163,6 +163,9 @@ Assets/Scripts/
     ReconOrderSystem.cs  recon lifecycle + the sensors the fog reads
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
+    ReinforcementSystem.cs  formations that arrive after H-hour: the schedule,
+                          the countdown and the deployment zone they land in
+                          (docs/30-REINFORCEMENTS.md)
     FlotEligibility.cs   which formations move the front line, and how much
                           (docs/28-FLOT.md §2)
     RangeRing.cs         range rings: line of sight, weapon range, fog and air

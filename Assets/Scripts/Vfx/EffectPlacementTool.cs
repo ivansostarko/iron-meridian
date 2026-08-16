@@ -69,6 +69,23 @@ namespace IronMeridian.Vfx
             ArmedChanged?.Invoke();
         }
 
+        /// <summary>
+        /// Marks a placed effect as the player's, so nothing takes it away.
+        ///
+        /// Two things used to end a hand-placed fire, and both looked like a
+        /// bug. It could be **evicted**: the concurrent-effect budget is 48, a
+        /// battle passes that easily, and an incoming explosion outranks a
+        /// standing fire — so the marker a player put down vanished the moment
+        /// the fighting got interesting, which is exactly when they were using
+        /// it. And an explosion left a wreck on a **timer**, so it went out on
+        /// its own. Neither is right for something placed by hand: it stays
+        /// until it is cleared.
+        /// </summary>
+        static void Pin(VfxInstance instance)
+        {
+            if (instance != null) instance.Pinned = true;
+        }
+
         static string Label(VfxId id) => id switch
         {
             VfxId.Explosion => "an explosion",
@@ -135,14 +152,22 @@ namespace IronMeridian.Vfx
                 // A hand-placed explosion leaves a burning wreck behind, the
                 // same as a destroyed unit — a detonation with nothing after it
                 // reads as a firework.
-                VfxSystem.PlayWreck(_lat, _lon, 0.6f);
+                //
+                // Built here rather than through VfxSystem.PlayWreck, because
+                // that one deliberately *burns out*: a battle that left a
+                // permanent fire wherever anything died would end up carpeted in
+                // them. A wreck the player put there by hand is the opposite
+                // case — it was placed to stay.
+                VfxSystem.Play(VfxId.Explosion, _lat, _lon, 1.1f);
+                Pin(VfxSystem.Play(VfxId.FireMedium, _lat, _lon));
+                Pin(VfxSystem.Play(VfxId.SmokePlume, _lat, _lon, 1.1f));
             }
             else
             {
-                VfxSystem.Play(id, _lat, _lon);
+                Pin(VfxSystem.Play(id, _lat, _lon));
             }
 
-            Flash?.Invoke($"Placed {Label(id)}.");
+            Flash?.Invoke($"Placed {Label(id)} — it burns until it is cleared.");
         }
 
         // ------------------------------------------------------------ reticle

@@ -21,6 +21,21 @@ namespace IronMeridian.Vfx
         /// <summary>True until <see cref="Stop"/> is called — a stopped instance is finishing its fade.</summary>
         public bool IsPlaying { get; private set; }
 
+        /// <summary>
+        /// **This effect was placed by hand and belongs to the player.**
+        ///
+        /// Everything else on the map is a consequence of something that
+        /// happened — a shell landed, a formation died — and is fair game for
+        /// the concurrency budget to evict when the battle gets busy. An effect
+        /// somebody deliberately put on the ground is not: it was placed to
+        /// mark or to stage something, and having it quietly disappear because
+        /// a fire mission arrived elsewhere is the map deleting the player's
+        /// own work. Pinned effects are never chosen as eviction victims and
+        /// are never given a lifetime — see <c>VfxSystem.MakeRoom</c> and
+        /// <c>EffectPlacementTool</c>.
+        /// </summary>
+        public bool Pinned { get; set; }
+
         ParticleSystem[] _systems;
         AudioSource _sound;
         bool _culled;

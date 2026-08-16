@@ -69,8 +69,8 @@ namespace IronMeridian.UI
 
         enum Section
         {
-            General, Units, Players, Commanders, Logistics, Sustainment, Effects, Missions,
-            Weather, Map, DateTime,
+            General, Units, Players, Commanders, Logistics, Sustainment, Reinforcements,
+            Effects, Missions, Environment, Map,
             /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
             Groups
         }
@@ -265,7 +265,8 @@ namespace IronMeridian.UI
             UavStrikeSystem uavStrike, NavalStrikeSystem naval,
             MapControlsUI mapControls, StrikeDockUI strikeDock,
             IronMeridian.Logistics.LogisticsSystem logistics,
-            IronMeridian.Logistics.SustainmentSystem sustainment)
+            IronMeridian.Logistics.SustainmentSystem sustainment,
+            ReinforcementSystem reinforcements)
         {
             _canvas = canvas;
             _map = map;
@@ -283,6 +284,7 @@ namespace IronMeridian.UI
             _strikeDock = strikeDock;
             _logistics = logistics;
             _sustainment = sustainment;
+            _reinforcements = reinforcements;
 
             // The section panel is created first so it draws *behind* the rail —
             // uGUI paints in hierarchy order, and the closed position tucks the
@@ -313,9 +315,9 @@ namespace IronMeridian.UI
             _sectionContent[Section.Sustainment] = MakeSectionContent(body, "Sustainment");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Missions] = MakeSectionContent(body, "Missions");
-            _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
+            _sectionContent[Section.Environment] = MakeSectionContent(body, "Environment");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
-            _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
+            _sectionContent[Section.Reinforcements] = MakeSectionContent(body, "Reinforcements");
             _sectionContent[Section.Groups] = MakeSectionContent(body, "Groups");
 
             BuildGeneralSection(_sectionContent[Section.General]);
@@ -326,9 +328,9 @@ namespace IronMeridian.UI
             BuildSustainmentSection(_sectionContent[Section.Sustainment]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildMissionsSection(_sectionContent[Section.Missions]);
-            BuildWeatherSection(_sectionContent[Section.Weather]);
+            BuildEnvironmentSection(_sectionContent[Section.Environment]);
             BuildMapSection(_sectionContent[Section.Map]);
-            BuildDateTimeSection(_sectionContent[Section.DateTime]);
+            BuildReinforcementSection(_sectionContent[Section.Reinforcements]);
             BuildGroupsSection(_sectionContent[Section.Groups]);
 
             // The four fire menus live in the strike dock's pages rather than in
@@ -457,6 +459,7 @@ namespace IronMeridian.UI
             if (section == Section.Groups) RefreshGroups();
             if (section == Section.Logistics) RefreshLogistics();
             if (section == Section.Sustainment) RefreshSustainment();
+            if (section == Section.Reinforcements) PopulateReinforcements();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -582,6 +585,17 @@ namespace IronMeridian.UI
             emblem.raycastTarget = false;
             UIFactory.Place((RectTransform)emblem.transform, new Vector2(0f, 1f), new Vector2(Pad, -14), new Vector2(19, 19));
 
+            // Which set of rules the map is currently playing by. The mode chip
+            // on the top bar says the same thing, but the rail is where the
+            // player's hands are — and half these sections mean something
+            // different depending on the answer, so it belongs at the head of
+            // the list they are choosing from. See SetBattleMode.
+            _modeHeading = UIFactory.CreateText(panel, "SCENARIO MODE", UiTheme.FontLabel,
+                UiTheme.TextDim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_modeHeading.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad + 26f, -14), new Vector2(RailWidth - Pad - 34f, 18));
+            UIFactory.Fit(_modeHeading, 8);
+
             // Nine rows, not fifteen. The five fire menus went to the strike
             // dock at the top right (they are things you *do* in a scenario,
             // not things you set one up with), and CONTROL MEASURES went
@@ -594,13 +608,16 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -152);
             AddNavRow(panel, Section.Logistics, "LOGISTICS", UiIcons.Pallet, -188);
             AddNavRow(panel, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop, -224);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -260);
+            AddNavRow(panel, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute, -260);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -296);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -296);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -332);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -368);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -404);
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -332);
+            // Time and weather are one section, not two: they are the same
+            // decision — what the light and the going are like — and a designer
+            // who sets a night attack is choosing both in the same breath.
+            AddNavRow(panel, Section.Environment, "ENVIRONMENT", UiIcons.Cloud, -368);
+            AddNavRow(panel, Section.Map, "MAP CONFIG", UiIcons.Layers, -404);
 
             // Last, and hidden until a battle starts — see SetBattleMode. A
             // group is something you command, not something you author, so the
@@ -901,6 +918,7 @@ namespace IronMeridian.UI
             if (_airSupply != null) _airSupply.Team = team;
             RefreshLogistics();
             RefreshSustainment();
+            PopulateReinforcements();
             Populate();
         }
 
@@ -1535,6 +1553,379 @@ namespace IronMeridian.UI
             return $"{days:0.#} day(s) of supply";
         }
 
+        // ----------------------------------------------- reinforcements section
+
+        ReinforcementSystem _reinforcements;
+        RectTransform _reinforceList;
+        Text _reinforceCount, _reinforceSide, _reinforceArrival;
+        Button _reinforceAvailableTab, _reinforceScheduledTab;
+        InputField _reinforceSearch;
+        ListMode _reinforceMode = ListMode.Available;
+        string _reinforceQuery = "";
+        /// <summary>Arrival time the next scheduled formation is given, minutes after the battle starts.</summary>
+        int _reinforceMinutes = 30;
+        readonly HashSet<UnitBranch> _reinforceOpenBranches = new HashSet<UnitBranch>();
+
+        /// <summary>
+        /// **REINFORCEMENTS** — the same panel as UNITS, for formations that are
+        /// not here yet.
+        ///
+        /// Deliberately the same UI, control for control: the blue/red tabs, the
+        /// search box, the AVAILABLE / SCHEDULED pair of tabs, and the same
+        /// branch accordion over the same 117 unit types. A designer choosing a
+        /// counter-attack battalion is doing exactly what they do when they
+        /// deploy one, and making them learn a second way to pick a unit would
+        /// be inventing a difference that is not there.
+        ///
+        /// The one thing that *is* different is the verb. UNITS drags a
+        /// formation onto the ground; this one gives it an **arrival time** —
+        /// click a type and it joins the schedule at H+n, to arrive in its
+        /// side's deployment zone (docs/22-MISSIONS.md §1c). That is the whole
+        /// feature: the same force, entered at a different moment.
+        ///
+        /// See docs/30-REINFORCEMENTS.md.
+        /// </summary>
+        void BuildReinforcementSection(RectTransform content)
+        {
+            // Team tabs, exactly as UNITS has them.
+            float half = (InnerWidth - 6f) / 2f;
+            var blue = UIFactory.CreateBorderedPanel(content, "ReinBlue", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(blue, new Vector2(0f, 1f), new Vector2(Pad, -8), new Vector2(half, 30));
+            var blueBtn = UIFactory.CreateButton(blue, "FRIENDLY", () => SetTeam(Team.User),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+            UIFactory.Stretch((RectTransform)blueBtn.transform);
+            _reinforceBlueFill = blue.Find("Fill").GetComponent<Image>();
+
+            var red = UIFactory.CreateBorderedPanel(content, "ReinRed", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(red, new Vector2(0f, 1f), new Vector2(Pad + half + 6f, -8), new Vector2(half, 30));
+            var redBtn = UIFactory.CreateButton(red, "ENEMY", () => SetTeam(Team.Enemy),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+            UIFactory.Stretch((RectTransform)redBtn.transform);
+            _reinforceRedFill = red.Find("Fill").GetComponent<Image>();
+
+            _reinforceSearch = UIFactory.CreateInputField(content, "Search unit types…", UiTheme.FontSmall);
+            UIFactory.Place((RectTransform)_reinforceSearch.transform, new Vector2(0f, 1f),
+                new Vector2(Pad, -46), new Vector2(InnerWidth, 30));
+            _reinforceSearch.onValueChanged.AddListener(text =>
+            {
+                _reinforceQuery = text ?? "";
+                PopulateReinforcements();
+            });
+
+            // Arrival time for the next pick. A stepper rather than a text
+            // field: the figure is always a round number of minutes, and typing
+            // one would be three keystrokes for a decision worth one.
+            var timeFrame = UIFactory.CreateBorderedPanel(content, "ArrivalAt", UiTheme.Surface, UiTheme.BorderStrong);
+            UIFactory.Place(timeFrame, new Vector2(0f, 1f), new Vector2(Pad, -84), new Vector2(InnerWidth, 34));
+
+            var timeLabel = UIFactory.CreateText(timeFrame, "ARRIVES AT", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            timeLabel.raycastTarget = false;
+            UIFactory.Place(timeLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 0),
+                new Vector2(InnerWidth - 140f, 14));
+
+            var minus = UIFactory.CreateButton(timeFrame, "−", () => StepArrival(-5),
+                UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Place((RectTransform)minus.transform, new Vector2(1f, 0.5f),
+                new Vector2(-88, 0), new Vector2(26, 24));
+
+            _reinforceArrival = UIFactory.CreateText(timeFrame, "", UiTheme.FontSmall,
+                UiTheme.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _reinforceArrival.raycastTarget = false;
+            UIFactory.Place(_reinforceArrival.rectTransform, new Vector2(1f, 0.5f),
+                new Vector2(-46, 0), new Vector2(56, 16));
+
+            var plus = UIFactory.CreateButton(timeFrame, "+", () => StepArrival(5),
+                UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontSmall);
+            UIFactory.Place((RectTransform)plus.transform, new Vector2(1f, 0.5f),
+                new Vector2(-10, 0), new Vector2(26, 24));
+
+            // AVAILABLE / SCHEDULED, the same pair UNITS carries.
+            _reinforceAvailableTab = ReinforceTab(content, "AVAILABLE", Pad,
+                () => SetReinforceMode(ListMode.Available));
+            _reinforceScheduledTab = ReinforceTab(content, "SCHEDULED", Pad + 88f,
+                () => SetReinforceMode(ListMode.Deployed));
+
+            _reinforceCount = UIFactory.CreateText(content, "0", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_reinforceCount.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-Pad, -126), new Vector2(40, 18));
+
+            _reinforceSide = UIFactory.CreateText(content, "", UiTheme.FontLabel,
+                UiTheme.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_reinforceSide.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-Pad - 44f, -126), new Vector2(110, 18));
+
+            var scroll = UIFactory.CreateScrollView(content, out _reinforceList, withScrollbar: true);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
+            srt.offsetMin = new Vector2(Pad, 42);
+            srt.offsetMax = new Vector2(-Pad, -150);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var layout = _reinforceList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 4; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            var clear = UIFactory.CreateBorderedPanel(content, "ClearSchedule", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(clear, new Vector2(0f, 0f), new Vector2(Pad, 6), new Vector2(InnerWidth, 30));
+            var clearBtn = UIFactory.CreateButton(clear, "CLEAR SCHEDULE",
+                () => { if (_reinforcements != null) _reinforcements.Clear(); },
+                new Color(0, 0, 0, 0), UiTheme.Danger, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)clearBtn.transform);
+
+            SetReinforceMode(ListMode.Available);
+        }
+
+        Image _reinforceBlueFill, _reinforceRedFill;
+
+        Button ReinforceTab(RectTransform content, string label, float x,
+            UnityEngine.Events.UnityAction action)
+        {
+            var b = UIFactory.CreateButton(content, label, action, new Color(0, 0, 0, 0),
+                UiTheme.TextDim, UiTheme.FontLabel);
+            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f),
+                new Vector2(x, -126), new Vector2(82, 22));
+            return b;
+        }
+
+        void SetReinforceMode(ListMode mode)
+        {
+            _reinforceMode = mode;
+            TintListTab(_reinforceAvailableTab, mode == ListMode.Available);
+            TintListTab(_reinforceScheduledTab, mode == ListMode.Deployed);
+            PopulateReinforcements();
+        }
+
+        void StepArrival(int minutes)
+        {
+            _reinforceMinutes = Mathf.Clamp(_reinforceMinutes + minutes, 0, 24 * 60);
+            PopulateReinforcements();
+        }
+
+        /// <summary>
+        /// Rebuilds whichever list is showing. Public because the schedule can
+        /// change without the panel touching it — an arrival coming on during a
+        /// battle takes itself off the pending list.
+        /// </summary>
+        public void RefreshReinforcements() => PopulateReinforcements();
+
+        void PopulateReinforcements()
+        {
+            if (_reinforceList == null) return;
+
+            if (_reinforceArrival != null)
+                _reinforceArrival.text = _reinforceMinutes == 0 ? "H-HOUR" : $"H+{_reinforceMinutes}";
+            if (_reinforceSide != null)
+            {
+                bool enemy = _team == Team.Enemy;
+                _reinforceSide.text = enemy ? "ENEMY" : "FRIENDLY";
+                _reinforceSide.color = enemy ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            }
+            if (_reinforceBlueFill != null)
+                _reinforceBlueFill.color = _team == Team.User ? UiTheme.Friendly : UiTheme.Surface;
+            if (_reinforceRedFill != null)
+                _reinforceRedFill.color = _team == Team.Enemy ? UiTheme.Hostile : UiTheme.Surface;
+
+            ClearChildren(_reinforceList);
+
+            int count = _reinforceMode == ListMode.Available
+                ? PopulateReinforceAvailable()
+                : PopulateReinforceScheduled();
+
+            if (_reinforceCount != null) _reinforceCount.text = count.ToString();
+        }
+
+        /// <summary>The catalogue, as the same branch accordion UNITS uses.</summary>
+        int PopulateReinforceAvailable()
+        {
+            string folder = _team == Team.User ? "Friendly" : "Enemy";
+            bool searching = !string.IsNullOrEmpty(_reinforceQuery);
+            int count = 0;
+
+            foreach (var branch in UnitBranchInfo.All)
+            {
+                _branchMatches.Clear();
+                foreach (var def in UnitDatabase.All)
+                {
+                    if (def.Branch != branch) continue;
+                    if (!ReinforceMatches(def)) continue;
+                    _branchMatches.Add(def);
+                }
+                if (_branchMatches.Count == 0) continue;
+
+                count += _branchMatches.Count;
+
+                bool open = searching || _reinforceOpenBranches.Contains(branch);
+                ReinforceBranchHeader(branch, _branchMatches.Count, open);
+                if (!open) continue;
+
+                foreach (var def in _branchMatches) ReinforceCard(def, folder);
+            }
+
+            if (count == 0)
+            {
+                var empty = UIFactory.CreateText(_reinforceList,
+                    "No unit type matches that search.", UiTheme.FontLabel,
+                    UiTheme.TextFaint, TextAnchor.UpperLeft);
+                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 32);
+            }
+            return count;
+        }
+
+        bool ReinforceMatches(UnitDefinition def)
+        {
+            if (string.IsNullOrEmpty(_reinforceQuery)) return true;
+            string q = _reinforceQuery.ToLowerInvariant();
+            return (def.name != null && def.name.ToLowerInvariant().Contains(q)) ||
+                   (def.id != null && def.id.ToLowerInvariant().Contains(q));
+        }
+
+        void ReinforceBranchHeader(UnitBranch branch, int count, bool open)
+        {
+            var row = UIFactory.CreateBorderedPanel(_reinforceList, "ReinBranch_" + branch,
+                open ? UiTheme.AccentWash : UiTheme.Surface, UiTheme.Border);
+            row.sizeDelta = new Vector2(0, 30);
+
+            var btn = row.gameObject.AddComponent<Button>();
+            btn.targetGraphic = row.GetComponent<Image>();
+            btn.onClick.AddListener(() =>
+            {
+                if (!_reinforceOpenBranches.Remove(branch)) _reinforceOpenBranches.Add(branch);
+                PopulateReinforcements();
+            });
+
+            var chevron = UIFactory.CreateText(row, open ? "▾" : "▸", UiTheme.FontSmall,
+                open ? UiTheme.Accent : UiTheme.TextDim, TextAnchor.MiddleCenter);
+            chevron.raycastTarget = false;
+            UIFactory.Place(chevron.rectTransform, new Vector2(0f, 0.5f), new Vector2(14f, 0f), new Vector2(16f, 16f));
+
+            var text = UIFactory.CreateSectionHeader(row,
+                UnitBranchInfo.DisplayName(branch).ToUpperInvariant(),
+                open ? UiTheme.Accent : UiTheme.Text);
+            text.raycastTarget = false;
+            text.alignment = TextAnchor.MiddleLeft;
+            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(30f, 0f),
+                new Vector2(InnerWidth - 90f, 16f));
+            UIFactory.Fit(text, 8);
+
+            var badge = UIFactory.CreateText(row, count.ToString(), UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
+            badge.raycastTarget = false;
+            UIFactory.Place(badge.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10f, 0f), new Vector2(40f, 16f));
+        }
+
+        /// <summary>
+        /// One type, as a card. Clicking it schedules that type at the arrival
+        /// time currently set — a click rather than a drag, because there is no
+        /// ground to drag it to: where it lands is the deployment zone's
+        /// business, not the cursor's.
+        /// </summary>
+        void ReinforceCard(UnitDefinition def, string folder)
+        {
+            var card = UIFactory.CreateBorderedPanel(_reinforceList, "Rein_" + def.id,
+                UiTheme.Surface, UiTheme.Border);
+            card.sizeDelta = new Vector2(0, 44);
+
+            var btn = card.gameObject.AddComponent<Button>();
+            btn.targetGraphic = card.GetComponent<Image>();
+            btn.onClick.AddListener(() =>
+            {
+                if (_reinforcements == null) return;
+                _reinforcements.Add(def, _team, DefaultEchelon, _reinforceMinutes);
+                SetReinforceMode(ListMode.Deployed);
+            });
+
+            var sprite = UIFactory.LoadIconSprite(folder, def.id);
+            if (sprite != null)
+            {
+                var icon = UIFactory.CreateImage(card, sprite, "Icon");
+                icon.raycastTarget = false;
+                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
+                    new Vector2(10, 0), new Vector2(34, 34));
+            }
+
+            UIFactory.CreateStackedLabels(card, def.name,
+                $"{UnitBranchInfo.DisplayName(def.Branch)}   ·   {DefaultEchelon}",
+                50f, InnerWidth - 110f, topInset: 5f);
+
+            var at = UIFactory.CreateText(card,
+                _reinforceMinutes == 0 ? "H-HOUR" : $"H+{_reinforceMinutes}",
+                UiTheme.FontLabel, UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
+            at.raycastTarget = false;
+            UIFactory.Place(at.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+        }
+
+        /// <summary>The schedule itself, earliest first, with what each arrival is waiting on.</summary>
+        int PopulateReinforceScheduled()
+        {
+            if (_reinforcements == null) return 0;
+
+            int count = 0;
+            double elapsed = _reinforcements.ElapsedMinutes;
+
+            foreach (var entry in _reinforcements.Schedule)
+            {
+                if (entry.team != _team.ToString()) continue;
+                var def = UnitDatabase.Get(entry.defId);
+                if (def == null) continue;
+                count++;
+
+                var row = UIFactory.CreateBorderedPanel(_reinforceList, "Sched_" + count,
+                    entry.arrived ? UiTheme.SurfaceSubtle : UiTheme.Surface, UiTheme.Border);
+                row.sizeDelta = new Vector2(0, 44);
+
+                var sprite = UIFactory.LoadIconSprite(_team == Team.User ? "Friendly" : "Enemy", def.id);
+                if (sprite != null)
+                {
+                    var icon = UIFactory.CreateImage(row, sprite, "Icon");
+                    icon.raycastTarget = false;
+                    UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
+                        new Vector2(10, 0), new Vector2(30, 30));
+                }
+
+                // What it is waiting on, in the terms the designer set it in.
+                string state = entry.arrived
+                    ? "ARRIVED"
+                    : elapsed > 0.0
+                        ? $"in {Mathf.Max(0, Mathf.CeilToInt((float)(entry.arrivalMinutes - elapsed)))} min"
+                        : $"{entry.echelon}";
+
+                UIFactory.CreateStackedLabels(row, def.name, state, 46f, InnerWidth - 150f, topInset: 5f);
+
+                var captured = entry;
+                var earlier = UIFactory.CreateButton(row, "−", () => _reinforcements.Reschedule(captured, -5),
+                    UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontLabel);
+                UIFactory.Place((RectTransform)earlier.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-84, 0), new Vector2(22, 22));
+
+                var at = UIFactory.CreateText(row,
+                    entry.arrivalMinutes == 0 ? "H" : $"H+{entry.arrivalMinutes}",
+                    UiTheme.FontLabel, entry.arrived ? UiTheme.TextFaint : UiTheme.Accent,
+                    TextAnchor.MiddleCenter, FontStyle.Bold);
+                at.raycastTarget = false;
+                UIFactory.Place(at.rectTransform, new Vector2(1f, 0.5f), new Vector2(-52, 0), new Vector2(44, 16));
+
+                var later = UIFactory.CreateButton(row, "+", () => _reinforcements.Reschedule(captured, 5),
+                    UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontLabel);
+                UIFactory.Place((RectTransform)later.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-30, 0), new Vector2(22, 22));
+
+                var del = UIFactory.CreateButton(row, "✕", () => _reinforcements.Remove(captured),
+                    new Color(0.55f, 0.18f, 0.18f), UiTheme.Text, UiTheme.FontLabel);
+                UIFactory.Place((RectTransform)del.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-6, 0), new Vector2(22, 22));
+            }
+
+            if (count == 0)
+            {
+                var empty = UIFactory.CreateText(_reinforceList,
+                    "Nothing scheduled for this side. Pick a type in AVAILABLE and it joins the " +
+                    "schedule at the arrival time above.",
+                    UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 48);
+            }
+            return count;
+        }
+
         // ------------------------------------------------------ groups section
 
         /// <summary>Select every formation in a group.</summary>
@@ -1547,6 +1938,7 @@ namespace IronMeridian.UI
         public System.Action GroupFlotClearRequested;
 
         RectTransform _groupsNavRow, _groupsList;
+        Text _modeHeading;
         Text _groupsFlotState;
         string _flotHolder = "";
 
@@ -1709,6 +2101,12 @@ namespace IronMeridian.UI
         /// </summary>
         public void SetBattleMode(bool running)
         {
+            if (_modeHeading != null)
+            {
+                _modeHeading.text = running ? "BATTLE MODE" : "SCENARIO MODE";
+                _modeHeading.color = running ? UiTheme.Success : UiTheme.TextDim;
+            }
+
             if (_groupsNavRow != null) _groupsNavRow.gameObject.SetActive(running);
 
             if (running) RefreshGroups();
@@ -2773,6 +3171,7 @@ namespace IronMeridian.UI
 
             BuildMissionAreaBlock(content);
             BuildHqZoneBlock(content);
+            BuildDeploymentBlock(content);
 
             // --- actions ---
             var save = UIFactory.CreateBorderedPanel(content, "SaveMission", UiTheme.Success, UiTheme.Success);
@@ -2924,7 +3323,10 @@ namespace IronMeridian.UI
 
         /// <summary>Top of the HQ ZONES block, and the bottom it hands back to the page.</summary>
         const float HqBlockTop = 718f;
-        const float HqBlockBottom = HqBlockTop + 176f;
+        const float HqBlockEnd = HqBlockTop + 176f;
+        /// <summary>The DEPLOYMENT ZONES block below it, and the bottom the whole page continues from.</summary>
+        const float DeployBlockTop = HqBlockEnd + 8f;
+        const float HqBlockBottom = DeployBlockTop + 176f;
 
         /// <summary>
         /// Where the two headquarters are.
@@ -3035,12 +3437,122 @@ namespace IronMeridian.UI
             }
         }
 
-        static void HqRowState(Text state, Text figures, string label, HqZone zone)
+        static void HqRowState(Text state, Text figures, string label, MissionZone zone)
         {
             state.text = label;
             figures.text = zone == null || !zone.placed
                 ? "Not placed"
                 : $"{zone.latitude:0.####}, {zone.longitude:0.####}";
+        }
+
+        // -------------------------------------------------- deployment zones
+
+        /// <summary>Arm a map pick for one side's deployment zone.</summary>
+        public System.Action<Team> MissionDeploymentSetRequested;
+        /// <summary>Take one side's deployment zone off the map.</summary>
+        public System.Action<Team> MissionDeploymentClearRequested;
+        /// <summary>Resize both zones, km.</summary>
+        public System.Action<float> MissionDeploymentRadiusRequested;
+
+        Text _friendlyDeployState, _friendlyDeployFigures, _enemyDeployState, _enemyDeployFigures;
+        readonly List<(float km, Image fill, Text label)> _deployRadiusButtons =
+            new List<(float, Image, Text)>();
+
+        /// <summary>
+        /// Where each side's reinforcements arrive.
+        ///
+        /// **Why a scenario has to name this.** A reinforcement that appeared
+        /// wherever the schedule felt like putting it would be a spawn, not a
+        /// reinforcement — the whole meaning of a reserve arriving is that it
+        /// comes from *somewhere*, and that somewhere is a decision the designer
+        /// makes: a road entry, a rear assembly area, the far side of a river.
+        /// Without one, arrivals fall back to their own side's rear, which is
+        /// the honest default but not a choice anybody made.
+        ///
+        /// Same shape as the HQ block above, and deliberately so: they are the
+        /// same kind of statement about the same ground, and a designer who has
+        /// learned one has learned both. See docs/30-REINFORCEMENTS.md.
+        /// </summary>
+        void BuildDeploymentBlock(RectTransform content)
+        {
+            SectionLabel(content, "DEPLOYMENT ZONES", -DeployBlockTop);
+
+            DeployRow(content, Team.User, "FRIENDLY DEPLOYMENT", GameConfig.BlueTeam,
+                -DeployBlockTop - 20f, out _friendlyDeployState, out _friendlyDeployFigures);
+            DeployRow(content, Team.Enemy, "ENEMY DEPLOYMENT", GameConfig.RedTeam,
+                -DeployBlockTop - 70f, out _enemyDeployState, out _enemyDeployFigures);
+
+            SectionLabel(content, "ZONE SIZE", -DeployBlockTop - 118f);
+
+            float third = (InnerWidth - 8f) / 3f;
+            DeployRadiusButton(content, "2 KM", 2f, 0, third, -DeployBlockTop - 138f);
+            DeployRadiusButton(content, "5 KM", 5f, 1, third, -DeployBlockTop - 138f);
+            DeployRadiusButton(content, "12 KM", 12f, 2, third, -DeployBlockTop - 138f);
+        }
+
+        void DeployRow(RectTransform content, Team team, string label, Color tint, float y,
+            out Text state, out Text figures)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Deploy_" + team, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 44));
+
+            var stripe = UIFactory.CreatePanel(frame, "Side", tint);
+            stripe.anchorMin = new Vector2(0, 0); stripe.anchorMax = new Vector2(0, 1);
+            stripe.pivot = new Vector2(0, 0.5f);
+            stripe.sizeDelta = new Vector2(3, -8);
+            stripe.GetComponent<Image>().raycastTarget = false;
+
+            var (title, detail) = UIFactory.CreateStackedLabels(frame, label, "Not placed",
+                12f, InnerWidth - 104f, topInset: 5f);
+            state = title;
+            figures = detail;
+
+            var captured = team;
+            var set = UIFactory.CreateButton(frame, "SET",
+                () => MissionDeploymentSetRequested?.Invoke(captured), UiTheme.SurfaceHover, UiTheme.Text, 11);
+            UIFactory.Place((RectTransform)set.transform, new Vector2(1f, 0.5f),
+                new Vector2(-38, 0), new Vector2(48, 26));
+            UiTooltip.Attach(set.gameObject, "Click the map to place this deployment zone",
+                UiTooltip.Side.Left);
+
+            var clear = UIFactory.CreateButton(frame, "✕",
+                () => MissionDeploymentClearRequested?.Invoke(captured), UiTheme.Surface, UiTheme.TextDim, 12);
+            UIFactory.Place((RectTransform)clear.transform, new Vector2(1f, 0.5f),
+                new Vector2(-8, 0), new Vector2(24, 24));
+        }
+
+        void DeployRadiusButton(RectTransform content, string label, float km, int index,
+            float width, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "DepR_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f),
+                new Vector2(Pad + index * (width + 4f), y), new Vector2(width, 30));
+
+            var btn = UIFactory.CreateButton(frame, label, () => MissionDeploymentRadiusRequested?.Invoke(km),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+            UIFactory.Stretch((RectTransform)btn.transform);
+
+            _deployRadiusButtons.Add((km, frame.Find("Fill").GetComponent<Image>(),
+                btn.GetComponentInChildren<Text>(true)));
+        }
+
+        /// <summary>Repaints the deployment block from the mission being edited.</summary>
+        public void RefreshDeploymentZones()
+        {
+            if (_friendlyDeployState == null) return;
+
+            HqRowState(_friendlyDeployState, _friendlyDeployFigures, "FRIENDLY DEPLOYMENT",
+                _mission?.friendlyDeployment);
+            HqRowState(_enemyDeployState, _enemyDeployFigures, "ENEMY DEPLOYMENT",
+                _mission?.enemyDeployment);
+
+            float radius = _mission?.deploymentRadiusKm ?? 5f;
+            foreach (var (km, fill, label) in _deployRadiusButtons)
+            {
+                bool on = _mission != null && Mathf.Approximately(km, radius);
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
         }
 
         void RectangleButton(RectTransform content, string label, float halfKm, int index,
@@ -3216,6 +3728,7 @@ namespace IronMeridian.UI
 
             RefreshMissionArea();
             RefreshHqZones();
+            RefreshDeploymentZones();
         }
 
         /// <summary>The mission the panel is editing, so the controller can read its area back.</summary>
@@ -3283,6 +3796,49 @@ namespace IronMeridian.UI
         /// list would make a night storm unexpressible — and would leave the
         /// automatic day/night toggle fighting whatever weather was picked.
         /// </summary>
+        /// <summary>Height the scenario-start block occupies inside the merged page.</summary>
+        const float StartBlockHeight = 380f;
+        /// <summary>And the weather block below it.</summary>
+        const float WeatherBlockHeight = 480f;
+
+        /// <summary>
+        /// **ENVIRONMENT** — when the scenario is fought and what the weather is
+        /// doing, on one page.
+        ///
+        /// These were two rail rows, WEATHER CONDITIONS and DATE AND TIME, and
+        /// they were always one decision. A designer setting a night attack is
+        /// choosing the hour *and* the sky in the same breath; the auto
+        /// day/night switch reads the clock the other section owned; and a
+        /// player asking "what will this look like" has to open both to find
+        /// out. One row that answers the whole question is worth two that each
+        /// answer half of it — and it gives the rail a row back.
+        ///
+        /// The two builders are unchanged and are laid into sub-pages of a
+        /// scroll view. Every section builder here places its controls at
+        /// absolute offsets from the top of what it is given, so handing each
+        /// one its own container is what lets them be stacked without either of
+        /// them being reflowed.
+        /// </summary>
+        void BuildEnvironmentSection(RectTransform section)
+        {
+            var page = ScrollableSection(section, StartBlockHeight + WeatherBlockHeight);
+
+            BuildDateTimeSection(SubPage(page, "StartBlock", 0f, StartBlockHeight));
+            BuildWeatherSection(SubPage(page, "WeatherBlock", StartBlockHeight, WeatherBlockHeight));
+        }
+
+        /// <summary>A full-width slice of a page, so a section builder's own offsets stay meaningful.</summary>
+        static RectTransform SubPage(RectTransform page, string name, float top, float height)
+        {
+            var rt = UIFactory.CreateGroup(page, name);
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, -top);
+            rt.sizeDelta = new Vector2(0f, height);
+            return rt;
+        }
+
         void BuildWeatherSection(RectTransform content)
         {
             SectionLabel(content, "SKY", -8);

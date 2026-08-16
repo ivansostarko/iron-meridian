@@ -302,12 +302,18 @@ namespace IronMeridian.Vfx
             foreach (var i in _live)
             {
                 if (i == null || i.Def == null) continue;
+                // Hand-placed effects are the player's, not the budget's.
+                if (i.Pinned) continue;
                 if (victim == null ||
                     i.Def.priority < victim.Def.priority ||
                     (i.Def.priority == victim.Def.priority && i.SpawnedAt < victim.SpawnedAt))
                     victim = i;
             }
 
+            // Nothing evictable — every live effect was placed by hand. Let the
+            // incoming one through rather than refusing it: a player who has
+            // covered the map in fires should not thereby stop their own
+            // artillery from having a burst.
             if (victim == null) return true;
             if (victim.Def.priority > incoming.priority) return false;
 

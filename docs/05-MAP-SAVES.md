@@ -81,6 +81,11 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
     }
   ],
 
+  "reinforcements": [
+    { "defId": "mech_infantry_bn", "team": "User",
+      "echelon": "Battalion", "arrivalMinutes": 40 }
+  ],
+
   "resources": [
     { "team": "User", "kind": "Fuel", "quantity": 84000.0 }
   ],
@@ -103,6 +108,10 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
 Unlike `markers`, these belong to the *scenario* rather than to a unit, so
 nothing sweeps them off the map when a formation dies. Empty on any map saved
 before they existed, which reads correctly as "this scenario has no rear area".
+
+`reinforcements` are formations that arrive after the battle starts — see
+[30-REINFORCEMENTS.md](30-REINFORCEMENTS.md). Minutes after H-hour rather than an
+absolute time, so the figure survives changing the scenario's start.
 
 `resources` is what each side has in stock — see
 [27-SUSTAINMENT.md](27-SUSTAINMENT.md). Only stocks are written; consumption is

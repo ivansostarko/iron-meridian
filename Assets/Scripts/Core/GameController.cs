@@ -109,6 +109,7 @@ namespace IronMeridian.Core
         UnitInfoPanel _infoPanel;
         IronMeridian.Logistics.LogisticsSystem _logistics;
         IronMeridian.Logistics.SustainmentSystem _sustainment;
+        ReinforcementSystem _reinforcements;
         MiniMapUI _minimap;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -292,6 +293,9 @@ namespace IronMeridian.Core
             // a drop is a logistics event, and the logistics system has to exist
             // before anything can hand it one.
             _airSupply.Logistics = _logistics;
+
+            // Formations that arrive after the battle starts — docs/30.
+            _reinforcements = gameObject.AddComponent<ReinforcementSystem>();
 
             // What the force fights on: stocks typed by the designer, burn rates
             // derived from the order of battle — see docs/27-SUSTAINMENT.md.
@@ -517,7 +521,7 @@ namespace IronMeridian.Core
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
                     _artillery, _airStrike, _airSupply, _uavStrike, _naval, _mapControls, _strikeDock,
-                    _logistics, _sustainment);
+                    _logistics, _sustainment, _reinforcements);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -589,6 +593,7 @@ namespace IronMeridian.Core
                     _areaTool.Show(_mission.area);
                     ApplyMissionArea();
                     RefreshHqZones();
+                    RefreshDeploymentZones();
                 }
 
                 // LOGISTICS section — the scenario's rear area.
@@ -642,6 +647,21 @@ namespace IronMeridian.Core
                     _palette.SetFlotHolder("");
                     _hud.Flash($"{name} released from the front line. Its formations keep their positions.");
                 };
+
+                // MISSIONS → DEPLOYMENT ZONES.
+                _palette.MissionDeploymentSetRequested = SetMissionDeployment;
+                _palette.MissionDeploymentClearRequested = ClearMissionDeployment;
+                _palette.MissionDeploymentRadiusRequested = SetMissionDeploymentRadius;
+
+                // REINFORCEMENTS — the schedule and where it arrives.
+                _reinforcements.Init(_clock, _combat);
+                _reinforcements.Flash = _hud.Flash;
+                _reinforcements.Changed += _palette.RefreshReinforcements;
+                _reinforcements.Spawn = (def, team, echelon, lat, lon) =>
+                    OnPaletteDrop(def, team,
+                        team == Team.User ? Affiliation.Friendly : Affiliation.Hostile,
+                        echelon, lat, lon);
+                _reinforcements.ZoneFor = DeploymentZoneFor;
 
                 // MISSIONS → HQ ZONES.
                 _palette.MissionHqSetRequested = SetMissionHq;
@@ -1173,9 +1193,12 @@ namespace IronMeridian.Core
             // fields null rather than at their initialisers when the JSON has
             // no member for them, so they are filled in here rather than
             // guarded at every reader.
-            if (mission.friendlyHq == null) mission.friendlyHq = new Data.HqZone();
-            if (mission.enemyHq == null) mission.enemyHq = new Data.HqZone();
+            if (mission.friendlyHq == null) mission.friendlyHq = new Data.MissionZone();
+            if (mission.enemyHq == null) mission.enemyHq = new Data.MissionZone();
+            if (mission.friendlyDeployment == null) mission.friendlyDeployment = new Data.MissionZone();
+            if (mission.enemyDeployment == null) mission.enemyDeployment = new Data.MissionZone();
             RefreshHqZones();
+            RefreshDeploymentZones();
 
             FlyTo(mission.latitude, mission.longitude, (float)mission.startAltitudeMeters);
 
@@ -1259,6 +1282,7 @@ namespace IronMeridian.Core
                 _palette.SetMissionStatus($"Created {mission.id}. Nothing saved to its map yet.");
             }
             RefreshHqZones();
+            RefreshDeploymentZones();
         }
 
         void DeleteMission(MissionDefinition mission)
@@ -1494,11 +1518,11 @@ namespace IronMeridian.Core
         /// its initialiser, so every mission written before HQ zones existed
         /// comes back with two nulls here.
         /// </summary>
-        Data.HqZone HqFor(Team team)
+        Data.MissionZone HqFor(Team team)
         {
             if (team == Team.User)
-                return _mission.friendlyHq ??= new Data.HqZone();
-            return _mission.enemyHq ??= new Data.HqZone();
+                return _mission.friendlyHq ??= new Data.MissionZone();
+            return _mission.enemyHq ??= new Data.MissionZone();
         }
 
         void ClearMissionHq(Team team)
@@ -1515,6 +1539,106 @@ namespace IronMeridian.Core
             zone.placed = false;
             RefreshHqZones();
             _hud.Flash($"{(team == Team.User ? "Friendly" : "Enemy")} HQ cleared.");
+        }
+
+        // ------------------------------------------------ deployment zones
+
+        /// <summary>The two deployment zones drawn on the map, when the mission names them.</summary>
+        RangeRing _friendlyDeployRing, _enemyDeployRing;
+
+        /// <summary>
+        /// Where a side's reinforcements arrive: the mission's zone, or nothing
+        /// — in which case <see cref="ReinforcementSystem"/> falls back to that
+        /// side's own rear, which is the honest answer for a map that is not a
+        /// mission at all.
+        /// </summary>
+        (double lat, double lon, float radiusKm)? DeploymentZoneFor(Team team)
+        {
+            if (_mission == null) return null;
+            var zone = team == Team.User ? _mission.friendlyDeployment : _mission.enemyDeployment;
+            if (zone == null || !zone.placed) return null;
+            return (zone.latitude, zone.longitude, Mathf.Max(0.3f, _mission.deploymentRadiusKm));
+        }
+
+        Data.MissionZone DeploymentFor(Team team)
+        {
+            if (team == Team.User)
+                return _mission.friendlyDeployment ??= new Data.MissionZone();
+            return _mission.enemyDeployment ??= new Data.MissionZone();
+        }
+
+        void SetMissionDeployment(Team team)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            string side = team == Team.User ? "friendly" : "enemy";
+            _hud.Flash($"Click the ground for the {side} deployment zone (Esc or RMB cancels).");
+
+            // An authoring pick: no selection behind it, and made with the clock
+            // stopped — see SelectionManager.ArmGroundPick.
+            _selection.ArmGroundPick((lat, lon) =>
+            {
+                var zone = DeploymentFor(team);
+                zone.placed = true;
+                zone.latitude = lat;
+                zone.longitude = lon;
+
+                RefreshDeploymentZones();
+                _hud.Flash($"{char.ToUpperInvariant(side[0]) + side.Substring(1)} deployment zone set — " +
+                           $"{_mission.deploymentRadiusKm:0.#} km. Reinforcements arrive here.");
+            }, "Deployment zone placement cancelled.", requireSelection: false, battleOnly: false);
+        }
+
+        void ClearMissionDeployment(Team team)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            var zone = DeploymentFor(team);
+            if (!zone.placed)
+            {
+                _hud.Flash("That deployment zone has not been placed.");
+                return;
+            }
+
+            zone.placed = false;
+            RefreshDeploymentZones();
+            _hud.Flash($"{(team == Team.User ? "Friendly" : "Enemy")} deployment zone cleared — " +
+                       "its reinforcements will arrive behind their own force.");
+        }
+
+        void SetMissionDeploymentRadius(float km)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            _mission.deploymentRadiusKm = km;
+            RefreshDeploymentZones();
+            _hud.Flash($"Deployment zones are now {km:0.#} km across the radius.");
+        }
+
+        /// <summary>Redraws both deployment rings from the open mission and repaints the panel.</summary>
+        void RefreshDeploymentZones()
+        {
+            if (_palette != null) _palette.RefreshDeploymentZones();
+
+            ShowDeployRing(ref _friendlyDeployRing, _mission?.friendlyDeployment,
+                GameConfig.BlueTeam, "FRIENDLY DEPLOYMENT");
+            ShowDeployRing(ref _enemyDeployRing, _mission?.enemyDeployment,
+                GameConfig.RedTeam, "ENEMY DEPLOYMENT");
+        }
+
+        void ShowDeployRing(ref RangeRing ring, Data.MissionZone zone, Color colour, string title)
+        {
+            if (zone == null || !zone.placed || _mission == null)
+            {
+                if (ring != null) ring.Hide();
+                return;
+            }
+
+            if (ring == null)
+                ring = RangeRing.Create(_map.Georeference, _map.Georeference.transform, colour, title);
+
+            ring.Show(zone.latitude, zone.longitude, Mathf.Max(0.2f, _mission.deploymentRadiusKm),
+                $"{title}  {_mission.deploymentRadiusKm:0.#} km");
         }
 
         void SetMissionHqRadius(float km)
@@ -1539,7 +1663,7 @@ namespace IronMeridian.Core
             ShowHqRing(ref _enemyHqRing, _mission?.enemyHq, GameConfig.RedTeam, "ENEMY HQ");
         }
 
-        void ShowHqRing(ref RangeRing ring, Data.HqZone zone, Color colour, string title)
+        void ShowHqRing(ref RangeRing ring, Data.MissionZone zone, Color colour, string title)
         {
             if (zone == null || !zone.placed || _mission == null)
             {
@@ -1984,6 +2108,7 @@ namespace IronMeridian.Core
             _save.flotMode = _frontline.Mode.ToString();
             _save.logistics = _logistics.Serialize();
             _save.resources = _sustainment.Serialize();
+            _save.reinforcements = _reinforcements.Serialize();
             _save.commanders = CommanderRegistry.Serialize();
             _save.teams = PlayerRegistry.SaveTeams();
             _save.players = PlayerRegistry.SavePlayers();
@@ -2144,6 +2269,7 @@ namespace IronMeridian.Core
             // and outlives every formation that draws on it.
             _logistics.LoadFrom(data.logistics);
             _sustainment.LoadFrom(data.resources);
+            _reinforcements.LoadFrom(data.reinforcements);
             // Commanders last. They are referenced by id from the units that are
             // already down, so loading them earlier would have the roster point
             // at formations that did not exist yet.

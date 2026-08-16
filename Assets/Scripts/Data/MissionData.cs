@@ -54,8 +54,10 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
-    /// One side's headquarters on a mission's ground: where it is, and whether
-    /// it has been placed at all.
+    /// One side's marked place on a mission's ground: where it is, and whether
+    /// it has been placed at all. Used for both headquarters and deployment
+    /// zones — they are the same record, and a second identical class would be
+    /// two things to keep in step for no gain.
     ///
     /// **A point plus a radius, not a polygon.** A mission area is a shape
     /// because coastlines and valleys are shapes; a headquarters is a place,
@@ -68,14 +70,14 @@ namespace IronMeridian.Data
     /// reason to touch.
     /// </summary>
     [Serializable]
-    public class HqZone
+    public class MissionZone
     {
         /// <summary>False until the designer has put it somewhere.</summary>
         public bool placed;
         public double latitude;
         public double longitude;
 
-        public HqZone Clone() => new HqZone
+        public MissionZone Clone() => new MissionZone
         {
             placed = placed, latitude = latitude, longitude = longitude
         };
@@ -180,11 +182,28 @@ namespace IronMeridian.Data
         /// on every mission written before this existed, which reads correctly
         /// as "this scenario names no headquarters" — see docs/22-MISSIONS.md.
         /// </summary>
-        public HqZone friendlyHq = new HqZone();
-        public HqZone enemyHq = new HqZone();
+        public MissionZone friendlyHq = new MissionZone();
+        public MissionZone enemyHq = new MissionZone();
 
-        /// <summary>Radius of both HQ zones, km. See <see cref="HqZone"/>.</summary>
+        /// <summary>Radius of both HQ zones, km. See <see cref="MissionZone"/>.</summary>
         public float hqRadiusKm = 3f;
+
+        /// <summary>
+        /// Where each side's **reinforcements arrive**. A scenario that can be
+        /// reinforced has to say where from: a battalion that materialised in
+        /// the middle of the fighting would be a spawn, not a reinforcement.
+        /// Unplaced on an older mission, in which case arrivals fall back to
+        /// the side's own rear — see <c>GameController.DeploymentZoneFor</c>.
+        /// </summary>
+        public MissionZone friendlyDeployment = new MissionZone();
+        public MissionZone enemyDeployment = new MissionZone();
+
+        /// <summary>
+        /// Radius of both deployment zones, km. Larger than an HQ's by default:
+        /// this is ground a formation arrives *into* and spreads across, not a
+        /// command post.
+        /// </summary>
+        public float deploymentRadiusKm = 5f;
 
         /// <summary>
         /// Position within its campaign board, ascending. Ties fall back to the
@@ -231,9 +250,12 @@ namespace IronMeridian.Data
             area = area?.Clone() ?? new MissionArea(),
             // Deep-copied for the same reason the area is: the live editor
             // overlay holds these, and a shallow copy would track later edits.
-            friendlyHq = friendlyHq?.Clone() ?? new HqZone(),
-            enemyHq = enemyHq?.Clone() ?? new HqZone(),
+            friendlyHq = friendlyHq?.Clone() ?? new MissionZone(),
+            enemyHq = enemyHq?.Clone() ?? new MissionZone(),
             hqRadiusKm = hqRadiusKm,
+            friendlyDeployment = friendlyDeployment?.Clone() ?? new MissionZone(),
+            enemyDeployment = enemyDeployment?.Clone() ?? new MissionZone(),
+            deploymentRadiusKm = deploymentRadiusKm,
             order = order,
             available = available
         };

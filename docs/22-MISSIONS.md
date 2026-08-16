@@ -52,6 +52,8 @@ All of these are edited in the map editor's **MISSIONS** panel. `MissionDefiniti
 | `area` | The ground the mission is fought over — a closed polygon. Empty means unbounded. See §1a |
 | `friendlyHq` / `enemyHq` | Where each side's headquarters is. Unplaced on an old mission. See §1b |
 | `hqRadiusKm` | How much ground around each counts as the HQ. One radius for both zones |
+| `friendlyDeployment` / `enemyDeployment` | Where each side's **reinforcements arrive**. See section 1c |
+| `deploymentRadiusKm` | How wide those zones are. One radius for both |
 | `order` | Position on its campaign board, ascending |
 | `available` | False hides a work-in-progress mission from the board without deleting it |
 
@@ -118,6 +120,30 @@ shift.
 are*, which is what a designer needs first; objectives and victory conditions
 that read them are the obvious next thing and are deliberately not in this
 change. See §6.
+
+---
+
+## 1c. Deployment zones
+
+`MissionZone` again - the same record as an HQ, because they are the same kind of
+statement about the same ground, and a second identical class would be two things
+to keep in step for no gain.
+
+**Where each side's reinforcements arrive** (docs/30-REINFORCEMENTS.md). A
+scenario that can be reinforced has to say where from: a battalion that
+materialised in the middle of the fighting would be a spawn, not a reinforcement.
+The whole meaning of a reserve arriving is that it comes from *somewhere*, and
+that somewhere is a decision the designer makes - a road entry, a rear assembly
+area, the far side of a river.
+
+Set them in the MISSIONS panel's **DEPLOYMENT ZONES** block: **SET** arms a map
+click, the cross clears it, and the size is one of **2 / 5 / 12 km** for both.
+Drawn as range rings in the side's colour, like the HQ zones above.
+
+**Unplaced is legal.** Arrivals then appear about 8 km behind their own side's
+centre of mass, away from the enemy - the honest fallback, since a reinforcement
+comes from the rear and the rear is wherever the army already is. It is just not
+a choice anybody made.
 
 ---
 
@@ -206,7 +232,9 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | **20 KM / 50 KM / 120 KM** | Replaces the area with a box that wide, centred on the point the camera is looking at |
 | **CLEAR AREA** | Drops the area — the mission is unbounded again |
 | **HQ ZONES** — FRIENDLY HQ / ENEMY HQ rows | Each shows its coordinates or *Not placed*. **SET** arms a map click; **✕** clears it |
-| **ZONE SIZE** — 1 / 3 / 8 KM | The radius of both zones. See §1b |
+| **ZONE SIZE** — 1 / 3 / 8 KM | The radius of both HQ zones. See §1b |
+| **DEPLOYMENT ZONES** — FRIENDLY / ENEMY rows | Where each side's reinforcements arrive. **SET** arms a map click. See §1c |
+| **ZONE SIZE** — 2 / 5 / 12 KM | The radius of both deployment zones |
 | **SAVE MISSION + MAP** | Writes the record **and** the current map |
 | **NEW MISSION HERE** | Starts one at the point the camera is looking at, in the chosen campaign |
 | **DELETE MISSION** | Removes it from the board, after a confirmation |

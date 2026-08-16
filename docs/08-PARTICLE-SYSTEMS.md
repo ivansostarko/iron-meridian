@@ -245,6 +245,14 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Move / withdraw / retreat placed | `TaskAreaMove` | as above | `ManoeuvreOrderSystem.Order` |
 | Supply bundle lands | `SupplyLandingDust` | at the bundle | `AirSupplySystem.Deliver` (docs/29-AIR-SUPPLY.md) |
 
+**Hand-placed effects are pinned.** `VfxInstance.Pinned` marks an effect the
+player put down from the EFFECTS section: it is never chosen as an eviction
+victim by the concurrency budget and is never given a lifetime, so it burns until
+it is cleared. Everything the *game* spawns stays evictable and still burns out -
+a battle that left a permanent fire wherever anything died would end up carpeted
+in them. A placed explosion is built as detonation + pinned fire + pinned smoke
+rather than through `VfxSystem.PlayWreck`, which deliberately expires.
+
 **Attached to the area, not played at it.** A one-shot puff says something
 happened; a task area is a standing state, so the motes loop for as long as the
 order does. They are the lowest-priority effects in the catalogue and are
