@@ -25,8 +25,16 @@ namespace IronMeridian.UI
     /// already looks for the state of the battle — the clock and the battle
     /// button are along that bar.
     ///
-    /// **The cluster never hides.** Every other right-hand panel — the unit
-    /// inspector, the group panel, the front-line options — now begins *below*
+    /// **The cluster is battle-mode only** — see <see cref="SetBattleMode"/>.
+    /// Calling for fire is something you do *during* a fight; in scenario mode
+    /// there is no clock running, nothing moves between the call and the
+    /// impact, and a strike laid on a static laydown is just a hole in a map
+    /// that is still being drawn. Hiding the cluster there also gives the
+    /// corner back to the editor and makes the mode switch legible: the fire
+    /// menus and the minimap appear together the moment the battle starts.
+    ///
+    /// **Within battle it never hides.** Every other right-hand panel — the
+    /// unit inspector, the group panel, the front-line options — begins *below*
     /// the icon strip (<see cref="UiTheme.StrikeDockHeight"/>) rather than
     /// under the top bar, so the fire menus can be reached with a formation
     /// selected. The panel itself shares the right edge with them, because two
@@ -98,6 +106,7 @@ namespace IronMeridian.UI
             BuildPanel(canvas);
             BuildCluster(canvas);
             Hide();
+            ApplyClusterVisibility();
         }
 
         void BuildPanel(Canvas canvas)
@@ -287,13 +296,53 @@ namespace IronMeridian.UI
         /// </summary>
         public void SetChromeVisible(bool visible)
         {
-            if (!visible) Hide();
-            if (_cluster != null) _cluster.gameObject.SetActive(visible);
+            _chromeVisible = visible;
+            ApplyClusterVisibility();
         }
+
+        /// <summary>
+        /// Battle running or not. The fire menus belong to a battle — see the
+        /// class remarks — so the cluster only exists while one is on, and any
+        /// menu left open when the battle stops comes down with it (which also
+        /// stands its weapon system down, through <see cref="Hide"/>).
+        /// </summary>
+        public void SetBattleMode(bool running)
+        {
+            if (_battleRunning == running) return;
+            _battleRunning = running;
+            ApplyClusterVisibility();
+        }
+
+        /// <summary>Both switches have to be on; either one closes an open menu.</summary>
+        void ApplyClusterVisibility()
+        {
+            bool show = _chromeVisible && _battleRunning;
+            if (!show) Hide();
+            if (_cluster != null) _cluster.gameObject.SetActive(show);
+        }
+
+        bool _chromeVisible = true;
+        /// <summary>
+        /// False until a battle starts. The editor opens in scenario mode, so
+        /// the cluster is built hidden rather than appearing for the frame
+        /// before the controller gets to say otherwise.
+        /// </summary>
+        bool _battleRunning;
 
         void OnDestroy()
         {
             if (IsOpen) IsOpen = false;
+        }
+
+        /// <summary>
+        /// Moves the panel's top edge, so it can clear whatever is docked above
+        /// it on this edge — the fire-menu cluster always, and the minimap too
+        /// once a battle starts. One caller decides for all of them; see
+        /// <c>GameController.RefreshRightDockTop</c>.
+        /// </summary>
+        public void SetTopInset(float pixels)
+        {
+            if (_panel != null) _panel.offsetMax = new Vector2(0, -pixels);
         }
     }
 }

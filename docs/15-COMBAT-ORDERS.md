@@ -6,9 +6,13 @@ human-readable version of `MoveTaskCatalog.cs`, `AttackTaskCatalog.cs`,
 `PlannerSystem.cs` — keep it in step with them in the same change.
 
 Orders live on the bottom **order bar** (`UnitActionBarUI`), which appears only
-while a battle is running and exactly one unit is selected. In scenario mode the
-bar is hidden and every order below is refused: the editor places counters, it
-does not fight.
+while a battle is running and at least one living formation is selected. In
+scenario mode the bar is hidden and every order below is refused: the editor
+places counters, it does not fight.
+
+**The same bar gives a group its orders** — see §1b. There is no second order
+bar anywhere: the group panel on the right names and recalls groups, it does not
+order them.
 
 ```
 ORDERS — 1ST INFANTRY BATTALION
@@ -87,6 +91,46 @@ Everything is ordinary map data — lines through `LineManager`, markers through
 regenerates.
 
 ---
+
+## 1b. Orders given to a group
+
+Select two or more formations and the bar is captioned
+`GROUP ORDERS — <group name> · <count>`, or `— N FORMATIONS` when the selection
+is not all one group. Naming a group that only half the selection belongs to
+would be the bar lying about what it is going to act on.
+
+All six buttons work, and **every formation in the selection carries the order
+out**. That is the whole difference: a group is not a different kind of thing
+from a formation as far as orders go, so it uses the same six verbs in the same
+place.
+
+### The frontage
+
+One click is one objective, but six battalions cannot occupy one grid square.
+Sending them all to the same coordinate piles six counters, six objective rings
+and six defensive lines on top of each other, and the player has ordered
+something no formation could carry out. So **the click sets the centre of a
+frontage** and the formations are laid out across it, perpendicular to the axis
+of advance — which is what a frontage is
+(`GameController.ForSelectionOnGround`).
+
+| | |
+|---|---|
+| **Axis** | From the selection's centre to the clicked point |
+| **Spacing** | The formations' own mean weapon range × 0.35, clamped to 0.6–4 km. A group of mortar companies packs tighter than a group of rocket battalions, and each can still cover its neighbour |
+| **Order of march** | Sorted by where they already stand across that axis, so the left-hand formation gets the left-hand slot and nobody is sent across the front of anybody else |
+
+Which orders are spread, and which are not:
+
+| Order | Given to the group as |
+|---|---|
+| **MOVE** (all five tasks) | A frontage — each formation gets its own destination and its own objective ring |
+| **DEFENCE** (DEFEND / HOLD / GUARD) | A frontage — each holds its own stretch of the line, side by side |
+| **RECON** | A frontage — each searches its own area, sized from its own sensor reach |
+| **ATTACK on ground** | A frontage onto the objective — each formation attacks its own piece of it |
+| **ATTACK on a formation** | **Not spread.** Everything selected attacks the formation that was clicked; a named target is a named target |
+| **COMMANDS** (STOP / FREE MOVEMENT / AUTO ATTACK) | Applied to every formation, flipped from the lead's current state so a mixed selection ends up all one way |
+| **PLANNER** | The lead formation only. A plan is one axis, not one per battalion |
 
 ## 2. Move — five tasks
 
@@ -285,7 +329,7 @@ picture. Ids are prefixed `plan-`.
 | `Lines/DefenceOrderSystem.cs` | Defend / hold / guard: frontage, threat axis, subordinate distribution |
 | `Units/PlannerSystem.cs` | The two drawn axes |
 | `Units/AxisArrow.cs` | The live attack/recon axis arrow — unit to target |
-| `Core/GameController.cs` | Wires all of it and owns the objective-sizing rules |
+| `Core/GameController.cs` | Wires all of it, owns the objective-sizing rules and lays a group's orders out across a frontage (`ForSelectionOnGround`) |
 
 ---
 

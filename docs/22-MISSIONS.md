@@ -50,6 +50,8 @@ All of these are edited in the map editor's **MISSIONS** panel. `MissionDefiniti
 | `skyPhase`, `weatherCondition`, `autoDayNight` | Weather — docs/14-WEATHER.md |
 | `fogOfWar` | Armed on entry. The one editor toggle a mission decides for the player, because a mission is a fight rather than a layout exercise |
 | `area` | The ground the mission is fought over — a closed polygon. Empty means unbounded. See §1a |
+| `friendlyHq` / `enemyHq` | Where each side's headquarters is. Unplaced on an old mission. See §1b |
+| `hqRadiusKm` | How much ground around each counts as the HQ. One radius for both zones |
 | `order` | Position on its campaign board, ascending |
 | `available` | False hides a work-in-progress mission from the board without deleting it |
 
@@ -74,6 +76,48 @@ It does three things at once, and they are the same thing:
 **Which vertices of the fog grid fall inside is baked once**, when the grid is laid, not per sweep: the answer cannot change for the length of a battle, and thousands of point-in-polygon tests several times a second for a constant would be the most expensive thing the fog does. See docs/16-FOG-OF-WAR.md §2b for how the grid is sized to the area.
 
 **Clamping slides along the edge** rather than snapping to the centre. A camera that jumped to the middle of the map when it touched the boundary would be unusable; one that slides feels like a wall.
+
+---
+
+## 1b. HQ zones
+
+`HqZone` in `Assets/Scripts/Data/MissionData.cs`. A point per side plus one
+radius for both, drawn in the editor's MISSIONS panel and stored on the
+**mission record** — not in the map file, for the same reason the area is not:
+they are what the scenario is *about*, rather than what happens to be deployed
+on it.
+
+**Why a mission names them at all.** A scenario is not only a piece of ground
+and two orders of battle — it is a *purpose*, and at operational level the
+purpose is almost always expressed against a headquarters: seize theirs, protect
+ours, get within artillery range of one, keep the other out of range. Without
+somewhere on the map that means "this is the enemy's command post", every
+mission is a meeting engagement, because the only thing either side can be told
+to do is find the other one.
+
+**A point and a radius, not a polygon.** A mission area is a shape because
+coastlines and valleys are shapes; a headquarters is a place, and the only thing
+about it that varies is how much ground around it counts as the HQ — a
+divisional main at five kilometres, a battalion step-up at one.
+
+**One radius for both.** Both headquarters in one scenario are at the same
+echelon, and giving each its own number would be a control nobody has a reason
+to touch. The three sizes offered — **1 / 3 / 8 km** — are the echelons a
+headquarters is actually drawn at, the same argument the area's three box sizes
+make.
+
+**Drawn as range rings.** A zone is a place and a radius, which is exactly what
+`RangeRing` states, so the two read as the same kind of statement about ground
+as a formation's own reach does: a flat band on the terrain, blue for friendly
+and red for enemy, captioned with the name and the radius. The rings are built
+on first use — most maps in the editor are not a mission, and two rings nobody
+asked for would be two more objects re-sampling terrain on every georeference
+shift.
+
+**Nothing enforces them yet.** They are a *statement of where the headquarters
+are*, which is what a designer needs first; objectives and victory conditions
+that read them are the obvious next thing and are deliberately not in this
+change. See §6.
 
 ---
 
@@ -161,6 +205,8 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | **DRAW AREA ON MAP** | Click the corners on the terrain. Right-click or Enter closes it (min 3), Backspace undoes a corner, Esc cancels |
 | **20 KM / 50 KM / 120 KM** | Replaces the area with a box that wide, centred on the point the camera is looking at |
 | **CLEAR AREA** | Drops the area — the mission is unbounded again |
+| **HQ ZONES** — FRIENDLY HQ / ENEMY HQ rows | Each shows its coordinates or *Not placed*. **SET** arms a map click; **✕** clears it |
+| **ZONE SIZE** — 1 / 3 / 8 KM | The radius of both zones. See §1b |
 | **SAVE MISSION + MAP** | Writes the record **and** the current map |
 | **NEW MISSION HERE** | Starts one at the point the camera is looking at, in the chosen campaign |
 | **DELETE MISSION** | Removes it from the board, after a confirmation |
@@ -186,11 +232,12 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | `Data/MissionData.cs` | `Campaign`, `CampaignInfo`, `MissionDefinition`, `MissionBook` |
 | `Data/MissionArea.cs` | The mission's boundary polygon: containment, extent, clamping, and the rectangle builder |
 | `Lines/MissionAreaTool.cs` | Click-to-draw the boundary, and the always-on overlay that shows it |
+| `Units/RangeRing.cs` | Draws the two HQ zones (§1b) — the same flat ground ring a weapon range uses |
 | `Save/MissionLibrary.cs` | Read / write / create / delete, the map fallback, and the `Selected` hand-off |
 | `UI/SinglePlayerUI.cs` | The campaign board and the mission board |
 | `Core/SceneLoader.cs` | Async scene load behind the standard overlay |
 | `UI/UnitPaletteUI.cs` | `BuildMissionsSection` — the editor panel |
-| `Core/GameController.cs` | `OpenMission` / `SaveMission` / `CreateMissionHere` / `DeleteMission` / `ApplyMissionArea`, and reading `MissionLibrary.Selected` at startup |
+| `Core/GameController.cs` | `OpenMission` / `SaveMission` / `CreateMissionHere` / `DeleteMission` / `ApplyMissionArea` / `SetMissionHq` / `RefreshHqZones`, and reading `MissionLibrary.Selected` at startup |
 | `UI/GameHUD.cs` | `SetTitle`, `HomeScene` — the bar says which job the scene is doing |
 | `UI/PauseMenuUI.cs` | `ExitScene` — where EXIT goes |
 
@@ -201,7 +248,7 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 ## 6. Known gaps
 
 - **The shipped missions have no scenarios.** Every one of the seven opens on empty ground at the right place — they are start points and briefings waiting for an order of battle. Lay one out in the editor and save it.
-- **No objectives, no victory condition, no scoring.** A mission is a place and a force; nothing yet says what winning is.
+- **No objectives, no victory condition, no scoring.** A mission is a place and a force; nothing yet says what winning is. The HQ zones (§1b) are the first half of the answer — somewhere on the map that means something — but nothing reads them yet.
 - **No progression.** Every mission is available from the start; `order` decides where it sits on the board and nothing gates it.
 - **No campaign-level state.** Missions do not carry losses forward, and finishing one does not change another.
 - **The editor's undo does not cover mission edits.** Ctrl+Z tracks unit placements, not the MISSIONS panel's fields — including the area.

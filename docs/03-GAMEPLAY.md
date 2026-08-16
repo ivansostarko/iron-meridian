@@ -69,13 +69,15 @@ The editor's left chrome is in two pieces:
 | **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
+| **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **WEATHER CONDITIONS** | Sky phase, auto day/night, weather condition |
 | **MAP** | Tile style, 2D/3D, layers, unit-label size |
 | **DATE AND TIME** | Scenario H-hour and presets |
+| **GROUPS** | *Battle mode only.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
 
-**Nine rows, not fifteen.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, then the dressing.
+**Ten rows, and an eleventh in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
 
@@ -87,7 +89,9 @@ The five ways of putting explosives on a piece of ground — **artillery, air, U
 
 **Why they left the rail.** They were five of the rail's fifteen rows, and the other ten are things you *set up* a scenario with. These are not that: they are things you *do* during one, they are all the same verb, and mixing them into the authoring nav made the rail read as a settings menu with weapons in it. Pulling them into their own cluster says what they have in common and gets them to one click from anywhere.
 
-**The icons never hide.** Everything else that docks on the right — the unit inspector, the group panel, the front-line options — now begins *below* the icon strip rather than under the top bar, so a fire menu can be reached with a formation selected. The panel itself still shares the right edge with them, because two panels cannot occupy one strip of screen: opening a fire menu drops the selection, and selecting a formation closes the fire menu. Closing a menu also stands its launcher down — leaving one armed behind a panel that is off screen would turn the next click on the map into a strike nobody asked for.
+**The cluster is battle-mode only.** It appears when the battle starts and goes when it stops, together with the minimap below it. Calling for fire is something you do *during* a fight: in scenario mode no clock is running, nothing moves between the call and the impact, and a strike laid on a laydown that is still being drawn is a hole in a map rather than an event. Stopping the battle takes any open fire menu down with the icons, which also stands its launcher down.
+
+**Within a battle the icons never hide.** Everything else that docks on the right — the unit inspector, the group panel, the front-line options — begins *below* the icon strip rather than under the top bar, so a fire menu can be reached with a formation selected. The panel itself still shares the right edge with them, because two panels cannot occupy one strip of screen: opening a fire menu drops the selection, and selecting a formation closes the fire menu. Closing a menu also stands its launcher down — leaving one armed behind a panel that is off screen would turn the next click on the map into a strike nobody asked for.
 
 | Icon | Menu | Detail |
 |---|---|---|
@@ -96,6 +100,32 @@ The five ways of putting explosives on a piece of ground — **artillery, air, U
 | Quadcopter | **UAV STRIKES** | Loitering munition, Shahed-class, reconnaissance. docs/19-UAV-STRIKES.md |
 | Interceptor | **MISSILE SYSTEMS** | Ten launchers, NATO and enemy. docs/20-MISSILE-SYSTEMS.md |
 | Warship | **NAVY STRIKE** | Nine mountings, NATO and enemy. docs/21-NAVAL-GUNFIRE.md |
+
+### The minimap
+
+Docked under the strike cluster, same width, so the two read as one block of top-right chrome. **Battle mode only**, for the same reason the fire menus are: it is the picture of a fight.
+
+The map is played at a few kilometres across while a scenario is tens of kilometres wide, so for most of a battle you are looking at one part of something whose shape you cannot see. Zooming out to find it costs the detail you were using; zooming back in costs the position you had. The minimap is the second, fixed-scale view that always shows the whole thing.
+
+| Drawn | Notes |
+|---|---|
+| **Blips** | Every living formation, blue or red. **Selected formations carry a white centre** |
+| **Front line** | Read straight off `FrontlineSystem`'s published line, so the two can never disagree |
+| **Mission boundary** | When a mission is open — the same polygon the fog and the camera clamp use |
+| **View box** | Where the camera is looking, sized from its field of view and standoff, with a tick out of the leading edge for the heading |
+| **Grid** | At a round 1 / 2 / 5 / 10 … km spacing, so distances can be estimated. The width in km is printed underneath |
+
+**North is up and stays up** — it is a map, not a repeat of the camera. **Click anywhere on it to fly the camera there.**
+
+**It obeys the fog.** An enemy formation hidden by fog of war is not drawn. A minimap showing the whole red laydown would be a way round the fog rather than a convenience — see `docs/16-FOG-OF-WAR.md`.
+
+**No terrain imagery, deliberately.** At 244 px a satellite thumbnail is a brown-green smear that hides the blips, and the map itself is right there for anyone who wants to look at ground.
+
+The picture is rasterised into a texture a few times a second rather than built from uGUI rects: a hundred formations would be a hundred `Image` components rebuilt on every move, and the front line is a polyline of several hundred vertices that uGUI cannot draw at all. See `Assets/Scripts/UI/MiniMapUI.cs`.
+
+A single-player mission keeps the minimap — it is gameplay feedback, not editor chrome — and it moves up under the top bar there, because a mission has no strike cluster above it.
+
+**Sharing the right edge.** The four panels that dock on that edge — unit inspector, group panel, front-line options, fire menu — start below the minimap while it is up, so both are readable at once. On a screen too short for that (1280×720), pushing a panel below the minimap would leave it shorter than its own header, so there the panel keeps its normal top and covers the minimap while it is open: the panel was opened deliberately, the minimap is ambient. One place decides it for all four — `GameController.RefreshRightDockTop`.
 
 ### Missions per weapon, not per scenario
 
@@ -168,12 +198,59 @@ Select **two or more** formations — box-select by dragging, or shift-click the
 
 | Block | What it is |
 |---|---|
-| **GROUP ORDERS** | MOVE / ATTACK / DEFEND for the group as a whole. Shown **only when everything selected belongs to the same group** — a bar captioned with a group's name acting on a half-and-half selection would be lying about its scope |
-| Name field + **CREATE GROUP** / **UNGROUP** | Names the current selection as a group, or takes it out of whatever group it is in |
+| **GROUP · &lt;name&gt;** | Which group this selection is — or *NOT A GROUP YET* — and a reminder that its orders are on the bar below the map |
+| Name field + **CREATE GROUP** / **RENAME** / **UNGROUP** | Names the selection as a new group, renames the group it is already in, or takes it out of whatever group it is in |
 | **SELECTED UNITS** | A row per selected formation: icon, name, echelon, and the group it currently belongs to. **⇄** moves that one formation to another group; **✕** deletes it from the map |
 | **EXISTING GROUPS** | Every group with a living member, with its size |
 
-**The order buttons are a mockup.** They carry the same glyphs the single-unit order bar uses and say plainly that the order is not wired up yet. Giving them a *plausible* behaviour — issuing the order to each member in turn — would be worse than doing nothing: a group move is not several unit moves, it is a formation moving with an axis, a frontage and an order of march, and shipping the naive version would make the real one a bug report rather than a feature.
+#### Renaming a group
+
+Select any part of the group, type the new name in the field, press **RENAME**. The field is **pre-filled with the current name**, because a rename is nearly always an edit of what is there rather than a fresh word, and one field feeds both naming buttons — asking for the name twice, once to create and once to rename, would be two inputs for one piece of information.
+
+**Every member is renamed, not just the selected ones.** The name is stored on each formation, so renaming only the selection would split one group into two that share an id and disagree about what they are called. RENAME is greyed out unless everything selected is in one group: a button that looks live and refuses on click is a worse answer than one that says it is unavailable.
+
+#### The group's orders are on the order bar
+
+The panel used to carry its own MOVE / ATTACK / DEFEND bar, which was a mockup that did nothing, in a different place and a different shape from the order bar every other order is given on. **Group orders now live where a formation's orders live** — the bar at the foot of the map — captioned `GROUP ORDERS — <name> · <count>` (or `— N FORMATIONS` when the selection is not one group). All six orders apply, not three, and every formation in the selection carries them out. See `docs/15-COMBAT-ORDERS.md` for the frontage they are spread across.
+
+#### The GROUPS panel — and putting a group on the front line
+
+**Left rail → GROUPS**, battle mode only. The right-hand group panel describes
+*the current selection*; this is the opposite question — what groups exist on
+this map, and where are they? A commander asks that without having selected
+anything, which is exactly when the right-hand panel is not there.
+
+Each row carries the group's name, its size, a side stripe, and two controls:
+
+| Control | Action |
+|---|---|
+| **The row** | Selects the group's formations |
+| **◎** | Selects them and flies the camera so the whole group is framed |
+| **FLOT** | Puts the group on the front line |
+
+**FLOT is the one thing you can do to a group that is not an order.** The front
+line is *derived* — it is where the fighting is, not a control measure anybody
+drew — and until now nothing could be done with it except look at it. But "hold
+the line" is the commonest order at this level, and giving it by hand meant
+clicking DEFENCE once per battalion and eyeballing the spacing along a curve.
+
+One click instead. The line is sampled at **equal arc lengths** — one point per
+formation, at the centre of its share, so the outermost formations sit inside
+the line rather than on its two tips — and each formation is ordered to defend
+its point. Arc length rather than vertex index, because the line is smoothed and
+its vertices bunch up wherever it bends.
+
+**They are set back from the line, not on it.** The FLOT runs *between* the two
+sides, so a formation placed exactly on it would be standing in the contact
+itself. Each objective is offset 1.2 km toward the group's own rear, taken from
+the two sides' centres of mass rather than from the line's local normal: the
+line bends, and a per-point normal would send the flank formations off in
+directions that have nothing to do with where their army is.
+
+Once assigned, the line captions itself **FLOT — &lt;GROUP&gt;** at both ends and the
+panel says who is holding it. **RELEASE** clears the assignment; the formations
+keep the positions they were given, because taking a group off the line is a
+statement about the line, not an order to abandon the ground.
 
 #### Recalling a group
 
@@ -420,12 +497,28 @@ control measure that has not happened yet looks like.
 The weight difference is the point: two identical arrows would be two arrows, a
 weighted pair is a plan.
 
-### Line of sight
+### Line of sight and weapon range
 
 Selecting a unit draws a ring at its view range with the distance **in metres**
 on the ring — in scenario mode as well as battle. **Left rail → GENERAL → LINE OF
-SIGHT** toggles it; on by default. The weapon-range ring is separate and always
-shown.
+SIGHT** toggles it; on by default. The weapon-range ring is separate, in its own
+colour, and toggled by **MAX WEAPON RANGE** beside it.
+
+**Both rings are flat.** A range is a distance measured across the map, so it is
+drawn on the ground: a feathered band lying on the terrain, bright along the true
+radius and fading out on both shoulders, with four cardinal tick spurs so it
+reads as an instrument rather than a halo. The band is clamped to the sampled
+ground the whole way round, so it dips into valleys and rides over spurs exactly
+as the terrain does. Only brightness breathes — the radius states a real distance
+and is never animated.
+
+It used to be a translucent wall of light rising out of the terrain along the
+whole circumference. That was legible, and wrong: standing a range up hides the
+very ground the reach is being judged against, and two rings on one formation
+became a thicket of curtains. The band is wide in *metres* rather than pixels,
+which is what keeps a flat ring visible from twenty kilometres up without it
+becoming a painted stripe close in. Fog contact rings and air-defence contact
+rings (`RangeRing`) are drawn the same way.
 
 ### Fog of war
 
@@ -513,7 +606,16 @@ It is solved as an **influence field**. Every living formation pulls on it, weig
 
 The two sides' weighted front edges are then interpolated by their local strength, so **a stronger side pushes the line into the weaker one** — advance, rout or die and the front moves. The solve runs in metres in a local east-north-up frame, and the result is subdivided by Chaikin corner-cutting into a few hundred vertices, which is what makes it read as a front rather than as a set of measurements.
 
-**The line spans every formation on the map.** It used to be trimmed back to the bands where both sides had real influence, and then trimmed again at the ends — so on any map wider than the fighting it was a short segment hanging in the middle of a deployment that ran well past both of its shoulders, and a formation on the flank sat *outside* the line that was supposed to describe where it stood. Now the span is set by the outermost formation on either side plus the influence width, and no band is dropped: past the last band both sides could be solved for, the front **runs straight on out** to the flank, and a gap between two separate engagements is **bridged** by interpolating across it, so a two-battle map reads as one continuous front.
+**The line spans every formation on the map.** It used to be trimmed back to the bands where both sides had real influence, and then trimmed again at the ends — so on any map wider than the fighting it was a short segment hanging in the middle of a deployment that ran well past both of its shoulders, and a formation on the flank sat *outside* the line that was supposed to describe where it stood. Now the span is set by the outermost formation on either side plus a shoulder, and no band is dropped: past the last band both sides could be solved for, the front **runs straight on out** to the flank, and a gap between two separate engagements is **bridged** by interpolating across it, so a two-battle map reads as one continuous front.
+
+The shoulder is the largest of the influence width, **15% of the deployment's own frontage** and **2.5 km**. Taking it from the influence width alone was not enough: that is a setting, and at its 1 km floor the line finished on top of the flank battalion's own counter, which reads as a front that has run out rather than one that continues beyond contact.
+
+**It is a 2D graphic, painted on the ground.** The FLOT states a fact about a piece of terrain, so it is drawn flat and clamped to the ground the whole way along, in the tilted view as well as the top-down one — never as a curtain standing in the world. Two things make that true, and both are needed:
+
+- Every vertex is **draped**: sampled onto the terrain at 150 m spacing (up to 768 rendered points), so the line runs down into re-entrants and over spurs instead of bridging them and disappearing inside the ridge in between. The front line arrives with its own vertices about 125 m apart, so in practice every one of them is clamped and nothing is bridged.
+- The ribbon is **aligned to the ground plane** rather than billboarded at the camera. A `LineRenderer` at its default `View` alignment rotates to face the viewer, so a 70 m-wide line tilts up out of the terrain as soon as the view comes off vertical — draped in position, but standing up on screen. Flat kinds are aligned to their own transform's Z, which is pointed along the local geodetic up.
+
+The same applies to every kind in `MapLine.FlatOnly`: lateral and rear boundaries, phase lines, and the front line. Defensive lines and battle positions still float clear of the ground, because they mark ground that is being physically held.
 
 Settings, from clicking the line (shipped defaults in **bold**):
 

@@ -569,5 +569,16 @@ namespace IronMeridian.UI
 
             _values[label] = val;
         }
+
+        /// <summary>
+        /// Moves the panel's top edge, so it can clear whatever is docked above
+        /// it on this edge — the fire-menu cluster always, and the minimap too
+        /// once a battle starts. One caller decides for all of them; see
+        /// <c>GameController.RefreshRightDockTop</c>.
+        /// </summary>
+        public void SetTopInset(float pixels)
+        {
+            if (_panel != null) _panel.offsetMax = new Vector2(0, -pixels);
+        }
     }
 }

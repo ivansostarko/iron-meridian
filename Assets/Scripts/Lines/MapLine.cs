@@ -33,6 +33,20 @@ namespace IronMeridian.Lines
     /// that is being physically held — keep the old behaviour, where the flag
     /// chooses how far clear of the ground the graphic floats.
     ///
+    /// **Draped is not the same as flat, and both are needed.** Clamping the
+    /// vertices to the ground only fixes where the ribbon *is*; a
+    /// <c>LineRenderer</c> at <see cref="LineAlignment.View"/> then rotates that
+    /// ribbon to face the camera, so a 70 m-wide front line tilts up out of the
+    /// terrain as soon as the view is off vertical and reads as a wall of colour
+    /// standing in the landscape — exactly the thing a control measure must not
+    /// be. Flat kinds are therefore aligned to their own transform's Z
+    /// (<see cref="OrientFlat"/>), which is pointed along the local geodetic up,
+    /// so the ribbon lies in the ground plane and is painted on the map from
+    /// every camera angle. They are also draped at
+    /// <see cref="FlatDrapeSpacingM"/> rather than the standard spacing: a line
+    /// lying *on* the ground shows every fold it crosses, so it has to be
+    /// sampled finely enough to follow them.
+    ///
     /// Because Cesium streams tiles, the first clamp routinely finds no ground.
     /// The line keeps re-clamping until every sample has real terrain under it,
     /// then stops — with an attempt cap, because ground the camera never goes
@@ -55,8 +69,28 @@ namespace IronMeridian.Lines
         const double ClearanceDrapedM = 30.0;
         /// <summary>Ground spacing between draped samples along a segment, metres.</summary>
         const double DrapeSpacingM = 220.0;
+        /// <summary>
+        /// Ground spacing for a <see cref="FlatOnly"/> kind. Tighter, because
+        /// these lie on the terrain rather than floating over it: at 220 m a
+        /// hand-drawn boundary bridges a re-entrant instead of running down
+        /// into it, and the part that bridges is buried.
+        ///
+        /// Not tighter still, deliberately. The front line already arrives with
+        /// its own vertices ~125 m apart (41 bands, three Chaikin passes), and
+        /// every sample is a terrain raycast on a line that is re-solved every
+        /// few seconds — halving this would double that cost for ground
+        /// resolution finer than the streamed terrain itself.
+        /// </summary>
+        const double FlatDrapeSpacingM = 150.0;
         /// <summary>Ceiling on rendered vertices — the drape spacing is widened to stay under it.</summary>
         const int MaxRenderPoints = 512;
+        /// <summary>
+        /// The same ceiling for a flat kind. Higher, because the front line is
+        /// the longest graphic on the map and the one whose whole job is to
+        /// follow the ground; it is still bounded, so a hundred-kilometre line
+        /// costs a fixed number of terrain samples rather than one per 150 m.
+        /// </summary>
+        const int MaxFlatRenderPoints = 768;
         /// <summary>Seconds between re-clamps while some sample still has no terrain under it.</summary>
         const float ReclampSeconds = 1.5f;
         /// <summary>
@@ -158,7 +192,10 @@ namespace IronMeridian.Lines
             _lr = gameObject.AddComponent<LineRenderer>();
             _lr.useWorldSpace = true;
             _lr.textureMode = LineTextureMode.Tile;
-            _lr.alignment = LineAlignment.View;
+            // Flat kinds lie in the ground plane and are aligned to this
+            // object's Z, which OrientFlat points along the local up. Everything
+            // else is a graphic standing in the world and keeps billboarding.
+            _lr.alignment = FlatOnly ? LineAlignment.TransformZ : LineAlignment.View;
             _lr.numCapVertices = 4;
             _lr.numCornerVertices = 4;
             ApplyStyle();
@@ -344,6 +381,8 @@ namespace IronMeridian.Lines
             _lr.positionCount = _render.Count;
             _lr.SetPositions(_render.ToArray());
 
+            if (FlatOnly) OrientFlat(pts[pts.Count / 2]);
+
             _reclampTimer = ReclampSeconds;
             RefreshLabels();
             if (Pickable) BuildPicker();
@@ -364,8 +403,43 @@ namespace IronMeridian.Lines
 
             // Every segment costs at least one sample, so the budget for the
             // subdivision is what is left after the authored points.
-            int budget = Mathf.Max(1, MaxRenderPoints - pts.Count);
-            return System.Math.Max(DrapeSpacingM, metres / budget);
+            int ceiling = FlatOnly ? MaxFlatRenderPoints : MaxRenderPoints;
+            double target = FlatOnly ? FlatDrapeSpacingM : DrapeSpacingM;
+            int budget = Mathf.Max(1, ceiling - pts.Count);
+            return System.Math.Max(target, metres / budget);
+        }
+
+        /// <summary>
+        /// Points this object's Z along the local geodetic up, which is what
+        /// makes a <see cref="LineAlignment.TransformZ"/> ribbon lie flat on the
+        /// ground instead of standing up towards the camera.
+        ///
+        /// Taken at the line's midpoint rather than per vertex — a
+        /// <c>LineRenderer</c> has one alignment for the whole line, and over
+        /// the tens of kilometres a scenario spans the globe's curvature moves
+        /// "up" by a fraction of a degree. Re-derived on every rebuild, so it
+        /// also survives Cesium re-origining the georeference.
+        ///
+        /// The drawn positions are world-space (<c>useWorldSpace</c>), so
+        /// rotating this transform moves nothing on screen; the captions place
+        /// themselves in world space each frame, and the click ribbon is built
+        /// through <c>InverseTransformPoint</c>, so both follow.
+        /// </summary>
+        void OrientFlat(GeoPoint mid)
+        {
+            Vector3 ground = GeoUtils.GeoToUnity(_geo, mid.latitude, mid.longitude, mid.heightMeters);
+            Vector3 up = GeoUtils.GeoToUnity(_geo, mid.latitude, mid.longitude, mid.heightMeters + 1000.0) - ground;
+            if (up.sqrMagnitude < 1e-4f) return;
+            up.Normalize();
+
+            // Any axis across the up will do — only Z is read — but taking it
+            // from local north keeps the transform readable in the inspector.
+            Vector3 north = GeoUtils.GeoToUnity(_geo, mid.latitude + 0.01, mid.longitude, mid.heightMeters) - ground;
+            north = Vector3.ProjectOnPlane(north, up);
+            if (north.sqrMagnitude < 1e-4f) north = Vector3.Cross(up, Vector3.right);
+            if (north.sqrMagnitude < 1e-4f) return;
+
+            transform.rotation = Quaternion.LookRotation(up, north.normalized);
         }
 
         /// <summary>

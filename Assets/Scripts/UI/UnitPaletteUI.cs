@@ -69,8 +69,10 @@ namespace IronMeridian.UI
 
         enum Section
         {
-            General, Units, Players, Commanders, Effects, Missions,
-            Weather, Map, DateTime
+            General, Units, Players, Commanders, Logistics, Effects, Missions,
+            Weather, Map, DateTime,
+            /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
+            Groups
         }
         enum ListMode { Available, Deployed }
 
@@ -138,7 +140,7 @@ namespace IronMeridian.UI
         /// </summary>
         const float ListTop = -90f;
         /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 374f;
+        const float HeaderHeight = 446f;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -261,7 +263,8 @@ namespace IronMeridian.UI
             GameClock clock, WeatherSystem weather, EffectPlacementTool effects,
             ArtilleryStrikeSystem artillery, AirStrikeSystem airStrike,
             UavStrikeSystem uavStrike, NavalStrikeSystem naval,
-            MapControlsUI mapControls, StrikeDockUI strikeDock)
+            MapControlsUI mapControls, StrikeDockUI strikeDock,
+            IronMeridian.Logistics.LogisticsSystem logistics)
         {
             _canvas = canvas;
             _map = map;
@@ -276,6 +279,7 @@ namespace IronMeridian.UI
             _naval = naval;
             _mapControls = mapControls;
             _strikeDock = strikeDock;
+            _logistics = logistics;
 
             // The section panel is created first so it draws *behind* the rail —
             // uGUI paints in hierarchy order, and the closed position tucks the
@@ -302,21 +306,25 @@ namespace IronMeridian.UI
             _sectionContent[Section.Units] = MakeSectionContent(body, "Units");
             _sectionContent[Section.Players] = MakeSectionContent(body, "Players");
             _sectionContent[Section.Commanders] = MakeSectionContent(body, "Commanders");
+            _sectionContent[Section.Logistics] = MakeSectionContent(body, "Logistics");
             _sectionContent[Section.Effects] = MakeSectionContent(body, "Effects");
             _sectionContent[Section.Missions] = MakeSectionContent(body, "Missions");
             _sectionContent[Section.Weather] = MakeSectionContent(body, "Weather");
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.DateTime] = MakeSectionContent(body, "DateTime");
+            _sectionContent[Section.Groups] = MakeSectionContent(body, "Groups");
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
             BuildPlayersSection(_sectionContent[Section.Players]);
             BuildCommandersSection(_sectionContent[Section.Commanders]);
+            BuildLogisticsSection(_sectionContent[Section.Logistics]);
             BuildEffectsSection(_sectionContent[Section.Effects]);
             BuildMissionsSection(_sectionContent[Section.Missions]);
             BuildWeatherSection(_sectionContent[Section.Weather]);
             BuildMapSection(_sectionContent[Section.Map]);
             BuildDateTimeSection(_sectionContent[Section.DateTime]);
+            BuildGroupsSection(_sectionContent[Section.Groups]);
 
             // The four fire menus live in the strike dock's pages rather than in
             // this rail. They are still built here because their controls are
@@ -438,6 +446,10 @@ namespace IronMeridian.UI
             // The commanders page skips rebuilds while it is shut — loading a
             // map would otherwise rebuild it once per formation spawned.
             if (section == Section.Commanders) _commanders?.OnShown();
+            // Both of these read live state rather than holding their own, so
+            // they are rebuilt on the way in rather than kept in step while shut.
+            if (section == Section.Groups) RefreshGroups();
+            if (section == Section.Logistics) RefreshLogistics();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -573,13 +585,21 @@ namespace IronMeridian.UI
             AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
             AddNavRow(panel, Section.Players, "PLAYERS", UiIcons.Shield, -116);
             AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -152);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -188);
+            AddNavRow(panel, Section.Logistics, "LOGISTICS", UiIcons.Pallet, -188);
+            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -224);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -224);
-            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -260);
-            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -296);
-            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -332);
+            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -260);
+            AddNavRow(panel, Section.Weather, "WEATHER CONDITIONS", UiIcons.Cloud, -296);
+            AddNavRow(panel, Section.Map, "MAP", UiIcons.Layers, -332);
+            AddNavRow(panel, Section.DateTime, "DATE AND TIME", UiIcons.Clock, -368);
+
+            // Last, and hidden until a battle starts — see SetBattleMode. A
+            // group is something you command, not something you author, so the
+            // row appears with the rest of the battle chrome rather than
+            // sitting greyed out through the whole of a scenario's layout.
+            _groupsNavRow = AddNavRow(panel, Section.Groups, "GROUPS", UiIcons.Group, -404);
+            _groupsNavRow.gameObject.SetActive(false);
 
             var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
             rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
@@ -587,7 +607,7 @@ namespace IronMeridian.UI
             rule.anchoredPosition = new Vector2(0, -HeaderHeight + 6);
         }
 
-        void AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, float y)
+        RectTransform AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, float y)
         {
             var row = UIFactory.CreatePanel(panel, "Nav_" + label, new Color(0, 0, 0, 0));
             UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(RailWidth, 34));
@@ -617,6 +637,7 @@ namespace IronMeridian.UI
             UIFactory.Fit(text);
 
             _navRows.Add((section, label, row.GetComponent<Image>(), img, text, bar));
+            return row;
         }
 
         // ----------------------------------------------------- general section
@@ -864,12 +885,19 @@ namespace IronMeridian.UI
             _affiliation = team == Team.User ? Affiliation.Friendly : Affiliation.Hostile;
             _blueFill.color = team == Team.User ? UiTheme.Friendly : UiTheme.Surface;
             _redFill.color = team == Team.Enemy ? UiTheme.Hostile : UiTheme.Surface;
+            // The rear area follows the team tab rather than carrying a second
+            // side control of its own — see BuildLogisticsSection.
+            if (_logistics != null) _logistics.Team = team;
+            RefreshLogistics();
             Populate();
         }
 
         void OnUnitsChanged()
         {
             if (_listMode == ListMode.Deployed) Populate();
+            // A group is a property of the units in it, so the group list has
+            // nothing else to hear about a formation joining, leaving or dying.
+            RefreshGroups();
         }
 
         // ------------------------------------------------------------ list
@@ -1232,6 +1260,384 @@ namespace IronMeridian.UI
         /// how they are drawn is an implementation detail, and the same section
         /// would hold a decal or a mesh effect later.
         /// </summary>
+        // ------------------------------------------------------ groups section
+
+        /// <summary>Select every formation in a group.</summary>
+        public System.Action<string> GroupSelectRequested;
+        /// <summary>Select them and fly the camera so the whole group is framed.</summary>
+        public System.Action<string> GroupFlyRequested;
+        /// <summary>Put a group on the front line — see <c>GameController.ManTheFlot</c>.</summary>
+        public System.Action<string> GroupFlotRequested;
+        /// <summary>Release whichever group is holding the front line.</summary>
+        public System.Action GroupFlotClearRequested;
+
+        RectTransform _groupsNavRow, _groupsList;
+        Text _groupsFlotState;
+        string _flotHolder = "";
+
+        /// <summary>
+        /// The order of battle as the player has grouped it, and the one thing
+        /// you can do to a group that is not an order: put it on the front line.
+        ///
+        /// **Why this is not the group panel.** The panel on the right describes
+        /// *the current selection* — it appears when two things are selected and
+        /// goes when they are not. This is the opposite question: what groups
+        /// exist on this map, and where are they? A commander asks that without
+        /// having selected anything, which is exactly when the right-hand panel
+        /// is not there.
+        ///
+        /// See docs/03-GAMEPLAY.md § Groups.
+        /// </summary>
+        void BuildGroupsSection(RectTransform content)
+        {
+            SectionLabel(content, "FRONT LINE", -8);
+
+            var flotFrame = UIFactory.CreateBorderedPanel(content, "FlotHolder", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(flotFrame, new Vector2(0f, 1f), new Vector2(Pad, -28), new Vector2(InnerWidth, 40));
+
+            _groupsFlotState = UIFactory.CreateText(flotFrame, "", UiTheme.FontSmall, UiTheme.TextDim,
+                TextAnchor.MiddleLeft);
+            UIFactory.Place(_groupsFlotState.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(12, 0), new Vector2(InnerWidth - 82f, 30));
+            UIFactory.Fit(_groupsFlotState, 8);
+
+            var release = UIFactory.CreateButton(flotFrame, "RELEASE",
+                () => GroupFlotClearRequested?.Invoke(), UiTheme.SurfaceHover, UiTheme.TextDim, 10);
+            UIFactory.Place((RectTransform)release.transform, new Vector2(1f, 0.5f),
+                new Vector2(-8, 0), new Vector2(62, 24));
+
+            SectionLabel(content, "GROUPS ON THIS MAP", -80);
+
+            var scroll = UIFactory.CreateScrollView(content, out _groupsList, withScrollbar: true);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
+            srt.offsetMin = new Vector2(Pad, 76);
+            srt.offsetMax = new Vector2(-Pad, -100);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var layout = _groupsList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 4; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            var hint = UIFactory.CreateText(content,
+                "Click a group to select it, ◎ to fly to it. FLOT sends the whole group to the front " +
+                "line: its formations are spread evenly along the line and each digs in on its own " +
+                "stretch, facing the enemy. Groups are named on the right-hand panel with two or more " +
+                "formations selected.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 0f), new Vector2(Pad, 6),
+                new Vector2(InnerWidth, 66));
+
+            RefreshGroups();
+        }
+
+        /// <summary>Names the group currently holding the front line, "" for none.</summary>
+        public void SetFlotHolder(string groupName)
+        {
+            _flotHolder = groupName ?? "";
+            if (_groupsFlotState != null)
+                _groupsFlotState.text = string.IsNullOrEmpty(_flotHolder)
+                    ? "No group is holding the FLOT."
+                    : $"FLOT held by {_flotHolder}.";
+        }
+
+        /// <summary>
+        /// Rebuilds the group list from the registry. Called when the section is
+        /// opened and whenever the order of battle changes — a group is a
+        /// property of the units in it, so there is no group list to subscribe
+        /// to.
+        /// </summary>
+        public void RefreshGroups()
+        {
+            if (_groupsList == null) return;
+            SetFlotHolder(_flotHolder);
+
+            // Cheap when shut: the registry changes on every spawn, move and
+            // casualty, and rebuilding a list nobody is looking at would be a
+            // few dozen uGUI objects churned per combat tick.
+            if (!_sectionContent.TryGetValue(Section.Groups, out var page) ||
+                !page.gameObject.activeSelf) return;
+
+            ClearChildren(_groupsList);
+
+            var order = new List<string>();
+            var names = new Dictionary<string, string>();
+            var counts = new Dictionary<string, int>();
+            var sides = new Dictionary<string, Team>();
+
+            foreach (var u in UnitRegistry.All)
+            {
+                if (u == null || !u.IsAlive || string.IsNullOrEmpty(u.State.groupId)) continue;
+                string id = u.State.groupId;
+                if (!counts.ContainsKey(id))
+                {
+                    order.Add(id);
+                    names[id] = string.IsNullOrEmpty(u.State.groupName) ? "Unnamed group" : u.State.groupName;
+                    counts[id] = 0;
+                    sides[id] = u.State.TeamEnum;
+                }
+                counts[id]++;
+            }
+
+            if (order.Count == 0)
+            {
+                var empty = UIFactory.CreateText(_groupsList,
+                    "No groups yet. Select two or more formations and name them on the right.",
+                    UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 44);
+                return;
+            }
+
+            foreach (var id in order) GroupRow(id, names[id], counts[id], sides[id]);
+        }
+
+        void GroupRow(string id, string name, int count, Team side)
+        {
+            var row = UIFactory.CreateBorderedPanel(_groupsList, "Group_" + id, UiTheme.Surface, UiTheme.Border);
+            row.sizeDelta = new Vector2(0, 52);
+
+            var select = UIFactory.CreateButton(row, "", () => GroupSelectRequested?.Invoke(id),
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)select.transform);
+            var caption = select.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            // Side stripe: which army this is, readable before the name is.
+            var stripe = UIFactory.CreatePanel(row, "Side",
+                side == Team.Enemy ? GameConfig.RedTeam : GameConfig.BlueTeam);
+            stripe.anchorMin = new Vector2(0, 0); stripe.anchorMax = new Vector2(0, 1);
+            stripe.pivot = new Vector2(0, 0.5f);
+            stripe.sizeDelta = new Vector2(3, -8);
+            stripe.GetComponent<Image>().raycastTarget = false;
+
+            UIFactory.CreateStackedLabels(row, name,
+                $"{count} formation(s)   ·   {(side == Team.Enemy ? "ENEMY" : "FRIENDLY")}",
+                12f, InnerWidth - 108f, topInset: 8f);
+
+            var fly = UIFactory.CreateButton(row, "◎", () => GroupFlyRequested?.Invoke(id),
+                UiTheme.SurfaceHover, UiTheme.Text, 12);
+            UIFactory.Place((RectTransform)fly.transform, new Vector2(1f, 1f),
+                new Vector2(-8, -8), new Vector2(26, 20));
+
+            var flot = UIFactory.CreateButton(row, "FLOT", () => GroupFlotRequested?.Invoke(id),
+                UiTheme.AccentWash, UiTheme.Accent, 10);
+            UIFactory.Place((RectTransform)flot.transform, new Vector2(1f, 0f),
+                new Vector2(-8, 8), new Vector2(58, 20));
+            UiTooltip.Attach(flot.gameObject,
+                "Put this group on the front line — one stretch each, facing the enemy",
+                UiTooltip.Side.Left);
+        }
+
+        /// <summary>
+        /// Shows or hides the battle-only chrome on the rail. Right now that is
+        /// the GROUPS row: a group is something you command rather than
+        /// something you author, and a row that did nothing for the whole of a
+        /// scenario's layout would be a row in the way.
+        /// </summary>
+        public void SetBattleMode(bool running)
+        {
+            if (_groupsNavRow != null) _groupsNavRow.gameObject.SetActive(running);
+
+            if (running) RefreshGroups();
+            else if (_section == Section.Groups && _panelOpen) ClosePanel();
+        }
+
+        // -------------------------------------------------- logistics section
+
+        IronMeridian.Logistics.LogisticsSystem _logistics;
+        readonly List<(LogisticsKind kind, Image fill, Text label)> _logisticsButtons =
+            new List<(LogisticsKind, Image, Text)>();
+        RectTransform _logisticsList;
+        Text _logisticsCount, _logisticsSide;
+
+        /// <summary>
+        /// The rear area, laid out on the map.
+        ///
+        /// **Driven entirely from <see cref="LogisticsCatalog"/>.** Six buttons
+        /// are read off the catalogue's rows, so a seventh kind of installation
+        /// appears here, on the map and in the save file without this method
+        /// being touched — the same arrangement the artillery natures and the
+        /// movement tasks use.
+        ///
+        /// **The team tab decides the side.** A scenario has two rear areas and
+        /// the designer lays out both; rather than a second team control here,
+        /// the panel follows the one already in UNITS, so whichever side you
+        /// are deploying formations for is the side you are deploying its
+        /// supply for.
+        ///
+        /// See docs/26-LOGISTICS.md.
+        /// </summary>
+        void BuildLogisticsSection(RectTransform content)
+        {
+            SectionLabel(content, "DEPLOY ON MAP", -8);
+
+            // Which army the next site belongs to. The panel takes the side
+            // from the UNITS tab rather than carrying its own control, so it
+            // has to *say* which one that is — a deploy button whose side is
+            // decided on another page is a button you press to find out.
+            _logisticsSide = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextDim,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            UIFactory.Place(_logisticsSide.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad + InnerWidth - 110f, -8), new Vector2(110, 18));
+
+            float y = -28f;
+            foreach (var def in LogisticsCatalog.All)
+            {
+                LogisticsButton(content, def, y);
+                y -= 50f;
+            }
+
+            var stop = UIFactory.CreateBorderedPanel(content, "StopDeploying", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 4f), new Vector2(InnerWidth, 30));
+            var stopBtn = UIFactory.CreateButton(stop, "STOP DEPLOYING",
+                () => { if (_logistics != null) _logistics.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)stopBtn.transform);
+
+            float listTop = y - 44f;
+            _logisticsCount = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            UIFactory.Place(_logisticsCount.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, listTop), new Vector2(InnerWidth, 16));
+
+            // The deployed list takes whatever height is left rather than a
+            // fixed block: it is the only part of this panel that grows.
+            var scroll = UIFactory.CreateScrollView(content, out _logisticsList, withScrollbar: true);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
+            srt.offsetMin = new Vector2(Pad, 42);
+            srt.offsetMax = new Vector2(-Pad, listTop - 18f);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var layout = _logisticsList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 3; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            var clear = UIFactory.CreateBorderedPanel(content, "ClearLogistics", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(clear, new Vector2(0f, 0f), new Vector2(Pad, 6), new Vector2(InnerWidth, 30));
+            var clearBtn = UIFactory.CreateButton(clear, "REMOVE ALL SITES",
+                () => LogisticsClearRequested?.Invoke(),
+                new Color(0, 0, 0, 0), UiTheme.Danger, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)clearBtn.transform);
+
+            RefreshLogistics();
+        }
+
+        /// <summary>Drop every logistic installation on the map.</summary>
+        public System.Action LogisticsClearRequested;
+
+        void LogisticsButton(RectTransform content, LogisticsDef def, float y)
+        {
+            var kind = def.kind;
+            var frame = UIFactory.CreateBorderedPanel(content, "Log_" + kind, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 46));
+
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_logistics != null) _logistics.Toggle(kind); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var caption = btn.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.gameObject.SetActive(false);
+
+            var icon = UIFactory.CreateImage(frame, UiIcons.GlyphFor(kind), "Glyph");
+            icon.color = def.tint;
+            icon.raycastTarget = false;
+            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
+                new Vector2(12, 0), new Vector2(24, 24));
+
+            var (name, _) = UIFactory.CreateStackedLabels(frame, def.name, def.detail,
+                46f, InnerWidth - 96f, topInset: 6f);
+
+            // The ground it serves, stated on the button: it is the number that
+            // decides where the site goes, so it belongs where the choice is made.
+            var reach = UIFactory.CreateText(frame, $"{def.serviceRadiusKm:0.#} km",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
+            UIFactory.Place(reach.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(44, 16));
+
+            _logisticsButtons.Add((kind, frame.Find("Fill").GetComponent<Image>(), name));
+        }
+
+        /// <summary>
+        /// Repaints from the system's own state — it owns what is armed and
+        /// what is on the map, not the panel.
+        /// </summary>
+        public void RefreshLogistics()
+        {
+            if (_logistics == null) return;
+
+            foreach (var (kind, fill, label) in _logisticsButtons)
+            {
+                bool on = _logistics.Armed.HasValue && _logistics.Armed.Value == kind;
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+
+            if (_logisticsList == null) return;
+
+            if (_logisticsSide != null)
+            {
+                bool enemySide = _team == Team.Enemy;
+                _logisticsSide.text = enemySide ? "FOR ENEMY" : "FOR FRIENDLY";
+                _logisticsSide.color = enemySide ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            }
+
+            int blue = _logistics.CountFor(Team.User), red = _logistics.CountFor(Team.Enemy);
+            if (_logisticsCount != null)
+                _logisticsCount.text = $"DEPLOYED — {blue} FRIENDLY · {red} ENEMY";
+
+            ClearChildren(_logisticsList);
+
+            foreach (var site in _logistics.Sites)
+            {
+                if (site == null) continue;
+                var def = LogisticsCatalog.Get(site.Kind);
+                bool enemy = site.Data.team == Team.Enemy.ToString();
+
+                var row = UIFactory.CreatePanel(_logisticsList, "Site_" + site.Data.id, UiTheme.SurfaceSubtle);
+                row.sizeDelta = new Vector2(0, 30);
+
+                var pip = UIFactory.CreateImage(row, UiIcons.GlyphFor(site.Kind), "Glyph");
+                pip.color = def.tint;
+                pip.raycastTarget = false;
+                UIFactory.Place((RectTransform)pip.transform, new Vector2(0f, 0.5f),
+                    new Vector2(8, 0), new Vector2(16, 16));
+
+                var label = UIFactory.CreateText(row,
+                    $"{def.name}   ·   {site.Data.latitude:0.###}, {site.Data.longitude:0.###}",
+                    UiTheme.FontLabel, enemy ? GameConfig.RedTeam : GameConfig.BlueTeam,
+                    TextAnchor.MiddleLeft);
+                var lr = label.rectTransform;
+                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                lr.offsetMin = new Vector2(30, 0);
+                lr.offsetMax = new Vector2(-58, 0);
+                UIFactory.Fit(label, 8);
+
+                var captured = site;
+                var focus = UIFactory.CreateButton(row, "◎", () => LogisticsFocusRequested?.Invoke(captured),
+                    UiTheme.SurfaceHover, UiTheme.Text, 12);
+                UIFactory.Place((RectTransform)focus.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-30, 0), new Vector2(24, 24));
+
+                var del = UIFactory.CreateButton(row, "✕", () => LogisticsRemoveRequested?.Invoke(captured),
+                    new Color(0.55f, 0.18f, 0.18f), UiTheme.Text, 12);
+                UIFactory.Place((RectTransform)del.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-4, 0), new Vector2(24, 24));
+            }
+        }
+
+        /// <summary>Fly the camera to a deployed site.</summary>
+        public System.Action<IronMeridian.Logistics.LogisticsSite> LogisticsFocusRequested;
+        /// <summary>Take one site off the map.</summary>
+        public System.Action<IronMeridian.Logistics.LogisticsSite> LogisticsRemoveRequested;
+
+        static void ClearChildren(RectTransform content)
+        {
+            // Unparent before Destroy: destruction is deferred to end of frame,
+            // so old rows would otherwise sit in the layout beside the new ones.
+            for (int i = content.childCount - 1; i >= 0; i--)
+            {
+                var child = content.GetChild(i);
+                child.SetParent(null, false);
+                Destroy(child.gameObject);
+            }
+        }
+
         void BuildEffectsSection(RectTransform content)
         {
             SectionLabel(content, "PLACE ON MAP", -8);
@@ -1987,15 +2393,16 @@ namespace IronMeridian.UI
             }, out _missionFogLabel);
 
             BuildMissionAreaBlock(content);
+            BuildHqZoneBlock(content);
 
             // --- actions ---
             var save = UIFactory.CreateBorderedPanel(content, "SaveMission", UiTheme.Success, UiTheme.Success);
-            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -724), new Vector2(InnerWidth, 36));
+            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -HqBlockBottom - 12f), new Vector2(InnerWidth, 36));
             var saveBtn = UIFactory.CreateButton(save, "SAVE MISSION + MAP", CommitMission,
                 new Color(0, 0, 0, 0), Color.white, UiTheme.FontSmall);
             UIFactory.Stretch((RectTransform)saveBtn.transform);
 
-            MissionActionButton(content, "NEW MISSION HERE", -768, UiTheme.Surface, UiTheme.Text, () =>
+            MissionActionButton(content, "NEW MISSION HERE", -HqBlockBottom - 56f, UiTheme.Surface, UiTheme.Text, () =>
             {
                 string name = _missionName != null && !string.IsNullOrWhiteSpace(_missionName.text)
                     ? _missionName.text.Trim()
@@ -2003,7 +2410,7 @@ namespace IronMeridian.UI
                 MissionCreateRequested?.Invoke(_missionCampaign, name);
             });
 
-            MissionActionButton(content, "DELETE MISSION", -808, UiTheme.Danger, Color.white, () =>
+            MissionActionButton(content, "DELETE MISSION", -HqBlockBottom - 96f, UiTheme.Danger, Color.white, () =>
             {
                 if (_mission != null) MissionDeleteRequested?.Invoke(_mission);
             });
@@ -2011,7 +2418,7 @@ namespace IronMeridian.UI
             _missionStatus = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.Accent,
                 TextAnchor.UpperLeft);
             UIFactory.Place(_missionStatus.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad, -850), new Vector2(InnerWidth, 34));
+                new Vector2(Pad, -HqBlockBottom - 138f), new Vector2(InnerWidth, 34));
 
             var hint = UIFactory.CreateText(content,
                 "A mission is this record plus its map file, and SAVE writes both — so whatever is on the " +
@@ -2023,14 +2430,19 @@ namespace IronMeridian.UI
                 "Missions are saved to your own copy of the list, which shadows the shipped one. Delete " +
                 "missions.json from the save folder to go back to the missions the game ships with.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -888),
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -HqBlockBottom - 176f),
                 new Vector2(InnerWidth, 250));
 
             RefreshMissionList();
         }
 
-        /// <summary>Height of the MISSIONS page inside its scroll view.</summary>
-        const float MissionsPageHeight = 1160f;
+        /// <summary>
+        /// Height of the MISSIONS page inside its scroll view. Grew with the HQ
+        /// ZONES block — everything below it is placed relative to
+        /// <see cref="HqBlockBottom"/> so the page and its contents can never
+        /// drift apart.
+        /// </summary>
+        const float MissionsPageHeight = HqBlockBottom + 440f;
 
         /// <summary>
         /// Wraps a section's content in a scroll view of a fixed page height,
@@ -2116,6 +2528,140 @@ namespace IronMeridian.UI
 
             MissionActionButton(content, "CLEAR AREA", -678, UiTheme.Surface, UiTheme.TextDim,
                 () => MissionAreaClearRequested?.Invoke());
+        }
+
+        // ---------------------------------------------------------- HQ zones
+
+        /// <summary>Arm a map pick for one side's headquarters.</summary>
+        public System.Action<Team> MissionHqSetRequested;
+        /// <summary>Take one side's headquarters off the map.</summary>
+        public System.Action<Team> MissionHqClearRequested;
+        /// <summary>Resize both zones, km.</summary>
+        public System.Action<float> MissionHqRadiusRequested;
+
+        Text _friendlyHqState, _friendlyHqFigures, _enemyHqState, _enemyHqFigures;
+        readonly List<(float km, Image fill, Text label)> _hqRadiusButtons =
+            new List<(float, Image, Text)>();
+
+        /// <summary>Top of the HQ ZONES block, and the bottom it hands back to the page.</summary>
+        const float HqBlockTop = 718f;
+        const float HqBlockBottom = HqBlockTop + 176f;
+
+        /// <summary>
+        /// Where the two headquarters are.
+        ///
+        /// **Why a mission names them.** A scenario is not only a piece of
+        /// ground and two orders of battle — it is a *purpose*, and at
+        /// operational level the purpose is almost always expressed against a
+        /// headquarters: seize theirs, protect ours, get within artillery range
+        /// of one, keep the other out of range. Without somewhere on the map
+        /// that means "this is the enemy's command post" every mission is a
+        /// meeting engagement, because the only thing either side can be told
+        /// to do is find the other one.
+        ///
+        /// Two zones, one radius, both belonging to the **mission record**
+        /// rather than to the map file — the same split the mission area uses,
+        /// and for the same reason: they are what the scenario is *about*, not
+        /// what happens to be deployed on it.
+        ///
+        /// See docs/22-MISSIONS.md.
+        /// </summary>
+        void BuildHqZoneBlock(RectTransform content)
+        {
+            SectionLabel(content, "HQ ZONES", -HqBlockTop);
+
+            HqRow(content, Team.User, "FRIENDLY HQ", GameConfig.BlueTeam, -HqBlockTop - 20f,
+                out _friendlyHqState, out _friendlyHqFigures);
+            HqRow(content, Team.Enemy, "ENEMY HQ", GameConfig.RedTeam, -HqBlockTop - 70f,
+                out _enemyHqState, out _enemyHqFigures);
+
+            SectionLabel(content, "ZONE SIZE", -HqBlockTop - 118f);
+
+            // The three echelons a headquarters is actually drawn at. Typing a
+            // number would be a decision nobody has a reason to make — the same
+            // argument the mission area's three box sizes make.
+            float third = (InnerWidth - 8f) / 3f;
+            HqRadiusButton(content, "1 KM", 1f, 0, third, -HqBlockTop - 138f);
+            HqRadiusButton(content, "3 KM", 3f, 1, third, -HqBlockTop - 138f);
+            HqRadiusButton(content, "8 KM", 8f, 2, third, -HqBlockTop - 138f);
+        }
+
+        void HqRow(RectTransform content, Team team, string label, Color tint, float y,
+            out Text state, out Text figures)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Hq_" + team, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 44));
+
+            // Side stripe rather than a coloured caption: the row's own text
+            // has to stay readable, and which army this is should be legible
+            // before a word of it is read.
+            var stripe = UIFactory.CreatePanel(frame, "Side", tint);
+            stripe.anchorMin = new Vector2(0, 0); stripe.anchorMax = new Vector2(0, 1);
+            stripe.pivot = new Vector2(0, 0.5f);
+            stripe.sizeDelta = new Vector2(3, -8);
+            stripe.GetComponent<Image>().raycastTarget = false;
+
+            var (title, detail) = UIFactory.CreateStackedLabels(frame, label, "Not placed",
+                12f, InnerWidth - 104f, topInset: 5f);
+            state = title;
+            figures = detail;
+
+            var captured = team;
+            var set = UIFactory.CreateButton(frame, "SET",
+                () => MissionHqSetRequested?.Invoke(captured), UiTheme.SurfaceHover, UiTheme.Text, 11);
+            UIFactory.Place((RectTransform)set.transform, new Vector2(1f, 0.5f),
+                new Vector2(-38, 0), new Vector2(48, 26));
+            UiTooltip.Attach(set.gameObject, "Click the map to place this headquarters",
+                UiTooltip.Side.Left);
+
+            var clear = UIFactory.CreateButton(frame, "✕",
+                () => MissionHqClearRequested?.Invoke(captured), UiTheme.Surface, UiTheme.TextDim, 12);
+            UIFactory.Place((RectTransform)clear.transform, new Vector2(1f, 0.5f),
+                new Vector2(-8, 0), new Vector2(24, 24));
+        }
+
+        void HqRadiusButton(RectTransform content, string label, float km, int index,
+            float width, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "HqR_" + label, UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f),
+                new Vector2(Pad + index * (width + 4f), y), new Vector2(width, 30));
+
+            var btn = UIFactory.CreateButton(frame, label, () => MissionHqRadiusRequested?.Invoke(km),
+                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
+            UIFactory.Stretch((RectTransform)btn.transform);
+
+            _hqRadiusButtons.Add((km, frame.Find("Fill").GetComponent<Image>(),
+                btn.GetComponentInChildren<Text>(true)));
+        }
+
+        /// <summary>
+        /// Repaints the HQ block from the mission being edited. Public because
+        /// the controller owns the map pick that places a zone, and the panel
+        /// has to be told when one lands.
+        /// </summary>
+        public void RefreshHqZones()
+        {
+            if (_friendlyHqState == null) return;
+
+            HqRowState(_friendlyHqState, _friendlyHqFigures, "FRIENDLY HQ", _mission?.friendlyHq);
+            HqRowState(_enemyHqState, _enemyHqFigures, "ENEMY HQ", _mission?.enemyHq);
+
+            float radius = _mission?.hqRadiusKm ?? 3f;
+            foreach (var (km, fill, label) in _hqRadiusButtons)
+            {
+                bool on = _mission != null && Mathf.Approximately(km, radius);
+                fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+        }
+
+        static void HqRowState(Text state, Text figures, string label, HqZone zone)
+        {
+            state.text = label;
+            figures.text = zone == null || !zone.placed
+                ? "Not placed"
+                : $"{zone.latitude:0.####}, {zone.longitude:0.####}";
         }
 
         void RectangleButton(RectTransform content, string label, float halfKm, int index,
@@ -2290,6 +2836,7 @@ namespace IronMeridian.UI
                     : $"{m.id}  ·  map: {m.ResolvedMapFile}";
 
             RefreshMissionArea();
+            RefreshHqZones();
         }
 
         /// <summary>The mission the panel is editing, so the controller can read its area back.</summary>

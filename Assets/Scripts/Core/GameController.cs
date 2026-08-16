@@ -104,6 +104,8 @@ namespace IronMeridian.Core
         UnitClusterLayer _clusters;
         ConnectivityWatcher _connectivity;
         UnitInfoPanel _infoPanel;
+        IronMeridian.Logistics.LogisticsSystem _logistics;
+        MiniMapUI _minimap;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
         PauseMenuUI _pauseMenu;
@@ -269,6 +271,11 @@ namespace IronMeridian.Core
             _naval = gameObject.AddComponent<NavalStrikeSystem>();
             _naval.Init(_map, _rig.Cam);
 
+            // The scenario's rear area: depots and supply, fuel, ammunition,
+            // repair and medical points — see docs/26-LOGISTICS.md.
+            _logistics = gameObject.AddComponent<IronMeridian.Logistics.LogisticsSystem>();
+            _logistics.Init(_map, _rig.Cam);
+
             EditHistory.Clear();
 
             _selection = gameObject.AddComponent<SelectionManager>();
@@ -281,6 +288,7 @@ namespace IronMeridian.Core
                                             _uavStrike.IsArmed ||
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
+                                            _logistics.IsArmed ||
                                             _areaTool.Drawing;
             _selection.BattleRunning = () => _combat.Running;
 
@@ -437,6 +445,12 @@ namespace IronMeridian.Core
                 };
 
                 _strikeDock.RightInsetChanged = _ => RefreshRightInset();
+
+                // Fire menus are a battle control, not an authoring one — see
+                // StrikeDockUI. Leaving the battle takes them off the screen and
+                // stands any armed weapon down with them.
+                _combat.RunningChanged += running => _strikeDock.SetBattleMode(running);
+                _strikeDock.SetBattleMode(_combat.Running);
             });
 
             BuildStep("missile systems", () =>
@@ -451,7 +465,8 @@ namespace IronMeridian.Core
             {
                 _palette = gameObject.AddComponent<UnitPaletteUI>();
                 _palette.Build(canvas, _map, _rig.Cam, _rig, _clock, _weather, _effects,
-                    _artillery, _airStrike, _uavStrike, _naval, _mapControls, _strikeDock);
+                    _artillery, _airStrike, _uavStrike, _naval, _mapControls, _strikeDock,
+                    _logistics);
                 _palette.DropRequested = OnPaletteDrop;
                 _palette.DropRejected = _hud.Flash;
                 _palette.GenerateSectorsRequested = GenerateSectors;
@@ -522,7 +537,56 @@ namespace IronMeridian.Core
                     _palette.ShowMission(_mission);
                     _areaTool.Show(_mission.area);
                     ApplyMissionArea();
+                    RefreshHqZones();
                 }
+
+                // LOGISTICS section — the scenario's rear area.
+                _logistics.Flash = _hud.Flash;
+                _logistics.Changed += _palette.RefreshLogistics;
+                _palette.LogisticsClearRequested = () =>
+                {
+                    int n = _logistics.Sites.Count;
+                    _logistics.Clear();
+                    _hud.Flash(n == 0
+                        ? "There are no logistic sites on the map."
+                        : $"{n} logistic site(s) removed.");
+                };
+                _palette.LogisticsRemoveRequested = site =>
+                {
+                    if (site == null) return;
+                    string name = LogisticsCatalog.Get(site.Kind).name;
+                    _logistics.Remove(site);
+                    _hud.Flash($"{name} removed.");
+                };
+                _palette.LogisticsFocusRequested = site =>
+                {
+                    if (site == null) return;
+                    var focus = GeoUtils.GeoToUnity(_map.Georeference,
+                        site.Data.latitude, site.Data.longitude, 300);
+                    _rig.FlyTo(focus, Mathf.Min(_rig.Distance, UnitFocusDistanceMeters));
+                };
+
+                // GROUPS section — battle-mode only, see UnitPaletteUI.
+                _palette.GroupSelectRequested = id => _selection.SetSelection(GroupMembers(id));
+                _palette.GroupFlyRequested = id => FlyToGroup(GroupMembers(id));
+                _palette.GroupFlotRequested = ManTheFlot;
+                _palette.GroupFlotClearRequested = () =>
+                {
+                    if (string.IsNullOrEmpty(_frontline.HoldingGroupId))
+                    {
+                        _hud.Flash("No group is holding the front line.");
+                        return;
+                    }
+                    string name = _frontline.HoldingGroupName;
+                    _frontline.SetHoldingGroup("", "");
+                    _palette.SetFlotHolder("");
+                    _hud.Flash($"{name} released from the front line. Its formations keep their positions.");
+                };
+
+                // MISSIONS → HQ ZONES.
+                _palette.MissionHqSetRequested = SetMissionHq;
+                _palette.MissionHqClearRequested = ClearMissionHq;
+                _palette.MissionHqRadiusRequested = SetMissionHqRadius;
 
                 // DEPLOYED list.
                 _palette.SelectUnitRequested = u => _selection.Select(u);
@@ -533,6 +597,31 @@ namespace IronMeridian.Core
                     _selection.Select(null);
                     u.RemoveFromMap();
                 };
+
+                // The rail's battle-only chrome — the GROUPS row.
+                _combat.RunningChanged += running => _palette.SetBattleMode(running);
+                _palette.SetBattleMode(_combat.Running);
+            });
+
+            // The battle minimap, docked under the fire-menu cluster. Built
+            // after the strike dock so the two agree on where the block of
+            // top-right chrome ends.
+            BuildStep("minimap", () =>
+            {
+                _minimap = gameObject.AddComponent<MiniMapUI>();
+                _minimap.Build(canvas, _map, _rig, _frontline,
+                    _save.centerLatitude, _save.centerLongitude);
+                _minimap.AreaSource = () => _mission?.area;
+                _minimap.FlyRequested = (lat, lon) =>
+                {
+                    var focus = GeoUtils.GeoToUnity(_map.Georeference, lat, lon, 300);
+                    _rig.FlyTo(focus);
+                };
+
+                // Same rule as the fire menus above it: an operational picture
+                // is something a battle has. See MiniMapUI.
+                _combat.RunningChanged += running => _minimap.SetVisible(running);
+                _minimap.SetVisible(_combat.Running);
             });
 
             BuildStep("unit info panel", () =>
@@ -571,6 +660,9 @@ namespace IronMeridian.Core
                 _groupPanel.Flash = _hud.Flash;
                 _groupPanel.SelectGroupRequested = members => _selection.SetSelection(members);
                 _groupPanel.FlyToGroupRequested = FlyToGroup;
+                // The order bar is captioned with the group's name and lives at
+                // the foot of the map, so a rename here has to reach it.
+                _groupPanel.GroupsChanged = RefreshActionBar;
                 _groupPanel.RemoveUnitRequested = u =>
                 {
                     RecordRemoval(u);
@@ -642,8 +734,11 @@ namespace IronMeridian.Core
                 // Attack: the bar picks the task, and the next map click is
                 // either an enemy formation or the ground to attack.
                 _actionBar.AttackRequested = task => _selection.ArmAttackOrder(task);
+                // A named target is the one thing a group does *not* spread
+                // across a frontage: everything selected attacks the formation
+                // that was clicked.
                 _selection.AttackTargetPicked = (target, task) =>
-                    _attacks.Order(_selection.Selected, target, task);
+                    ForSelection(u => _attacks.Order(u, target, task));
                 _selection.AttackGroundPicked = (lat, lon, task) =>
                     OrderAreaAttack(task, lat, lon);
                 _selection.AttackOrderResolved = () => _actionBar.ClearArmed();
@@ -675,6 +770,7 @@ namespace IronMeridian.Core
 
                 if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
                 if (_groupPanel != null) _groupPanel.SetSelection(sel);
+                if (_minimap != null) _minimap.SetSelection(sel);
                 // The whole map can be carrying orders at once; this is what
                 // makes the selected formation's own area stand out of them.
                 if (_taskAreas != null) _taskAreas.SetSelection(sel);
@@ -735,6 +831,9 @@ namespace IronMeridian.Core
             });
 
             BuildStep("mission mode", ApplyMissionMode);
+            // Last: it reads the minimap's dock position, which mission mode
+            // has just had its say on.
+            BuildStep("right dock layout", RefreshRightDockTop);
 
             // Everything is built; what remains is Cesium streaming tiles for
             // the opening view. Hand the overlay that as its progress source.
@@ -748,17 +847,60 @@ namespace IronMeridian.Core
         }
 
         /// <summary>
-        /// The order bar is only meaningful in game mode with a single unit
-        /// selected — in editor mode right-click repositions instead.
+        /// The order bar belongs to game mode — in editor mode right-click
+        /// repositions instead — and now to a group as much as to a single
+        /// formation.
+        ///
+        /// **Why a group gets the same bar.** The group panel used to carry
+        /// three buttons of its own, in a different place, with a different
+        /// vocabulary, that did nothing. A group is not a different kind of
+        /// thing from a formation as far as orders go: it moves, attacks,
+        /// reconnoitres and defends, and it does so with the same six verbs. So
+        /// it uses the same bar in the same place, captioned with whose orders
+        /// they are — see <see cref="UnitActionBarUI.Show"/>.
         /// </summary>
         void RefreshActionBar()
         {
             if (_actionBar == null) return;
+            if (!_combat.Running) { _actionBar.Hide(); return; }
+
             var sel = _selection.Selection;
-            if (_combat.Running && sel.Count == 1 && sel[0] != null && sel[0].IsAlive)
-                _actionBar.Show(sel[0]);
-            else
-                _actionBar.Hide();
+            UnitActor lead = null;
+            int alive = 0;
+            foreach (var u in sel)
+            {
+                if (u == null || !u.IsAlive) continue;
+                if (lead == null) lead = u;
+                alive++;
+            }
+
+            if (lead == null) { _actionBar.Hide(); return; }
+            _actionBar.Show(lead, alive == 1 ? null : $"GROUP ORDERS — {SelectionScopeName(sel, alive)}");
+        }
+
+        /// <summary>
+        /// What the order bar calls a multi-unit selection: the group's name
+        /// when they all share one, and a count when they do not. Naming a
+        /// group that only half the selection belongs to would be the bar
+        /// lying about what it is going to act on.
+        /// </summary>
+        static string SelectionScopeName(
+            System.Collections.Generic.IReadOnlyList<UnitActor> selection, int alive)
+        {
+            string id = null, name = null;
+            bool first = true;
+
+            foreach (var u in selection)
+            {
+                if (u == null || !u.IsAlive) continue;
+                if (string.IsNullOrEmpty(u.State.groupId)) { first = false; id = null; break; }
+                if (first) { id = u.State.groupId; name = u.State.groupName; first = false; }
+                else if (u.State.groupId != id) { id = null; break; }
+            }
+
+            return string.IsNullOrEmpty(id)
+                ? $"{alive} FORMATIONS"
+                : $"{(string.IsNullOrEmpty(name) ? "UNNAMED GROUP" : name)}  ·  {alive}";
         }
 
         /// <summary>Runs one setup step, reporting failure instead of aborting the remaining wiring.</summary>
@@ -976,6 +1118,14 @@ namespace IronMeridian.Core
             ApplyMissionArea();
             if (_palette != null) _palette.RefreshMissionArea();
 
+            // Old missions carry no HQ record at all; JsonUtility leaves the
+            // fields null rather than at their initialisers when the JSON has
+            // no member for them, so they are filled in here rather than
+            // guarded at every reader.
+            if (mission.friendlyHq == null) mission.friendlyHq = new Data.HqZone();
+            if (mission.enemyHq == null) mission.enemyHq = new Data.HqZone();
+            RefreshHqZones();
+
             FlyTo(mission.latitude, mission.longitude, (float)mission.startAltitudeMeters);
 
             _hud.SetTitle(mission.name.ToUpperInvariant());
@@ -1057,6 +1207,7 @@ namespace IronMeridian.Core
                 _palette.ShowMission(mission);
                 _palette.SetMissionStatus($"Created {mission.id}. Nothing saved to its map yet.");
             }
+            RefreshHqZones();
         }
 
         void DeleteMission(MissionDefinition mission)
@@ -1185,6 +1336,12 @@ namespace IronMeridian.Core
             // with nothing to close it would sit over the map for the rest
             // of the mission.
             if (_strikeDock != null) _strikeDock.SetChromeVisible(false);
+
+            // The minimap stays — it is the operational picture, which is
+            // gameplay rather than authoring — but with the fire-menu cluster
+            // gone it moves up under the top bar rather than hanging below a
+            // gap where the cluster used to be.
+            if (_minimap != null) _minimap.SetTopOffset(UiTheme.TopBarHeight + 4f);
         }
 
         /// <summary>
@@ -1233,6 +1390,112 @@ namespace IronMeridian.Core
             if (picked.area == null) picked.area = new Data.MissionArea();
             if (_areaTool.Area != picked.area) _areaTool.Show(picked.area);
             return true;
+        }
+
+        // ----------------------------------------------------- HQ zones
+
+        /// <summary>
+        /// The two headquarters drawn on the map, when the open mission names
+        /// them. Range rings rather than a graphic of their own: a HQ zone is a
+        /// place and a radius, which is exactly what a range ring states, and
+        /// re-using it means the two read as the same kind of statement about
+        /// ground as a formation's own reach does. See docs/22-MISSIONS.md.
+        /// </summary>
+        RangeRing _friendlyHqRing, _enemyHqRing;
+
+        /// <summary>
+        /// Arms a map click for one side's headquarters. Refuses unless the
+        /// mission the panel is pointed at is the one actually open — an HQ is
+        /// drawn *against the terrain*, so it only means anything on the map it
+        /// belongs to. Same rule as the mission area.
+        /// </summary>
+        void SetMissionHq(Team team)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            string side = team == Team.User ? "friendly" : "enemy";
+            _hud.Flash($"Click the ground for the {side} headquarters (Esc or RMB cancels).");
+
+            _selection.ArmGroundPick((lat, lon) =>
+            {
+                var zone = HqFor(team);
+                zone.placed = true;
+                zone.latitude = lat;
+                zone.longitude = lon;
+
+                RefreshHqZones();
+                _hud.Flash($"{char.ToUpperInvariant(side[0]) + side.Substring(1)} HQ set — " +
+                           $"{_mission.hqRadiusKm:0.#} km zone. SAVE MISSION + MAP to keep it.");
+            }, "HQ placement cancelled.");
+        }
+
+        /// <summary>
+        /// One side's HQ record, created if the mission has none.
+        /// <c>JsonUtility</c> leaves a missing object member null rather than at
+        /// its initialiser, so every mission written before HQ zones existed
+        /// comes back with two nulls here.
+        /// </summary>
+        Data.HqZone HqFor(Team team)
+        {
+            if (team == Team.User)
+                return _mission.friendlyHq ??= new Data.HqZone();
+            return _mission.enemyHq ??= new Data.HqZone();
+        }
+
+        void ClearMissionHq(Team team)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            var zone = HqFor(team);
+            if (!zone.placed)
+            {
+                _hud.Flash("That headquarters has not been placed.");
+                return;
+            }
+
+            zone.placed = false;
+            RefreshHqZones();
+            _hud.Flash($"{(team == Team.User ? "Friendly" : "Enemy")} HQ cleared.");
+        }
+
+        void SetMissionHqRadius(float km)
+        {
+            if (!PointAreaToolAtPanelMission()) return;
+
+            _mission.hqRadiusKm = km;
+            RefreshHqZones();
+            _hud.Flash($"HQ zones are now {km:0.#} km across the radius.");
+        }
+
+        /// <summary>
+        /// Redraws both HQ rings from the open mission and repaints the panel.
+        /// One method, called from every path that can change them, so the map
+        /// and the panel cannot disagree about where a headquarters is.
+        /// </summary>
+        void RefreshHqZones()
+        {
+            if (_palette != null) _palette.RefreshHqZones();
+
+            ShowHqRing(ref _friendlyHqRing, _mission?.friendlyHq, GameConfig.BlueTeam, "FRIENDLY HQ");
+            ShowHqRing(ref _enemyHqRing, _mission?.enemyHq, GameConfig.RedTeam, "ENEMY HQ");
+        }
+
+        void ShowHqRing(ref RangeRing ring, Data.HqZone zone, Color colour, string title)
+        {
+            if (zone == null || !zone.placed || _mission == null)
+            {
+                if (ring != null) ring.Hide();
+                return;
+            }
+
+            // Built on first use rather than at startup: most maps in the editor
+            // are not a mission, and two rings nobody asked for would be two
+            // more objects re-sampling terrain every time the georeference moves.
+            if (ring == null)
+                ring = RangeRing.Create(_map.Georeference, _map.Georeference.transform, colour, title);
+
+            ring.Show(zone.latitude, zone.longitude, Mathf.Max(0.2f, _mission.hqRadiusKm),
+                $"{title}  {_mission.hqRadiusKm:0.#} km");
         }
 
         /// <summary>
@@ -1324,6 +1587,161 @@ namespace IronMeridian.Core
         /// <summary>Standoff a double-clicked formation is shown at, metres.</summary>
         const float UnitFocusDistanceMeters = 4500f;
 
+        /// <summary>Every living formation in a group, in registry order.</summary>
+        System.Collections.Generic.List<UnitActor> GroupMembers(string groupId)
+        {
+            var members = new System.Collections.Generic.List<UnitActor>();
+            if (string.IsNullOrEmpty(groupId)) return members;
+            foreach (var u in UnitRegistry.All)
+                if (u != null && u.IsAlive && u.State.groupId == groupId) members.Add(u);
+            return members;
+        }
+
+        /// <summary>
+        /// Puts a group on the front line: its formations are spread evenly
+        /// along the FLOT and each digs in on its own stretch of it.
+        ///
+        /// **Why this is worth a button.** The front line is *derived* — it is
+        /// where the fighting is, not a control measure anybody drew — and up
+        /// to now nothing could be done with it except look at it. But "hold
+        /// the line" is the commonest order at this level, and giving it by
+        /// hand meant clicking DEFENCE once per battalion and eyeballing the
+        /// spacing along a curve. One click instead: the line is sampled at
+        /// equal arc lengths, one point per formation, and each is ordered to
+        /// defend its point.
+        ///
+        /// **They are set back from the line, not on it.** The FLOT runs
+        /// between the two sides, so a formation placed exactly on it would be
+        /// standing in the contact itself. Each objective is offset toward the
+        /// group's own rear by <see cref="FlotStandoffKm"/>, which is what
+        /// makes this a defence of the line rather than an advance across it.
+        /// </summary>
+        void ManTheFlot(string groupId)
+        {
+            var members = GroupMembers(groupId);
+            if (members.Count == 0)
+            {
+                _hud.Flash("That group has no formations left.");
+                return;
+            }
+
+            var line = _frontline.Line;
+            var pts = line != null ? line.Data.points : null;
+            if (pts == null || pts.Count < 2)
+            {
+                _hud.Flash("There is no front line to hold — both sides need formations in contact.");
+                return;
+            }
+
+            // Which way is "back". Taken from the two sides' centres of mass
+            // rather than from the line's own geometry: the line bends, and a
+            // per-point normal would send the flank formations off in
+            // directions that have nothing to do with where their army is.
+            var side = members[0].State.TeamEnum;
+            if (!SideCentres(side, out double ownLat, out double ownLon,
+                             out double enemyLat, out double enemyLon))
+            {
+                _hud.Flash("The enemy has nothing on the map — there is no front to face.");
+                return;
+            }
+
+            GeoUtils.ToLocalKm(enemyLat, enemyLon, ownLat, ownLon, out double backEast, out double backNorth);
+            double backLength = System.Math.Sqrt(backEast * backEast + backNorth * backNorth);
+            if (backLength < 0.001)
+            {
+                _hud.Flash("The two sides are on top of each other — no front to hold.");
+                return;
+            }
+            backEast /= backLength; backNorth /= backLength;
+
+            // Arc length along the drawn line, so the formations are spaced by
+            // *ground* rather than by vertex index — the line is smoothed, and
+            // its vertices bunch up wherever it bends.
+            var cumulative = new double[pts.Count];
+            for (int i = 1; i < pts.Count; i++)
+                cumulative[i] = cumulative[i - 1] + GeoUtils.DistanceKm(
+                    pts[i - 1].latitude, pts[i - 1].longitude, pts[i].latitude, pts[i].longitude);
+
+            double total = cumulative[pts.Count - 1];
+            if (total < 0.1)
+            {
+                _hud.Flash("The front line is too short to distribute a group along.");
+                return;
+            }
+
+            int placed = 0;
+            for (int i = 0; i < members.Count; i++)
+            {
+                // Centres of equal shares rather than the ends, so the outermost
+                // formations sit inside the line instead of on its two tips.
+                double target = total * (i + 0.5) / members.Count;
+                PointAt(pts, cumulative, target, out double lat, out double lon);
+
+                GeoUtils.FromLocalKm(lat, lon, backEast * FlotStandoffKm, backNorth * FlotStandoffKm,
+                    out double standLat, out double standLon);
+
+                if (_defence.Defend(members[i], standLat, standLon)) placed++;
+            }
+
+            // One name for all three places it appears — the flash, the line's
+            // own caption and the panel's readout — so an unnamed group does
+            // not read as "no group" on one of them and as a holder on another.
+            string name = string.IsNullOrEmpty(members[0].State.groupName)
+                ? "Unnamed group" : members[0].State.groupName;
+            _frontline.SetHoldingGroup(groupId, name);
+            if (_palette != null) _palette.SetFlotHolder(name);
+
+            _hud.Flash($"{name} takes the front line — {placed} formation(s) along {total:0.#} km, " +
+                       $"{FlotStandoffKm:0.#} km back from it.");
+        }
+
+        /// <summary>How far behind the FLOT a formation manning it digs in, km.</summary>
+        const double FlotStandoffKm = 1.2;
+
+        /// <summary>
+        /// Power-weighted centres of the given side and of its opponent.
+        /// Returns false when either side has nothing on the map.
+        /// </summary>
+        static bool SideCentres(Team side, out double ownLat, out double ownLon,
+            out double enemyLat, out double enemyLon)
+        {
+            ownLat = ownLon = enemyLat = enemyLon = 0;
+            int own = 0, enemy = 0;
+
+            foreach (var u in UnitRegistry.All)
+            {
+                if (u == null || !u.IsAlive) continue;
+                if (u.State.TeamEnum == side)
+                {
+                    ownLat += u.State.latitude; ownLon += u.State.longitude; own++;
+                }
+                else
+                {
+                    enemyLat += u.State.latitude; enemyLon += u.State.longitude; enemy++;
+                }
+            }
+
+            if (own == 0 || enemy == 0) return false;
+            ownLat /= own; ownLon /= own;
+            enemyLat /= enemy; enemyLon /= enemy;
+            return true;
+        }
+
+        /// <summary>The point a given distance along a polyline, interpolated within its segment.</summary>
+        static void PointAt(System.Collections.Generic.List<GeoPoint> pts, double[] cumulative,
+            double distanceKm, out double lat, out double lon)
+        {
+            int i = 1;
+            while (i < pts.Count - 1 && cumulative[i] < distanceKm) i++;
+
+            double span = cumulative[i] - cumulative[i - 1];
+            double t = span > 1e-6 ? (distanceKm - cumulative[i - 1]) / span : 0.0;
+            t = System.Math.Max(0.0, System.Math.Min(1.0, t));
+
+            lat = pts[i - 1].latitude + (pts[i].latitude - pts[i - 1].latitude) * t;
+            lon = pts[i - 1].longitude + (pts[i].longitude - pts[i - 1].longitude) * t;
+        }
+
         /// <summary>
         /// Double-click on a group row: select the whole group and travel to it.
         ///
@@ -1413,6 +1831,7 @@ namespace IronMeridian.Core
                 if (a != null && a.IsAlive) _save.units.Add(a.Snapshot());
             _save.lines = _lines.Serialize();
             _save.markers = _markers.Serialize();
+            _save.logistics = _logistics.Serialize();
             _save.commanders = CommanderRegistry.Serialize();
             _save.teams = PlayerRegistry.SaveTeams();
             _save.players = PlayerRegistry.SavePlayers();
@@ -1475,6 +1894,7 @@ namespace IronMeridian.Core
             if (_taskAreas != null) _taskAreas.ClearAll();
             if (_planner != null) _planner.ClearAll();
             _effects.Cancel();
+            _logistics.Cancel();
             _missiles.Cancel();
             _naval.Cancel();
             _artillery.Cancel();
@@ -1490,6 +1910,7 @@ namespace IronMeridian.Core
             _showWeaponRange = true;
             _sectors.AutoUpdate = false;
             _sectors.ClearAll();
+            if (_palette != null) _palette.SetFlotHolder("");
             _frontline.ResetToDefaults();
             if (_palette != null) _palette.SyncGeneralToggles(false, false, true, true);
             UnitActor.SetLabelScale(1f);
@@ -1563,6 +1984,9 @@ namespace IronMeridian.Core
             // After the units: a task marker whose owning unit is not on the map
             // is swept away, and during a load that is briefly all of them.
             _markers.LoadFrom(data.markers);
+            // Independent of the units: an installation belongs to the scenario
+            // and outlives every formation that draws on it.
+            _logistics.LoadFrom(data.logistics);
             // Commanders last. They are referenced by id from the units that are
             // already down, so loading them earlier would have the roster point
             // at formations that did not exist yet.
@@ -1576,6 +2000,10 @@ namespace IronMeridian.Core
         {
             TickMissionAutoStart();
             RefreshRightInset();
+            // Polled, not pushed: it depends on the window's height as well as
+            // on whether the minimap is up. Both guards make the poll free when
+            // nothing has changed.
+            RefreshRightDockTop();
 
             if (Input.GetKeyDown(KeyCode.F5)) SaveMap();
             if (Input.GetKeyDown(KeyCode.F9)) LoadMap();
@@ -1675,13 +2103,82 @@ namespace IronMeridian.Core
         }
 
         /// <summary>
+        /// Gives a ground order to the whole selection, **spread across a
+        /// frontage** rather than stacked on the point that was clicked.
+        ///
+        /// One click is one objective, but six battalions cannot occupy one
+        /// grid square: sending them all to the same coordinate piles six
+        /// counters, six objective rings and six defensive lines on top of each
+        /// other, and the player has ordered something no formation could
+        /// carry out. So the click sets the *centre* of a frontage, and the
+        /// formations are laid out across it perpendicular to the axis of
+        /// advance — which is what a frontage is.
+        ///
+        /// Two details make it read as a deliberate laydown rather than an
+        /// arbitrary scatter. The spacing comes from the formations' own reach,
+        /// so a group of mortar companies is packed tighter than a group of
+        /// rocket battalions and each can still cover its neighbour. And they
+        /// are ordered by where they already stand across that axis, so the
+        /// left-hand formation gets the left-hand slot and nobody is sent
+        /// across the front of anybody else.
+        /// </summary>
+        void ForSelectionOnGround(double lat, double lon,
+            System.Action<UnitActor, double, double> order)
+        {
+            var units = new System.Collections.Generic.List<UnitActor>();
+            foreach (var u in _selection.Selection)
+                if (u != null && u.IsAlive) units.Add(u);
+
+            if (units.Count == 0) return;
+            if (units.Count == 1) { order(units[0], lat, lon); return; }
+
+            // Axis of advance: from where the group is now to where it is being
+            // sent. The frontage lies across it.
+            double centreLat = 0, centreLon = 0;
+            double reachKm = 0;
+            foreach (var u in units)
+            {
+                centreLat += u.State.latitude;
+                centreLon += u.State.longitude;
+                reachKm += u.Def.weaponRangeKm;
+            }
+            centreLat /= units.Count; centreLon /= units.Count;
+            reachKm /= units.Count;
+
+            float axis = GeoUtils.BearingDeg(centreLat, centreLon, lat, lon);
+            double across = (axis + 90f) * System.Math.PI / 180.0;
+            double eastAcross = System.Math.Sin(across), northAcross = System.Math.Cos(across);
+
+            double spacingKm = System.Math.Min(4.0, System.Math.Max(0.6, reachKm * 0.35));
+
+            // Sorted by their present position along the frontage, so the order
+            // of march is the order they are already in.
+            double Lateral(UnitActor u)
+            {
+                GeoUtils.ToLocalKm(centreLat, centreLon, u.State.latitude, u.State.longitude,
+                    out double east, out double north);
+                return east * eastAcross + north * northAcross;
+            }
+            units.Sort((a, b) => Lateral(a).CompareTo(Lateral(b)));
+
+            double half = (units.Count - 1) * spacingKm * 0.5;
+            for (int i = 0; i < units.Count; i++)
+            {
+                double offset = i * spacingKm - half;
+                GeoUtils.FromLocalKm(lat, lon, eastAcross * offset, northAcross * offset,
+                    out double unitLat, out double unitLon);
+                order(units[i], unitLat, unitLon);
+            }
+        }
+
+        /// <summary>
         /// MOVE, FAST MOVE, TACTICAL MOVE, WITHDRAW or RETREAT onto the picked
         /// ground. Given to the whole selection; each formation gets its own
         /// objective ring, because six rings on one point would be one ring.
         /// </summary>
         void OrderMove(MoveTask task, double lat, double lon)
         {
-            ForSelection(u => _manoeuvre.Order(u, task, lat, lon));
+            ForSelectionOnGround(lat, lon, (u, ulat, ulon) => _manoeuvre.Order(u, task, ulat, ulon));
         }
 
         /// <summary>
@@ -1695,32 +2192,38 @@ namespace IronMeridian.Core
         /// </summary>
         void OrderRecon(ReconTask task, double lat, double lon)
         {
-            var unit = _selection.Selected;
-            if (unit == null) return;
-
             var def = ReconTaskCatalog.Get(task);
-            double radiusKm = System.Math.Min(20.0,
-                System.Math.Max(1.0, unit.Def.viewRangeKm * def.sensorRangeFactor));
-            float axis = GeoUtils.BearingDeg(unit.State.latitude, unit.State.longitude, lat, lon);
 
-            _taskAreas.Show(unit, TaskAreaShape.Quadrants, MarkerKind.Recon, "RECON",
-                lat, lon, radiusKm, axis, def.arrowTint, VfxId.TaskAreaRecon);
+            ForSelectionOnGround(lat, lon, (unit, ulat, ulon) =>
+            {
+                double radiusKm = System.Math.Min(20.0,
+                    System.Math.Max(1.0, unit.Def.viewRangeKm * def.sensorRangeFactor));
+                float axis = GeoUtils.BearingDeg(unit.State.latitude, unit.State.longitude, ulat, ulon);
 
-            _recon.Order(unit, lat, lon, task);
+                _taskAreas.Show(unit, TaskAreaShape.Quadrants, MarkerKind.Recon, "RECON",
+                    ulat, ulon, radiusKm, axis, def.arrowTint, VfxId.TaskAreaRecon);
+
+                _recon.Order(unit, ulat, ulon, task);
+            });
         }
 
-        /// <summary>DEFEND, HOLD or GUARD on the picked ground.</summary>
+        /// <summary>
+        /// DEFEND, HOLD or GUARD on the picked ground — across a frontage when
+        /// several formations are selected, which is what a defence given to a
+        /// group means: each holds its own stretch of the line, side by side,
+        /// rather than all of them stacking on one hill.
+        /// </summary>
         void OrderDefence(UnitActionBarUI.DefenceTask task, double lat, double lon)
         {
-            var unit = _selection.Selected;
-            if (unit == null) return;
-
-            switch (task)
+            ForSelectionOnGround(lat, lon, (unit, ulat, ulon) =>
             {
-                case UnitActionBarUI.DefenceTask.Defend: _defence.Defend(unit, lat, lon); break;
-                case UnitActionBarUI.DefenceTask.Hold: _defence.Hold(unit, lat, lon); break;
-                default: _defence.Guard(unit, lat, lon); break;
-            }
+                switch (task)
+                {
+                    case UnitActionBarUI.DefenceTask.Defend: _defence.Defend(unit, ulat, ulon); break;
+                    case UnitActionBarUI.DefenceTask.Hold: _defence.Hold(unit, ulat, ulon); break;
+                    default: _defence.Guard(unit, ulat, ulon); break;
+                }
+            });
         }
 
         /// <summary>
@@ -1730,17 +2233,17 @@ namespace IronMeridian.Core
         /// </summary>
         void OrderAreaAttack(AttackTask task, double lat, double lon)
         {
-            var unit = _selection.Selected;
-            if (unit == null) return;
+            ForSelectionOnGround(lat, lon, (unit, ulat, ulon) =>
+            {
+                double radiusKm = AttackObjectiveRadiusKm(unit);
+                float axis = GeoUtils.BearingDeg(unit.State.latitude, unit.State.longitude, ulat, ulon);
 
-            double radiusKm = AttackObjectiveRadiusKm(unit);
-            float axis = GeoUtils.BearingDeg(unit.State.latitude, unit.State.longitude, lat, lon);
+                _taskAreas.Show(unit, TaskAreaShape.Ring, MarkerKind.Attack, "ATTACK",
+                    ulat, ulon, radiusKm, axis, AttackTaskCatalog.Get(task).arrowTint,
+                    VfxId.TaskAreaAttack);
 
-            _taskAreas.Show(unit, TaskAreaShape.Ring, MarkerKind.Attack, "ATTACK",
-                lat, lon, radiusKm, axis, AttackTaskCatalog.Get(task).arrowTint,
-                VfxId.TaskAreaAttack);
-
-            _attacks.OrderArea(unit, lat, lon, radiusKm, task);
+                _attacks.OrderArea(unit, ulat, ulon, radiusKm, task);
+            });
         }
 
         /// <summary>
@@ -1784,6 +2287,52 @@ namespace IronMeridian.Core
         }
 
         float _lastRightInset = -1f;
+
+        /// <summary>
+        /// How tall a right-hand panel has to be left before the minimap is
+        /// allowed to push it down. Below this the panel would have less room
+        /// than its own header block needs and its lists would collapse to
+        /// nothing.
+        /// </summary>
+        const float MinRightPanelHeight = 460f;
+
+        float _lastRightDockTop = -1f;
+
+        /// <summary>
+        /// Where the right-hand panels' top edge sits.
+        ///
+        /// Four things dock on that edge — the unit inspector, the group panel,
+        /// the front-line options and a fire menu — and above all of them sit
+        /// the fire-menu icon cluster and, in battle, the minimap. They all have
+        /// to start below whatever is up there, and one place deciding it for
+        /// all of them is what stops a panel being built to clear a block that
+        /// has since moved.
+        ///
+        /// **It gives way on a short screen.** At 1280×720 the minimap's block
+        /// plus a panel does not fit: pushing the panel below the minimap would
+        /// leave it shorter than its own header. There the panel keeps its
+        /// normal top and covers the minimap while it is open, which is the
+        /// right trade — the panel was opened deliberately, the minimap is
+        /// ambient.
+        /// </summary>
+        void RefreshRightDockTop()
+        {
+            float top = UiTheme.TopBarHeight + UiTheme.StrikeDockHeight;
+
+            if (_minimap != null && _minimap.Visible)
+            {
+                float below = _minimap.BottomEdge + 6f;
+                if (Screen.height - below >= MinRightPanelHeight) top = below;
+            }
+
+            if (Mathf.Approximately(top, _lastRightDockTop)) return;
+            _lastRightDockTop = top;
+
+            if (_infoPanel != null) _infoPanel.SetTopInset(top);
+            if (_groupPanel != null) _groupPanel.SetTopInset(top);
+            if (_frontlinePanel != null) _frontlinePanel.SetTopInset(top);
+            if (_strikeDock != null) _strikeDock.SetTopInset(top);
+        }
 
         /// <summary>GENERAL → LINE OF SIGHT. Repaints the current selection immediately.</summary>
         void SetLineOfSightVisible(bool on)

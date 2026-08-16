@@ -308,6 +308,10 @@ The **DEPLOYED list** does *not* leak: hidden formations are excluded from it,
 and a formation that vanishes while selected is deselected so the info panel
 cannot keep reporting it.
 
+The **minimap** does *not* leak either: `MiniMapUI` skips any formation with
+`HiddenByFog` set. A minimap showing the whole red laydown at a glance would be
+a more comfortable way round the fog than any of the leaks above.
+
 Closing these means keeping a separate "what the player has seen" model and
 deriving graphics from that instead of from the world. That is a larger change
 than the fog itself, and is deliberately not in this one.
@@ -323,7 +327,8 @@ than the fog itself, and is deliberately not in this one.
 | `Assets/Scripts/Units/ReconOrderSystem.cs` | Task lifecycle: outbound, on station, patrol, UAV flight |
 | `Assets/Scripts/Units/AxisArrow.cs` | The objective arrow (shared with attack orders) |
 | `Assets/Scripts/Units/UnitActor.cs` | `HiddenByFog`, `SetHiddenByFog` |
-| `Assets/Scripts/Units/RangeRing.cs` | Range volumes — line of sight, weapon range, contact rings |
+| `Assets/Scripts/Units/RangeRing.cs` | Range rings — line of sight, weapon range, contact rings. Flat, draped on the terrain |
+| `Assets/Scripts/UI/MiniMapUI.cs` | The battle minimap — draws only what the fog allows (§3) |
 | `Assets/Scripts/Units/FogBlanket.cs` | The dark over unobserved ground (§2a) and outside the mission area (§2b) |
 | `Assets/Scripts/Data/MissionArea.cs` | The mission boundary: containment, extent, clamping (§2b) |
 | `Assets/Scripts/UI/UnitPaletteUI.cs` | **GENERAL → INTELLIGENCE** toggles (line of sight, fog) |

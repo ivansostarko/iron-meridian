@@ -54,6 +54,34 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// One side's headquarters on a mission's ground: where it is, and whether
+    /// it has been placed at all.
+    ///
+    /// **A point plus a radius, not a polygon.** A mission area is a shape
+    /// because coastlines and valleys are shapes; a headquarters is a place,
+    /// and the only thing about it that varies is how much ground around it
+    /// counts as "the HQ" — a divisional main at five kilometres, a battalion
+    /// step-up at one. The radius is the mission's
+    /// (<see cref="MissionDefinition.hqRadiusKm"/>) rather than each zone's,
+    /// because both sides' headquarters in one scenario are at the same
+    /// echelon and giving each its own number would be a control nobody has a
+    /// reason to touch.
+    /// </summary>
+    [Serializable]
+    public class HqZone
+    {
+        /// <summary>False until the designer has put it somewhere.</summary>
+        public bool placed;
+        public double latitude;
+        public double longitude;
+
+        public HqZone Clone() => new HqZone
+        {
+            placed = placed, latitude = latitude, longitude = longitude
+        };
+    }
+
+    /// <summary>
     /// One single-player mission.
     ///
     /// **A mission is the metadata; the map file is the content.** Everything a
@@ -148,6 +176,17 @@ namespace IronMeridian.Data
         public MissionArea area = new MissionArea();
 
         /// <summary>
+        /// The two headquarters, drawn in the editor's MISSIONS panel. Unplaced
+        /// on every mission written before this existed, which reads correctly
+        /// as "this scenario names no headquarters" — see docs/22-MISSIONS.md.
+        /// </summary>
+        public HqZone friendlyHq = new HqZone();
+        public HqZone enemyHq = new HqZone();
+
+        /// <summary>Radius of both HQ zones, km. See <see cref="HqZone"/>.</summary>
+        public float hqRadiusKm = 3f;
+
+        /// <summary>
         /// Position within its campaign board, ascending. Ties fall back to the
         /// order the file lists them in, so a hand-edited file with no orders at
         /// all still reads sensibly.
@@ -190,6 +229,11 @@ namespace IronMeridian.Data
             // editor overlay, and a shallow copy would track later edits rather
             // than recording the mission as it stood.
             area = area?.Clone() ?? new MissionArea(),
+            // Deep-copied for the same reason the area is: the live editor
+            // overlay holds these, and a shallow copy would track later edits.
+            friendlyHq = friendlyHq?.Clone() ?? new HqZone(),
+            enemyHq = enemyHq?.Clone() ?? new HqZone(),
+            hqRadiusKm = hqRadiusKm,
             order = order,
             available = available
         };

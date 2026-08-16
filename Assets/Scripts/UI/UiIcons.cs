@@ -499,6 +499,106 @@ namespace IronMeridian.UI
             return Mathf.Max(hull, Mathf.Max(bridge, Mathf.Max(mast, Mathf.Max(mount, barrel))));
         });
 
+        // ---------------------------------------------------------- logistics
+        // Six installations that have to be told apart at 20 px on a rail
+        // button and at whatever the camera makes of them on the map, so each
+        // is a different *silhouette* rather than a different letter in the
+        // same box: a roof, stacked crates, a droplet, rounds, crossed tools, a
+        // cross. See docs/26-LOGISTICS.md.
+
+        /// <summary>Supply depot — a warehouse: pitched roof over an open shed.</summary>
+        public static Sprite Depot => Get(nameof(Depot), (u, v) =>
+        {
+            float roof = InPoly(u, v, new[] { 0.08f, 0.60f, 0.50f, 0.90f, 0.92f, 0.60f });
+            float body = RectOutline(u, v, 0.16f, 0.14f, 0.84f, 0.62f, 0.075f);
+            float door = Rect(u, v, 0.42f, 0.14f, 0.58f, 0.42f);
+            return Mathf.Max(roof, Mathf.Max(body, door));
+        });
+
+        /// <summary>Supply point — two crates, the forward stock of the depot above.</summary>
+        public static Sprite Crates => Get(nameof(Crates), (u, v) =>
+        {
+            float lower = RectOutline(u, v, 0.10f, 0.10f, 0.56f, 0.50f, 0.07f);
+            float lowerStrap = Seg(u, v, 0.10f, 0.30f, 0.56f, 0.30f, 0.06f);
+            float upper = RectOutline(u, v, 0.44f, 0.44f, 0.90f, 0.86f, 0.07f);
+            float upperStrap = Seg(u, v, 0.44f, 0.65f, 0.90f, 0.65f, 0.06f);
+            return Mathf.Max(Mathf.Max(lower, lowerStrap), Mathf.Max(upper, upperStrap));
+        });
+
+        /// <summary>Fuel point — a droplet.</summary>
+        public static Sprite FuelDrop => Get(nameof(FuelDrop), (u, v) =>
+        {
+            float bowl = DiscAt(u, v, 0.5f, 0.34f, 0.28f);
+            float tip = InPoly(u, v, new[] { 0.24f, 0.42f, 0.50f, 0.92f, 0.76f, 0.42f });
+            return Mathf.Max(bowl, tip);
+        });
+
+        /// <summary>Ammunition point — two rounds standing on their bases.</summary>
+        public static Sprite Rounds => Get(nameof(Rounds), (u, v) =>
+        {
+            float shape = 0f;
+            for (int i = 0; i < 2; i++)
+            {
+                float x = 0.20f + i * 0.34f;
+                float body = Rect(u, v, x, 0.14f, x + 0.20f, 0.58f);
+                float nose = InPoly(u, v, new[]
+                {
+                    x, 0.58f, x + 0.10f, 0.84f, x + 0.20f, 0.58f
+                });
+                shape = Mathf.Max(shape, Mathf.Max(body, nose));
+            }
+            return shape;
+        });
+
+        /// <summary>Repair point — crossed tools, one with a ring spanner head.</summary>
+        public static Sprite Tools => Get(nameof(Tools), (u, v) =>
+        {
+            float shaft = Seg(u, v, 0.20f, 0.24f, 0.72f, 0.70f, 0.105f);
+            float head = RingAt(u, v, 0.78f, 0.76f, 0.115f, 0.085f);
+            float driver = Seg(u, v, 0.24f, 0.76f, 0.64f, 0.34f, 0.085f);
+            float grip = Seg(u, v, 0.64f, 0.34f, 0.80f, 0.18f, 0.14f);
+            return Mathf.Max(Mathf.Max(shaft, head), Mathf.Max(driver, grip));
+        });
+
+        /// <summary>Medical point — the cross, which needs no explaining anywhere.</summary>
+        public static Sprite MedicalCross => Get(nameof(MedicalCross), (u, v) =>
+            Mathf.Max(Rect(u, v, 0.40f, 0.12f, 0.60f, 0.88f),
+                      Rect(u, v, 0.12f, 0.40f, 0.88f, 0.60f)));
+
+        /// <summary>The rail row for the whole LOGISTICS section — a loaded pallet.</summary>
+        public static Sprite Pallet => Get(nameof(Pallet), (u, v) =>
+        {
+            float load = RectOutline(u, v, 0.20f, 0.36f, 0.80f, 0.84f, 0.075f);
+            float deck = Rect(u, v, 0.08f, 0.22f, 0.92f, 0.32f);
+            float legL = Rect(u, v, 0.14f, 0.10f, 0.26f, 0.22f);
+            float legR = Rect(u, v, 0.74f, 0.10f, 0.86f, 0.22f);
+            return Mathf.Max(load, Mathf.Max(deck, Mathf.Max(legL, legR)));
+        });
+
+        /// <summary>The rail row for GROUPS — three counters standing together.</summary>
+        public static Sprite Group => Get(nameof(Group), (u, v) =>
+        {
+            float a = RectOutline(u, v, 0.06f, 0.46f, 0.46f, 0.82f, 0.075f);
+            float b = RectOutline(u, v, 0.54f, 0.46f, 0.94f, 0.82f, 0.075f);
+            float c = RectOutline(u, v, 0.30f, 0.12f, 0.70f, 0.44f, 0.075f);
+            return Mathf.Max(a, Mathf.Max(b, c));
+        });
+
+        /// <summary>
+        /// The glyph for a logistic installation. One mapping, read by the
+        /// LOGISTICS panel's buttons, its placement ghost and the map marker —
+        /// three pictures of the same thing that must never disagree.
+        /// </summary>
+        public static Sprite GlyphFor(Data.LogisticsKind kind) => kind switch
+        {
+            Data.LogisticsKind.SupplyDepot => Depot,
+            Data.LogisticsKind.SupplyPoint => Crates,
+            Data.LogisticsKind.FuelPoint => FuelDrop,
+            Data.LogisticsKind.AmmoPoint => Rounds,
+            Data.LogisticsKind.RepairPoint => Tools,
+            _ => MedicalCross
+        };
+
         static float ArcX(float t) => Mathf.Lerp(0.08f, 0.92f, t);
         static float ArcY(float t) => 0.30f + t * 1.62f - t * t * 1.78f;
 

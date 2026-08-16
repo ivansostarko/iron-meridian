@@ -56,7 +56,12 @@ Assets/Scripts/
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
     FrontlinePanelUI.cs  docked right panel: front-line settings, opened by clicking the line
     StrikeDockUI.cs      the five fire menus: an icon cluster under the top
-                          bar's right end and one right-docked panel behind it
+                          bar's right end and one right-docked panel behind it.
+                          Battle mode only — see docs/03-GAMEPLAY.md
+    MiniMapUI.cs         the battle minimap under that cluster: blips, front
+                          line, mission boundary and the camera's view box,
+                          rasterised into a texture. Click to fly the camera.
+                          Battle mode only; obeys the fog
     MissilePanelUI.cs    the missile board, built into a StrikeDockUI page
                           (docs/20-MISSILE-SYSTEMS.md)
     PlayerPanel.cs       the rail's PLAYERS section: teams, players, computer
@@ -83,8 +88,10 @@ Assets/Scripts/
     LossesDialog.cs      the casualty list, TAB in battle mode: both sides'
                           losses side by side, from Units/LossLedger
     GroupPanelUI.cs      right panel for a 2+ selection: name it as a group,
-                          recall/fly to a saved group, move formations between
-                          groups, and the (mocked) group order bar
+                          RENAME the group it is in, recall/fly to a saved
+                          group, move formations between groups. It gives no
+                          orders — a group's orders are on UnitActionBarUI,
+                          where a formation's are
     MainMenuUI.cs        left-hand command board: grouped entries + quit modal
     SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
     TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
@@ -148,7 +155,10 @@ Assets/Scripts/
     ReconOrderSystem.cs  recon lifecycle + the sensors the fog reads
     FogOfWarSystem.cs    detection sweep, hiding, last-known contacts
     FogBlanket.cs        the dark over unobserved ground — see docs/16-FOG-OF-WAR.md
-    RangeRing.cs         range volumes: line of sight, weapon range, fog contacts
+    RangeRing.cs         range rings: line of sight, weapon range, fog and air
+                          contacts, and a mission's two HQ zones (docs/22). A FLAT feathered band draped on the terrain
+                          with cardinal ticks — a range is a distance measured
+                          across the map, not a wall standing on it
     BlastDamage.cs       what a shell/bomb/warhead does to formations under it.
                           Range is measured to the formation's FOOTPRINT, not to
                           its map pin — see docs/17-ARTILLERY.md § Damage
@@ -157,7 +167,9 @@ Assets/Scripts/
     MapLine.cs           LineRenderer polyline, terrain DRAPING (segments are
                           subdivided and every sample clamped), styles, captions,
                           optional invisible ribbon MeshCollider for click picking.
-                          Boundary kinds are FlatOnly: always draped, never 3D
+                          Boundary kinds are FlatOnly: always draped, drape-
+                          sampled at 90 m, and aligned to the GROUND PLANE
+                          rather than billboarded, so they never stand up
     LineManager.cs       line collection <-> save data
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground
@@ -166,7 +178,13 @@ Assets/Scripts/
                           shows it. Deliberately NOT a LineManager line — the area
                           belongs to the mission record, not the map file
     FrontlineSystem.cs   the front line: influence field over every formation,
-                          solved in metres and smoothed (docs/03-GAMEPLAY.md)
+                          solved in metres and smoothed (docs/03-GAMEPLAY.md).
+                          Also records which GROUP has been put on the line
+  Logistics/             the scenario's rear area — see docs/26-LOGISTICS.md
+    LogisticsSystem.cs   owns every depot and supply/fuel/ammo/repair/medical
+                          point, the arm-then-click placement tool, save/load
+    LogisticsSite.cs     the map graphic: side-coloured ground ring, the
+                          function's billboarded symbol, caption
   Models/                3D models — see docs/09-3D-MODELS.md
     UnitModelLibrary.cs  unit definition -> model prefab, source candidates, clips
     ModelPreview.cs      renders a model into a uGUI panel (RenderTexture rig)

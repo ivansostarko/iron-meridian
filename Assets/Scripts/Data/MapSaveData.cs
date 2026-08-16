@@ -192,6 +192,31 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// One logistic installation on the map — a depot, a supply point, or one
+    /// of the four function-specific points. See docs/26-LOGISTICS.md.
+    ///
+    /// Deliberately not a <see cref="MapMarkerData"/>. A task marker belongs to
+    /// the unit that was given the order and is swept off the map when that
+    /// unit goes; an installation belongs to the *scenario* and outlives every
+    /// formation that draws on it.
+    /// </summary>
+    [Serializable]
+    public class LogisticsSiteData
+    {
+        public string id;
+        /// <summary>LogisticsKind name — see <see cref="LogisticsCatalog"/>.</summary>
+        public string kind;
+        /// <summary>Owning side, a <see cref="Team"/> name.</summary>
+        public string team;
+        /// <summary>Caption drawn under the marker; empty takes the catalogue's name.</summary>
+        public string label = "";
+
+        public double latitude;
+        public double longitude;
+        public double heightMeters;
+    }
+
+    /// <summary>
     /// A complete scenario/map save. Serialized to JSON, one file per map, in
     /// persistentDataPath/Maps (user saves) or StreamingAssets/Maps (shipped defaults).
     /// </summary>
@@ -232,6 +257,12 @@ namespace IronMeridian.Data
         public List<MapLineData> lines = new List<MapLineData>();
         /// <summary>Hold / guard / defend positions — see docs/03-GAMEPLAY.md.</summary>
         public List<MapMarkerData> markers = new List<MapMarkerData>();
+        /// <summary>
+        /// Depots and supply, fuel, ammunition, repair and medical points.
+        /// Empty on a map saved before logistics existed, which reads correctly
+        /// as "this scenario has no rear area" — see docs/26-LOGISTICS.md.
+        /// </summary>
+        public List<LogisticsSiteData> logistics = new List<LogisticsSiteData>();
         /// <summary>
         /// The order of battle above the units: who commands what, on both
         /// sides. Empty on a map saved before commanders existed, which reads

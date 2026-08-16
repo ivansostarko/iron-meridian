@@ -44,7 +44,18 @@ namespace IronMeridian.Lines
     /// ones where both sides have influence; the rest — out past the flanks,
     /// and any gap between two separate engagements — are filled rather than
     /// dropped (see <see cref="FillUnsolved"/>). A boundary that stopped short
-    /// of the units it is drawn between is not a boundary.
+    /// of the units it is drawn between is not a boundary. The band range is
+    /// taken from the outermost formation on either side and then carried a
+    /// shoulder further (<see cref="FlankPadFraction"/>), so the front runs past
+    /// the flanks rather than terminating on the flank unit's own counter.
+    ///
+    /// **It is a 2D graphic, painted on the ground.** The FLOT states where the
+    /// fighting is, which is a fact about a piece of terrain — so it is drawn
+    /// flat and clamped to the ground the whole way along, in both the top-down
+    /// and the tilted view, and never as a curtain standing in the world. That
+    /// is <see cref="LineKind.Boundary"/>'s membership of <c>MapLine.FlatOnly</c>
+    /// plus the ground-plane ribbon alignment described there; this class only
+    /// has to publish the geometry and say <c>is3D = false</c>.
     ///
     /// All of the shaping constants are settings rather than constants, driven
     /// from <see cref="UI.FrontlinePanelUI"/> — the line is clickable and opens
@@ -95,6 +106,55 @@ namespace IronMeridian.Lines
         public int RedCount { get; private set; }
         /// <summary>Why the last solve produced nothing, or null when it succeeded.</summary>
         public string LastFailure { get; private set; }
+
+        // ------------------------------------------------- the group holding it
+
+        /// <summary>
+        /// The group that has been put on the line, if any — its id and its
+        /// name at the time it was assigned.
+        ///
+        /// **Why the line knows.** Manning the FLOT is an order given to
+        /// formations, and the orders themselves live on the units; but "who is
+        /// holding the front" is a fact about the *front*, and it has to
+        /// survive every recompute of the geometry. Keeping it here is what
+        /// lets the line caption itself with the group's name rather than a
+        /// bare "FLOT", and what lets the GROUPS panel say which group is on it
+        /// without interrogating every formation on the map.
+        /// </summary>
+        public string HoldingGroupId { get; private set; } = "";
+        public string HoldingGroupName { get; private set; } = "";
+
+        /// <summary>
+        /// Records which group holds the line, or clears it with an empty id.
+        /// Re-captions the line; the deployment itself is the caller's business
+        /// — see <c>GameController.ManTheFlot</c>.
+        /// </summary>
+        public void SetHoldingGroup(string groupId, string groupName)
+        {
+            HoldingGroupId = groupId ?? "";
+            HoldingGroupName = string.IsNullOrEmpty(groupId) ? "" : (groupName ?? "");
+            ApplyLabel();
+            Recomputed?.Invoke();
+        }
+
+        /// <summary>
+        /// The line's caption: "FLOT", or "FLOT — 1ST BRIGADE" once a group has
+        /// been put on it. Re-applied after every publish, because a line
+        /// rebuilt from a save comes back with whatever label the file carried.
+        /// </summary>
+        void ApplyLabel()
+        {
+            var line = Line;
+            if (line == null) return;
+
+            string label = string.IsNullOrEmpty(HoldingGroupName)
+                ? "FLOT"
+                : "FLOT — " + HoldingGroupName.ToUpperInvariant();
+            if (line.Data.label == label) return;
+
+            line.Data.label = label;
+            line.RefreshStyle();       // rebuilds the captions from Data.label
+        }
         /// <summary>Raised after every recompute, so the panel can refresh its readout.</summary>
         public event System.Action Recomputed;
 
@@ -108,6 +168,10 @@ namespace IronMeridian.Lines
         const float ForwardBiasKm = 4f;
         /// <summary>Metres per degree of latitude. Good to a fraction of a percent anywhere a scenario is fought.</summary>
         const double MetresPerDegLat = 111132.0;
+        /// <summary>Share of the deployment's frontage carried out past each flank.</summary>
+        const float FlankPadFraction = 0.15f;
+        /// <summary>Floor on that shoulder, metres — see <see cref="Recompute"/>.</summary>
+        const float MinFlankPadM = 2500f;
 
         LineManager _lines;
         float _timer;
@@ -191,6 +255,8 @@ namespace IronMeridian.Lines
         {
             AutoUpdate = true;
             Visible = true;
+            HoldingGroupId = "";
+            HoldingGroupName = "";
             Resolution = DefaultResolution;
             SmoothingPasses = DefaultSmoothing;
             InfluenceWidthKm = DefaultInfluenceWidthKm;
@@ -220,16 +286,27 @@ namespace IronMeridian.Lines
             }
 
             // Span across the front, from the outermost formation on either
-            // side, padded by the influence width so the line does not stop
-            // dead at the last unit's shoulder. Every unit on the map is inside
-            // this span by construction, and — since nothing is trimmed off the
-            // ends any more — inside the drawn line too.
+            // side, padded so the line does not stop dead at the last unit's
+            // shoulder. Every unit on the map is inside this span by
+            // construction, and — since nothing is trimmed off the ends any
+            // more — inside the drawn line too.
             float minLat = float.MaxValue, maxLat = float.MinValue;
             foreach (var n in _blue) { minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral); }
             foreach (var n in _red) { minLat = Mathf.Min(minLat, n.Lateral); maxLat = Mathf.Max(maxLat, n.Lateral); }
 
             float sigma = InfluenceWidthKm * 1000f;
-            minLat -= sigma; maxLat += sigma;
+
+            // The shoulder past the outermost formation. The influence width is
+            // a *setting* — at its 1 km floor it would leave the line finishing
+            // on top of the flank battalion's counter, which reads as a front
+            // that runs out rather than one that continues beyond contact. So
+            // the pad is the largest of the influence width, a share of the
+            // deployment's own frontage, and a fixed minimum: whichever the
+            // scenario is, the line covers every unit on the map with ground to
+            // spare on both flanks.
+            float pad = Mathf.Max(sigma,
+                Mathf.Max((maxLat - minLat) * FlankPadFraction, MinFlankPadM));
+            minLat -= pad; maxLat += pad;
             if (maxLat - minLat < 1f)
             {
                 LastFailure = "The force has no width across the front.";
@@ -511,7 +588,11 @@ namespace IronMeridian.Lines
                     id = LineId,
                     kind = LineKind.Boundary.ToString(),
                     team = "",
-                    is3D = true,
+                    // The front line is a map graphic, never a fence standing in
+                    // the world: it is drawn flat on the terrain in both view
+                    // modes. MapLine normalises this for every FlatOnly kind, so
+                    // this is the record of intent rather than the enforcement.
+                    is3D = false,
                     autoGenerated = true,
                     label = "FLOT",
                     points = points
@@ -525,6 +606,7 @@ namespace IronMeridian.Lines
             // LineManager rather than created here and would otherwise come
             // back un-clickable.
             line.SetPickable(true);
+            ApplyLabel();
             line.gameObject.SetActive(Visible);
             LengthKm = line.LengthKm;
             LastFailure = null;

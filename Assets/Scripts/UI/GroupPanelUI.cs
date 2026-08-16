@@ -13,12 +13,20 @@ namespace IronMeridian.UI
     /// 2+ units are selected. It does four things:
     ///
     ///  • **Names the current selection as a group**, so it can be recalled later.
+    ///  • **Renames the group it is already in** — see <see cref="RenameGroup"/>.
     ///  • **Lists what is selected**, with each formation's current group beside
     ///    it and a way to move it to another one.
     ///  • **Lists the existing groups** — click one to select its members,
     ///    double-click to fly the camera to them.
-    ///  • **Gives the group orders** — MOVE / ATTACK / DEFEND. Mocked up for now;
-    ///    see <see cref="OrderNotImplemented"/>.
+    ///
+    /// **It does not give orders.** It used to carry a MOVE / ATTACK / DEFEND
+    /// bar of its own, which was a mockup that did nothing, in a different
+    /// place and a different shape from the order bar every other order is
+    /// given on. Those orders now live where a formation's orders live — the
+    /// bar at the foot of the map (<see cref="UnitActionBarUI"/>) — captioned
+    /// with the group's name and carried out by every formation in it. One
+    /// place, one vocabulary, and a group can be given all six orders instead
+    /// of three.
     ///
     /// **Why regrouping lives here.** A group is a property of the units in it,
     /// not an object of its own, so "move these units to that group" has to be
@@ -38,6 +46,14 @@ namespace IronMeridian.UI
         public System.Action<string> Flash;
         /// <summary>Delete a unit from the map (raised by the ✕ on a selected-unit row).</summary>
         public System.Action<UnitActor> RemoveUnitRequested;
+        /// <summary>
+        /// Raised whenever this panel changes what the groups are or what they
+        /// are called. The order bar is captioned with the group's name, and it
+        /// is not on this panel, so it has to be told — a rename that left the
+        /// bar reading the old name until the next click would be two places
+        /// disagreeing about one group.
+        /// </summary>
+        public System.Action GroupsChanged;
 
         // ------------------------------------------------------------ layout
 
@@ -57,28 +73,28 @@ namespace IronMeridian.UI
         /// <summary>Vertical gap above the SELECTED UNITS heading.</summary>
         const float UnitsLabelMargin = 10f;
 
-        // Distances from the panel's top edge to the top of each block. The
-        // whole lower half slides down by OrdersBlockHeight when the orders bar
-        // is up — see Layout().
+        // Distances from the panel's top edge to the top of each block. Fixed
+        // now that the orders bar has gone to the foot of the map — nothing in
+        // the upper half appears or disappears any more, so nothing shifts.
         const float TitleTop = 24f, TitleHeight = 32f;
-        const float OrdersCaptionTop = 62f;
-        const float OrdersButtonsTop = 82f, OrdersButtonsHeight = 46f;
-        /// <summary>What the orders block costs everything below it.</summary>
-        const float OrdersBlockHeight = 76f;
+        /// <summary>Which group this is, and where its orders are given.</summary>
+        const float ScopeTop = 56f, ScopeHeight = 16f;
+        const float ScopeNoteTop = 72f, ScopeNoteHeight = 14f;
 
-        const float HintTop = 56f;
-        const float NameInputTop = 84f;
-        const float CreateTop = 128f, CreateHeight = 40f;
-        /// <summary>Heading sits a clear <see cref="UnitsLabelMargin"/> below the CREATE row.</summary>
-        const float UnitsLabelTop = CreateTop + CreateHeight + UnitsLabelMargin;
+        const float HintTop = 92f;
+        const float NameInputTop = 112f;
+        const float ButtonsTop = 156f, ButtonsHeight = 40f;
+        /// <summary>Heading sits a clear <see cref="UnitsLabelMargin"/> below the button row.</summary>
+        const float UnitsLabelTop = ButtonsTop + ButtonsHeight + UnitsLabelMargin;
         const float UnitsLabelHeight = 24f;
         const float UnitsScrollTop = UnitsLabelTop + UnitsLabelHeight + 4f;
 
+        /// <summary>Button row: CREATE · RENAME · UNGROUP, meeting exactly at <see cref="Inner"/>.</summary>
+        const float CreateWidth = 104f, RenameWidth = 74f, UngroupWidth = 78f, ButtonGap = 4f;
+
         /// <summary>
         /// Where the selected-units list stops and the saved-groups list begins,
-        /// as a fraction of panel height. Lower than it was: the orders bar took
-        /// 76 px off the top half, and at 720p that left the upper list two rows
-        /// tall.
+        /// as a fraction of panel height.
         /// </summary>
         const float SplitFraction = 0.38f;
 
@@ -92,10 +108,12 @@ namespace IronMeridian.UI
         InputField _nameInput;
         RectTransform _listContent;      // existing groups
         RectTransform _unitsContent;     // units in the current selection
-        RectTransform _unitsScroll, _unitsLabelRect, _hintRect, _createRect, _ungroupRect;
-        RectTransform _ordersBlock;
-        Text _ordersCaption;
+        RectTransform _unitsScroll;
+        Text _hint, _scope, _scopeNote;
+        Button _rename;
         RectTransform _picker;           // the per-unit group chooser, when open
+        /// <summary>Group the name field was last filled for — see <see cref="RefreshNaming"/>.</summary>
+        string _scopeGroupId;
 
         IReadOnlyList<UnitActor> _currentSelection = new List<UnitActor>();
 
@@ -121,39 +139,62 @@ namespace IronMeridian.UI
             UIFactory.Place(_title.rectTransform, new Vector2(0.5f, 1f),
                 new Vector2(0, -TitleTop), new Vector2(Inner + 16f, TitleHeight));
 
-            BuildOrdersBar();
+            // Which group this selection is, and — because the buttons that
+            // used to be here have moved — where its orders are now given.
+            _scope = UIFactory.CreateText(_panel, "", 12, UiTheme.Accent,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(_scope.rectTransform, new Vector2(0.5f, 1f),
+                new Vector2(0, -ScopeTop), new Vector2(Inner, ScopeHeight));
+            UIFactory.Fit(_scope, 9);
 
-            var hint = UIFactory.CreateText(_panel, "Name this selection as a group:", 13,
+            _scopeNote = UIFactory.CreateText(_panel,
+                "Orders are on the bar below the map.", 10,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            UIFactory.Place(_scopeNote.rectTransform, new Vector2(0.5f, 1f),
+                new Vector2(0, -ScopeNoteTop), new Vector2(Inner, ScopeNoteHeight));
+            UIFactory.Fit(_scopeNote, 8);
+
+            _hint = UIFactory.CreateText(_panel, "Name this selection as a group:", 13,
                 UiTheme.TextDim, TextAnchor.MiddleLeft);
-            _hintRect = hint.rectTransform;
-            UIFactory.Place(_hintRect, new Vector2(0.5f, 1f), new Vector2(0, -HintTop), new Vector2(Inner, 22));
+            UIFactory.Place(_hint.rectTransform, new Vector2(0.5f, 1f),
+                new Vector2(0, -HintTop), new Vector2(Inner, 22));
 
             _nameInput = UIFactory.CreateInputField(_panel, "Group name…", 16);
             UIFactory.Place((RectTransform)_nameInput.transform, new Vector2(0.5f, 1f),
                 new Vector2(0, -NameInputTop), new Vector2(Inner, 36));
 
-            // CREATE and UNGROUP share a row. They are the two halves of one
-            // question — is this selection a group or not — and stacking them
-            // would have cost a row of the list below for no gain.
+            // CREATE · RENAME · UNGROUP share a row: the three things that can
+            // be done to a group's membership and its name, in the order they
+            // are reached for. One field feeds both of the naming buttons —
+            // asking for the name twice, once to create and once to rename,
+            // would be two inputs for one piece of information.
+            float x = -Inner * 0.5f;
             var create = UIFactory.CreateButton(_panel, "CREATE GROUP", CreateGroup,
-                UiTheme.Accent, new Color(0.1f, 0.1f, 0.1f), 15);
-            _createRect = (RectTransform)create.transform;
-            UIFactory.Place(_createRect, new Vector2(0.5f, 1f),
-                new Vector2(-52f, -CreateTop), new Vector2(160, CreateHeight));
-            UIFactory.Fit(create.GetComponentInChildren<Text>(), 10);
+                UiTheme.Accent, new Color(0.1f, 0.1f, 0.1f), 14);
+            UIFactory.Place((RectTransform)create.transform, new Vector2(0.5f, 1f),
+                new Vector2(x + CreateWidth * 0.5f, -ButtonsTop), new Vector2(CreateWidth, ButtonsHeight));
+            UIFactory.Fit(create.GetComponentInChildren<Text>(), 9);
+            x += CreateWidth + ButtonGap;
+
+            _rename = UIFactory.CreateButton(_panel, "RENAME", RenameGroup,
+                UiTheme.Surface, UiTheme.Text, 13);
+            UIFactory.Place((RectTransform)_rename.transform, new Vector2(0.5f, 1f),
+                new Vector2(x + RenameWidth * 0.5f, -ButtonsTop), new Vector2(RenameWidth, ButtonsHeight));
+            UIFactory.Fit(_rename.GetComponentInChildren<Text>(), 9);
+            UiTooltip.Attach(_rename.gameObject,
+                "Rename the group these formations belong to", UiTooltip.Side.Left);
+            x += RenameWidth + ButtonGap;
 
             var ungroup = UIFactory.CreateButton(_panel, "UNGROUP", UngroupSelection,
                 UiTheme.Surface, UiTheme.TextDim, 13);
-            _ungroupRect = (RectTransform)ungroup.transform;
-            UIFactory.Place(_ungroupRect, new Vector2(0.5f, 1f),
-                new Vector2(82f, -CreateTop), new Vector2(100, CreateHeight));
-            UIFactory.Fit(ungroup.GetComponentInChildren<Text>(), 10);
+            UIFactory.Place((RectTransform)ungroup.transform, new Vector2(0.5f, 1f),
+                new Vector2(x + UngroupWidth * 0.5f, -ButtonsTop), new Vector2(UngroupWidth, ButtonsHeight));
+            UIFactory.Fit(ungroup.GetComponentInChildren<Text>(), 9);
 
             // ---- units in this selection ----
             var unitsLabel = UIFactory.CreateText(_panel, "SELECTED UNITS", 14, UiTheme.Accent,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            _unitsLabelRect = unitsLabel.rectTransform;
-            UIFactory.Place(_unitsLabelRect, new Vector2(0.5f, 1f),
+            UIFactory.Place(unitsLabel.rectTransform, new Vector2(0.5f, 1f),
                 new Vector2(0, -UnitsLabelTop), new Vector2(Inner, UnitsLabelHeight));
 
             var unitsScroll = UIFactory.CreateScrollView(_panel, out _unitsContent);
@@ -204,96 +245,92 @@ namespace IronMeridian.UI
             Hide();
         }
 
-        // ------------------------------------------------------- orders bar
+        // ------------------------------------------------------------ naming
 
         /// <summary>
-        /// MOVE / ATTACK / DEFEND for the group as a whole.
+        /// Renames the group the selection belongs to.
         ///
-        /// **A mockup, deliberately and visibly.** The buttons exist, are
-        /// captioned, carry the same glyphs the single-unit order bar uses
-        /// (<see cref="ProceduralTextures"/>), and say plainly that the order is
-        /// not wired yet. Giving them a *plausible* behaviour — issuing the
-        /// order to each member in turn — would be worse than doing nothing: a
-        /// group move is not several unit moves, it is a formation moving with
-        /// an axis, a frontage and an order of march, and shipping the naive
-        /// version would make the real one a bug report rather than a feature.
-        ///
-        /// The glyphs are shared with <see cref="UnitActionBarUI"/> on purpose:
-        /// when these are wired up they must read as the same verbs, and a
-        /// second visual vocabulary for the same three orders would be a
-        /// second thing to learn.
+        /// **Every member is renamed, not just the selected ones.** A group's
+        /// name is stored on each formation in it, so renaming only what happens
+        /// to be selected would split one group into two that share an id and
+        /// disagree about what they are called — and the group list, which reads
+        /// the name off whichever member it meets first, would then show one
+        /// name or the other depending on registry order. The button is about
+        /// the *group*, so it acts on the group.
         /// </summary>
-        void BuildOrdersBar()
+        void RenameGroup()
         {
-            _ordersBlock = UIFactory.CreateGroup(_panel, "GroupOrders");
-            UIFactory.Place(_ordersBlock, new Vector2(0.5f, 1f),
-                new Vector2(0, -OrdersCaptionTop),
-                new Vector2(Inner, OrdersButtonsTop - OrdersCaptionTop + OrdersButtonsHeight));
+            string id = SharedGroupIdOfSelection();
+            if (string.IsNullOrEmpty(id))
+            {
+                Flash?.Invoke(_currentSelection.Count == 0
+                    ? "Nothing selected."
+                    : "These formations are not all in one group — CREATE GROUP makes them one.");
+                return;
+            }
 
-            _ordersCaption = UIFactory.CreateSectionHeader(_ordersBlock, "GROUP ORDERS", UiTheme.TextFaint);
-            UIFactory.PlaceTopLeft(_ordersCaption.rectTransform, 0f, 0f, Inner, 16f);
+            string name = _nameInput.text.Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                Flash?.Invoke("Type the new name in the field above first.");
+                return;
+            }
 
-            const float gap = 6f;
-            float w = (Inner - gap * 2f) / 3f;
+            int count = 0;
+            foreach (var u in UnitRegistry.All)
+            {
+                if (u == null || u.State.groupId != id) continue;
+                u.State.groupName = name;
+                count++;
+            }
 
-            OrderButton("MOVE", 0, w, gap, ProceduralTextures.MoveIcon(UiTheme.Text));
-            OrderButton("ATTACK", 1, w, gap, ProceduralTextures.AttackIcon(UiTheme.Text));
-            OrderButton("DEFEND", 2, w, gap, ProceduralTextures.ShieldIcon(UiTheme.Text));
-
-            _ordersBlock.gameObject.SetActive(false);
+            Flash?.Invoke($"Group renamed to '{name}' ({count} formations).");
+            Regrouped();
         }
-
-        void OrderButton(string label, int index, float width, float gap, Texture2D icon)
-        {
-            var btn = UIFactory.CreateButton(_ordersBlock, "", () => OrderNotImplemented(label),
-                UiTheme.Surface, UiTheme.Text, 11);
-            var rt = (RectTransform)btn.transform;
-            UIFactory.Place(rt, new Vector2(0f, 1f),
-                new Vector2(index * (width + gap), -(OrdersButtonsTop - OrdersCaptionTop)),
-                new Vector2(width, OrdersButtonsHeight));
-
-            // CreateButton centres its own caption; this layout wants the glyph
-            // above it, so the caption is retargeted to the lower strip — the
-            // same arrangement UnitActionBarUI uses.
-            var caption = btn.GetComponentInChildren<Text>(true);
-            caption.text = label;
-            caption.alignment = TextAnchor.LowerCenter;
-            var crt = caption.rectTransform;
-            crt.anchorMin = new Vector2(0, 0); crt.anchorMax = new Vector2(1, 0);
-            crt.pivot = new Vector2(0.5f, 0f);
-            crt.sizeDelta = new Vector2(0, 16);
-            crt.anchoredPosition = new Vector2(0, 4);
-            UIFactory.Fit(caption, 8);
-
-            var sprite = Sprite.Create(icon, new Rect(0, 0, icon.width, icon.height),
-                new Vector2(0.5f, 0.5f), 100f);
-            var image = UIFactory.CreateImage(rt, sprite, "Icon");
-            image.raycastTarget = false;
-            UIFactory.Place((RectTransform)image.transform, new Vector2(0.5f, 1f),
-                new Vector2(0, -5), new Vector2(22, 22));
-        }
-
-        void OrderNotImplemented(string order) =>
-            Flash?.Invoke($"{order} as a group is not wired up yet — order the formations individually for now.");
 
         /// <summary>
-        /// Slides the block below the orders bar up or down by exactly what the
-        /// bar costs. Hand-placed rects rather than a layout group, so the shift
-        /// has to be applied to each of them — but only these four move, and
-        /// everything under the split fraction is anchored to the bottom half
-        /// and never moves at all.
+        /// Repaints the header block for what is currently selected: which group
+        /// it is (or that it is not one yet), and whether RENAME can do
+        /// anything. A button that looks live and refuses on click is a worse
+        /// answer than one that plainly says it is not available.
         /// </summary>
-        void Layout(bool ordersVisible)
+        void RefreshNaming()
         {
-            _ordersBlock.gameObject.SetActive(ordersVisible);
-            float shift = ordersVisible ? OrdersBlockHeight : 0f;
+            string groupName = SharedGroupName();
+            bool grouped = groupName != null;
 
-            _hintRect.anchoredPosition = new Vector2(0, -(HintTop + shift));
-            ((RectTransform)_nameInput.transform).anchoredPosition = new Vector2(0, -(NameInputTop + shift));
-            _createRect.anchoredPosition = new Vector2(-52f, -(CreateTop + shift));
-            _ungroupRect.anchoredPosition = new Vector2(82f, -(CreateTop + shift));
-            _unitsLabelRect.anchoredPosition = new Vector2(0, -(UnitsLabelTop + shift));
-            _unitsScroll.offsetMax = new Vector2(-10, -(UnitsScrollTop + shift));
+            _scope.text = grouped
+                ? UiTheme.Spaced("GROUP · " + groupName)
+                : UiTheme.Spaced("NOT A GROUP YET");
+            _scope.color = grouped ? UiTheme.Accent : UiTheme.TextDim;
+
+            _scopeNote.text = grouped
+                ? "Orders for this group are on the bar below the map."
+                : "Name it below to recall it later. Orders are on the bar below the map.";
+
+            _hint.text = grouped
+                ? "Rename this group, or name it as a new one:"
+                : "Name this selection as a group:";
+
+            // Pre-filled with the current name: renaming is nearly always an
+            // edit of what is there rather than a fresh word, and an empty box
+            // above a RENAME button asks the player to remember it.
+            //
+            // Refilled when the *group* changes rather than whenever the box is
+            // empty. Leaving a name behind from the last selection would leave
+            // RENAME pointed at one group carrying another one's name — and
+            // half-typed text must survive a repaint of this panel, which is
+            // what happens on every membership change.
+            string id = SharedGroupIdOfSelection();
+            if (id != _scopeGroupId)
+            {
+                _scopeGroupId = id;
+                _nameInput.text = grouped ? groupName : "";
+            }
+
+            _rename.interactable = grouped;
+            var caption = _rename.GetComponentInChildren<Text>(true);
+            if (caption != null) caption.color = grouped ? UiTheme.Text : UiTheme.TextFaint;
         }
 
         // --------------------------------------------------------- selection
@@ -307,13 +344,7 @@ namespace IronMeridian.UI
             _panel.gameObject.SetActive(true);
             _title.text = $"{selection.Count} UNITS SELECTED";
 
-            // The orders bar belongs to a *group*, not to any two units that
-            // happen to be selected together — otherwise "group orders" would
-            // be the wrong name for what the buttons act on.
-            string groupName = SharedGroupName();
-            Layout(groupName != null);
-            if (groupName != null) _ordersCaption.text = UiTheme.Spaced("ORDERS · " + groupName);
-
+            RefreshNaming();
             RefreshUnitList();
             RefreshGroupList();
         }
@@ -411,6 +442,16 @@ namespace IronMeridian.UI
             Flash?.Invoke($"Removed {count} units.");
         }
 
+        /// <summary>
+        /// Repaints this panel for a membership or naming change, and tells
+        /// whoever else is showing the group's name.
+        /// </summary>
+        void Regrouped()
+        {
+            SetSelection(_currentSelection);
+            GroupsChanged?.Invoke();
+        }
+
         static void TightenRows(RectTransform content)
         {
             var layout = content.GetComponent<VerticalLayoutGroup>();
@@ -456,8 +497,7 @@ namespace IronMeridian.UI
                 count++;
             }
             Flash?.Invoke($"Group '{name}' created ({count} units).");
-            _nameInput.text = "";
-            SetSelection(_currentSelection);       // the orders bar applies from now on
+            Regrouped();
         }
 
         /// <summary>Takes every selected formation out of whatever group it is in.</summary>
@@ -475,7 +515,7 @@ namespace IronMeridian.UI
             Flash?.Invoke(count == 0
                 ? "None of the selected formations is in a group."
                 : $"{count} formation(s) removed from their group.");
-            SetSelection(_currentSelection);
+            Regrouped();
         }
 
         /// <summary>Every group with at least one living member, in registry order.</summary>
@@ -631,7 +671,7 @@ namespace IronMeridian.UI
                 : $"{moved} formation(s) moved into '{group.Name}'" +
                   (already > 0 ? $" ({already} already there)." : "."));
 
-            SetSelection(_currentSelection);
+            Regrouped();
         }
 
         // ------------------------------------------------------- unit picker
@@ -737,7 +777,7 @@ namespace IronMeridian.UI
                 : $"{name} moved into '{groupName}'.");
 
             ClosePicker();
-            SetSelection(_currentSelection);
+            Regrouped();
         }
 
         void ClosePicker()
@@ -746,6 +786,17 @@ namespace IronMeridian.UI
             _picker.SetParent(null, false);
             Destroy(_picker.gameObject);
             _picker = null;
+        }
+
+        /// <summary>
+        /// Moves the panel's top edge, so it can clear whatever is docked above
+        /// it on this edge — the fire-menu cluster always, and the minimap too
+        /// once a battle starts. One caller decides for all of them; see
+        /// <c>GameController.RefreshRightDockTop</c>.
+        /// </summary>
+        public void SetTopInset(float pixels)
+        {
+            if (_panel != null) _panel.offsetMax = new Vector2(0, -pixels);
         }
     }
 }

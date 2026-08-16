@@ -70,6 +70,17 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
     }
   ],
 
+  "logistics": [
+    {
+      "id": "log-3f9a21c4",
+      "kind": "FuelPoint",            // SupplyDepot | SupplyPoint | FuelPoint
+                                      // AmmoPoint | RepairPoint | MedicalPoint
+      "team": "User",
+      "label": "",                    // "" takes the catalogue's own name
+      "latitude": 45.7500, "longitude": 4.8500, "heightMeters": 214.0
+    }
+  ],
+
   "teams": [
     { "id": "team-blue", "name": "Blue Force", "side": "User" },
     { "id": "team-red",  "name": "Red Force",  "side": "Enemy" }
@@ -83,6 +94,11 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
   ]
 }
 ```
+
+`logistics` is the scenario's rear area — see [26-LOGISTICS.md](26-LOGISTICS.md).
+Unlike `markers`, these belong to the *scenario* rather than to a unit, so
+nothing sweeps them off the map when a formation dies. Empty on any map saved
+before they existed, which reads correctly as "this scenario has no rear area".
 
 `teams` and `players` say who is fighting the scenario — see
 [25-PLAYERS.md](25-PLAYERS.md). A file with neither (anything saved before they

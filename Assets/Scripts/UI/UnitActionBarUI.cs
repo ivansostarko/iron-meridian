@@ -32,6 +32,14 @@ namespace IronMeridian.UI
     /// Only one submenu is open at a time, and any of them closes when the
     /// selection changes — a menu that silently re-targeted whichever unit
     /// happened to be selected when you finally clicked would be a trap.
+    ///
+    /// **One formation or a whole group.** The bar is the only place an order
+    /// is given, whichever is selected: with several formations up it is
+    /// captioned for the group and every one of them carries the order out,
+    /// spread across a frontage rather than stacked on one point (see
+    /// <c>GameController.ForSelectionOnGround</c>). The lamps read the lead
+    /// formation, because a standing switch is flipped for the group as a whole
+    /// from whatever the lead currently is.
     /// </summary>
     public class UnitActionBarUI : MonoBehaviour
     {
@@ -457,7 +465,21 @@ namespace IronMeridian.UI
 
         // --------------------------------------------------------- lifecycle
 
-        public void Show(UnitActor unit)
+        /// <summary>
+        /// Puts the bar up for a formation — or for a group, in which case
+        /// <paramref name="scopeTitle"/> says whose orders these are and
+        /// <paramref name="unit"/> is the lead formation the lamps are read
+        /// from.
+        ///
+        /// **The group's orders live here, on the same six buttons.** They used
+        /// to be three unwired buttons inside the group panel on the right, and
+        /// having two places to give an order — with two vocabularies, one of
+        /// which did nothing — was worse than having one. A group is given the
+        /// same six orders in the same place as a single formation; the only
+        /// difference is how many formations carry them out, and that is what
+        /// the caption is for.
+        /// </summary>
+        public void Show(UnitActor unit, string scopeTitle = null)
         {
             if (_panel == null || unit == null) { Hide(); return; }
             _unit = unit;
@@ -470,7 +492,9 @@ namespace IronMeridian.UI
             RefreshCommandLamps();
 
             string name = string.IsNullOrEmpty(unit.State.customName) ? unit.Def.name : unit.State.customName;
-            _title.text = $"ORDERS — {name.ToUpperInvariant()}";
+            _title.text = string.IsNullOrEmpty(scopeTitle)
+                ? $"ORDERS — {name.ToUpperInvariant()}"
+                : scopeTitle.ToUpperInvariant();
         }
 
         public void Hide()
