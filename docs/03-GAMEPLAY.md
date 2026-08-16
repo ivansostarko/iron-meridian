@@ -77,13 +77,34 @@ The editor's left chrome is in two pieces:
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **ENVIRONMENT** | Scenario H-hour and presets, sky phase, auto day/night, weather condition — **one section**, because they are one decision: a designer setting a night attack is choosing the hour *and* the sky in the same breath |
 | **MAP CONFIG** | Tile style, 2D/3D, layers, unit-label size |
+| **STATS** | *Empty.* Reserved — see *Reserved sections* below |
+| **ZONES** | *Empty.* Reserved — see *Reserved sections* below |
+| **OBJECTS** | *Empty.* Reserved — see *Reserved sections* below |
+| **SUPPLIES** | *Empty.* Reserved — see *Reserved sections* below |
 | **GROUPS** | *Battle mode only.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
 
 The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
 
-**Twelve rows, and a thirteenth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
+**Sixteen rows, and a seventeenth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing, then the four reserved pages. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
+
+**The nav scrolls.** Seventeen rows do not fit the rail on a 1280×720 screen, and a row that ran under the tool strip would be a section that could not be opened at all — the one failure a nav is not allowed. The emblem above and the tools below stay put; only the list between them moves, with a scrollbar down its right edge.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
+
+### Reserved sections
+
+**STATS**, **ZONES**, **OBJECTS** and **SUPPLIES** are a nav row and an empty page each, and nothing else yet. They are places to build in: the row, the section, the panel and the title are wired, so filling one is writing its controls and nothing else.
+
+Each page says on its face that it is empty — a page that merely rendered blank would read as a section that had broken — and each names its nearest built neighbours, so the next person to fill one is told what already exists rather than building a second way of doing it:
+
+| Section | Where the nearest existing thing lives |
+|---|---|
+| **STATS** | Casualties on **TAB** (the losses list); stocks under **SUSTAINMENT** |
+| **ZONES** | Mission boundary, HQ zones and deployment zones, all under **MISSIONS** |
+| **OBJECTS** | Barrier plans under **MINES AND OBSTACLES**; installations under **LOGISTICS** |
+| **SUPPLIES** | Stocks under **SUSTAINMENT**, depots under **LOGISTICS**, air-dropped loads on the **AIR SUPPLY** fire menu |
+
+They are built by `UnitPaletteUI.BuildEmptySection`, one shared page so the four cannot drift into four different ways of saying "empty".
 
 **Hand-placed effects are permanent.** A fire, smoke column or explosion put down from the EFFECTS section burns until it is cleared — never evicted by the concurrent-effect budget, never given a lifetime, in battle mode or out of it. Two things used to end one and both looked like a bug: the budget is 48 effects and an incoming explosion outranks a standing fire, so the marker a player put down vanished exactly when the fighting got interesting; and a placed explosion left a wreck on a timer that went out by itself. Effects the *game* creates still burn out and are still evictable — otherwise a long battle ends up carpeted in permanent fires.
 

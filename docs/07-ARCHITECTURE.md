@@ -116,8 +116,10 @@ Assets/Scripts/
     EastFranceUI.cs      "Under development" placeholder
     GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.
                          SetMissionMode strips it to the clock (docs/22-MISSIONS.md §3)
-    UnitPaletteUI.cs     left rail (nine-row section nav + three tools) + the
-                         sliding section panel. Also builds the four fire menus
+    UnitPaletteUI.cs     left rail (scrolling section nav + three tools) + the
+                         sliding section panel. STATS / ZONES / OBJECTS /
+                         SUPPLIES are reserved rows with empty pages —
+                         BuildEmptySection. Also builds the four fire menus
                          into StrikeDockUI's pages — what moved is where they
                          are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission

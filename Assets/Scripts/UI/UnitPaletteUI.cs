@@ -71,6 +71,14 @@ namespace IronMeridian.UI
         {
             General, Units, Players, Commanders, Logistics, Sustainment, Reinforcements,
             Obstacles, Effects, Missions, Environment, Map,
+            /// <summary>Reserved — see <see cref="BuildStatsSection"/>.</summary>
+            Stats,
+            /// <summary>Reserved — see <see cref="BuildZonesSection"/>.</summary>
+            Zones,
+            /// <summary>Reserved — see <see cref="BuildObjectsSection"/>.</summary>
+            Objects,
+            /// <summary>Reserved — see <see cref="BuildSuppliesSection"/>.</summary>
+            Supplies,
             /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
             Groups
         }
@@ -139,8 +147,21 @@ namespace IronMeridian.UI
         /// space rather than leaving a gap where a control used to be.
         /// </summary>
         const float ListTop = -90f;
-        /// <summary>Emblem block plus the nine nav rows, measured from the rail's top.</summary>
-        const float HeaderHeight = 518f;
+        /// <summary>
+        /// Where the nav list starts, measured from the rail's top: clear of the
+        /// emblem and the mode heading, which stay put while the list scrolls.
+        /// </summary>
+        const float NavTop = 40f;
+        /// <summary>Pitch of a nav row — the row's own height plus its gap.</summary>
+        const float NavRowPitch = 36f;
+        /// <summary>Inset above the first nav row and below the last.</summary>
+        const float NavPad = 6f;
+        /// <summary>
+        /// Nav rows are inset from the rail's right edge by the scrollbar, so a
+        /// row's fill and its click target end where the viewport does rather
+        /// than running under the bar.
+        /// </summary>
+        const float NavRowWidth = RailWidth - UIFactory.ScrollbarWidth;
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
@@ -320,6 +341,10 @@ namespace IronMeridian.UI
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.Reinforcements] = MakeSectionContent(body, "Reinforcements");
             _sectionContent[Section.Obstacles] = MakeSectionContent(body, "Obstacles");
+            _sectionContent[Section.Stats] = MakeSectionContent(body, "Stats");
+            _sectionContent[Section.Zones] = MakeSectionContent(body, "Zones");
+            _sectionContent[Section.Objects] = MakeSectionContent(body, "Objects");
+            _sectionContent[Section.Supplies] = MakeSectionContent(body, "Supplies");
             _sectionContent[Section.Groups] = MakeSectionContent(body, "Groups");
 
             BuildGeneralSection(_sectionContent[Section.General]);
@@ -334,6 +359,10 @@ namespace IronMeridian.UI
             BuildMapSection(_sectionContent[Section.Map]);
             BuildReinforcementSection(_sectionContent[Section.Reinforcements]);
             BuildObstacleSection(_sectionContent[Section.Obstacles]);
+            BuildStatsSection(_sectionContent[Section.Stats]);
+            BuildZonesSection(_sectionContent[Section.Zones]);
+            BuildObjectsSection(_sectionContent[Section.Objects]);
+            BuildSuppliesSection(_sectionContent[Section.Supplies]);
             BuildGroupsSection(_sectionContent[Section.Groups]);
 
             // The four fire menus live in the strike dock's pages rather than in
@@ -611,48 +640,98 @@ namespace IronMeridian.UI
                 new Vector2(Pad + 26f, -14), new Vector2(RailWidth - Pad - 34f, 18));
             UIFactory.Fit(_modeHeading, 8);
 
-            // Nine rows, not fifteen. The five fire menus went to the strike
-            // dock at the top right (they are things you *do* in a scenario,
-            // not things you set one up with), and CONTROL MEASURES went
-            // altogether. What is left is the authoring nav, in the order a
-            // scenario is actually built: the ground rules, the forces, who is
-            // fighting, who commands, then the dressing.
-            AddNavRow(panel, Section.General, "GENERAL", UiIcons.Flag, -44);
-            AddNavRow(panel, Section.Units, "UNITS", UiIcons.Person, -80);
-            AddNavRow(panel, Section.Players, "PLAYERS", UiIcons.Shield, -116);
-            AddNavRow(panel, Section.Commanders, "COMMANDERS", UiIcons.Orders, -152);
-            AddNavRow(panel, Section.Logistics, "LOGISTICS", UiIcons.Pallet, -188);
-            AddNavRow(panel, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop, -224);
-            AddNavRow(panel, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute, -260);
-            AddNavRow(panel, Section.Obstacles, "MINES AND OBSTACLES", UiIcons.Obstacles, -296);
-            AddNavRow(panel, Section.Effects, "EFFECTS", UiIcons.Flame, -332);
+            // The nav scrolls. Seventeen sections do not fit the rail on a 720p
+            // screen, and a row that ran under the tool strip would be a section
+            // that could not be opened at all — the one failure a nav is not
+            // allowed. The emblem above and the tools below stay put; only the
+            // list between them moves.
+            var nav = BuildNavList(panel);
+
+            // The authoring nav, in the order a scenario is actually built: the
+            // ground rules, the forces, who is fighting, who commands, then the
+            // dressing. The five fire menus are not here — they went to the
+            // strike dock at the top right, being things you *do* in a scenario
+            // rather than things you set one up with.
+            float y = -NavPad;
+            AddNavRow(nav, Section.General, "GENERAL", UiIcons.Flag, ref y);
+            AddNavRow(nav, Section.Units, "UNITS", UiIcons.Person, ref y);
+            AddNavRow(nav, Section.Players, "PLAYERS", UiIcons.Shield, ref y);
+            AddNavRow(nav, Section.Commanders, "COMMANDERS", UiIcons.Orders, ref y);
+            AddNavRow(nav, Section.Logistics, "LOGISTICS", UiIcons.Pallet, ref y);
+            AddNavRow(nav, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop, ref y);
+            AddNavRow(nav, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute, ref y);
+            AddNavRow(nav, Section.Obstacles, "MINES AND OBSTACLES", UiIcons.Obstacles, ref y);
+            AddNavRow(nav, Section.Effects, "EFFECTS", UiIcons.Flame, ref y);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(panel, Section.Missions, "MISSIONS", UiIcons.Pin, -368);
+            AddNavRow(nav, Section.Missions, "MISSIONS", UiIcons.Pin, ref y);
             // Time and weather are one section, not two: they are the same
             // decision — what the light and the going are like — and a designer
             // who sets a night attack is choosing both in the same breath.
-            AddNavRow(panel, Section.Environment, "ENVIRONMENT", UiIcons.Cloud, -404);
-            AddNavRow(panel, Section.Map, "MAP CONFIG", UiIcons.Layers, -440);
+            AddNavRow(nav, Section.Environment, "ENVIRONMENT", UiIcons.Cloud, ref y);
+            AddNavRow(nav, Section.Map, "MAP CONFIG", UiIcons.Layers, ref y);
+
+            // Four sections that exist as rows and empty pages, in the order
+            // they were asked for. Each is a place to build in rather than a
+            // feature — see the builders for what belongs in them.
+            AddNavRow(nav, Section.Stats, "STATS", UiIcons.Chart, ref y);
+            AddNavRow(nav, Section.Zones, "ZONES", UiIcons.Square, ref y);
+            AddNavRow(nav, Section.Objects, "OBJECTS", UiIcons.Equipment, ref y);
+            AddNavRow(nav, Section.Supplies, "SUPPLIES", UiIcons.Crates, ref y);
 
             // Last, and hidden until a battle starts — see SetBattleMode. A
             // group is something you command, not something you author, so the
             // row appears with the rest of the battle chrome rather than
             // sitting greyed out through the whole of a scenario's layout.
-            _groupsNavRow = AddNavRow(panel, Section.Groups, "GROUPS", UiIcons.Group, -476);
+            _groupsNavRow = AddNavRow(nav, Section.Groups, "GROUPS", UiIcons.Group, ref y);
             _groupsNavRow.gameObject.SetActive(false);
 
-            var rule = UIFactory.CreateDivider(panel, UiTheme.Border);
-            rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(1, 1);
-            rule.pivot = new Vector2(0.5f, 1);
-            rule.anchoredPosition = new Vector2(0, -HeaderHeight + 6);
+            // The list is as tall as the rows put in it, so the scroll knows
+            // when there is nothing more to show — and does not scroll at all
+            // on a screen tall enough to hold the lot.
+            nav.sizeDelta = new Vector2(0, -y + NavPad);
         }
 
-        RectTransform AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, float y)
+        /// <summary>
+        /// The scrolling viewport the nav rows live in: from under the emblem
+        /// down to the tool strip, which keeps its place at the foot of the rail.
+        ///
+        /// The stock scroll content stacks its children with a
+        /// <see cref="VerticalLayoutGroup"/>; it is **disabled rather than
+        /// destroyed**, because `Destroy` on a component is deferred to the end
+        /// of the frame and a destroyed layout group would still lay out the
+        /// rows added to it a few lines later.
+        /// </summary>
+        RectTransform BuildNavList(RectTransform panel)
+        {
+            var scroll = UIFactory.CreateScrollView(panel, out RectTransform nav, withScrollbar: true);
+            var rt = (RectTransform)scroll.transform;
+            rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(1, 1);
+            rt.offsetMin = new Vector2(0, ToolStripHeight);
+            rt.offsetMax = new Vector2(0, -NavTop);
+            // The rail already has a fill; the scroll's own would darken a band
+            // down the middle of it.
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+
+            var layout = nav.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) layout.enabled = false;
+            var fitter = nav.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+
+            return nav;
+        }
+
+        /// <summary>
+        /// One nav row, placed at <paramref name="y"/> and stepping it on to the
+        /// next. Rows used to carry their own hand-written offsets, which meant
+        /// inserting a section in the middle was renumbering every row under it.
+        /// </summary>
+        RectTransform AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, ref float y)
         {
             var row = UIFactory.CreatePanel(panel, "Nav_" + label, new Color(0, 0, 0, 0));
-            UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(RailWidth, 34));
+            UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(NavRowWidth, 34));
             row.pivot = new Vector2(0f, 1f);
+            y -= NavRowPitch;
 
             var btn = row.gameObject.AddComponent<Button>();
             btn.targetGraphic = row.GetComponent<Image>();
@@ -669,12 +748,12 @@ namespace IronMeridian.UI
             img.raycastTarget = false;
             UIFactory.Place((RectTransform)img.transform, new Vector2(0f, 0.5f), new Vector2(Pad, 0), new Vector2(16, 16));
 
-            // "WEATHER CONDITIONS" is the longest label the rail has to carry, so
-            // the row's text is fitted rather than clipped at a fixed width.
+            // "MINES AND OBSTACLES" is the longest label the rail has to carry,
+            // so the row's text is fitted rather than clipped at a fixed width.
             var text = UIFactory.CreateText(row, label, UiTheme.FontBody, UiTheme.TextDim,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(Pad + 26, 0),
-                new Vector2(RailWidth - Pad - 34f, 20));
+                new Vector2(NavRowWidth - Pad - 34f, 20));
             UIFactory.Fit(text);
 
             _navRows.Add((section, label, row.GetComponent<Image>(), img, text, bar));
@@ -2012,6 +2091,65 @@ namespace IronMeridian.UI
                 new Vector2(InnerWidth, 66));
 
             RefreshGroups();
+        }
+
+        // -------------------------------------------------- reserved sections
+
+        /// <summary>
+        /// Four sections that are a nav row and an empty page, and nothing else
+        /// yet: STATS, ZONES, OBJECTS and SUPPLIES.
+        ///
+        /// **Why they exist before their contents do.** They were asked for as
+        /// places to build in, and a named empty page is the cheapest way to
+        /// hold ground in the nav: the row, the section enum, the panel and the
+        /// title are all wired, so filling one is writing its controls and
+        /// nothing else. Each says on its face that it is empty — a page that
+        /// merely rendered blank would read as a section that had broken.
+        ///
+        /// Each names its nearest built neighbours where there are any, so the
+        /// next person to fill one is told what already exists rather than
+        /// building a second way of doing it.
+        /// </summary>
+        void BuildStatsSection(RectTransform content) => BuildEmptySection(content, "STATS",
+            "Nothing is built into this section yet — it is a row, a page and a place to put the " +
+            "scenario's figures.\n\nWhat is counted today is elsewhere: casualties are on TAB " +
+            "(the losses list) and each side's stocks are under SUSTAINMENT.");
+
+        void BuildZonesSection(RectTransform content) => BuildEmptySection(content, "ZONES",
+            "Nothing is built into this section yet — it is a row, a page and a place to put areas " +
+            "drawn on the map.\n\nThe areas that already exist are elsewhere: a mission's boundary, " +
+            "its headquarters zones and its deployment zones are all under MISSIONS.");
+
+        void BuildObjectsSection(RectTransform content) => BuildEmptySection(content, "OBJECTS",
+            "Nothing is built into this section yet — it is a row, a page and a place to put things " +
+            "placed on the map that are not formations.\n\nThe ones that already exist are " +
+            "elsewhere: barrier plans are under MINES AND OBSTACLES and rear-area installations " +
+            "are under LOGISTICS.");
+
+        void BuildSuppliesSection(RectTransform content) => BuildEmptySection(content, "SUPPLIES",
+            "Nothing is built into this section yet — it is a row, a page and a place to put " +
+            "supply.\n\nWhat exists today is elsewhere: a side's stocks and their daily use are " +
+            "under SUSTAINMENT, depots and supply points under LOGISTICS, and air-dropped loads " +
+            "on the AIR SUPPLY fire menu.");
+
+        /// <summary>
+        /// A reserved section's whole page: its heading and one card saying what
+        /// it is not yet. Shared, so the four cannot drift apart into four
+        /// slightly different ways of saying "empty".
+        /// </summary>
+        void BuildEmptySection(RectTransform content, string label, string note)
+        {
+            SectionLabel(content, label, -8);
+
+            var frame = UIFactory.CreateBorderedPanel(content, "Empty", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -30), new Vector2(InnerWidth, 190));
+
+            var caption = UIFactory.CreateSectionHeader(frame, "EMPTY", UiTheme.TextFaint);
+            UIFactory.PlaceTopLeft(caption.rectTransform, 12f, 12f, InnerWidth - 24f, 14f);
+
+            var text = UIFactory.CreateText(frame, note, UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.UpperLeft);
+            UIFactory.PlaceTopLeft(text.rectTransform, 12f, 34f, InnerWidth - 24f, 144f);
         }
 
         /// <summary>Names the group currently holding the front line, "" for none.</summary>
