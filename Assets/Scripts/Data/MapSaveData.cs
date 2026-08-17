@@ -217,6 +217,35 @@ namespace IronMeridian.Data
     }
 
     /// <summary>
+    /// One drawn map object — a bridge, an airfield, a built-up area. A polygon
+    /// of at least four corners with a side that owns it; see
+    /// <see cref="MapObjectCatalog"/> and docs/33-MAP-OBJECTS.md.
+    /// </summary>
+    [Serializable]
+    public class MapObjectData
+    {
+        public string id = "";
+        /// <summary>MapObjectKind name.</summary>
+        public string kind = MapObjectKind.Bridge.ToString();
+        /// <summary>Owning side, a <see cref="Team"/> name.</summary>
+        public string team = Team.User.ToString();
+        /// <summary>Caption drawn on the ground; empty takes the catalogue's name.</summary>
+        public string label = "";
+
+        public List<GeoPoint> points = new List<GeoPoint>();
+
+        public MapObjectKind KindEnum =>
+            Enum.TryParse(kind, out MapObjectKind k) ? k : MapObjectKind.Bridge;
+        public Team TeamEnum => team == Team.Enemy.ToString() ? Team.Enemy : Team.User;
+
+        public MapObjectData Clone() => new MapObjectData
+        {
+            id = id, kind = kind, team = team, label = label,
+            points = points == null ? new List<GeoPoint>() : new List<GeoPoint>(points)
+        };
+    }
+
+    /// <summary>
     /// One logistic installation on the map — a depot, a supply point, or one
     /// of the four function-specific points. See docs/26-LOGISTICS.md.
     ///
@@ -332,6 +361,13 @@ namespace IronMeridian.Data
         /// as "this scenario has no rear area" — see docs/26-LOGISTICS.md.
         /// </summary>
         public List<LogisticsSiteData> logistics = new List<LogisticsSiteData>();
+
+        /// <summary>
+        /// Drawn infrastructure — bridges, airfields, built-up areas. Empty on
+        /// every map written before they existed, which reads correctly as "this
+        /// scenario names none". See docs/33-MAP-OBJECTS.md.
+        /// </summary>
+        public List<MapObjectData> mapObjects = new List<MapObjectData>();
         /// <summary>
         /// What each side has in stock — fuel, ammunition natures, replacements
         /// and the rest. Empty on an older map, which reads as a force with

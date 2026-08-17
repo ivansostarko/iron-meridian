@@ -107,6 +107,8 @@ namespace IronMeridian.Core
         UnitClusterLayer _clusters;
         ConnectivityWatcher _connectivity;
         UnitInfoPanel _infoPanel;
+        UnitTypePanel _typePanel;
+        IronMeridian.Lines.MapObjectSystem _mapObjects;
         IronMeridian.Logistics.LogisticsSystem _logistics;
         IronMeridian.Logistics.SustainmentSystem _sustainment;
         ReinforcementSystem _reinforcements;
@@ -517,6 +519,22 @@ namespace IronMeridian.Core
                 // stands any armed weapon down with them.
                 _combat.RunningChanged += running => _strikeDock.SetBattleMode(running);
                 _strikeDock.SetBattleMode(_combat.Running);
+
+                // And stood down here as well, on the way out of battle mode.
+                // The dock disarms whatever menu it was showing; this covers
+                // every system whether or not its menu was the open one, so
+                // "no fire missions in scenario mode" holds however a launcher
+                // came to be armed.
+                _combat.RunningChanged += running =>
+                {
+                    if (running) return;
+                    _artillery.Cancel();
+                    _airStrike.Cancel();
+                    _airSupply.Cancel();
+                    _uavStrike.Cancel();
+                    _missiles.Cancel();
+                    _naval.Cancel();
+                };
             });
 
             BuildStep("missile systems", () =>
@@ -705,6 +723,15 @@ namespace IronMeridian.Core
                 _palette.MissionHqClearRequested = ClearMissionHq;
                 _palette.MissionHqRadiusRequested = SetMissionHqRadius;
 
+                // AVAILABLE list: a click on a catalogue card opens what that
+                // type is, on the right-hand edge the other panels share.
+                _palette.InspectTypeRequested = (def, team) =>
+                {
+                    if (_typePanel == null) return;
+                    _selection.Select(null);          // the two panels share one strip
+                    _typePanel.Show(def, team);
+                };
+
                 // DEPLOYED list.
                 _palette.SelectUnitRequested = u => _selection.Select(u);
                 _palette.FocusUnitRequested = FlyToUnit;
@@ -743,6 +770,29 @@ namespace IronMeridian.Core
                 // is something a battle has. See MiniMapUI.
                 _combat.RunningChanged += running => _minimap.SetVisible(running);
                 _minimap.SetVisible(_combat.Running);
+            });
+
+            BuildStep("map objects", () =>
+            {
+                _mapObjects = gameObject.AddComponent<MapObjectSystem>();
+                _mapObjects.Init(_map, _rig.Cam);
+                _mapObjects.Flash = _hud.Flash;
+                _mapObjects.Changed += _palette.RefreshMapObjects;
+                _palette.BindMapObjects(_mapObjects);
+                _palette.MapObjectFocusRequested = obj =>
+                {
+                    if (obj == null || obj.points == null || obj.points.Count == 0) return;
+                    // The first corner, not a centroid: a bridge's polygon can be
+                    // long and thin, and its centre is as likely to be water.
+                    var p0 = obj.points[0];
+                    FlyTo(p0.latitude, p0.longitude, 4000f);
+                };
+            });
+
+            BuildStep("unit type panel", () =>
+            {
+                _typePanel = gameObject.AddComponent<UnitTypePanel>();
+                _typePanel.Build(canvas);
             });
 
             BuildStep("unit info panel", () =>
@@ -882,6 +932,7 @@ namespace IronMeridian.Core
                 {
                     if (_frontlinePanel != null) _frontlinePanel.Hide();
                     if (_strikeDock != null) _strikeDock.Hide();
+                    if (_typePanel != null) _typePanel.Hide();
                 }
 
                 if (_infoPanel != null) _infoPanel.Show(infoPanelOpen ? sel[0] : null);
@@ -2171,6 +2222,7 @@ namespace IronMeridian.Core
             _save.markers = _markers.Serialize();
             _save.flotMode = _frontline.Mode.ToString();
             _save.logistics = _logistics.Serialize();
+            _save.mapObjects = _mapObjects.Serialize();
             _save.obstacles = _obstacles.Serialize();
             _save.resources = _sustainment.Serialize();
             _save.reinforcements = _reinforcements.Serialize();
@@ -2238,6 +2290,7 @@ namespace IronMeridian.Core
             _effects.Cancel();
             _logistics.Cancel();
             _obstacles.Cancel();
+            if (_mapObjects != null) _mapObjects.Cancel();
             _airSupply.Cancel();
             _missiles.Cancel();
             _naval.Cancel();
@@ -2334,6 +2387,7 @@ namespace IronMeridian.Core
             // Independent of the units: an installation belongs to the scenario
             // and outlives every formation that draws on it.
             _logistics.LoadFrom(data.logistics);
+            _mapObjects.LoadFrom(data.mapObjects);
             _obstacles.LoadFrom(data.obstacles);
             _sustainment.LoadFrom(data.resources);
             _reinforcements.LoadFrom(data.reinforcements);
@@ -2658,6 +2712,7 @@ namespace IronMeridian.Core
 
             float inset = 0f;
             if (_selectionPanelOpen) inset = UiTheme.RightPanelWidth;
+            else if (_typePanel != null && _typePanel.Visible) inset = UiTheme.RightPanelWidth;
             else if (StrikeDockUI.IsOpen) inset = StrikeDockUI.PanelWidth;
             else if (FrontlinePanelUI.IsOpen) inset = UiTheme.RightPanelWidth;
 
@@ -2691,6 +2746,7 @@ namespace IronMeridian.Core
             _lastRightDockTop = top;
 
             if (_infoPanel != null) _infoPanel.SetTopInset(top);
+            if (_typePanel != null) _typePanel.SetTopInset(top);
             if (_groupPanel != null) _groupPanel.SetTopInset(top);
             if (_frontlinePanel != null) _frontlinePanel.SetTopInset(top);
             if (_strikeDock != null) _strikeDock.SetTopInset(top);

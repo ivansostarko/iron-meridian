@@ -142,6 +142,8 @@ Assets/Scripts/
                          are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission
     UnitInfoPanel.cs     right panel: full unit data on click
+    UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
+                          card in the palette's AVAILABLE list (read-only)
     UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence /
                          Commands / Planner (+ submenus)
                          (the strike dock's ARTILLERY page is built by
@@ -215,6 +217,8 @@ Assets/Scripts/
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground
     DefenceOrderSystem.cs Defend / Hold / Guard — lines, battle position, distribution
+    MapObjectSystem.cs   drawn infrastructure — bridges, airfields, built-up
+                          areas; polygons of 4+ corners (docs/33-MAP-OBJECTS.md)
     MissionAreaTool.cs   click-to-draw a mission's boundary, and the overlay that
                           shows it. Deliberately NOT a LineManager line — the area
                           belongs to the mission record, not the map file

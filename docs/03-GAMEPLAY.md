@@ -77,15 +77,15 @@ The editor's left chrome is in two pieces:
 | Mode | Rows |
 |---|---|
 | **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS |
-| **Battle** | REINFORCEMENTS · STATS · SUPPLIES |
+| **Battle** | REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES |
 
 Hidden rows are **re-flowed, not merely switched off** — the rows sit at absolute offsets inside the scrolling list, so a hidden one would otherwise leave a hole and the rail would read as a list with pieces missing rather than as a shorter list. `UnitPaletteUI.ApplyModeVisibility` does both, off `ScenarioSections` / `BattleSections`. If the open section is not in the new mode's list, the panel **closes** rather than switching to some other section: closing hands that strip of screen back to the map, which is what starting a battle is for.
 
-**GROUPS** is in neither list and so is currently unreachable. It is still built and still works — putting it back is one entry in the arrays above.
+**SECTORS is battle-only.** The tactical graphics — GENERATE SECTORS, CLEAR GRAPHICS, AUTO-UPDATE — moved off the GENERAL panel onto a section of their own. They are a battle control: a boundary runs between the formations as they stand, and the whole point of AUTO-UPDATE is that it keeps redrawing them while the fighting moves. One consequence worth knowing: they cannot be generated while laying a scenario out, only once the battle is running.
 
 | Nav row | What the panel shows |
 |---|---|
-| **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight**, **max weapon range** and **fog of war** |
+| **GENERAL** | **Line of sight**, **max weapon range** and **fog of war** — what the player is allowed to see. The tactical graphics that used to head this panel are now SECTORS |
 | **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right). The palette every formation on the map is dragged from, so scenario mode cannot do without it — see *The units panel* below |
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
@@ -97,17 +97,18 @@ Hidden rows are **re-flowed, not merely switched off** — the rows sit at absol
 | **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **ENVIRONMENT** | Scenario H-hour and presets, sky phase, auto day/night, weather condition — **one section**, because they are one decision: a designer setting a night attack is choosing the hour *and* the sky in the same breath |
 | **MAP CONFIG** | Tile style, 2D/3D, layers, unit-label size |
+| **SECTORS** | *Battle mode.* The derived control measures: generate or clear the sector boundaries and the FEBA, and keep them redrawing as the battle moves |
 | **STATS** | *Empty.* Reserved — see *Reserved sections* below |
-| **ZONES** | *Empty.* Reserved — see *Reserved sections* below |
-| **OBJECTS** | *Empty.* Reserved — see *Reserved sections* below |
+| **ZONES** | The mission's **HQ zones** and **deployment zones**, with their sizes. Moved off the MISSIONS page: they are places on the map, put there by clicking it, not fields of a record |
+| **OBJECTS** | Infrastructure drawn on the ground — bridges, airfields, ports, built-up areas, ten kinds in all, four corners minimum. See [33-MAP-OBJECTS.md](33-MAP-OBJECTS.md) |
 | **SUPPLIES** | *Empty.* Reserved — see *Reserved sections* below |
-| **GROUPS** | Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below. *Currently in neither mode's list — see above* |
+| **GROUPS** | *Battle mode.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
 
 The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
 
 **The top bar's mode chip is a switch.** Clicking it starts or stops the battle, exactly as START BATTLE does — it is the same `CombatSystem.Toggle` call, not a second path into the same state. The chip says which mode the map is in, sits where the player already looks to find that out, and was the obvious thing to click to change it.
 
-**Thirteen rows in scenario mode, three in battle** — the two lists above. The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, who is fighting, who commands, what supplies them and what they fight on, then the dressing, then the reserved pages.
+**Thirteen rows in scenario mode, five in battle** — the two lists above. The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, who is fighting, who commands, what supplies them and what they fight on, then the dressing, then the reserved pages.
 
 **The nav scrolls.** The full row set does not fit the rail on a 1280×720 screen, and a row that ran under the tool strip would be a section that could not be opened at all — the one failure a nav is not allowed. The emblem above and the tools below stay put; only the list between them moves. The scrollbar shows itself only when the mode's list is actually longer than the rail, so battle mode's three rows never carry one.
 
@@ -129,6 +130,14 @@ out on a fixed pitch so the numbers line up down the column. A list of cards is
 compared far more often than any one card is read, and columns are what make that
 possible. Each glyph carries a hover caption, since a mark is only self-evident
 to somebody who already knows it.
+
+**Clicking a catalogue card shows what the type is.** A click on an AVAILABLE
+card opens a read-only sheet on the right-hand edge — combat power, reach, the
+men, what it carries, what it is for. Dragging the same card still deploys one: a
+click is the question, a drag is the answer, and uGUI raises the click only when
+no drag happened. Selecting a formation on the map takes the sheet down, because
+both panels dock on the same strip. The place to *change* a type's figures is
+still DEVELOPMENT → UNITS LIST, which writes the tuning patch.
 
 **DEPLOYED is split by side.** It used to be one list in registry order — the
 order things happened to be spawned in — so a scenario with both sides laid out
@@ -175,6 +184,8 @@ The tool strip along the bottom is down to three: the **cursor**, **generate sec
 Six icons under the top bar's right-hand end: five ways of putting explosives on a piece of ground — **artillery, air, UAV, missile, naval** — and one of putting supplies on it, **air supply**, next to the air strike it is flown alongside. Click one to open its menu, docked on the right beneath the icons; click it again, or the **✕**, to close it.
 
 **Why they left the rail.** They were five of the rail's fifteen rows, and the other ten are things you *set up* a scenario with. These are not that: they are things you *do* during one, they are all the same verb, and mixing them into the authoring nav made the rail read as a settings menu with weapons in it. Pulling them into their own cluster says what they have in common and gets them to one click from anywhere.
+
+**RESET is scenario-mode only.** It reloads the scenario and puts every setting back — the right thing to have while laying a battle out, and a catastrophe one click from PAUSE BATTLE while fighting one. The battle control beside it already swaps between START and PAUSE with the mode; the destructive button should not be the constant.
 
 **The cluster is battle-mode only.** It appears when the battle starts and goes when it stops, together with the minimap below it. Calling for fire is something you do *during* a fight: in scenario mode no clock is running, nothing moves between the call and the impact, and a strike laid on a laydown that is still being drawn is a hole in a map rather than an event. Stopping the battle takes any open fire menu down with the icons, which also stands its launcher down.
 

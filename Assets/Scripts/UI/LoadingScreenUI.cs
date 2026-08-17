@@ -38,6 +38,11 @@ namespace IronMeridian.UI
 
         CanvasGroup _group;
         RectTransform _barFill;
+
+        /// <summary>The wordmark shown above the title — see docs/11-GAME-MENU.md §2.2.</summary>
+        const string LogoPath = "Graphics/Logo/game-logo";
+        /// <summary>Width the logo is fitted into; its height follows the artwork's aspect.</summary>
+        const float LogoWidth = 620f;
         Text _percentText, _statusText;
 
         Func<float> _progress;
@@ -67,10 +72,33 @@ namespace IronMeridian.UI
             UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Default,
                 BackgroundCatalog.LoaderScrim);
 
-            var titleText = UIFactory.CreateText(canvas.transform, title.ToUpperInvariant(), 84,
+            // The wordmark, not the game's name set in the UI font. A loader is
+            // the first thing a player sees on the way into a mission and the
+            // logo is the one piece of the game that is *designed*; setting its
+            // name in the interface typeface instead was the screen introducing
+            // itself in somebody else's handwriting.
+            //
+            // The title is still used — as the line under the mark, where it
+            // says which map is loading rather than which game.
+            var logo = UIFactory.LoadSprite(LogoPath);
+            if (logo != null)
+            {
+                var mark = UIFactory.CreateImage(canvas.transform, logo, "Logo");
+                mark.raycastTarget = false;
+                mark.preserveAspect = true;
+
+                float height = logo.rect.width > 0f
+                    ? LogoWidth * (logo.rect.height / logo.rect.width)
+                    : LogoWidth * 0.34f;
+                UIFactory.Place((RectTransform)mark.transform, new Vector2(0.5f, 0.5f),
+                    new Vector2(0, 150), new Vector2(LogoWidth, height));
+            }
+
+            var titleText = UIFactory.CreateText(canvas.transform, title.ToUpperInvariant(),
+                logo != null ? 34 : 84,
                 GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Place(titleText.rectTransform, new Vector2(0.5f, 0.5f),
-                new Vector2(0, 120), new Vector2(1500, 110));
+                new Vector2(0, logo != null ? 74 : 120), new Vector2(1500, logo != null ? 44 : 110));
 
             var subtitleText = UIFactory.CreateText(canvas.transform, subtitle, 26,
                 GameConfig.UiTextDim, TextAnchor.MiddleCenter);
@@ -93,10 +121,15 @@ namespace IronMeridian.UI
             _barFill.offsetMax = Vector2.zero;
             _barFill.GetComponent<Image>().raycastTarget = false;
 
+            // The figure sits **under the bar**, at its right-hand end, rather
+            // than beside it: the bar is the thing being read and a number level
+            // with it competes for the same glance. Under the line it is a
+            // caption on what the line is doing.
             _percentText = UIFactory.CreateText(canvas.transform, "0%", 20,
                 GameConfig.UiText, TextAnchor.MiddleRight);
             UIFactory.Place(_percentText.rectTransform, new Vector2(0.5f, 0.5f),
                 new Vector2(450, -88), new Vector2(200, 28));
+            _percentText.rectTransform.pivot = new Vector2(1f, 0.5f);
 
             _statusText = UIFactory.CreateText(canvas.transform, "Preparing…", 20,
                 GameConfig.UiTextDim, TextAnchor.MiddleLeft);

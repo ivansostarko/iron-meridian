@@ -64,6 +64,7 @@ so nothing renders without one. See [Quick start](#quick-start-windows) below.
 - **Fog of war** — the enemy is seen only where something of yours can see them, with contacts that decay into a growing ring of uncertainty
 - **A front line that answers to the fighting** — the FLOT is derived from where the formations stand and what they are worth, not drawn by hand
 - **Mines and obstacles**, laid as NATO barrier graphics
+- **Map objects** — bridges, airfields, ports, rail yards and built-up areas, drawn on the terrain
 
 **Around the game**
 
@@ -87,7 +88,7 @@ Full guide: [docs/01-GETTING-STARTED.md](docs/01-GETTING-STARTED.md)
 
 ## Documentation
 
-Thirty-two documents under [`docs/`](docs/). Several are **registers** — the
+Thirty-three documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -132,6 +133,7 @@ in the same change as the catalogue, never afterwards.
 | [26-LOGISTICS](docs/26-LOGISTICS.md) | Depots, supply, fuel, ammunition, repair and medical points |
 | [27-SUSTAINMENT](docs/27-SUSTAINMENT.md) | What a force fights on, and what it burns |
 | [31-OBSTACLES](docs/31-OBSTACLES.md) | Mines, wire, ditches and roadblocks |
+| [33-MAP-OBJECTS](docs/33-MAP-OBJECTS.md) | **Map object register** — bridges, airfields, ports, built-up areas |
 
 ### Presentation
 
@@ -186,7 +188,7 @@ Assets/
     Data/missions.json      the mission book — 6 campaigns, 90 missions
     Maps/lyon_dev.json      the default Lyon scenario
     cesium-token.txt        <- YOUR CESIUM ION TOKEN GOES HERE (git-ignored)
-docs/                       32 documents; several are registers — see above
+docs/                       33 documents; several are registers — see above
 scripts/                    generate_units.py · generate_icons.py ·
                             generate_stat_icons.py · generate_units_doc.py ·
                             build-windows.ps1

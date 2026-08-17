@@ -66,14 +66,21 @@ namespace IronMeridian.UI
         /// <summary>Double-click on a DEPLOYED row: select it *and* fly the camera to it.</summary>
         public System.Action<UnitActor> FocusUnitRequested;
         public System.Action<UnitActor> RemoveUnitRequested;
+        /// <summary>
+        /// A catalogue card was clicked: show what this *type* is. Dragging it
+        /// still deploys one — a click is the question, a drag is the answer.
+        /// </summary>
+        public System.Action<UnitDefinition, Team> InspectTypeRequested;
 
         enum Section
         {
             General, Units, Players, Commanders, Logistics, Sustainment, Reinforcements,
             Obstacles, Effects, Missions, Environment, Map,
+            /// <summary>Battle mode: the derived control measures — see <see cref="BuildSectorsSection"/>.</summary>
+            Sectors,
             /// <summary>Reserved — see <see cref="BuildStatsSection"/>.</summary>
             Stats,
-            /// <summary>Reserved — see <see cref="BuildZonesSection"/>.</summary>
+            /// <summary>The mission's HQ and deployment zones — see <see cref="BuildZonesSection"/>.</summary>
             Zones,
             /// <summary>Reserved — see <see cref="BuildObjectsSection"/>.</summary>
             Objects,
@@ -352,6 +359,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Map] = MakeSectionContent(body, "Map");
             _sectionContent[Section.Reinforcements] = MakeSectionContent(body, "Reinforcements");
             _sectionContent[Section.Obstacles] = MakeSectionContent(body, "Obstacles");
+            _sectionContent[Section.Sectors] = MakeSectionContent(body, "Sectors");
             _sectionContent[Section.Stats] = MakeSectionContent(body, "Stats");
             _sectionContent[Section.Zones] = MakeSectionContent(body, "Zones");
             _sectionContent[Section.Objects] = MakeSectionContent(body, "Objects");
@@ -370,6 +378,7 @@ namespace IronMeridian.UI
             BuildMapSection(_sectionContent[Section.Map]);
             BuildReinforcementSection(_sectionContent[Section.Reinforcements]);
             BuildObstacleSection(_sectionContent[Section.Obstacles]);
+            BuildSectorsSection(_sectionContent[Section.Sectors]);
             BuildStatsSection(_sectionContent[Section.Stats]);
             BuildZonesSection(_sectionContent[Section.Zones]);
             BuildObjectsSection(_sectionContent[Section.Objects]);
@@ -504,6 +513,7 @@ namespace IronMeridian.UI
             if (section == Section.Sustainment) RefreshSustainment();
             if (section == Section.Reinforcements) PopulateReinforcements();
             if (section == Section.Obstacles) RefreshObstacles();
+            if (section == Section.Objects) RefreshMapObjects();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -681,6 +691,7 @@ namespace IronMeridian.UI
             // who sets a night attack is choosing both in the same breath.
             AddNavRow(nav, Section.Environment, "ENVIRONMENT", UiIcons.Cloud);
             AddNavRow(nav, Section.Map, "MAP CONFIG", UiIcons.Layers);
+            AddNavRow(nav, Section.Sectors, "SECTORS", UiIcons.Square);
             AddNavRow(nav, Section.Stats, "STATS", UiIcons.Chart);
             AddNavRow(nav, Section.Zones, "ZONES", UiIcons.Square);
             AddNavRow(nav, Section.Objects, "OBJECTS", UiIcons.Equipment);
@@ -713,7 +724,8 @@ namespace IronMeridian.UI
         /// </summary>
         static readonly Section[] BattleSections =
         {
-            Section.Reinforcements, Section.Stats, Section.Supplies
+            Section.Reinforcements, Section.Sectors, Section.Groups,
+            Section.Stats, Section.Supplies
         };
 
         static bool Allowed(Section section, bool battle) =>
@@ -843,7 +855,18 @@ namespace IronMeridian.UI
         /// Tactical graphics: derive each side's sector boundaries and FEBA from
         /// where its units currently stand.
         /// </summary>
-        void BuildGeneralSection(RectTransform content)
+        /// <summary>
+        /// SECTORS — the control measures the game *derives*, rather than the
+        /// ones a designer draws.
+        ///
+        /// These three used to head the GENERAL panel, above the intelligence
+        /// toggles, which put an authoring page and a battle page in one
+        /// section. They are a battle control: a boundary runs between the
+        /// formations as they stand, and the whole point of AUTO-UPDATE is that
+        /// it keeps redrawing them while the fighting moves. GENERAL keeps what
+        /// it was always about — what the player is allowed to see.
+        /// </summary>
+        void BuildSectorsSection(RectTransform content)
         {
             SectionLabel(content, "TACTICAL GRAPHICS", -8);
 
@@ -855,16 +878,22 @@ namespace IronMeridian.UI
                 AutoSectorsChanged?.Invoke(_autoSectors);
                 RefreshAutoSectorLabel();
             });
+            RefreshAutoSectorLabel();
 
             var hint = UIFactory.CreateText(content,
-                "Boundaries run rear-to-front between adjacent formations; the FEBA follows the forward units.",
+                "Boundaries run rear-to-front between adjacent formations; the FEBA follows the " +
+                "forward units. AUTO-UPDATE redraws them as the battle moves — see docs/28-FLOT.md.",
                 UiTheme.FontSmall, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -156), new Vector2(InnerWidth, 56));
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -156),
+                new Vector2(InnerWidth, 76));
+        }
 
+        void BuildGeneralSection(RectTransform content)
+        {
             // --- intelligence ---
-            SectionLabel(content, "INTELLIGENCE", -216);
+            SectionLabel(content, "INTELLIGENCE", -8);
 
-            _losLamp = ToggleRow(content, "LINE OF SIGHT", -238, () =>
+            _losLamp = ToggleRow(content, "LINE OF SIGHT", -30, () =>
             {
                 _lineOfSight = !_lineOfSight;
                 LineOfSightChanged?.Invoke(_lineOfSight);
@@ -875,14 +904,14 @@ namespace IronMeridian.UI
             // what a formation can see and what it can reach are the pair of
             // circles a planner is comparing, and having only one of them
             // switchable meant you could never look at either on its own.
-            _weaponLamp = ToggleRow(content, "MAX WEAPON RANGE", -282, () =>
+            _weaponLamp = ToggleRow(content, "MAX WEAPON RANGE", -74, () =>
             {
                 _weaponRange = !_weaponRange;
                 WeaponRangeChanged?.Invoke(_weaponRange);
                 RefreshGeneralSection();
             }, out _weaponLabel);
 
-            _fogLamp = ToggleRow(content, "FOG OF WAR", -326, () =>
+            _fogLamp = ToggleRow(content, "FOG OF WAR", -118, () =>
             {
                 _fog = !_fog;
                 FogOfWarChanged?.Invoke(_fog);
@@ -901,7 +930,8 @@ namespace IronMeridian.UI
                 "shows both sides so you can lay them out. Use the RECON orders to see past your own " +
                 "units' eyes.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(intelHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -370), new Vector2(InnerWidth, 230));
+            UIFactory.Place(intelHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -166),
+                new Vector2(InnerWidth, 240));
 
             RefreshGeneralSection();
         }
@@ -1171,6 +1201,7 @@ namespace IronMeridian.UI
             // for — see BuildAirSupplySection.
             if (_airSupply != null) _airSupply.Team = team;
             if (_obstacles != null) _obstacles.Team = team;
+            if (_mapObjects != null) _mapObjects.Team = team;
             PaintSideTabs();
             RefreshLogistics();
             RefreshSustainment();
@@ -1437,6 +1468,11 @@ namespace IronMeridian.UI
             AddEvent(trigger, EventTriggerType.BeginDrag, e => BeginDrag(def, sprite));
             AddEvent(trigger, EventTriggerType.Drag, e => Drag((PointerEventData)e));
             AddEvent(trigger, EventTriggerType.EndDrag, e => EndDrag((PointerEventData)e));
+            // A click asks what the type is; a drag deploys one. Both live on
+            // the same card because they are the same question at two speeds,
+            // and uGUI raises PointerClick only when no drag happened.
+            AddEvent(trigger, EventTriggerType.PointerClick,
+                e => InspectTypeRequested?.Invoke(def, _team));
         }
 
         /// <summary>
@@ -2381,16 +2417,219 @@ namespace IronMeridian.UI
             "scenario's figures.\n\nWhat is counted today is elsewhere: casualties are on TAB " +
             "(the losses list) and each side's stocks are under SUSTAINMENT.");
 
-        void BuildZonesSection(RectTransform content) => BuildEmptySection(content, "ZONES",
-            "Nothing is built into this section yet — it is a row, a page and a place to put areas " +
-            "drawn on the map.\n\nThe areas that already exist are elsewhere: a mission's boundary, " +
-            "its headquarters zones and its deployment zones are all under MISSIONS.");
+        /// <summary>
+        /// ZONES — the ground a mission *names*: where each side's headquarters
+        /// is, and where its reinforcements arrive.
+        ///
+        /// They were the bottom half of the MISSIONS page, seven hundred pixels
+        /// below its first field, under a form of text boxes. They are not
+        /// fields of a record: they are places on the map, put there by clicking
+        /// it, and they belong with the other things you draw rather than with
+        /// the mission's name and briefing. MISSIONS keeps the record and the
+        /// mission's own boundary, which is what SAVE MISSION + MAP writes.
+        ///
+        /// Both blocks still edit the **mission**, so they read as unavailable
+        /// until one is open — the same fields the MISSIONS panel refreshes.
+        /// </summary>
+        void BuildZonesSection(RectTransform section)
+        {
+            var content = ScrollableSection(section, ZonesPageHeight);
 
-        void BuildObjectsSection(RectTransform content) => BuildEmptySection(content, "OBJECTS",
-            "Nothing is built into this section yet — it is a row, a page and a place to put things " +
-            "placed on the map that are not formations.\n\nThe ones that already exist are " +
-            "elsewhere: barrier plans are under MINES AND OBSTACLES and rear-area installations " +
-            "are under LOGISTICS.");
+            BuildHqZoneBlock(content);
+            BuildDeploymentBlock(content);
+
+            var hint = UIFactory.CreateText(content,
+                "Both belong to the mission rather than to the map, so they need one open: pick it under " +
+                "MISSIONS first. SET drops the zone where the camera is looking; the size buttons apply to " +
+                "both sides at once, because two headquarters in one scenario are at the same echelon.\n\n" +
+                "A mission's own boundary — the ground the battle is fought inside — is still under " +
+                "MISSIONS, with the record it is part of. See docs/22-MISSIONS.md.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, -HqBlockBottom - 12f), new Vector2(InnerWidth, 150));
+        }
+
+        const float ZonesPageHeight = HqBlockBottom + 180f;
+
+        // ------------------------------------------------------- map objects
+
+        IronMeridian.Lines.MapObjectSystem _mapObjects;
+        readonly List<(MapObjectKind kind, Image fill, Text label)> _objectButtons =
+            new List<(MapObjectKind, Image, Text)>();
+        RectTransform _objectList;
+        Text _objectCount;
+
+        /// <summary>Fly the camera to a drawn object — the list rows' action.</summary>
+        public System.Action<MapObjectData> MapObjectFocusRequested;
+
+        public void BindMapObjects(IronMeridian.Lines.MapObjectSystem system)
+        {
+            _mapObjects = system;
+            if (_mapObjects != null) _mapObjects.Team = _team;
+            RefreshMapObjects();
+        }
+
+        const float ObjectsPageHeight = 10 * 50f + 560f;
+
+        /// <summary>
+        /// OBJECTS — the infrastructure a scenario is fought over, drawn on the
+        /// ground rather than dropped on it.
+        ///
+        /// **Why these are polygons.** A depot is a place and LOGISTICS marks it
+        /// with a point. A bridge, an airfield or a quarter of a city is an
+        /// *extent*: what matters is how much ground it covers and where its
+        /// ends are, which a marker cannot say. Four corners minimum — see
+        /// <see cref="MapObjectCatalog.MinCorners"/>.
+        ///
+        /// The side comes from the tabs at the head of the page, as it does on
+        /// LOGISTICS and MINES AND OBSTACLES: a bridge in friendly hands and the
+        /// same bridge in the enemy's are different problems.
+        /// </summary>
+        void BuildObjectsSection(RectTransform section)
+        {
+            var content = SidedPage(ScrollableSection(section, ObjectsPageHeight + SideBlock));
+
+            SectionLabel(content, "DRAW ON MAP", -8);
+
+            float y = -30f;
+            foreach (var def in MapObjectCatalog.All)
+            {
+                ObjectButton(content, def, y);
+                y -= 50f;
+            }
+
+            var stop = UIFactory.CreateBorderedPanel(content, "StopDrawing", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(stop, new Vector2(0f, 1f), new Vector2(Pad, y - 4f), new Vector2(InnerWidth, 30));
+            var stopBtn = UIFactory.CreateButton(stop, "STOP DRAWING",
+                () => { if (_mapObjects != null) _mapObjects.Cancel(); },
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)stopBtn.transform);
+
+            var hint = UIFactory.CreateText(content,
+                "Pick a kind, then click at least four corners on the map. Backspace undoes a corner, " +
+                "right-click or Enter closes the outline, Esc abandons it. The kind stays armed so a " +
+                "row of bridges is a row of outlines, not ten trips back to this panel.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 42f),
+                new Vector2(InnerWidth, 76));
+
+            SectionLabel(content, "ON THIS MAP", y - 124f);
+
+            _objectCount = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            UIFactory.Place(_objectCount.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, y - 146f), new Vector2(InnerWidth, 16));
+
+            var scroll = UIFactory.CreateScrollView(content, out _objectList,
+                withScrollbar: true, autoHideScrollbar: true);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0f, 1f); srt.anchorMax = new Vector2(1f, 1f);
+            srt.pivot = new Vector2(0.5f, 1f);
+            srt.anchoredPosition = new Vector2(0, y - 168f);
+            srt.sizeDelta = new Vector2(-Pad * 2f, 240f);
+
+            var layout = _objectList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 4; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            RefreshMapObjects();
+        }
+
+        void ObjectButton(RectTransform content, MapObjectDef def, float y)
+        {
+            var frame = UIFactory.CreateBorderedPanel(content, "Object_" + def.kind,
+                UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 46));
+
+            var captured = def.kind;
+            var btn = UIFactory.CreateButton(frame, "",
+                () => { if (_mapObjects != null) _mapObjects.Arm(captured); },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var made = btn.GetComponentInChildren<Text>(true);
+            if (made != null) made.gameObject.SetActive(false);
+
+            // A swatch in the object's own colour: the panel and the ground use
+            // one palette, so a row here is findable on the map.
+            var swatch = UIFactory.CreatePanel(frame, "Swatch", ParseHex(def.colorHex));
+            UIFactory.Place(swatch, new Vector2(0f, 0.5f), new Vector2(10, 0), new Vector2(6, 26));
+            swatch.GetComponent<Image>().raycastTarget = false;
+
+            var label = UIFactory.CreateText(frame, def.name, UiTheme.FontSmall, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(label.rectTransform, 26f, 6f, InnerWidth - 40f, 16f);
+            UIFactory.Fit(label, 9);
+            label.raycastTarget = false;
+
+            var note = UIFactory.CreateText(frame, def.description, UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.PlaceTopLeft(note.rectTransform, 26f, 22f, InnerWidth - 40f, 20f);
+            UIFactory.Fit(note, 8);
+            note.raycastTarget = false;
+
+            _objectButtons.Add((def.kind, frame.Find("Fill").GetComponent<Image>(), label));
+        }
+
+        /// <summary>"#RRGGBB" to a colour, falling back to the accent rather than to black.</summary>
+        static Color ParseHex(string hex) =>
+            ColorUtility.TryParseHtmlString(hex, out var c) ? c : UiTheme.Accent;
+
+        /// <summary>Repaints the armed kind and the list of what is on the map.</summary>
+        public void RefreshMapObjects()
+        {
+            if (_mapObjects == null) return;
+
+            foreach (var (kind, fill, label) in _objectButtons)
+            {
+                bool on = _mapObjects.Armed.HasValue && _mapObjects.Armed.Value == kind;
+                if (fill != null) fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
+                if (label != null) label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+
+            if (_objectList == null) return;
+
+            int blue = _mapObjects.CountFor(Team.User), red = _mapObjects.CountFor(Team.Enemy);
+            if (_objectCount != null)
+                _objectCount.text = $"DRAWN — {blue} FRIENDLY · {red} ENEMY";
+
+            ClearChildren(_objectList);
+
+            foreach (var data in _mapObjects.Objects)
+            {
+                var captured = data;
+                var def = MapObjectCatalog.Get(data.KindEnum);
+                bool friendly = data.TeamEnum == Team.User;
+
+                var row = UIFactory.CreateBorderedPanel(_objectList, "Obj_" + data.id,
+                    UiTheme.Surface, UiTheme.Border);
+                row.sizeDelta = new Vector2(0, 34);
+
+                var focus = UIFactory.CreateButton(row, "",
+                    () => MapObjectFocusRequested?.Invoke(captured),
+                    new Color(0, 0, 0, 0), UiTheme.Text, 1);
+                UIFactory.Stretch((RectTransform)focus.transform);
+                var made = focus.GetComponentInChildren<Text>(true);
+                if (made != null) made.gameObject.SetActive(false);
+
+                var side = UIFactory.CreatePanel(row, "Side",
+                    friendly ? UiTheme.Friendly : UiTheme.Hostile);
+                UIFactory.Place(side, new Vector2(0f, 0.5f), new Vector2(8, 0), new Vector2(4, 20));
+                side.GetComponent<Image>().raycastTarget = false;
+
+                var text = UIFactory.CreateText(row, $"{def.name}  ·  {data.points.Count} corners",
+                    UiTheme.FontLabel, UiTheme.Text, TextAnchor.MiddleLeft);
+                UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(20, 0),
+                    new Vector2(InnerWidth - 70f, 16));
+                UIFactory.Fit(text, 8);
+                text.raycastTarget = false;
+
+                var remove = UIFactory.CreateIconButton(row, UiIcons.Trash,
+                    () => { _mapObjects.Remove(captured); },
+                    new Color(0, 0, 0, 0), UiTheme.TextFaint, 7f);
+                UIFactory.Place((RectTransform)remove.transform, new Vector2(1f, 0.5f),
+                    new Vector2(-6, 0), new Vector2(24, 24));
+            }
+        }
 
         void BuildSuppliesSection(RectTransform content) => BuildEmptySection(content, "SUPPLIES",
             "Nothing is built into this section yet — it is a row, a page and a place to put " +
@@ -3766,17 +4005,19 @@ namespace IronMeridian.UI
             }, out _missionFogLabel);
 
             BuildMissionAreaBlock(content);
-            BuildHqZoneBlock(content);
-            BuildDeploymentBlock(content);
+            // HQ ZONES and DEPLOYMENT ZONES are on the ZONES panel — see
+            // BuildZonesSection. They are ground a mission names rather than
+            // fields of its record, and they were the bottom half of a page
+            // whose top half is text boxes.
 
             // --- actions ---
             var save = UIFactory.CreateBorderedPanel(content, "SaveMission", UiTheme.Success, UiTheme.Success);
-            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -HqBlockBottom - 12f), new Vector2(InnerWidth, 36));
+            UIFactory.Place(save, new Vector2(0f, 1f), new Vector2(Pad, -MissionActionsTop - 12f), new Vector2(InnerWidth, 36));
             var saveBtn = UIFactory.CreateButton(save, "SAVE MISSION + MAP", CommitMission,
                 new Color(0, 0, 0, 0), Color.white, UiTheme.FontSmall);
             UIFactory.Stretch((RectTransform)saveBtn.transform);
 
-            MissionActionButton(content, "NEW MISSION HERE", -HqBlockBottom - 56f, UiTheme.Surface, UiTheme.Text, () =>
+            MissionActionButton(content, "NEW MISSION HERE", -MissionActionsTop - 56f, UiTheme.Surface, UiTheme.Text, () =>
             {
                 string name = _missionName != null && !string.IsNullOrWhiteSpace(_missionName.text)
                     ? _missionName.text.Trim()
@@ -3784,7 +4025,7 @@ namespace IronMeridian.UI
                 MissionCreateRequested?.Invoke(_missionCampaign, name);
             });
 
-            MissionActionButton(content, "DELETE MISSION", -HqBlockBottom - 96f, UiTheme.Danger, Color.white, () =>
+            MissionActionButton(content, "DELETE MISSION", -MissionActionsTop - 96f, UiTheme.Danger, Color.white, () =>
             {
                 if (_mission != null) MissionDeleteRequested?.Invoke(_mission);
             });
@@ -3792,7 +4033,7 @@ namespace IronMeridian.UI
             _missionStatus = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.Accent,
                 TextAnchor.UpperLeft);
             UIFactory.Place(_missionStatus.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad, -HqBlockBottom - 138f), new Vector2(InnerWidth, 34));
+                new Vector2(Pad, -MissionActionsTop - 138f), new Vector2(InnerWidth, 34));
 
             var hint = UIFactory.CreateText(content,
                 "A mission is this record plus its map file, and SAVE writes both — so whatever is on the " +
@@ -3804,7 +4045,7 @@ namespace IronMeridian.UI
                 "Missions are saved to your own copy of the list, which shadows the shipped one. Delete " +
                 "missions.json from the save folder to go back to the missions the game ships with.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -HqBlockBottom - 176f),
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -MissionActionsTop - 176f),
                 new Vector2(InnerWidth, 250));
 
             RefreshMissionList();
@@ -3816,7 +4057,7 @@ namespace IronMeridian.UI
         /// <see cref="HqBlockBottom"/> so the page and its contents can never
         /// drift apart.
         /// </summary>
-        const float MissionsPageHeight = HqBlockBottom + 440f;
+        const float MissionsPageHeight = MissionActionsTop + 440f;
 
         /// <summary>
         /// Wraps a section's content in a scroll view of a fixed page height,
@@ -3917,12 +4158,19 @@ namespace IronMeridian.UI
         readonly List<(float km, Image fill, Text label)> _hqRadiusButtons =
             new List<(float, Image, Text)>();
 
-        /// <summary>Top of the HQ ZONES block, and the bottom it hands back to the page.</summary>
-        const float HqBlockTop = 718f;
+        /// <summary>
+        /// Top of the HQ ZONES block on the **ZONES** page, and the bottom it
+        /// hands back. It used to be 718 px down the MISSIONS page; on a page of
+        /// its own it starts at the top.
+        /// </summary>
+        const float HqBlockTop = 8f;
         const float HqBlockEnd = HqBlockTop + 176f;
-        /// <summary>The DEPLOYMENT ZONES block below it, and the bottom the whole page continues from.</summary>
+        /// <summary>The DEPLOYMENT ZONES block below it, and the bottom the page continues from.</summary>
         const float DeployBlockTop = HqBlockEnd + 8f;
         const float HqBlockBottom = DeployBlockTop + 176f;
+
+        /// <summary>Where the MISSIONS page resumes after the mission-area block.</summary>
+        const float MissionActionsTop = 718f;
 
         /// <summary>
         /// Where the two headquarters are.

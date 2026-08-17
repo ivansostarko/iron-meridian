@@ -6,6 +6,13 @@ Single player: six campaigns and ninety missions, each mission a piece of real g
 
 ---
 
+> **The zones moved.** HQ ZONES and DEPLOYMENT ZONES are on the left rail's
+> **ZONES** panel, not on MISSIONS. They are places on the map, put there by
+> clicking it, and they were the bottom half of a page whose top half is text
+> boxes. They still edit the open mission and are still written by SAVE MISSION
+> + MAP; the mission's own **boundary** stays here, with the record it is part of.
+
+
 ## 1. What a mission is
 
 A mission is **two files**:
@@ -261,9 +268,9 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | **DRAW AREA ON MAP** | Click the corners on the terrain. Right-click or Enter closes it (min 3), Backspace undoes a corner, Esc cancels |
 | **20 KM / 50 KM / 120 KM** | Replaces the area with a box that wide, centred on the point the camera is looking at |
 | **CLEAR AREA** | Drops the area — the mission is unbounded again |
-| **HQ ZONES** — FRIENDLY HQ / ENEMY HQ rows | Each shows its coordinates or *Not placed*. **SET** arms a map click; **✕** clears it |
+| **HQ ZONES** *(now on the ZONES panel)* — FRIENDLY HQ / ENEMY HQ rows | Each shows its coordinates or *Not placed*. **SET** arms a map click; **✕** clears it |
 | **ZONE SIZE** — 1 / 3 / 8 KM | The radius of both HQ zones. See §1b |
-| **DEPLOYMENT ZONES** — FRIENDLY / ENEMY rows | Where each side's reinforcements arrive. **SET** arms a map click. See §1c |
+| **DEPLOYMENT ZONES** *(now on the ZONES panel)* — FRIENDLY / ENEMY rows | Where each side's reinforcements arrive. **SET** arms a map click. See §1c |
 | **ZONE SIZE** — 2 / 5 / 12 KM | The radius of both deployment zones |
 | **SAVE MISSION + MAP** | Writes the record **and** the current map |
 | **NEW MISSION HERE** | Starts one at the point the camera is looking at, in the chosen campaign |

@@ -118,9 +118,10 @@ namespace IronMeridian.UI
         /// </summary>
         public void SetMissionMode(bool on)
         {
+            _missionMode = on;
             if (_identity != null) _identity.gameObject.SetActive(!on);
             if (_modeChip != null) _modeChip.gameObject.SetActive(!on);
-            if (_resetFrame != null) _resetFrame.gameObject.SetActive(!on);
+            ApplyResetVisibility();
             if (_battleBtn != null) _battleBtn.gameObject.SetActive(!on);
             if (_help != null) _help.gameObject.SetActive(!on);
 
@@ -332,7 +333,30 @@ namespace IronMeridian.UI
                 _modeChipFill.color = running ? new Color(0.106f, 0.631f, 0.361f, 0.16f) : UiTheme.Surface;
 
             if (_clockPanel != null) _clockPanel.gameObject.SetActive(running);
+            ApplyResetVisibility();
             if (running) RefreshClockSpeed();
+        }
+
+        bool _missionMode;
+
+        /// <summary>
+        /// RESET is a **scenario-mode control**, and it is off the bar in battle.
+        ///
+        /// It reloads the scenario from disk and puts every setting back — which
+        /// is the right thing to have while laying a battle out and a
+        /// catastrophe to have one click from PAUSE while fighting one. The
+        /// battle control beside it swaps between START and PAUSE, so the two
+        /// buttons in that corner mean different things in the two modes; the
+        /// destructive one should not be the constant.
+        ///
+        /// A mission hides it too, for the older reason: a player is not
+        /// authoring the ground somebody else laid out.
+        /// </summary>
+        void ApplyResetVisibility()
+        {
+            if (_resetFrame == null) return;
+            bool running = _combat != null && _combat.Running;
+            _resetFrame.gameObject.SetActive(!_missionMode && !running);
         }
 
         public void Flash(string message) => _status.text = message;
