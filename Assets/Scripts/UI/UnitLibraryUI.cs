@@ -179,7 +179,7 @@ namespace IronMeridian.UI
             MusicManager.Play(MusicTrack.ExtrasTheme);
 
             _canvas = UIFactory.CreateCanvas("UnitLibraryCanvas");
-            UIFactory.CreateScreenBackground(_canvas.transform, BackgroundId.Extras,
+            UIFactory.CreateScreenBackground(_canvas.transform, BackgroundId.Interior,
                 BackgroundCatalog.DenseScreenScrim);
 
             _back = UIFactory.CreateBackButton(_canvas.transform, "BACK TO EXTRAS", GoBack,

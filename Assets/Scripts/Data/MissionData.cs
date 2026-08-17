@@ -15,42 +15,90 @@ namespace IronMeridian.Data
     /// </summary>
     public enum Campaign
     {
-        WestEurope,
-        EastEurope,
-        NorthAmerica
+        /// <summary>
+        /// One European theatre, from the Fulda Gap to the Suwałki corridor and
+        /// the Balkan river lines.
+        ///
+        /// It was two — WEST EUROPE and EAST EUROPE — and the split was doing
+        /// the player no favours: two boards of two or three missions each, in
+        /// a browser whose whole job is to show what there is to play. A
+        /// campaign is a *shelf*, and a shelf with two things on it is a list
+        /// pretending to be a structure. Both names still load; see
+        /// <see cref="CampaignInfo.Parse"/>.
+        /// </summary>
+        Europe,
+        Africa,
+        Asia,
+        NorthAmerica,
+        SouthAmerica,
+        Australia
     }
 
     /// <summary>Display data for a campaign — what the selection board reads off.</summary>
     public static class CampaignInfo
     {
-        /// <summary>Declaration order is the order the boards are drawn in.</summary>
+        /// <summary>
+        /// Declaration order is the order the boards are drawn in. Europe first
+        /// because it is where the game's own ground lies; the rest run
+        /// west to east and north to south, which is an order a reader can
+        /// predict rather than one they have to learn.
+        /// </summary>
         public static readonly Campaign[] All =
         {
-            Campaign.WestEurope, Campaign.EastEurope, Campaign.NorthAmerica
+            Campaign.Europe, Campaign.Africa, Campaign.Asia,
+            Campaign.NorthAmerica, Campaign.SouthAmerica, Campaign.Australia
         };
 
         public static string DisplayName(Campaign c) => c switch
         {
-            Campaign.WestEurope => "WEST EUROPE",
-            Campaign.EastEurope => "EAST EUROPE",
+            Campaign.Europe => "EUROPE",
+            Campaign.Africa => "AFRICA",
+            Campaign.Asia => "ASIA",
             Campaign.NorthAmerica => "NORTH AMERICA",
+            Campaign.SouthAmerica => "SOUTH AMERICA",
+            Campaign.Australia => "AUSTRALIA",
             _ => c.ToString().ToUpperInvariant()
         };
 
         public static string Blurb(Campaign c) => c switch
         {
-            Campaign.WestEurope =>
-                "The North German Plain and the northern flank — the ground NATO planned to hold.",
-            Campaign.EastEurope =>
-                "The Pannonian basin and the Sava corridor — river lines, cities and short distances.",
+            Campaign.Europe =>
+                "From the Fulda Gap to the Suwałki corridor and the Balkan river lines — the ground " +
+                "every European plan of the last fifty years was written around.",
+            Campaign.Africa =>
+                "Desert, Sahel and the Horn — distances that beat an army before anybody does, and a " +
+                "handful of ports and oases worth the fight.",
+            Campaign.Asia =>
+                "The DMZ, the Himalayan passes and the island chains — three theatres that share a " +
+                "continent and nothing else.",
             Campaign.NorthAmerica =>
-                "The continental interior and the eastern seaboard — depth, and very little of it defended.",
+                "The continental interior, the Arctic approaches and both seaboards — depth, and very " +
+                "little of it defended.",
+            Campaign.SouthAmerica =>
+                "Andes, Amazon and Patagonia — jungle with no roads, mountains with one road each, and " +
+                "a coast at either end.",
+            Campaign.Australia =>
+                "The northern approaches and the outback behind them — a coastline nobody can watch and " +
+                "a continent nobody can cross quickly.",
             _ => ""
         };
 
-        /// <summary>Parses a saved campaign name, falling back rather than throwing on an old file.</summary>
-        public static Campaign Parse(string name) =>
-            Enum.TryParse(name, out Campaign c) ? c : Campaign.WestEurope;
+        /// <summary>
+        /// Parses a saved campaign name, falling back rather than throwing on an
+        /// old file.
+        ///
+        /// **The two retired names are mapped, not dropped.** `WestEurope` and
+        /// `EastEurope` are written into every mission record and map file
+        /// saved before the merge; letting them fall through to the default
+        /// would work by luck rather than on purpose, and would silently move a
+        /// North American mission if the default ever changed. Handled here so
+        /// every reader of a campaign name gets the same answer.
+        /// </summary>
+        public static Campaign Parse(string name)
+        {
+            if (name == "WestEurope" || name == "EastEurope") return Campaign.Europe;
+            return Enum.TryParse(name, out Campaign c) ? c : Campaign.Europe;
+        }
     }
 
     /// <summary>
@@ -113,7 +161,7 @@ namespace IronMeridian.Data
         public string id = "";
 
         /// <summary>Campaign name — a <see cref="Campaign"/> value.</summary>
-        public string campaign = Campaign.WestEurope.ToString();
+        public string campaign = Campaign.Europe.ToString();
 
         /// <summary>Mission title, as the board shows it.</summary>
         public string name = "New mission";
@@ -274,5 +322,20 @@ namespace IronMeridian.Data
     {
         public string savedAtUtc = "";
         public List<MissionDefinition> missions = new List<MissionDefinition>();
+
+        /// <summary>
+        /// Shipped missions the player has deliberately deleted.
+        ///
+        /// The player's book is merged over the shipped one rather than
+        /// replacing it — see <see cref="Save.MissionLibrary"/> — which on its
+        /// own could not tell "never had it" from "got rid of it", and would
+        /// resurrect a mission somebody removed on purpose. This is that
+        /// distinction, written down: an id in here is a mission the merge
+        /// leaves out.
+        ///
+        /// Empty on every book written before the merge existed, which reads
+        /// correctly as "nothing has been deleted".
+        /// </summary>
+        public List<string> retiredIds = new List<string>();
     }
 }

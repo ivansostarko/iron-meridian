@@ -3,12 +3,17 @@
 ## Screen flow
 
 ```
-Main Menu ── SINGLE PLAYER ──┬── WEST EUROPE ...... Berlin, Oslo
-    │                        ├── EAST EUROPE ...... Zagreb, Bjelovar, Budapest
-    │                        └── NORTH AMERICA .... Denver, New York
+Main Menu ── SINGLE PLAYER ──┬── EUROPE ........... 15 missions, 1991–2025
+    │                        ├── AFRICA ........... 15 missions, 1990–2025
+    │                        ├── ASIA ............. 15 missions, 1990–2025
+    │                        ├── NORTH AMERICA .... 15 missions, 1990–2025
+    │                        ├── SOUTH AMERICA .... 15 missions, 1990–2025
+    │                        └── AUSTRALIA ........ 15 missions, 1990–2025
     │                              └── a mission ── loader ── game screen
     ├── MULTIPLAYER ....... "Under development"
-    ├── EXTRAS ............ "Under development"
+    ├── EXTRAS ──┬── UNITS ............. the unit encyclopaedia
+    │            ├── DLC ............... "Under development"
+    │            └── CREDITS ........... "Under development"
     ├── TESTING ──┬── MAP EDITOR ........ map editor (Lyon)
     │             ├── UNITS LIST ......... unit catalogue
     │             ├── PARTICLES .......... effect catalogue
@@ -19,11 +24,11 @@ Main Menu ── SINGLE PLAYER ──┬── WEST EUROPE ...... Berlin, Oslo
     └── QUIT ...... confirmation modal
 ```
 
-**Play modes first, tools second.** SINGLE PLAYER is the campaign browser — three
-campaign boards, each holding missions authored in the map editor
-(docs/22-MISSIONS.md). MULTIPLAYER and EXTRAS are still placeholders: each is a
-real screen with its own background and music entry, a plain "under development"
-statement and a way back. They sit above TESTING because that is the order the
+**Play modes first, tools second.** SINGLE PLAYER is the campaign browser — six
+campaign boards of fifteen missions each, authored in the map editor
+(docs/22-MISSIONS.md). MULTIPLAYER is still a placeholder — a real screen with
+its own background and music entry, a plain "under development" statement and a
+way back — and so are the DLC and CREDITS pages behind EXTRAS. They sit above TESTING because that is the order the
 menu reads in, and moving them later would retrain the player for nothing. QUIT
 stays last, where it cannot be hit by accident.
 

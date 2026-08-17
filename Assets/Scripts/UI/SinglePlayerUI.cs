@@ -72,7 +72,7 @@ namespace IronMeridian.UI
         Button _backButton;
 
         Page _page = Page.Campaigns;
-        Campaign _campaign = Campaign.WestEurope;
+        Campaign _campaign = Campaign.Europe;
 
         void Start()
         {
@@ -136,7 +136,7 @@ namespace IronMeridian.UI
             // The list. Scrolls, because a campaign can hold as many missions as
             // somebody cares to add in the editor.
             var scroll = UIFactory.CreateScrollView(_canvas.transform, out _listContent,
-                withScrollbar: true);
+                withScrollbar: true, autoHideScrollbar: true);
             scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
 
             var srt = (RectTransform)scroll.transform;
@@ -174,6 +174,7 @@ namespace IronMeridian.UI
                     CampaignInfo.DisplayName(c),
                     CampaignInfo.Blurb(c),
                     count == 1 ? "1 MISSION" : $"{count} MISSIONS",
+                    null,
                     enabled: count > 0,
                     () => ShowMissions(c));
             }
@@ -205,17 +206,51 @@ namespace IronMeridian.UI
                     : m.briefing;
 
                 AddRow(UiIcons.Pin, m.name.ToUpperInvariant(), detail,
+                    WhenText(m.startDateTime),
                     string.IsNullOrEmpty(m.location) ? "" : m.location.ToUpperInvariant(),
                     enabled: true,
                     () => Launch(m));
             }
         }
 
+        /// <summary>
+        /// A mission's H-hour as the board shows it: "18 MAR 2025 · 05:45".
+        ///
+        /// Parsed rather than sliced, so a malformed date in a hand-edited
+        /// mission file degrades to itself instead of to a substring of itself.
+        /// The time is worth the four characters: half these missions are
+        /// fought in the dark, and the hour is the first thing that tells you.
+        /// </summary>
+        static string WhenText(string startDateTime)
+        {
+            if (string.IsNullOrWhiteSpace(startDateTime)) return "";
+
+            if (System.DateTime.TryParseExact(startDateTime, "yyyy-MM-dd HH:mm",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var when))
+                return when.ToString("dd MMM yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture).ToUpperInvariant()
+                    + "  ·  " + when.ToString("HH:mm");
+
+            return startDateTime;
+        }
+
+        /// <summary>
+        /// One glyph per theatre. They are marks rather than maps — a 26 px
+        /// pictogram cannot draw a continent — so each is picked for what the
+        /// campaign's ground *is*: a shield for the plain everyone planned to
+        /// defend, a flame for the desert, a warship for a theatre fought
+        /// across water.
+        /// </summary>
         static Sprite CampaignGlyph(Campaign c) => c switch
         {
-            Campaign.WestEurope => UiIcons.Shield,
-            Campaign.EastEurope => UiIcons.Flag,
-            _ => UiIcons.Layers
+            Campaign.Europe => UiIcons.Shield,
+            Campaign.Africa => UiIcons.Flame,
+            Campaign.Asia => UiIcons.Pin,
+            Campaign.NorthAmerica => UiIcons.Layers,
+            Campaign.SouthAmerica => UiIcons.Cloud,
+            Campaign.Australia => UiIcons.Warship,
+            _ => UiIcons.Flag
         };
 
         // ------------------------------------------------------------ launch
@@ -270,7 +305,17 @@ namespace IronMeridian.UI
         /// in the sentence — how many missions a campaign holds, where a mission
         /// is.
         /// </summary>
-        void AddRow(Sprite glyph, string label, string detail, string caption,
+        /// <summary>
+        /// One row: glyph, title, a line of detail, and a caption column at the
+        /// right-hand end carrying one or two stacked lines.
+        ///
+        /// A mission's caption is **when and where** — the date it is fought on
+        /// over the ground it is fought over. Both belong on the board rather
+        /// than inside the mission: a campaign that spans thirty-five years is
+        /// a chronology, and a list of names with no dates on it throws that
+        /// away.
+        /// </summary>
+        void AddRow(Sprite glyph, string label, string detail, string caption, string captionSub,
             bool enabled, UnityEngine.Events.UnityAction action)
         {
             var frame = UIFactory.CreateBorderedPanel(_listContent, "Row_" + label,
@@ -297,7 +342,8 @@ namespace IronMeridian.UI
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
                 new Vector2(34, 0), new Vector2(30, 30));
 
-            float captionWidth = string.IsNullOrEmpty(caption) ? 0f : 150f;
+            float captionWidth = string.IsNullOrEmpty(caption) ? 0f
+                : string.IsNullOrEmpty(captionSub) ? 150f : 190f;
             float textWidth = BoardWidth - ListIndent - UIFactory.ScrollbarWidth - TextX - 24f - captionWidth;
 
             var title = UIFactory.CreateText(frame, label, 24, UiTheme.Text,
@@ -311,12 +357,28 @@ namespace IronMeridian.UI
 
             if (!string.IsNullOrEmpty(caption))
             {
-                var chip = UIFactory.CreateText(frame, caption, UiTheme.FontLabel,
-                    UiTheme.TextFaint, TextAnchor.MiddleRight);
+                // One line sits on the row's midline; two straddle it, so the
+                // pair reads as a block rather than as a line with something
+                // hanging off it.
+                bool stacked = !string.IsNullOrEmpty(captionSub);
+
+                var chip = UIFactory.CreateText(frame, caption, 14,
+                    enabled ? UiTheme.Accent : UiTheme.TextFaint,
+                    TextAnchor.MiddleRight, FontStyle.Bold);
                 chip.raycastTarget = false;
                 UIFactory.Place(chip.rectTransform, new Vector2(1f, 0.5f),
-                    new Vector2(-22, 0), new Vector2(captionWidth, 18));
+                    new Vector2(-22, stacked ? 10 : 0), new Vector2(captionWidth, 18));
                 UIFactory.Fit(chip, 9);
+
+                if (stacked)
+                {
+                    var where = UIFactory.CreateText(frame, captionSub, UiTheme.FontLabel,
+                        UiTheme.TextFaint, TextAnchor.MiddleRight);
+                    where.raycastTarget = false;
+                    UIFactory.Place(where.rectTransform, new Vector2(1f, 0.5f),
+                        new Vector2(-22, -9), new Vector2(captionWidth, 16));
+                    UIFactory.Fit(where, 9);
+                }
             }
 
             var row = new Row

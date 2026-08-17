@@ -94,8 +94,18 @@ namespace IronMeridian.UI
         const float EntryHeight = 96f, EntryGap = 2f;
         /// <summary>Accent strip down an entry's leading edge, at rest and under the cursor.</summary>
         const float StripRest = 0f, StripHover = 4f;
+        /// <summary>
+        /// How far a row's contents are inset from its own left edge.
+        ///
+        /// The row's fill and its accent strip still run to the edge — the strip
+        /// is the thing that marks the row, and a strip that started 40 px in
+        /// would be a floating tick rather than a leading edge. What moves is
+        /// everything you read: the glyph, the rule beside it and both lines of
+        /// text.
+        /// </summary>
+        const float ContentInset = 40f;
         /// <summary>Left inset of a row's glyph, and of the text column beside it.</summary>
-        const float GlyphX = 30f, TextX = 92f;
+        const float GlyphX = ContentInset + 30f, TextX = ContentInset + 92f;
 
         GameObject _quitModal;
 

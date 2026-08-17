@@ -13,13 +13,28 @@ namespace IronMeridian.Save
     ///   Shipped : Assets/StreamingAssets/Data/missions.json
     ///   Player  : %USERPROFILE%/AppData/LocalLow/…/Iron Meridian/missions.json
     ///
-    /// **The user file shadows the shipped one wholesale**, exactly as
-    /// <see cref="SaveSystem"/> does for maps. Merging the two per-mission was
-    /// the obvious alternative and is worse: a player who deletes a shipped
-    /// mission in the editor would watch it reappear, because a merge cannot
-    /// tell "never had it" from "got rid of it". Shadowing means the editor
-    /// owns the list once it has been touched, and deleting the user file is
-    /// the way back to the shipped one.
+    /// **The player's book is merged over the shipped one, by id.** It used to
+    /// shadow it wholesale, the way <see cref="SaveSystem"/> does for maps, and
+    /// that was wrong for a *catalogue*: the moment the editor saved once, the
+    /// player's file became the whole list, and every mission added to the
+    /// shipped book afterwards was invisible to them for ever. Eighty-three new
+    /// missions arriving and nobody seeing them is not a corner case, it is what
+    /// happens on the next update.
+    ///
+    /// The merge is the same shape as <c>TuningStore</c>'s patch over
+    /// `units.json`: the shipped file is the catalogue, the player's is what
+    /// they have changed on top of it.
+    ///
+    ///   • a player entry with a shipped id **wins** — that is their edit
+    ///   • a player entry with a new id is **theirs**, and is kept
+    ///   • a shipped entry the player has never touched is **added**
+    ///   • a shipped id in <see cref="MissionBook.retiredIds"/> is **left out**
+    ///
+    /// That last rule is what the old wholesale shadowing was protecting: a
+    /// merge on its own cannot tell "never had it" from "got rid of it", so
+    /// deleting a shipped mission writes its id down rather than relying on its
+    /// absence. Deleting the user file is still the way back to a clean shipped
+    /// list.
     ///
     /// **Why the game and the editor share this.** A mission is its record here
     /// plus its map file, and the editor writes both — so "change it in the
@@ -77,24 +92,118 @@ namespace IronMeridian.Save
 
         static MissionBook Read()
         {
-            string path = File.Exists(UserPath) ? UserPath : ShippedPath;
+            var shipped = ReadFile(ShippedPath);
+            var user = File.Exists(UserPath) ? ReadFile(UserPath) : null;
 
-            if (!File.Exists(path))
+            if (shipped == null && user == null)
             {
-                Debug.LogWarning($"[Missions] No mission list found (looked in {path}). " +
+                Debug.LogWarning($"[Missions] No mission list found (looked in {ShippedPath}). " +
                     "Starting empty — the editor's MISSIONS panel can create one.");
                 return new MissionBook();
             }
+
+            if (user == null)
+            {
+                Debug.Log($"[Missions] Loaded {shipped.missions.Count} shipped mission(s).");
+                return shipped;
+            }
+            if (shipped == null) return user;
+
+            return Merge(shipped, user);
+        }
+
+        /// <summary>
+        /// The shipped catalogue with the player's book laid over it — see the
+        /// class remarks for the four rules.
+        ///
+        /// Shipped order is kept and the player's own missions are appended, so
+        /// a campaign board reads as "what the game shipped, then what you
+        /// added" rather than reshuffling every time somebody saves.
+        /// </summary>
+        static MissionBook Merge(MissionBook shipped, MissionBook user)
+        {
+            var byId = new Dictionary<string, MissionDefinition>(user.missions.Count);
+            foreach (var m in user.missions) byId[m.id] = m;
+
+            var retired = new HashSet<string>(user.retiredIds ?? new List<string>());
+
+            var merged = new MissionBook
+            {
+                savedAtUtc = user.savedAtUtc,
+                retiredIds = new List<string>(retired)
+            };
+
+            int edited = 0, added = 0;
+            foreach (var m in shipped.missions)
+            {
+                if (retired.Contains(m.id)) continue;
+
+                if (byId.TryGetValue(m.id, out var mine))
+                {
+                    merged.missions.Add(mine);   // the player's version wins
+                    byId.Remove(m.id);
+                    edited++;
+                }
+                else
+                {
+                    merged.missions.Add(m);
+                    added++;
+                }
+            }
+
+            // Whatever is left in the map is the player's own, in their file's
+            // order — and it goes *after* the shipped block on its campaign's
+            // board rather than interleaving with it. Both lists number from
+            // zero, so without this a mission the player made would land
+            // between the first and second shipped ones, which reads as the
+            // board being shuffled rather than added to.
+            var nextOrder = new Dictionary<Campaign, int>();
+            foreach (var m in merged.missions)
+            {
+                var c = m.CampaignEnum;
+                if (!nextOrder.TryGetValue(c, out int max) || m.order >= max)
+                    nextOrder[c] = m.order + 1;
+            }
+
+            int own = 0;
+            foreach (var m in user.missions)
+            {
+                if (!byId.ContainsKey(m.id)) continue;
+
+                var c = m.CampaignEnum;
+                m.order = nextOrder.TryGetValue(c, out int next) ? next : 0;
+                nextOrder[c] = m.order + 1;
+
+                merged.missions.Add(m);
+                own++;
+            }
+
+            Debug.Log($"[Missions] {merged.missions.Count} mission(s): {added} shipped, " +
+                      $"{edited} shipped-and-edited, {own} your own" +
+                      (retired.Count > 0 ? $", {retired.Count} retired" : ""));
+            return merged;
+        }
+
+        /// <summary>
+        /// One mission file, or null if it is absent or unreadable. Repairs the
+        /// records it does read, so no caller has to test for a missing id or a
+        /// null area.
+        /// </summary>
+        static MissionBook ReadFile(string path)
+        {
+            if (!File.Exists(path)) return null;
 
             MissionBook book = null;
             try { book = JsonUtility.FromJson<MissionBook>(File.ReadAllText(path)); }
             catch (System.Exception e)
             {
                 Debug.LogError($"[Missions] Could not read {path}: {e.Message}");
+                return null;
             }
 
-            if (book == null) book = new MissionBook();
+            if (book == null) return null;
             if (book.missions == null) book.missions = new List<MissionDefinition>();
+            if (book.retiredIds == null) book.retiredIds = new List<string>();
 
             // A record with no id cannot be saved, deleted or given a map file,
             // so give it one now rather than letting it fail later.
@@ -109,8 +218,17 @@ namespace IronMeridian.Save
                 if (m.area.points == null) m.area.points = new List<GeoPoint>();
             }
 
-            Debug.Log($"[Missions] Loaded {book.missions.Count} mission(s) from {path}");
             return book;
+        }
+
+        /// <summary>Ids in the shipped catalogue — what <see cref="Delete"/> has to write down.</summary>
+        static HashSet<string> ShippedIds()
+        {
+            var ids = new HashSet<string>();
+            var shipped = ReadFile(ShippedPath);
+            if (shipped != null)
+                foreach (var m in shipped.missions) ids.Add(m.id);
+            return ids;
         }
 
         /// <summary>Missions in one campaign, in board order. Unavailable ones are omitted.</summary>
@@ -188,12 +306,18 @@ namespace IronMeridian.Save
         {
             if (mission == null) return false;
             bool removed = Book.missions.Remove(mission);
-            if (removed)
-            {
-                if (Selected == mission) Clear();
-                SaveBook();
-            }
-            return removed;
+            if (!removed) return false;
+
+            // A shipped mission has to be written down as gone. The player's
+            // book is merged *over* the shipped catalogue, and absence alone
+            // would read as "never had it" — so deleting one would only hide it
+            // until the next load. See the class remarks.
+            if (ShippedIds().Contains(mission.id) && !Book.retiredIds.Contains(mission.id))
+                Book.retiredIds.Add(mission.id);
+
+            if (Selected == mission) Clear();
+            SaveBook();
+            return true;
         }
 
         static int NextOrder(Campaign campaign)

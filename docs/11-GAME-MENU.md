@@ -53,10 +53,10 @@ All three layers set `raycastTarget = false`, so the background never intercepts
 
 | Asset | Path | Resource path | Screens | Scrim | Description |
 |---|---|---|---|---|---|
-| Default menu artwork | `Assets/Resources/Graphics/Backgrounds/default_background.png` | `Graphics/Backgrounds/default_background` | Main Menu, Settings, Development, Units List, Particles, Audio — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
+| Default menu artwork | `Assets/Resources/Graphics/Backgrounds/default_background.png` | `Graphics/Backgrounds/default_background` | Main Menu, Development, Units List, Particles, Audio — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
 | Single player | *not supplied yet* | `Graphics/Backgrounds/single_player` | Single Player | 0.62 | **Awaiting artwork.** Falls back to the default image. |
 | Multiplayer | *not supplied yet* | `Graphics/Backgrounds/multiplayer` | Multiplayer | 0.62 | **Awaiting artwork.** Falls back to the default image. |
-| Extras | *not supplied yet* | `Graphics/Backgrounds/extras` | Extras | 0.62 | **Awaiting artwork.** Falls back to the default image. |
+| Interior artwork | `Assets/Resources/Graphics/Backgrounds/background.png` | `Graphics/Backgrounds/background` | Settings, Extras, Unit Library, DLC, Credits | 0.78 (Settings and Unit Library: 0.86) | A front line seen from altitude, blue against red. One image for the screens behind the main menu rather than five ids naming one file — they are the pages you pass *through*, and giving each its own artwork would make the menu read as five different products. |
 
 ### Fallbacks
 
@@ -93,11 +93,15 @@ Map terrain and imagery are streamed by Cesium, not shipped as textures — see 
 |---|---|---|---|---|
 | Main Menu | `MainMenu` | Default | 0.42 | Artwork behind the command board. The scrim is lighter than a working screen's because the board carries its own darker field down the left-hand edge, so the artwork on the right stays close to how it was authored. The board's entries now sit in a **scroll view** between the masthead and the footer, so the list can outgrow a short window instead of running off the bottom of it — see §3.1. |
 | Single Player | `SinglePlayer` | Single Player | 0.62 | Behind the campaign board and the mission board — two pages of one scene. See docs/22-MISSIONS.md. |
-| Settings | `Settings` | Default | **0.86** | Behind the vertical tab rail and its pages — a page of dense rows, so it takes the dense-screen scrim. |
+| Settings | `Settings` | **Interior** | **0.86** | Behind the vertical tab rail and its pages — a page of dense rows, so it takes the dense-screen scrim over the interior artwork. |
 | Development | `Testing` | Default | 0.62 | Behind the hub's four cards, laid out in centred rows by hand — `LayoutGroup` is `[DisallowMultipleComponent]`, so a `GridLayoutGroup` cannot be swapped into a scroll view's content. |
 | Particles | `EffectsList` | Default | 0.86 | Dense table + 3D preview; the heavier scrim keeps rows legible. |
 | Audio | `AudioList` | Default | 0.86 | Dense table + transport; same scrim as the other data screens. |
 | Units List | `UnitsList` | Default | **0.86** | Dense table and stat panel — legibility beats atmosphere. |
+| Extras | `Extras` | **Interior** | 0.78 | Behind the UNITS / DLC / CREDITS entries. |
+| Unit Library | `UnitLibrary` | **Interior** | **0.86** | Arm board, then a filtered list with a 3D preview — dense, so it takes the dense-screen scrim. |
+| DLC | `Dlc` | **Interior** | 0.78 | "Under development" placeholder behind Extras. |
+| Credits | `Credits` | **Interior** | 0.78 | "Under development" placeholder behind Extras. |
 | Map editor / game | `Game` | **None** | — | Deliberate: the Cesium globe *is* the background. A full-screen image would cover the map. |
 
 ### 3.1 The main menu board
@@ -182,8 +186,8 @@ has an edge of its own, an accent strip down its leading edge that widens under
 the cursor, and a `UiIcons.ArrowLeft` glyph so the direction is legible before the
 label is read.
 
-Used by `PlaceholderScreenUI` (Single Player, Multiplayer, Extras), `TestingUI`,
-`SettingsUI`, `EastFranceUI` and `UnitsListUI`. Each passes its own anchor and
+Used by `PlaceholderScreenUI` (Multiplayer, DLC, Credits), `TestingUI`,
+`SettingsUI`, `UnitLibraryUI`, `EastFranceUI` and `UnitsListUI`. Each passes its own anchor and
 position; the default is the top-left corner.
 
 ### 3.3 The settings screen

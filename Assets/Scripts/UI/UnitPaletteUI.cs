@@ -3513,7 +3513,7 @@ namespace IronMeridian.UI
         InputField _missionLat, _missionLon, _missionAltitude;
         RectTransform _missionFogLamp;
         Text _missionFogLabel, _missionStatus;
-        Campaign _missionCampaign = Campaign.WestEurope;
+        Campaign _missionCampaign = Campaign.Europe;
         MissionDefinition _mission;
         List<MissionDefinition> _missionsShown = new List<MissionDefinition>();
         /// <summary>True while the panel is writing its own controls, so their events are not edits.</summary>

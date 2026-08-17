@@ -1,6 +1,6 @@
 # Missions and Campaigns
 
-Single player: three campaigns, each holding a list of missions, each mission a piece of real ground with an order of battle on it. Missions are authored in the map editor and played from the main menu — **the same two files on both sides**, so there is no publish step to forget.
+Single player: six campaigns and ninety missions, each mission a piece of real ground with an order of battle on it. Missions are authored in the map editor and played from the main menu — **the same two files on both sides**, so there is no publish step to forget.
 
 > **Keep this file current.** Every new campaign, every new field on a mission, and every change to how missions are stored or loaded must be recorded here in the same change. See [Rules](#rules) at the bottom.
 
@@ -23,13 +23,32 @@ That split is the whole design. The map format already existed and is what the e
 
 Campaigns are a **closed enum** (`Data.Campaign`), because a campaign is navigation structure: the single-player screen draws one board per value, and a mission whose campaign nobody recognises would be a mission with nowhere to appear. Missions are data and can be added freely; campaigns are added deliberately, in code, with a display name and a blurb.
 
-| Campaign | Shipped missions |
-|---|---|
-| **West Europe** | Berlin, Oslo |
-| **East Europe** | Zagreb, Bjelovar, Budapest |
-| **North America** | Denver, New York |
+| Campaign | Missions | Span | Ground |
+|---|---|---|---|
+| **Europe** | 15 | 1991 → 2025 | Ljubljana, Slavonia, Sarajevo, Kosovo, Klaipėda, Narvik, Constanța, the Carpathians, Gotland, Crimea, the Suwałki Gap, Finnmark, the Warsaw–Lublin corridor, Riga, the Fulda Gap |
+| **Africa** | 15 | 1990 → 2025 | Kufra, Western Sahara, Mogadishu, northern Kenya, Kisangani, Aswan, the Eritrean border, the Atlas, southern Algeria, Sirte, Gao, Lake Chad, Port Sudan, Goma, Cape Town |
+| **Asia** | 15 | 1990 → 2025 | the Korean DMZ, Kashmir, the Taiwan Strait, Ladakh, Kazakhstan, the Taklamakan, Okinawa, the South China Sea, Hokkaido, the Bhutan frontier, the Luzon Strait |
+| **North America** | 15 | 1990 → 2025 | the Aleutians, the Northwest Territories, Vancouver Island, Anchorage, the Sonoran, the Yukon, the California coast, the Rockies, Nunavut, Lake Superior, the Chihuahua border, Dutch Harbor, Hudson Bay, Puget Sound, Prudhoe Bay |
+| **South America** | 15 | 1990 → 2025 | Manaus, the Peruvian Andes, the Colombian Amazon, Patagonia, the Orinoco, the altiplano, Pará, the Atacama, the llanos, Tierra del Fuego, the Ecuadorian Andes, the Amazon basin |
+| **Australia** | 15 | 1990 → 2025 | Darwin, Townsville, Alice Springs, Perth, the Timor Sea, the Great Sandy Desert, the Reef, Tasmania, Brisbane, the Katherine corridor, Woomera, Cape York, the Arafura Sea, Sydney |
 
 Adding one: a value in `Data.Campaign`, an entry in `CampaignInfo.All`, and a case in `DisplayName` / `Blurb`. The boards, the editor's campaign dropdown and the filtering all read from those.
+
+### The mission set
+
+Ninety missions, fifteen per campaign, spanning 1990 to 2025. Each names a real place and is anchored to its coordinates, so opening one flies the camera to that ground on the real globe.
+
+**Every mission carries a date, and the board shows it.** A campaign that runs thirty-five years is a chronology, and a list of names with no dates on it throws that away. The row's caption column carries the date over the location — `18 MAR 2025 · 05:45` over `FULDA GAP, GERMANY`.
+
+**H-hour comes from the mission's job, not from a dice roll.** Each campaign uses all fifteen of the design's archetypes exactly once — armoured breakthrough, defensive line, urban assault, amphibious landing, airborne assault, convoy escort, encirclement, reconnaissance, special forces raid, artillery suppression, air-defence operation, extraction, delaying action, bridge seizure, combined-arms battle — rotated so mission 1 is a different job in each theatre. The archetype opens the briefing and sets the hour and the opening altitude with it: a raid goes in at 01:20 from 8 km, a combined-arms battle at 11:00 from 18 km. Half these missions are fought in the dark, and the hour is the first thing that says so.
+
+**Weather is the theatre's.** Arctic and alpine missions are in snow, jungle and monsoon ones in rain, deserts clear, maritime approaches in storm or overcast.
+
+**None of them has a map file yet.** `mapFile` is empty on all ninety, which is the documented "no map yet" case: `MissionLibrary.LoadMap` logs it and opens empty ground at the mission's start point, with the mission's own date, weather, sky and view applied over it. They are ground and a brief; the order of battle on each is authored in the editor, saved, and from then on the mission has content. That is the honest state of the set rather than ninety copies of one laydown.
+
+**Europe was two campaigns.** WEST EUROPE (Berlin, Oslo) and EAST EUROPE (Zagreb, Bjelovar, Budapest) are now one board. The split was doing the player no favours: two shelves of two and three missions each, in a browser whose whole job is to show what there is to play. A campaign is a shelf, and a shelf with two things on it is a list pretending to be a structure.
+
+**The retired names still load.** `CampaignInfo.Parse` maps `WestEurope` and `EastEurope` to `Europe` explicitly, rather than letting them fall through to the default — every mission record and map file saved before the merge carries one of them, and a fallback that happened to be right would stop being right the moment the default changed. Shipped `missions.json` rows have been rewritten to `Europe`; a *user's* mission file is migrated on read, not on disk, so nothing is rewritten behind their back.
 
 ### Mission fields
 
@@ -150,15 +169,26 @@ a choice anybody made.
 ## 2. Storage
 
 ```
-Assets/StreamingAssets/Data/missions.json          shipped list
-%USERPROFILE%/AppData/LocalLow/…/missions.json     the player's list  (shadows it)
+Assets/StreamingAssets/Data/missions.json          shipped list   — the catalogue
+%USERPROFILE%/AppData/LocalLow/…/missions.json     the player's list — merged over it
 Assets/StreamingAssets/Maps/<id>.json              shipped scenarios
 %USERPROFILE%/AppData/LocalLow/…/Maps/<id>.json    the player's scenarios (shadow them)
 ```
 
-`MissionLibrary` reads the user file if it exists and the shipped one otherwise — **wholesale, not merged**, exactly as `SaveSystem` already does for maps.
+**The maps shadow; the mission list merges.** A map is a save and the newest one wins. The mission list is a *catalogue*, and it has to keep growing after the player has saved once.
 
-Merging per-mission was the obvious alternative and is worse: a player who deletes a shipped mission in the editor would watch it come back, because a merge cannot tell *never had it* from *got rid of it*. Shadowing means the editor owns the list once it has been touched, and deleting `missions.json` from the save folder is the documented way back to the shipped set.
+| Case | Result |
+|---|---|
+| A player entry with a shipped id | **The player's wins** — that is their edit |
+| A player entry with a new id | **Kept**, appended after the shipped block on its board |
+| A shipped entry the player never touched | **Added** |
+| A shipped id in `retiredIds` | **Left out** — deliberately deleted |
+
+The user file used to shadow the shipped one wholesale, the way maps do. That was wrong here, and quietly: the moment the editor saved once, the player's file became the whole list, and every mission added to the shipped book afterwards was invisible to them for ever. Ninety missions arriving and nobody seeing them is not a corner case — it is what happens on the next update. The merge is the same shape as `TuningStore`'s patch over `units.json`: shipped file is the catalogue, the player's file is the difference.
+
+**Deleting a shipped mission writes its id into `retiredIds`.** A merge on its own cannot tell *never had it* from *got rid of it*, so absence is not enough — without the list, a deleted shipped mission would come back on the next load. Deleting the whole user `missions.json` is still the documented way back to a clean shipped set; the player's **maps** in the save folder are untouched by that.
+
+**Your own missions keep their place.** Both lists number `order` from zero, so an appended mission would otherwise land between the first and second shipped ones. The merge renumbers user-only missions to sit after the shipped block on their campaign's board.
 
 The list is **one file** because the campaign board reads all of it before anything is picked, and seven file reads to draw one board would be seven chances to half-load a menu. The **maps** stay one file each — those are big, and only ever one is wanted.
 
@@ -292,6 +322,7 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 3. **Adding a campaign is a code change** (`Data.Campaign` + `CampaignInfo`); adding a mission is a data change. Do not turn the campaign into a free string to avoid the former.
 4. **New fields on `MissionDefinition` must default harmlessly** — `JsonUtility` leaves missing fields at their initialiser values, and old lists must keep loading.
 5. **Record every new field in §1** and every storage change in §2, in the same commit.
+6. **The shipped list is a catalogue and must keep reaching the player.** Anything that makes the user's file authoritative over the whole list — rather than a difference merged over it — puts every future mission behind a file the player already has.
 
 ---
 

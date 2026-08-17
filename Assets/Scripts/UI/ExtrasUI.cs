@@ -37,7 +37,7 @@ namespace IronMeridian.UI
             MusicManager.Play(MusicTrack.ExtrasTheme);
 
             var canvas = UIFactory.CreateCanvas("ExtrasCanvas");
-            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Extras);
+            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Interior);
 
             var title = UIFactory.CreateText(canvas.transform, "EXTRAS", 56,
                 GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);

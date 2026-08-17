@@ -15,8 +15,13 @@ namespace IronMeridian.UI
         SinglePlayer,
         /// <summary>Multiplayer lobby screen.</summary>
         Multiplayer,
-        /// <summary>Extras screen.</summary>
-        Extras
+        /// <summary>
+        /// The inner screens — settings, extras, and the pages behind extras.
+        /// One image for the family rather than five ids naming one file: they
+        /// are the pages you pass *through*, and giving each its own artwork
+        /// would make the menu read as five different products.
+        /// </summary>
+        Interior
     }
 
     /// <summary>One background: where to load it and how far to knock it back.</summary>
@@ -96,11 +101,16 @@ namespace IronMeridian.UI
             },
             new BackgroundDef
             {
-                id = BackgroundId.Extras,
-                resourcePath = "Graphics/Backgrounds/extras",
-                scrimAlpha = 0.62f,
+                id = BackgroundId.Interior,
+                resourcePath = "Graphics/Backgrounds/background",
+                // Heavier than the menu's: these screens are tables, rows and
+                // sliders read at length, and the artwork is a busy operational
+                // map. It stays a picture; it stops being a distraction.
+                scrimAlpha = 0.78f,
                 fallback = BackgroundId.Default,
-                description = "Extras screen. Awaiting artwork."
+                description = "Settings, Extras, Unit Library, DLC and Credits — the screens " +
+                              "behind the main menu. A front line seen from altitude, blue " +
+                              "against red."
             }
         };
 

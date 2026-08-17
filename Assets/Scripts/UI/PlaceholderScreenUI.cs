@@ -95,7 +95,7 @@ namespace IronMeridian.UI
         protected override string Title => "DLC";
         protected override string Promise =>
             "Additional campaigns, theatres and unit packs will appear here.";
-        protected override BackgroundId Background => BackgroundId.Extras;
+        protected override BackgroundId Background => BackgroundId.Interior;
         protected override MusicTrack Track => MusicTrack.ExtrasTheme;
         protected override string BackScene => GameConfig.SceneExtras;
         protected override string BackLabel => "BACK TO EXTRAS";
@@ -107,7 +107,7 @@ namespace IronMeridian.UI
         protected override string Title => "CREDITS";
         protected override string Promise =>
             "Who built Iron Meridian, and the assets and data it was built from.";
-        protected override BackgroundId Background => BackgroundId.Extras;
+        protected override BackgroundId Background => BackgroundId.Interior;
         protected override MusicTrack Track => MusicTrack.ExtrasTheme;
         protected override string BackScene => GameConfig.SceneExtras;
         protected override string BackLabel => "BACK TO EXTRAS";
