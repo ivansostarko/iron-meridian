@@ -6,8 +6,8 @@ using IronMeridian.Map;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// On-map controls: a zoom/orientation cluster at the bottom-left of the
-    /// map, and an optional compass rose at the bottom-right.
+    /// On-map controls: a zoom/orientation/projection cluster at the bottom-left
+    /// of the map, and an optional compass rose at the bottom-right.
     ///
     /// Both are opt-in from the MAP panel. Keyboard and mouse already cover
     /// everything here (wheel, WASD, Q/E), so permanent on-screen buttons would
@@ -43,6 +43,7 @@ namespace IronMeridian.UI
         RectTransform _compass;
         RectTransform _compassDial;
         Text _compassHeading, _zoomReadout;
+        (Image fill, Text label) _mode2D, _mode3D;
 
         public bool ControlsVisible { get; private set; } = true;
         public bool CompassVisible { get; private set; }
@@ -55,8 +56,21 @@ namespace IronMeridian.UI
             BuildCluster(canvas);
             BuildCompass(canvas);
 
+            // The projection is also set from MAP CONFIG and by loading a map,
+            // so the pair follows the map rather than only its own clicks —
+            // buttons that disagreed with the terrain would be worse than the
+            // toggle they replaced.
+            _map.ViewModeChanged += OnViewModeChanged;
+
             SetControlsVisible(ControlsVisible);
             SetCompassVisible(CompassVisible);
+        }
+
+        void OnViewModeChanged(ViewMode mode) => PaintProjection();
+
+        void OnDestroy()
+        {
+            if (_map != null) _map.ViewModeChanged -= OnViewModeChanged;
         }
 
         /// <summary>
@@ -97,11 +111,7 @@ namespace IronMeridian.UI
             ClusterButton(UiIcons.Plus, "Zoom in", "Wheel up, or R", () => _rig.ZoomIn(), ref y);
             ClusterButton(UiIcons.Minus, "Zoom out", "Wheel down, or F", () => _rig.ZoomOut(), ref y);
             ClusterButton(UiIcons.CompassNeedle, "Face north", "Clears any Q/E rotation", () => _rig.ResetNorth(), ref y);
-            ClusterButton(UiIcons.Layers, "Toggle 2D / 3D", "Same world, different camera", () =>
-            {
-                _map.ToggleViewMode();
-                _rig.SetMode(_map.ViewMode);
-            }, ref y);
+            BuildProjectionPair(ref y);
             ClusterButton(UiIcons.Person, "Frame the order of battle", "Centres on every deployed unit",
                 FrameAllUnits, ref y);
 
@@ -111,6 +121,65 @@ namespace IronMeridian.UI
             _zoomReadout = UIFactory.CreateText(readoutFrame, "", UiTheme.FontLabel, UiTheme.TextDim);
             UIFactory.Stretch(_zoomReadout.rectTransform);
             UiTooltip.Attach(readoutFrame.gameObject, "Camera altitude above the ground");
+        }
+
+        /// <summary>
+        /// The projection pair: **2D** and **3D**, side by side in one band.
+        ///
+        /// Two buttons rather than the single toggle that used to be here. A
+        /// toggle carrying a layers glyph says neither which projection the map
+        /// is in nor which one pressing it will give you — it is only readable
+        /// after you have pressed it and looked at the terrain. A pair states
+        /// both: the lit one is where you are, the dark one is where you can go,
+        /// and pressing the lit one is harmlessly idempotent rather than a
+        /// silent flip back.
+        /// </summary>
+        void BuildProjectionPair(ref float y)
+        {
+            _mode2D = ProjectionButton("2D", 0f, ViewMode.Mode2D, y,
+                "Flat, north-up — the map as a map");
+            _mode3D = ProjectionButton("3D", ButtonSize + Gap, ViewMode.Mode3D, y,
+                "Tilted, free heading — the map as ground");
+
+            PaintProjection();
+            y += ButtonSize + Gap;
+        }
+
+        (Image fill, Text label) ProjectionButton(string caption, float x, ViewMode mode, float y, string hint)
+        {
+            var frame = UIFactory.CreateBorderedPanel(_cluster, "View_" + caption, UiTheme.Chrome, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(x, -y), new Vector2(ButtonSize, ButtonSize));
+
+            var btn = UIFactory.CreateButton(frame, caption, () => SetProjection(mode),
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            UiTooltip.Attach(btn.gameObject, $"{caption} view   ·   {hint}");
+
+            return (frame.Find("Fill").GetComponent<Image>(), btn.GetComponentInChildren<Text>(true));
+        }
+
+        /// <summary>
+        /// Puts the map into one projection rather than flipping it. Asking for
+        /// the projection you are already in has to be a no-op, or the pair
+        /// would behave like the toggle it replaced.
+        /// </summary>
+        void SetProjection(ViewMode mode)
+        {
+            if (_map.ViewMode != mode) _map.SetViewMode(mode);
+            _rig.SetMode(mode);
+            PaintProjection();
+        }
+
+        /// <summary>Lights whichever projection the map is actually in.</summary>
+        void PaintProjection()
+        {
+            if (_mode2D.fill == null || _map == null) return;
+            bool flat = _map.ViewMode == ViewMode.Mode2D;
+
+            _mode2D.fill.color = flat ? UiTheme.AccentWash : UiTheme.Chrome;
+            _mode2D.label.color = flat ? UiTheme.Accent : UiTheme.TextDim;
+            _mode3D.fill.color = flat ? UiTheme.Chrome : UiTheme.AccentWash;
+            _mode3D.label.color = flat ? UiTheme.TextDim : UiTheme.Accent;
         }
 
         /// <summary>

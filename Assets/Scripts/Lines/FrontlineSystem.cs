@@ -25,8 +25,8 @@ namespace IronMeridian.Lines
     public enum TerritoryOwner { Blue, Red, Contested }
 
     /// <summary>
-    /// One published stretch of front: a side's forward edge in one engagement,
-    /// a pocket ring, or the manual line.
+    /// One published stretch of front: a side's forward edge, or the manual
+    /// line. There is exactly one per side — see <see cref="FrontlineSystem"/>.
     /// </summary>
     public class FlotSegment
     {
@@ -35,8 +35,6 @@ namespace IronMeridian.Lines
         public FlotState State;
         public List<GeoPoint> Points = new List<GeoPoint>();
         public double LengthKm;
-        /// <summary>A closed ring around an isolated cluster rather than a forward edge.</summary>
-        public bool Pocket;
         /// <summary>Drawn from what the player can see rather than from the truth — fog is on.</summary>
         public bool Estimated;
         /// <summary>The designer's hand-drawn line, in Manual/Hybrid mode.</summary>
@@ -61,11 +59,11 @@ namespace IronMeridian.Lines
     ///             combat-effective formations vote)
     ///           → clustering (mutually supporting groups, per side)
     ///           → outlier filtering (a lone recon car deep in enemy ground
-    ///             does not drag the front with it; a cluster with real combat
-    ///             power becomes a pocket instead)
-    ///           → engagements (each friendly cluster paired with the enemy
-    ///             cluster it faces — the operational direction comes from the
-    ///             pairing, so two separated battles get two axes)
+    ///             does not drag the front with it; a cluster cut off from its
+    ///             side's main body stops voting on where the front runs)
+    ///           → one engagement: each side's remaining clusters merged into a
+    ///             single body, and the operational direction taken from the two
+    ///             bodies' centres
     ///           → per-band forward edges, one per side (influence field,
     ///             Gaussian across the front, exponential toward the enemy)
     ///           → smoothing, stability damping, terrain projection (MapLine
@@ -73,10 +71,21 @@ namespace IronMeridian.Lines
     ///           → segments with states, breach detection, territory answers,
     ///             history snapshots
     ///
-    /// **Two lines, not one.** Each side has its own forward edge; the ground
-    /// between them is contested. That is what makes territory a query the
-    /// game can answer (<see cref="TerritoryAt"/>) instead of a colour, and a
-    /// breach a definable event (<see cref="Breach"/>) instead of a feeling.
+    /// **Exactly two lines: ours and theirs.** Each side has one forward edge;
+    /// the ground between them is contested. That is what makes territory a
+    /// query the game can answer (<see cref="TerritoryAt"/>) instead of a
+    /// colour, and a breach a definable event (<see cref="Breach"/>) instead of
+    /// a feeling.
+    ///
+    /// **And never more than two.** The solver used to pair every friendly
+    /// cluster with the enemy cluster it faced and publish an edge per battle,
+    /// plus a ring around each pocket — so a dispersed order of battle put four
+    /// or five identically-coloured traces on the map and left the player
+    /// working out which of them was the front. The FLOT answers one question,
+    /// so it is one line per side: the clusters are merged into a single body
+    /// before the solve, and everything downstream (territory, breach, manning,
+    /// history) reads the engagement's nodes rather than the published geometry,
+    /// so none of it changes shape with the merge.
     ///
     /// **Three modes.** Automatic solves from the force; Manual publishes the
     /// designer's drawn line and uses it for the same queries; Hybrid is
@@ -96,6 +105,10 @@ namespace IronMeridian.Lines
     public class FrontlineSystem : MonoBehaviour
     {
         public const string LineIdPrefix = "flot-";
+        /// <summary>The friendly forward edge. One line, always this id.</summary>
+        public const string UserLineId = "flot-user";
+        /// <summary>The hostile forward edge — the truth, or the estimate under fog.</summary>
+        public const string EnemyLineId = "flot-enemy";
         public const string ManualLineId = "flot-manual";
         /// <summary>The single midline the old solver published; removed from old saves on the first solve.</summary>
         public const string LegacyLineId = "boundary-auto";
@@ -300,13 +313,15 @@ namespace IronMeridian.Lines
             }
         }
 
-        /// <summary>A side's main (largest, non-pocket) segment.</summary>
+        /// <summary>
+        /// A side's segment. There is only ever one, but the largest still wins
+        /// the tie so a manual trace and an automatic edge cannot both answer.
+        /// </summary>
         public FlotSegment MainSegment(Team team)
         {
             FlotSegment best = null;
             foreach (var s in _segments)
             {
-                if (s.Pocket) continue;
                 if (!s.Manual && s.Team != team) continue;
                 if (best == null || s.LengthKm > best.LengthKm) best = s;
             }
@@ -398,37 +413,57 @@ namespace IronMeridian.Lines
             var redClusters = BuildClusters(red);
 
             // 3. Outlier filtering. The strongest cluster is the main body;
-            // anything far from it either becomes a pocket (real combat power)
-            // or is dropped from the solve entirely (a lone probing unit must
-            // not pull the whole front with it).
+            // anything far from it is either dropped from the solve entirely (a
+            // lone probing unit must not pull the whole front with it) or marked
+            // isolated, which keeps it out of the line without deleting it.
             float bluePower = SidePower(blueClusters), redPower = SidePower(redClusters);
             MarkIsolation(blueClusters, bluePower);
             MarkIsolation(redClusters, redPower);
 
-            // 4. Engagements — each main friendly cluster faces the nearest
-            // main enemy cluster. The pairing *is* the operational direction:
-            // two separated battles get two axes, which is what makes curved
-            // and multi-directional fronts come out right.
-            var pairs = PairEngagements(blueClusters, redClusters);
-            if (pairs.Count == 0)
+            // 4. One engagement. Each side's surviving clusters are merged into
+            // a single body, so the solve publishes exactly one forward edge per
+            // side however many separate battles the ground happens to hold —
+            // see the class comment for why the front is one line and not one
+            // per fight.
+            var blueBody = Merge(blueClusters);
+            var redBody = Merge(redClusters);
+            if (blueBody == null || redBody == null)
             {
                 LastFailure = "No main bodies face each other — only isolated groups.";
+                return;
             }
 
-            // Strongest engagement first, so index 0 is the main front and the
-            // holding-group caption lands on it.
-            pairs.Sort((a, b) =>
-                (b.blue.Power + b.red.Power).CompareTo(a.blue.Power + a.red.Power));
+            SolveEngagement(blueBody, redBody);
+        }
 
-            for (int e = 0; e < pairs.Count; e++)
-                SolveEngagement(pairs[e].blue, pairs[e].red, e);
+        /// <summary>
+        /// Every cluster a side still has, as one body: the union of their units
+        /// and a power-weighted centre.
+        ///
+        /// Isolated clusters are left out while the side has anything else — a
+        /// cut-off battalion must not drag its side's front back across the map
+        /// to reach it. A side that is *only* isolated clusters still gets a
+        /// line built from them, because being surrounded is a shape of front
+        /// rather than the absence of one, and the alternative is a side with no
+        /// front at all.
+        /// </summary>
+        static Cluster Merge(List<Cluster> clusters)
+        {
+            bool anyMain = false;
+            foreach (var c in clusters) if (!c.Isolated) { anyMain = true; break; }
 
-            // 6. Pockets: an isolated cluster with real power is its own
-            // stretch of front — a closed ring, because it is surrounded in
-            // every direction that matters.
-            int pocketIndex = 0;
-            foreach (var c in blueClusters) if (c.Isolated) AddPocket(c, Team.User, pocketIndex++);
-            foreach (var c in redClusters) if (c.Isolated) AddPocket(c, Team.Enemy, pocketIndex++);
+            var merged = new Cluster();
+            double lat = 0, lon = 0; float power = 0f;
+            foreach (var c in clusters)
+            {
+                if (anyMain && c.Isolated) continue;
+                merged.Units.AddRange(c.Units);
+                lat += c.Lat * c.Power; lon += c.Lon * c.Power; power += c.Power;
+            }
+            if (power <= 0f) return null;
+
+            merged.Lat = lat / power; merged.Lon = lon / power; merged.Power = power;
+            return merged;
         }
 
         List<Cluster> BuildClusters(List<UnitActor> units)
@@ -496,33 +531,12 @@ namespace IronMeridian.Lines
             }
         }
 
-        List<(Cluster blue, Cluster red)> PairEngagements(List<Cluster> blues, List<Cluster> reds)
-        {
-            var pairs = new List<(Cluster, Cluster)>();
-            foreach (var b in blues)
-            {
-                if (b.Isolated) continue;
-                Cluster nearest = null; double best = double.MaxValue;
-                foreach (var r in reds)
-                {
-                    if (r.Isolated) continue;
-                    double km = GeoUtils.DistanceKm(b.Lat, b.Lon, r.Lat, r.Lon);
-                    if (km < best) { best = km; nearest = r; }
-                }
-                if (nearest == null) continue;
-                bool duplicate = false;
-                foreach (var (pb, pr) in pairs) if (pr == nearest && pb == b) duplicate = true;
-                if (!duplicate) pairs.Add((b, nearest));
-            }
-            return pairs;
-        }
-
         /// <summary>
-        /// Solves one battle: both sides' forward edges across the band span,
+        /// Solves the battle: both sides' forward edges across the band span,
         /// published as one segment per side. The frame and the nodes are kept
         /// so territory and breach queries can re-ask it later.
         /// </summary>
-        void SolveEngagement(Cluster blue, Cluster red, int index)
+        void SolveEngagement(Cluster blue, Cluster red)
         {
             var eng = new Engagement { Blue = new List<Node>(), Red = new List<Node>() };
 
@@ -609,7 +623,7 @@ namespace IronMeridian.Lines
 
             if (bFirst >= 0)
                 AddEdgeSegment(eng, blueDepth, blueSolved, bFirst, bLast, bands,
-                    Team.User, index, blue.Units.Count, meanGap, estimated: false);
+                    Team.User, blue.Units.Count, meanGap, estimated: false);
 
             if (rFirst >= 0)
             {
@@ -642,18 +656,18 @@ namespace IronMeridian.Lines
                     if (rFirst < 0) return;
 
                     AddEdgeSegment(eng, redDepth, redSolved, rFirst, rLast, bands,
-                        Team.Enemy, index, visible.Count, meanGap, estimated: true);
+                        Team.Enemy, visible.Count, meanGap, estimated: true);
                 }
                 else
                 {
                     AddEdgeSegment(eng, redDepth, redSolved, rFirst, rLast, bands,
-                        Team.Enemy, index, red.Units.Count, meanGap, estimated: false);
+                        Team.Enemy, red.Units.Count, meanGap, estimated: false);
                 }
             }
         }
 
         void AddEdgeSegment(Engagement eng, float[] depth, bool[] solved, int first, int last,
-            int bands, Team team, int engagementIndex, int contributors, float meanGap, bool estimated)
+            int bands, Team team, int contributors, float meanGap, bool estimated)
         {
             FillUnsolved(depth, solved, first, last);
 
@@ -671,7 +685,7 @@ namespace IronMeridian.Lines
 
             var seg = new FlotSegment
             {
-                Id = $"{LineIdPrefix}{(team == Team.User ? "user" : "enemy")}-{engagementIndex}",
+                Id = team == Team.User ? UserLineId : EnemyLineId,
                 Team = team,
                 Points = ToGeo(eng, pts),
                 Contributors = contributors,
@@ -711,36 +725,6 @@ namespace IronMeridian.Lines
                 });
             }
             return geo;
-        }
-
-        void AddPocket(Cluster cluster, Team team, int index)
-        {
-            // A ring at the cluster's own footprint plus a stand-off: the
-            // pocket's edge is where its control ends, not where its units are.
-            double maxKm = 1.0;
-            foreach (var u in cluster.Units)
-                maxKm = System.Math.Max(maxKm,
-                    GeoUtils.DistanceKm(cluster.Lat, cluster.Lon, u.State.latitude, u.State.longitude));
-            double radiusKm = maxKm + 2.0;
-
-            const int Steps = 28;
-            var pts = new List<GeoPoint>(Steps + 1);
-            for (int i = 0; i <= Steps; i++)
-            {
-                GeoUtils.Destination(cluster.Lat, cluster.Lon, i * 360.0 / Steps, radiusKm,
-                    out double lat, out double lon);
-                pts.Add(new GeoPoint { latitude = lat, longitude = lon });
-            }
-
-            _segments.Add(new FlotSegment
-            {
-                Id = $"{LineIdPrefix}pocket-{(team == Team.User ? "user" : "enemy")}-{index}",
-                Team = team,
-                Points = pts,
-                Pocket = true,
-                State = FlotState.Isolated,
-                Contributors = cluster.Units.Count
-            });
         }
 
         /// <summary>
@@ -1024,11 +1008,12 @@ namespace IronMeridian.Lines
                 line.gameObject.SetActive(Visible);
 
                 seg.LengthKm = line.LengthKm;
-                if (seg.Team == Team.User && !seg.Pocket) userLength += seg.LengthKm;
+                if (seg.Team == Team.User) userLength += seg.LengthKm;
             }
 
-            // Anything published last solve and absent now comes down — a
-            // pocket that broke out, an engagement that ended.
+            // Anything published last solve and absent now comes down — the
+            // enemy edge when fog closes over it, or the manual trace when the
+            // mode changes.
             foreach (var id in _publishedIds)
             {
                 if (newIds.Contains(id)) continue;
@@ -1037,6 +1022,25 @@ namespace IronMeridian.Lines
                 _prevPoints.Remove(id);
                 _prevMeanDepth.Remove(id);
             }
+
+            // And so does anything left on the map that this system owns but no
+            // longer publishes: a scenario saved before the front became one
+            // line per side carries flot-user-0, flot-pocket-… and friends in
+            // its line list, and they would otherwise sit there for ever as
+            // traces nothing updates.
+            //
+            // The drawn line is the exception — it is the designer's own work,
+            // read back by SolveManual when the mode returns to MANUAL, and
+            // deleting it because the map happens to be solving automatically
+            // right now would throw it away.
+            for (int i = _lines.Lines.Count - 1; i >= 0; i--)
+            {
+                var line = _lines.Lines[i];
+                if (line == null || !IsFlotLine(line.Data.id)) continue;
+                if (line.Data.id == ManualLineId || newIds.Contains(line.Data.id)) continue;
+                _lines.Remove(line);
+            }
+
             _publishedIds.Clear();
             foreach (var id in newIds) _publishedIds.Add(id);
 
@@ -1045,7 +1049,6 @@ namespace IronMeridian.Lines
 
         string LabelFor(FlotSegment seg)
         {
-            if (seg.Pocket) return "POCKET";
             if (seg.Manual || seg.Team == Team.User)
                 return string.IsNullOrEmpty(HoldingGroupName) || seg.Id != MainSegment(Team.User)?.Id
                     ? "FLOT"
@@ -1147,7 +1150,7 @@ namespace IronMeridian.Lines
             FlotSegment nearest = null; double best = double.MaxValue;
             foreach (var seg in _segments)
             {
-                if (seg.Team != victim || seg.Pocket || seg.Points.Count == 0) continue;
+                if (seg.Team != victim || seg.Points.Count == 0) continue;
                 var mid = seg.Points[seg.Points.Count / 2];
                 double km = GeoUtils.DistanceKm(mid.latitude, mid.longitude, lat, lon);
                 if (km < best) { best = km; nearest = seg; }

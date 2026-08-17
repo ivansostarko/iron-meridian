@@ -27,30 +27,35 @@ has space.
 ## 2. The panel
 
 **Deliberately the same panel as UNITS**, control for control: blue/red team
-tabs, a search box, AVAILABLE / SCHEDULED tabs, and the same branch accordion
-over the same 117 unit types. A designer choosing a counter-attack battalion is
-doing exactly what they do when they deploy one, and making them learn a second
-way to pick a unit would be inventing a difference that is not there.
+tabs, a search box, and the same branch accordion over the same 117 unit types. A
+commander calling a battalion forward is doing exactly what a designer does when
+they deploy one, and making them learn a second way to pick a unit would be
+inventing a difference that is not there. The accordion's headings — INFANTRY,
+ARMOUR and the rest — are inset 25 px so an arm's name reads as a heading over
+its cards rather than as another card.
 
 The one thing that *is* different is the verb:
 
 | UNITS | REINFORCEMENTS |
 |---|---|
-| Drag a type onto the ground | **Click** a type to schedule it |
-| It is there now | It arrives at **H+n** |
+| Drag a type onto the ground | **Click** a type |
 | Where the cursor was | In its side's **deployment zone** |
 
-**ARRIVES AT** sets the time the next pick is given, in five-minute steps from
-H-HOUR. A stepper rather than a text field: the figure is always a round number
-of minutes, and typing one would be three keystrokes for a decision worth one.
+**Click and it is there.** The panel used to schedule: an ARRIVES AT stepper set
+a time, a SCHEDULED tab held the queue, and the formation appeared at H+n. That
+is an authoring tool, and this row is on the rail's **battle** mode — a commander
+asking for a reserve wants it committed, not diarised. So a card places the
+formation immediately, scattered off whatever it placed before it, and the panel
+carries no clock at all.
 
-**SCHEDULED** lists that side's arrivals, earliest first, each with **−** / **+**
-to move it five minutes either way and **✕** to drop it. During a battle the row
-reads `in n min` and goes to `ARRIVED` as it lands.
+**The schedule itself has not gone.** `ReinforcementSystem` still holds one
+loaded from the map file (§5) and still brings it on during a battle (§3). What
+went is the panel for typing one in; a scenario that wants timed arrivals writes
+them into the map's `reinforcements` list.
 
 ---
 
-## 3. Timing
+## 3. Timing (a schedule loaded from the map file)
 
 Scheduled in **scenario minutes after the battle starts**, not at an absolute
 clock time. A designer thinks in "forty minutes in", the figure survives changing
@@ -66,6 +71,11 @@ its reserves already spent.
 ---
 
 ## 4. Where they arrive
+
+Both routes — a card clicked on the panel and an entry coming due on the
+schedule — land the same way, through the same `Place` call. A second placement
+rule would mean the deployment zone meant one thing to the designer's schedule
+and another to the commander's reserve.
 
 The mission's **deployment zone** for that side (docs/22-MISSIONS.md §1c) —
 scattered over it on the same golden-angle disc the artillery sheaf uses, so an
@@ -105,7 +115,7 @@ already on it".
 
 | File | Role |
 |---|---|
-| `Units/ReinforcementSystem.cs` | The schedule, the countdown, and where an arrival lands |
+| `Units/ReinforcementSystem.cs` | The schedule, the countdown, `DeployNow`, and where an arrival lands |
 | `Data/MapSaveData.cs` | `ReinforcementEntry` and the `reinforcements` list |
 | `Data/MissionData.cs` | `MissionZone` — the deployment zones (docs/22 §1c) |
 | `UI/UnitPaletteUI.cs` | `BuildReinforcementSection` — the panel, and the deployment-zone block in MISSIONS |
@@ -122,6 +132,9 @@ already on it".
   FLOT is breached" or "when this objective falls" would need the trigger model
   that docs/28-FLOT.md §13 also wants.
 - **Echelon is fixed at battalion**, the same default the deploy palette uses.
+- **No way to author a schedule from the UI** since the panel became immediate.
+  The map file still carries one and the system still plays it; only hand-editing
+  puts one there.
 - **Nothing routes them forward.** They arrive in the zone and stand there until
   ordered; a scenario that wants them marching on arrival has to be given that
   order by hand.

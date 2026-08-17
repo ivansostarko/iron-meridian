@@ -78,7 +78,8 @@ Assets/Scripts/
     PlayerPanel.cs       the rail's PLAYERS section: teams, players, computer
                           difficulty (docs/25-PLAYERS.md)
     UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
-    MapControlsUI.cs     on-map zoom cluster (bottom-left) + compass (bottom-right)
+    MapControlsUI.cs     on-map cluster (bottom-left): zoom, face north, the
+                          2D / 3D projection pair, frame-all + compass (bottom-right)
     UiTheme.cs           map-editor design tokens (colours, sizes)
                          LeftPanelWidth = the always-present rail; other on-map
                          chrome measures from it, never from the section panel
@@ -135,11 +136,12 @@ Assets/Scripts/
     GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.
                          SetMissionMode strips it to the clock (docs/22-MISSIONS.md §3)
     UnitPaletteUI.cs     left rail (scrolling section nav + three tools) + the
-                         sliding section panel. STATS / ZONES / OBJECTS /
-                         SUPPLIES are reserved rows with empty pages —
-                         BuildEmptySection. Also builds the four fire menus
-                         into StrikeDockUI's pages — what moved is where they
-                         are drawn, not who draws them.
+                         sliding section panel. Battle mode's pages include
+                         STATS (BuildStatsSection — LossLedger, the same figures
+                         as the TAB page) and SUPPLIES (BuildSuppliesSection —
+                         ammo/fuel/rations per friendly formation). Also builds
+                         the four fire menus into StrikeDockUI's pages — what
+                         moved is where they are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
@@ -223,10 +225,11 @@ Assets/Scripts/
                           shows it. Deliberately NOT a LineManager line — the area
                           belongs to the mission record, not the map file
     FrontlineSystem.cs   the FLOT as a gameplay object: eligibility →
-                          clustering → outliers/pockets → per-engagement,
-                          per-side forward edges → states, breach events,
-                          territory queries, modes, history (docs/28-FLOT.md).
-                          Also records which GROUP has been put on the line
+                          clustering → outlier filtering → one merged body per
+                          side → exactly two forward edges, ours and theirs →
+                          states, breach events, territory queries, modes,
+                          history (docs/28-FLOT.md). Also records which GROUP
+                          has been put on the line
   Logistics/             the scenario's rear area — see docs/26-LOGISTICS.md
     LogisticsSystem.cs   owns every depot and supply/fuel/ammo/repair/medical
                           point, the arm-then-click placement tool, save/load

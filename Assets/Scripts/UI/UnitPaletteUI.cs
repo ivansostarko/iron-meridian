@@ -514,6 +514,8 @@ namespace IronMeridian.UI
             if (section == Section.Reinforcements) PopulateReinforcements();
             if (section == Section.Obstacles) RefreshObstacles();
             if (section == Section.Objects) RefreshMapObjects();
+            if (section == Section.Stats) RefreshStats();
+            if (section == Section.Supplies) RefreshSupplies();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -575,9 +577,24 @@ namespace IronMeridian.UI
             }
         }
 
+        /// <summary>Seconds between supply-table rebuilds while SUPPLIES is open.</summary>
+        const float SupplyTickSeconds = 1f;
+        float _supplyTimer;
+
         void Update()
         {
             if (_chromeHidden) return;
+
+            // Ammunition and fuel are spent by combat rather than by anything
+            // that raises an event, so the supply table is the one page here that
+            // has to be pulled. Once a second: fast enough that a battery running
+            // dry is visible while it happens, slow enough that rebuilding thirty
+            // rows is not a per-frame cost.
+            if (_panelOpen && _section == Section.Supplies)
+            {
+                _supplyTimer += Time.unscaledDeltaTime;
+                if (_supplyTimer >= SupplyTickSeconds) { _supplyTimer = 0f; RefreshSupplies(); }
+            }
 
             float target = _panelOpen ? 1f : 0f;
             if (Mathf.Approximately(_slide, target)) return;
@@ -1220,6 +1237,10 @@ namespace IronMeridian.UI
             // force, so the force changing is the only thing that moves them.
             if (_sectionContent.TryGetValue(Section.Sustainment, out var page) &&
                 page.gameObject.activeSelf) RefreshSustainment();
+            // A formation joining or leaving is a row appearing or disappearing
+            // from the supply table. What it *carries* moves without the registry
+            // hearing about it, which is what the tick in Update is for.
+            RefreshSupplies();
         }
 
         // ------------------------------------------------------------ list
@@ -1956,31 +1977,41 @@ namespace IronMeridian.UI
 
         ReinforcementSystem _reinforcements;
         RectTransform _reinforceList;
-        Text _reinforceCount, _reinforceSide, _reinforceArrival;
-        Button _reinforceAvailableTab, _reinforceScheduledTab;
+        Text _reinforceCount, _reinforceSide;
         InputField _reinforceSearch;
-        ListMode _reinforceMode = ListMode.Available;
         string _reinforceQuery = "";
-        /// <summary>Arrival time the next scheduled formation is given, minutes after the battle starts.</summary>
-        int _reinforceMinutes = 30;
         readonly HashSet<UnitBranch> _reinforceOpenBranches = new HashSet<UnitBranch>();
 
         /// <summary>
-        /// **REINFORCEMENTS** — the same panel as UNITS, for formations that are
-        /// not here yet.
+        /// Left inset of an accordion header's contents in this list — INFANTRY,
+        /// ARMOUR and the rest. The rows keep the list's full width so the count
+        /// badge still sits against the scrollbar; it is the chevron and the
+        /// heading that move in, which is what makes the arm's name read as a
+        /// heading over its cards rather than as another card.
+        /// </summary>
+        const float ReinforceHeaderIndent = 25f;
+
+        /// <summary>
+        /// **REINFORCEMENTS** — the same panel as UNITS, for formations brought
+        /// on after the map was laid out.
         ///
         /// Deliberately the same UI, control for control: the blue/red tabs, the
-        /// search box, the AVAILABLE / SCHEDULED pair of tabs, and the same
-        /// branch accordion over the same 117 unit types. A designer choosing a
-        /// counter-attack battalion is doing exactly what they do when they
-        /// deploy one, and making them learn a second way to pick a unit would
-        /// be inventing a difference that is not there.
+        /// search box, and the same branch accordion over the same 117 unit
+        /// types. A commander calling a battalion forward is doing exactly what
+        /// a designer does when they deploy one, and making them learn a second
+        /// way to pick a unit would be inventing a difference that is not there.
         ///
-        /// The one thing that *is* different is the verb. UNITS drags a
-        /// formation onto the ground; this one gives it an **arrival time** —
-        /// click a type and it joins the schedule at H+n, to arrive in its
-        /// side's deployment zone (docs/22-MISSIONS.md §1c). That is the whole
-        /// feature: the same force, entered at a different moment.
+        /// **Click and it is there.** This panel used to schedule: a stepper set
+        /// an arrival time, a SCHEDULED tab held the queue, and the formation
+        /// appeared at H+n. That is an authoring tool, and this is the rail's
+        /// *battle* mode — a commander asking for a reserve wants it committed,
+        /// not diarised. So a card places the formation immediately, in its
+        /// side's deployment zone (docs/22-MISSIONS.md §1c), scattered off
+        /// whatever arrived before it.
+        ///
+        /// The schedule itself has not gone: <see cref="ReinforcementSystem"/>
+        /// still carries one loaded from the map file and still brings it on
+        /// during a battle. What went is the panel for typing one in.
         ///
         /// See docs/30-REINFORCEMENTS.md.
         /// </summary>
@@ -2011,99 +2042,46 @@ namespace IronMeridian.UI
                 PopulateReinforcements();
             });
 
-            // Arrival time for the next pick. A stepper rather than a text
-            // field: the figure is always a round number of minutes, and typing
-            // one would be three keystrokes for a decision worth one.
-            var timeFrame = UIFactory.CreateBorderedPanel(content, "ArrivalAt", UiTheme.Surface, UiTheme.BorderStrong);
-            UIFactory.Place(timeFrame, new Vector2(0f, 1f), new Vector2(Pad, -84), new Vector2(InnerWidth, 34));
-
-            var timeLabel = UIFactory.CreateText(timeFrame, "ARRIVES AT", UiTheme.FontLabel,
-                UiTheme.TextFaint, TextAnchor.MiddleLeft);
-            timeLabel.raycastTarget = false;
-            UIFactory.Place(timeLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(10, 0),
-                new Vector2(InnerWidth - 140f, 14));
-
-            var minus = UIFactory.CreateButton(timeFrame, "−", () => StepArrival(-5),
-                UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontSmall);
-            UIFactory.Place((RectTransform)minus.transform, new Vector2(1f, 0.5f),
-                new Vector2(-88, 0), new Vector2(26, 24));
-
-            _reinforceArrival = UIFactory.CreateText(timeFrame, "", UiTheme.FontSmall,
-                UiTheme.Accent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            _reinforceArrival.raycastTarget = false;
-            UIFactory.Place(_reinforceArrival.rectTransform, new Vector2(1f, 0.5f),
-                new Vector2(-46, 0), new Vector2(56, 16));
-
-            var plus = UIFactory.CreateButton(timeFrame, "+", () => StepArrival(5),
-                UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontSmall);
-            UIFactory.Place((RectTransform)plus.transform, new Vector2(1f, 0.5f),
-                new Vector2(-10, 0), new Vector2(26, 24));
-
-            // AVAILABLE / SCHEDULED, the same pair UNITS carries.
-            _reinforceAvailableTab = ReinforceTab(content, "AVAILABLE", Pad,
-                () => SetReinforceMode(ListMode.Available));
-            _reinforceScheduledTab = ReinforceTab(content, "SCHEDULED", Pad + 88f,
-                () => SetReinforceMode(ListMode.Deployed));
+            var caption = UIFactory.CreateText(content, "BRING ON NOW", UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.Place(caption.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Pad, -86), new Vector2(InnerWidth - 100f, 18));
 
             _reinforceCount = UIFactory.CreateText(content, "0", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
             UIFactory.Place(_reinforceCount.rectTransform, new Vector2(1f, 1f),
-                new Vector2(-Pad, -126), new Vector2(40, 18));
+                new Vector2(-Pad, -86), new Vector2(40, 18));
 
             _reinforceSide = UIFactory.CreateText(content, "", UiTheme.FontLabel,
                 UiTheme.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
             UIFactory.Place(_reinforceSide.rectTransform, new Vector2(1f, 1f),
-                new Vector2(-Pad - 44f, -126), new Vector2(110, 18));
+                new Vector2(-Pad - 44f, -86), new Vector2(110, 18));
 
             var scroll = UIFactory.CreateScrollView(content, out _reinforceList, withScrollbar: true);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
-            srt.offsetMin = new Vector2(Pad, 42);
-            srt.offsetMax = new Vector2(-Pad, -150);
+            srt.offsetMin = new Vector2(Pad, 46);
+            srt.offsetMax = new Vector2(-Pad, -110);
             scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
             var layout = _reinforceList.GetComponent<VerticalLayoutGroup>();
             if (layout != null) { layout.spacing = 4; layout.padding = new RectOffset(2, 2, 2, 2); }
 
-            var clear = UIFactory.CreateBorderedPanel(content, "ClearSchedule", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(clear, new Vector2(0f, 0f), new Vector2(Pad, 6), new Vector2(InnerWidth, 30));
-            var clearBtn = UIFactory.CreateButton(clear, "CLEAR SCHEDULE",
-                () => { if (_reinforcements != null) _reinforcements.Clear(); },
-                new Color(0, 0, 0, 0), UiTheme.Danger, UiTheme.FontSmall);
-            UIFactory.Stretch((RectTransform)clearBtn.transform);
+            var hint = UIFactory.CreateText(content,
+                "A card places that formation at once, in this side's deployment zone — set one under " +
+                "ZONES, or it falls in behind the force it is joining.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 0f), new Vector2(Pad, 6),
+                new Vector2(InnerWidth, 36));
 
-            SetReinforceMode(ListMode.Available);
+            PopulateReinforcements();
         }
 
         Image _reinforceBlueFill, _reinforceRedFill;
 
-        Button ReinforceTab(RectTransform content, string label, float x,
-            UnityEngine.Events.UnityAction action)
-        {
-            var b = UIFactory.CreateButton(content, label, action, new Color(0, 0, 0, 0),
-                UiTheme.TextDim, UiTheme.FontLabel);
-            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f),
-                new Vector2(x, -126), new Vector2(82, 22));
-            return b;
-        }
-
-        void SetReinforceMode(ListMode mode)
-        {
-            _reinforceMode = mode;
-            TintListTab(_reinforceAvailableTab, mode == ListMode.Available);
-            TintListTab(_reinforceScheduledTab, mode == ListMode.Deployed);
-            PopulateReinforcements();
-        }
-
-        void StepArrival(int minutes)
-        {
-            _reinforceMinutes = Mathf.Clamp(_reinforceMinutes + minutes, 0, 24 * 60);
-            PopulateReinforcements();
-        }
-
         /// <summary>
-        /// Rebuilds whichever list is showing. Public because the schedule can
-        /// change without the panel touching it — an arrival coming on during a
-        /// battle takes itself off the pending list.
+        /// Rebuilds the list. Public because the force can change without the
+        /// panel touching it — a scheduled arrival coming on during a battle
+        /// changes what is deployed while this page is open.
         /// </summary>
         public void RefreshReinforcements() => PopulateReinforcements();
 
@@ -2111,8 +2089,6 @@ namespace IronMeridian.UI
         {
             if (_reinforceList == null) return;
 
-            if (_reinforceArrival != null)
-                _reinforceArrival.text = _reinforceMinutes == 0 ? "H-HOUR" : $"H+{_reinforceMinutes}";
             if (_reinforceSide != null)
             {
                 bool enemy = _team == Team.Enemy;
@@ -2126,10 +2102,7 @@ namespace IronMeridian.UI
 
             ClearChildren(_reinforceList);
 
-            int count = _reinforceMode == ListMode.Available
-                ? PopulateReinforceAvailable()
-                : PopulateReinforceScheduled();
-
+            int count = PopulateReinforceAvailable();
             if (_reinforceCount != null) _reinforceCount.text = count.ToString();
         }
 
@@ -2195,15 +2168,17 @@ namespace IronMeridian.UI
             var chevron = UIFactory.CreateText(row, open ? "▾" : "▸", UiTheme.FontSmall,
                 open ? UiTheme.Accent : UiTheme.TextDim, TextAnchor.MiddleCenter);
             chevron.raycastTarget = false;
-            UIFactory.Place(chevron.rectTransform, new Vector2(0f, 0.5f), new Vector2(14f, 0f), new Vector2(16f, 16f));
+            UIFactory.Place(chevron.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(ReinforceHeaderIndent + 14f, 0f), new Vector2(16f, 16f));
 
             var text = UIFactory.CreateSectionHeader(row,
                 UnitBranchInfo.DisplayName(branch).ToUpperInvariant(),
                 open ? UiTheme.Accent : UiTheme.Text);
             text.raycastTarget = false;
             text.alignment = TextAnchor.MiddleLeft;
-            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(30f, 0f),
-                new Vector2(InnerWidth - 90f, 16f));
+            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(ReinforceHeaderIndent + 30f, 0f),
+                new Vector2(InnerWidth - 90f - ReinforceHeaderIndent, 16f));
             UIFactory.Fit(text, 8);
 
             var badge = UIFactory.CreateText(row, count.ToString(), UiTheme.FontLabel,
@@ -2213,10 +2188,10 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// One type, as a card. Clicking it schedules that type at the arrival
-        /// time currently set — a click rather than a drag, because there is no
-        /// ground to drag it to: where it lands is the deployment zone's
-        /// business, not the cursor's.
+        /// One type, as a card. Clicking it puts that formation on the map
+        /// immediately, in this side's deployment zone — a click rather than a
+        /// drag, because there is no ground to drag it to: where it lands is the
+        /// zone's business, not the cursor's.
         /// </summary>
         void ReinforceCard(UnitDefinition def, string folder)
         {
@@ -2229,8 +2204,7 @@ namespace IronMeridian.UI
             btn.onClick.AddListener(() =>
             {
                 if (_reinforcements == null) return;
-                _reinforcements.Add(def, _team, DefaultEchelon, _reinforceMinutes);
-                SetReinforceMode(ListMode.Deployed);
+                _reinforcements.DeployNow(def, _team, DefaultEchelon);
             });
 
             var sprite = UIFactory.LoadIconSprite(folder, def.id);
@@ -2246,83 +2220,10 @@ namespace IronMeridian.UI
                 $"{UnitBranchInfo.DisplayName(def.Branch)}   ·   {DefaultEchelon}",
                 50f, InnerWidth - 110f, topInset: 5f);
 
-            var at = UIFactory.CreateText(card,
-                _reinforceMinutes == 0 ? "H-HOUR" : $"H+{_reinforceMinutes}",
+            var at = UIFactory.CreateText(card, "DEPLOY",
                 UiTheme.FontLabel, UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
             at.raycastTarget = false;
             UIFactory.Place(at.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
-        }
-
-        /// <summary>The schedule itself, earliest first, with what each arrival is waiting on.</summary>
-        int PopulateReinforceScheduled()
-        {
-            if (_reinforcements == null) return 0;
-
-            int count = 0;
-            double elapsed = _reinforcements.ElapsedMinutes;
-
-            foreach (var entry in _reinforcements.Schedule)
-            {
-                if (entry.team != _team.ToString()) continue;
-                var def = UnitDatabase.Get(entry.defId);
-                if (def == null) continue;
-                count++;
-
-                var row = UIFactory.CreateBorderedPanel(_reinforceList, "Sched_" + count,
-                    entry.arrived ? UiTheme.SurfaceSubtle : UiTheme.Surface, UiTheme.Border);
-                row.sizeDelta = new Vector2(0, 44);
-
-                var sprite = UIFactory.LoadIconSprite(_team == Team.User ? "Friendly" : "Enemy", def.id);
-                if (sprite != null)
-                {
-                    var icon = UIFactory.CreateImage(row, sprite, "Icon");
-                    icon.raycastTarget = false;
-                    UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
-                        new Vector2(10, 0), new Vector2(30, 30));
-                }
-
-                // What it is waiting on, in the terms the designer set it in.
-                string state = entry.arrived
-                    ? "ARRIVED"
-                    : elapsed > 0.0
-                        ? $"in {Mathf.Max(0, Mathf.CeilToInt((float)(entry.arrivalMinutes - elapsed)))} min"
-                        : $"{entry.echelon}";
-
-                UIFactory.CreateStackedLabels(row, def.name, state, 46f, InnerWidth - 150f, topInset: 5f);
-
-                var captured = entry;
-                var earlier = UIFactory.CreateButton(row, "−", () => _reinforcements.Reschedule(captured, -5),
-                    UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontLabel);
-                UIFactory.Place((RectTransform)earlier.transform, new Vector2(1f, 0.5f),
-                    new Vector2(-84, 0), new Vector2(22, 22));
-
-                var at = UIFactory.CreateText(row,
-                    entry.arrivalMinutes == 0 ? "H" : $"H+{entry.arrivalMinutes}",
-                    UiTheme.FontLabel, entry.arrived ? UiTheme.TextFaint : UiTheme.Accent,
-                    TextAnchor.MiddleCenter, FontStyle.Bold);
-                at.raycastTarget = false;
-                UIFactory.Place(at.rectTransform, new Vector2(1f, 0.5f), new Vector2(-52, 0), new Vector2(44, 16));
-
-                var later = UIFactory.CreateButton(row, "+", () => _reinforcements.Reschedule(captured, 5),
-                    UiTheme.SurfaceHover, UiTheme.Text, UiTheme.FontLabel);
-                UIFactory.Place((RectTransform)later.transform, new Vector2(1f, 0.5f),
-                    new Vector2(-30, 0), new Vector2(22, 22));
-
-                var del = UIFactory.CreateButton(row, "✕", () => _reinforcements.Remove(captured),
-                    new Color(0.55f, 0.18f, 0.18f), UiTheme.Text, UiTheme.FontLabel);
-                UIFactory.Place((RectTransform)del.transform, new Vector2(1f, 0.5f),
-                    new Vector2(-6, 0), new Vector2(22, 22));
-            }
-
-            if (count == 0)
-            {
-                var empty = UIFactory.CreateText(_reinforceList,
-                    "Nothing scheduled for this side. Pick a type in AVAILABLE and it joins the " +
-                    "schedule at the arrival time above.",
-                    UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 48);
-            }
-            return count;
         }
 
         // ------------------------------------------------------ groups section
@@ -2340,6 +2241,23 @@ namespace IronMeridian.UI
         Text _modeHeading;
         Text _groupsFlotState;
         string _flotHolder = "";
+
+        /// <summary>
+        /// Insets of a row in GROUPS ON THIS MAP, applied as the list's own
+        /// layout padding so the rows are genuinely narrower. Asymmetric because
+        /// the list carries a scrollbar down its right-hand side and the rows
+        /// should clear it by the same *visible* margin they keep on the left.
+        /// </summary>
+        const float GroupsListPadLeft = 35f, GroupsListPadRight = 30f;
+
+        /// <summary>
+        /// Width a GROUPS row actually gets. Everything placed against a row's
+        /// right-hand end measures from this — the FLOT and ◎ buttons are
+        /// right-anchored and the caption is not, so a row that shrank while the
+        /// caption did not would run the two into each other.
+        /// </summary>
+        const float GroupsRowWidth =
+            InnerWidth - UIFactory.ScrollbarWidth - GroupsListPadLeft - GroupsListPadRight;
 
         /// <summary>
         /// The order of battle as the player has grouped it, and the one thing
@@ -2381,7 +2299,11 @@ namespace IronMeridian.UI
             srt.offsetMax = new Vector2(-Pad, -100);
             scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
             var layout = _groupsList.GetComponent<VerticalLayoutGroup>();
-            if (layout != null) { layout.spacing = 4; layout.padding = new RectOffset(2, 2, 2, 2); }
+            if (layout != null)
+            {
+                layout.spacing = 4;
+                layout.padding = new RectOffset((int)GroupsListPadLeft, (int)GroupsListPadRight, 2, 2);
+            }
 
             var hint = UIFactory.CreateText(content,
                 "Click a group to select it, ◎ to fly to it. FLOT sends the whole group to the front " +
@@ -2395,27 +2317,144 @@ namespace IronMeridian.UI
             RefreshGroups();
         }
 
-        // -------------------------------------------------- reserved sections
+        // ------------------------------------------------------ stats section
+
+        RectTransform _statsList;
+        Text _statsHeadline;
 
         /// <summary>
-        /// Four sections that are a nav row and an empty page, and nothing else
-        /// yet: STATS, ZONES, OBJECTS and SUPPLIES.
+        /// **STATS** — what the battle has cost, both sides, in the rail.
         ///
-        /// **Why they exist before their contents do.** They were asked for as
-        /// places to build in, and a named empty page is the cheapest way to
-        /// hold ground in the nav: the row, the section enum, the panel and the
-        /// title are all wired, so filling one is writing its controls and
-        /// nothing else. Each says on its face that it is empty — a page that
-        /// merely rendered blank would read as a section that had broken.
+        /// The same ledger the TAB page reads (<see cref="LossesDialog"/>, and
+        /// <see cref="LossLedger"/> under it), in the shape the rail can hold. It
+        /// is not a second accounting: both read <c>LossLedger</c> and neither
+        /// keeps a figure of its own, so the two cannot drift.
         ///
-        /// Each names its nearest built neighbours where there are any, so the
-        /// next person to fill one is told what already exists rather than
-        /// building a second way of doing it.
+        /// **Why both, when TAB already exists.** TAB is a page you stop and
+        /// read — two columns side by side, the whole comparison at once. This is
+        /// a column you keep open while you fight, in the rail your hand is
+        /// already on, at the cost of reading the two sides one under the other.
+        /// Different postures, same numbers.
+        ///
+        /// **FORM** is formations destroyed outright; **MEN** is the manpower
+        /// behind every point of strength lost, in surviving formations as well
+        /// as dead ones — see <see cref="LossLedger"/> for how they are booked.
         /// </summary>
-        void BuildStatsSection(RectTransform content) => BuildEmptySection(content, "STATS",
-            "Nothing is built into this section yet — it is a row, a page and a place to put the " +
-            "scenario's figures.\n\nWhat is counted today is elsewhere: casualties are on TAB " +
-            "(the losses list) and each side's stocks are under SUSTAINMENT.");
+        void BuildStatsSection(RectTransform content)
+        {
+            SectionLabel(content, "BATTLE LOSSES", -8);
+
+            _statsHeadline = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.UpperLeft);
+            UIFactory.Place(_statsHeadline.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -28),
+                new Vector2(InnerWidth, 30));
+
+            var scroll = UIFactory.CreateScrollView(content, out _statsList, withScrollbar: true);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
+            srt.offsetMin = new Vector2(Pad, 46);
+            srt.offsetMax = new Vector2(-Pad, -62);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var layout = _statsList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 2; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            var hint = UIFactory.CreateText(content,
+                "FORM is formations destroyed outright. MEN is the manpower behind every point of " +
+                "strength lost. TAB shows the same figures as a full page.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 0f), new Vector2(Pad, 6),
+                new Vector2(InnerWidth, 36));
+
+            // A tick of combat can add a row, so the page follows the ledger
+            // rather than a timer — a total that disagreed with the rows above
+            // it would be worse than no total.
+            LossLedger.Changed += RefreshStats;
+            RefreshStats();
+        }
+
+        /// <summary>
+        /// Rebuilds the loss tables. Cheap when shut, for the same reason
+        /// <see cref="RefreshGroups"/> is: the ledger books a row on every
+        /// exchange, and churning uGUI objects for a page nobody is looking at
+        /// would cost a few dozen of them per combat tick.
+        /// </summary>
+        public void RefreshStats()
+        {
+            if (_statsList == null) return;
+            if (!_sectionContent.TryGetValue(Section.Stats, out var page) ||
+                !page.gameObject.activeSelf) return;
+
+            var (blueForm, bluePeople) = LossLedger.Total(Team.User);
+            var (redForm, redPeople) = LossLedger.Total(Team.Enemy);
+            if (_statsHeadline != null)
+                _statsHeadline.text =
+                    $"FRIENDLY  {blueForm} formation(s)  ·  {Mathf.RoundToInt(bluePeople):n0} men\n" +
+                    $"ENEMY  {redForm} formation(s)  ·  {Mathf.RoundToInt(redPeople):n0} men";
+
+            ClearChildren(_statsList);
+            StatsSide(Team.User, "FRIENDLY LOSSES", UiTheme.Friendly);
+            StatsSide(Team.Enemy, "HOSTILE LOSSES", UiTheme.Hostile);
+        }
+
+        /// <summary>One side's block: heading, standing/lost summary, then its table.</summary>
+        void StatsSide(Team team, string title, Color accent)
+        {
+            var head = UIFactory.CreateText(_statsList, title, UiTheme.FontSmall, accent,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            ((RectTransform)head.transform).sizeDelta = new Vector2(0, 20);
+
+            var (formations, personnel) = LossLedger.Total(team);
+            var summary = UIFactory.CreateText(_statsList,
+                $"{formations:n0} destroyed  ·  {LossLedger.Surviving(team):n0} still on the map  ·  " +
+                $"{Mathf.RoundToInt(personnel):n0} men",
+                UiTheme.FontLabel, formations > 0 ? UiTheme.Text : UiTheme.TextDim, TextAnchor.UpperLeft);
+            ((RectTransform)summary.transform).sizeDelta = new Vector2(0, 26);
+
+            var rows = LossLedger.For(team);
+            if (rows.Count == 0)
+            {
+                var none = UIFactory.CreateText(_statsList, "No losses recorded.", UiTheme.FontLabel,
+                    UiTheme.TextFaint, TextAnchor.UpperLeft);
+                ((RectTransform)none.transform).sizeDelta = new Vector2(0, 24);
+                return;
+            }
+
+            foreach (var data in rows) StatsRow(data);
+        }
+
+        /// <summary>
+        /// One formation type's line. Three columns, the two numeric ones
+        /// measured in from the right so they stay in line down the table and
+        /// the name takes whatever is left — the same rule the TAB page uses.
+        /// </summary>
+        void StatsRow(LossLedger.Row data)
+        {
+            const float FormWidth = 42f, MenWidth = 56f;
+            float width = InnerWidth - UIFactory.ScrollbarWidth - 4f;
+
+            var row = UIFactory.CreatePanel(_statsList, "Loss_" + data.defId, UiTheme.SurfaceSubtle);
+            row.sizeDelta = new Vector2(0, 22);
+
+            var name = UIFactory.CreateText(row, data.name, UiTheme.FontLabel, UiTheme.Text,
+                TextAnchor.MiddleLeft);
+            name.raycastTarget = false;
+            UIFactory.Place(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(6, 0),
+                new Vector2(width - FormWidth - MenWidth - 14f, 16));
+            UIFactory.Fit(name, 8);
+
+            var form = UIFactory.CreateText(row, data.formations.ToString(), UiTheme.FontLabel,
+                data.formations > 0 ? UiTheme.Warning : UiTheme.TextFaint,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            form.raycastTarget = false;
+            UIFactory.Place(form.rectTransform, new Vector2(1f, 0.5f), new Vector2(-(MenWidth + 4f), 0),
+                new Vector2(FormWidth, 16));
+
+            var men = UIFactory.CreateText(row, $"{Mathf.RoundToInt(data.personnel):n0}",
+                UiTheme.FontLabel, UiTheme.TextDim, TextAnchor.MiddleRight);
+            men.raycastTarget = false;
+            UIFactory.Place(men.rectTransform, new Vector2(1f, 0.5f), new Vector2(-4, 0),
+                new Vector2(MenWidth, 16));
+        }
 
         /// <summary>
         /// ZONES — the ground a mission *names*: where each side's headquarters
@@ -2631,31 +2670,177 @@ namespace IronMeridian.UI
             }
         }
 
-        void BuildSuppliesSection(RectTransform content) => BuildEmptySection(content, "SUPPLIES",
-            "Nothing is built into this section yet — it is a row, a page and a place to put " +
-            "supply.\n\nWhat exists today is elsewhere: a side's stocks and their daily use are " +
-            "under SUSTAINMENT, depots and supply points under LOGISTICS, and air-dropped loads " +
-            "on the AIR SUPPLY fire menu.");
+        // --------------------------------------------------- supplies section
+
+        RectTransform _suppliesList;
+        Text _suppliesHeadline;
 
         /// <summary>
-        /// A reserved section's whole page: its heading and one card saying what
-        /// it is not yet. Shared, so the four cannot drift apart into four
-        /// slightly different ways of saying "empty".
+        /// **SUPPLIES** — what every friendly formation is actually carrying:
+        /// ammunition, fuel and rations, formation by formation.
+        ///
+        /// **Why this and not SUSTAINMENT.** SUSTAINMENT is the theatre's
+        /// stocks — one set of figures for the whole side, and the rate the force
+        /// burns them. It answers "how long can this army fight". This answers a
+        /// different question, the one a commander asks before ordering an
+        /// attack: *which battalion is out of ammunition*. A total cannot say
+        /// that, because a side with three days of fuel in depot still has a
+        /// company that cannot move.
+        ///
+        /// **Friendly only.** What the enemy is carrying is not something a
+        /// commander knows, and a page that told them would undo fog of war more
+        /// completely than any reconnaissance could — see docs/16-FOG-OF-WAR.md.
+        ///
+        /// Read live off <see cref="UnitState"/> and <see cref="UnitDefinition"/>
+        /// on every rebuild: this holds no figures of its own, so it cannot
+        /// disagree with the formation's own info panel.
         /// </summary>
-        void BuildEmptySection(RectTransform content, string label, string note)
+        void BuildSuppliesSection(RectTransform content)
         {
-            SectionLabel(content, label, -8);
+            SectionLabel(content, "FRIENDLY SUPPLY STATE", -8);
 
-            var frame = UIFactory.CreateBorderedPanel(content, "Empty", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -30), new Vector2(InnerWidth, 190));
-
-            var caption = UIFactory.CreateSectionHeader(frame, "EMPTY", UiTheme.TextFaint);
-            UIFactory.PlaceTopLeft(caption.rectTransform, 12f, 12f, InnerWidth - 24f, 14f);
-
-            var text = UIFactory.CreateText(frame, note, UiTheme.FontLabel, UiTheme.TextFaint,
+            _suppliesHeadline = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.UpperLeft);
-            UIFactory.PlaceTopLeft(text.rectTransform, 12f, 34f, InnerWidth - 24f, 144f);
+            UIFactory.Place(_suppliesHeadline.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -28),
+                new Vector2(InnerWidth, 30));
+
+            var scroll = UIFactory.CreateScrollView(content, out _suppliesList, withScrollbar: true);
+            var srt = (RectTransform)scroll.transform;
+            srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
+            srt.offsetMin = new Vector2(Pad, 46);
+            srt.offsetMax = new Vector2(-Pad, -62);
+            scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            var layout = _suppliesList.GetComponent<VerticalLayoutGroup>();
+            if (layout != null) { layout.spacing = 3; layout.padding = new RectOffset(2, 2, 2, 2); }
+
+            var hint = UIFactory.CreateText(content,
+                "AMM is rounds carried against the type's scale, FUEL litres, RAT days of rations. " +
+                "A formation runs amber below a third and red when it is out. Click a row to select it.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 0f), new Vector2(Pad, 6),
+                new Vector2(InnerWidth, 36));
+
+            RefreshSupplies();
         }
+
+        /// <summary>
+        /// Rebuilds the supply table. Driven from <see cref="OnUnitsChanged"/>
+        /// and from opening the section, and — like every other live page on the
+        /// rail — silent while it is shut.
+        /// </summary>
+        public void RefreshSupplies()
+        {
+            if (_suppliesList == null) return;
+            if (!_sectionContent.TryGetValue(Section.Supplies, out var page) ||
+                !page.gameObject.activeSelf) return;
+
+            ClearChildren(_suppliesList);
+
+            int formations = 0, dry = 0, low = 0;
+            long ammo = 0, ammoScale = 0;
+
+            foreach (var u in UnitRegistry.All)
+            {
+                if (u == null || !u.IsAlive || u.Def == null) continue;
+                if (u.State.TeamEnum != Team.User) continue;
+
+                formations++;
+                ammo += u.State.ammo;
+                ammoScale += u.Def.ammoStock;
+
+                float share = u.Def.ammoStock > 0 ? u.State.ammo / (float)u.Def.ammoStock : 1f;
+                if (u.State.ammo <= 0 && u.Def.ammoStock > 0) dry++;
+                else if (share < LowSupplyShare) low++;
+
+                SupplyRow(u);
+            }
+
+            if (_suppliesHeadline != null)
+                _suppliesHeadline.text = formations == 0
+                    ? "No friendly formations on the map."
+                    : $"{formations} formation(s)  ·  {(ammoScale > 0 ? Mathf.RoundToInt(100f * ammo / ammoScale) : 100)}% of ammunition scale\n" +
+                      $"{dry} out of ammunition  ·  {low} below a third";
+
+            if (formations == 0)
+            {
+                var empty = UIFactory.CreateText(_suppliesList,
+                    "Nothing deployed for this side yet.", UiTheme.FontLabel,
+                    UiTheme.TextFaint, TextAnchor.UpperLeft);
+                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 32);
+            }
+        }
+
+        /// <summary>Share of scale below which a stock reads as low rather than held.</summary>
+        const float LowSupplyShare = 1f / 3f;
+
+        /// <summary>
+        /// One formation's line: its icon and name over the three stocks it
+        /// carries, each coloured by how much of its own scale is left. Absolute
+        /// figures rather than bars — "180 / 600" is a number a commander can
+        /// weigh against a fire plan, and a bar is not.
+        /// </summary>
+        void SupplyRow(UnitActor unit)
+        {
+            var def = unit.Def;
+            var state = unit.State;
+
+            var row = UIFactory.CreateBorderedPanel(_suppliesList, "Sup_" + state.instanceId,
+                UiTheme.Surface, UiTheme.Border);
+            row.sizeDelta = new Vector2(0, 46);
+
+            var captured = unit;
+            var select = UIFactory.CreateButton(row, "", () => SelectUnitRequested?.Invoke(captured),
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)select.transform);
+            var made = select.GetComponentInChildren<Text>(true);
+            if (made != null) made.gameObject.SetActive(false);
+
+            var sprite = UIFactory.LoadIconSprite("Friendly", def.id);
+            if (sprite != null)
+            {
+                var icon = UIFactory.CreateImage(row, sprite, "Icon");
+                icon.raycastTarget = false;
+                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
+                    new Vector2(8, 0), new Vector2(28, 28));
+            }
+
+            string name = string.IsNullOrEmpty(state.customName) ? def.name : state.customName;
+            var title = UIFactory.CreateText(row, name, UiTheme.FontLabel, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            title.raycastTarget = false;
+            UIFactory.PlaceTopLeft(title.rectTransform, 42f, 5f, InnerWidth - 70f, 15f);
+            UIFactory.Fit(title, 8);
+
+            // The three stocks, laid out as thirds so the columns line up down
+            // the table however long the names above them are.
+            float cell = (InnerWidth - UIFactory.ScrollbarWidth - 52f) / 3f;
+            SupplyCell(row, 42f, cell, "AMM", $"{state.ammo:n0}/{def.ammoStock:n0}",
+                def.ammoStock > 0 ? state.ammo / (float)def.ammoStock : 1f);
+            SupplyCell(row, 42f + cell, cell, "FUEL",
+                def.fuelStock > 0 ? $"{state.fuel:n0} L" : "—",
+                def.fuelStock > 0 ? state.fuel / def.fuelStock : 1f);
+            SupplyCell(row, 42f + cell * 2f, cell, "RAT", $"{state.foodDays} d",
+                def.foodDays > 0 ? state.foodDays / (float)def.foodDays : 1f);
+        }
+
+        void SupplyCell(RectTransform row, float x, float width, string label, string value, float share)
+        {
+            var caption = UIFactory.CreateText(row, label, UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            caption.raycastTarget = false;
+            UIFactory.PlaceTopLeft(caption.rectTransform, x, 24f, 26f, 14f);
+
+            var text = UIFactory.CreateText(row, value, UiTheme.FontLabel, SupplyColour(share),
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            text.raycastTarget = false;
+            UIFactory.PlaceTopLeft(text.rectTransform, x + 26f, 24f, Mathf.Max(20f, width - 28f), 14f);
+            UIFactory.Fit(text, 8);
+        }
+
+        static Color SupplyColour(float share) =>
+            share <= 0f ? UiTheme.Danger
+            : share < LowSupplyShare ? UiTheme.Warning
+            : UiTheme.Text;
 
         /// <summary>Names the group currently holding the front line, "" for none.</summary>
         public void SetFlotHolder(string groupName)
@@ -2738,7 +2923,7 @@ namespace IronMeridian.UI
 
             UIFactory.CreateStackedLabels(row, name,
                 $"{count} formation(s)   ·   {(side == Team.Enemy ? "ENEMY" : "FRIENDLY")}",
-                12f, InnerWidth - 108f, topInset: 8f);
+                12f, GroupsRowWidth - 94f, topInset: 8f);
 
             var fly = UIFactory.CreateButton(row, "◎", () => GroupFlyRequested?.Invoke(id),
                 UiTheme.SurfaceHover, UiTheme.Text, 12);
@@ -5262,6 +5447,7 @@ namespace IronMeridian.UI
             // callbacks fire into a destroyed component on scene reload.
             UnitRegistry.Changed -= OnUnitsChanged;
             StrikeBudget.Changed -= RefreshStrikeBudget;
+            LossLedger.Changed -= RefreshStats;
             // The commanders and players panels subscribe to registries of their own.
             _commanders?.Dispose();
             _players?.Dispose();

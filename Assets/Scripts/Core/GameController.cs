@@ -827,8 +827,20 @@ namespace IronMeridian.Core
                 _groupPanel.SelectGroupRequested = members => _selection.SetSelection(members);
                 _groupPanel.FlyToGroupRequested = FlyToGroup;
                 // The order bar is captioned with the group's name and lives at
-                // the foot of the map, so a rename here has to reach it.
-                _groupPanel.GroupsChanged = RefreshActionBar;
+                // the foot of the map, so a rename here has to reach it — and so
+                // does the rail's GROUPS list, which is the other place the same
+                // groups are shown.
+                //
+                // A group is a property of the units in it rather than an object
+                // of its own, so forming or breaking one mutates unit state
+                // without the registry changing: nothing else tells the rail that
+                // GROUP 3 now exists. Without this the list stayed at whatever it
+                // held when the section was last opened.
+                _groupPanel.GroupsChanged = () =>
+                {
+                    RefreshActionBar();
+                    if (_palette != null) _palette.RefreshGroups();
+                };
                 _groupPanel.RemoveUnitRequested = u =>
                 {
                     RecordRemoval(u);

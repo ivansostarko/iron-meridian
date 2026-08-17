@@ -63,13 +63,33 @@ namespace IronMeridian.UI
         const float Inner = PanelWidth - 36f;
 
         /// <summary>
-        /// Left inset of a selected-unit row's contents — the icon and the
-        /// caption beside it. The rows used to start hard against the scroll
-        /// viewport's edge, which put an APP-6 frame's left stroke on the
-        /// clipping boundary and made the list read as pressed against the side
-        /// of the screen rather than as a table inside it.
+        /// Left and right inset of every row in both of this panel's lists,
+        /// applied as the scroll content's own layout padding so the rows are
+        /// genuinely narrower rather than merely drawn inboard.
+        ///
+        /// The lists used to run edge to edge inside their viewports, which put
+        /// an APP-6 frame's left stroke on the clipping boundary and made both
+        /// of them read as pressed against the side of the screen rather than as
+        /// tables inside a panel.
         /// </summary>
-        const float UnitRowInset = 30f;
+        const float RowPad = 25f;
+
+        /// <summary>
+        /// Width a row actually gets: the panel, less the scroll views' shared
+        /// 10 px margins, less <see cref="RowPad"/> either side. Everything
+        /// placed against a row's right-hand end is measured from this — a row
+        /// that shrank while its contents did not would put the buttons through
+        /// the captions.
+        /// </summary>
+        const float RowWidth = PanelWidth - 20f - RowPad * 2f;
+
+        /// <summary>
+        /// Left inset of a selected-unit row's contents — the icon and the
+        /// caption beside it. Small, because <see cref="RowPad"/> is what now
+        /// holds the list off the viewport edge; the two stacking would have
+        /// spent 55 px of a 330 px panel on empty gutter.
+        /// </summary>
+        const float UnitRowInset = 6f;
 
         /// <summary>Vertical gap above the SELECTED UNITS heading.</summary>
         const float UnitsLabelMargin = 10f;
@@ -398,7 +418,7 @@ namespace IronMeridian.UI
         {
             var layout = content.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 3;
-            layout.padding = new RectOffset(6, 6, 6, 6);
+            layout.padding = new RectOffset((int)RowPad, (int)RowPad, 6, 6);
         }
 
         static void ClearChildren(RectTransform content)
@@ -542,12 +562,12 @@ namespace IronMeridian.UI
 
             var name = UIFactory.CreateText(row, group.Name, 14,
                 isCurrent ? UiTheme.Accent : UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(name.rectTransform, 10f, 6f, Inner - 90f, 17f);
+            UIFactory.PlaceTopLeft(name.rectTransform, 10f, 6f, RowWidth - 60f, 17f);
             UIFactory.Fit(name, 9);
 
             var detail = UIFactory.CreateText(row, $"{group.Count} formation(s)", 11,
                 UiTheme.TextFaint, TextAnchor.MiddleLeft);
-            UIFactory.PlaceTopLeft(detail.rectTransform, 10f, 23f, Inner - 90f, 15f);
+            UIFactory.PlaceTopLeft(detail.rectTransform, 10f, 23f, RowWidth - 60f, 15f);
 
             var add = UIFactory.CreateButton(row, "＋", () => MoveSelectionToGroup(group),
                 UiTheme.SurfaceHover, UiTheme.Text, 15);

@@ -115,6 +115,37 @@ namespace IronMeridian.Units
             Changed?.Invoke();
         }
 
+        /// <summary>
+        /// Brings one formation on **now**, in its side's deployment zone.
+        ///
+        /// The REINFORCEMENTS panel's whole verb. It shares the schedule's
+        /// arrival machinery — the same <see cref="Place"/>, the same zone, the
+        /// same golden-angle scatter — and skips only the waiting, so a
+        /// formation called forward lands exactly where a scheduled one would
+        /// have. That matters more than it sounds: a second placement rule would
+        /// mean the deployment zone meant one thing to the designer's schedule
+        /// and another to the commander's reserve.
+        ///
+        /// The scatter index runs across everything this method has ever placed
+        /// rather than restarting per call, so clicking a type four times gives a
+        /// laydown instead of four counters on one point.
+        /// </summary>
+        public void DeployNow(UnitDefinition def, Team team, Echelon echelon)
+        {
+            if (def == null || Spawn == null) return;
+
+            Place(team, _deployedNow++, out double lat, out double lon);
+            Spawn(def, team, echelon, lat, lon);
+
+            bool zoned = ZoneFor?.Invoke(team) != null;
+            Flash?.Invoke($"{def.name} ({echelon}) joins the " +
+                          $"{(team == Team.User ? "friendly" : "enemy")} force — " +
+                          (zoned ? "in its deployment zone." : "behind its own front; no deployment zone is set."));
+        }
+
+        /// <summary>How many formations <see cref="DeployNow"/> has placed, for the scatter.</summary>
+        int _deployedNow;
+
         public void Remove(ReinforcementEntry entry)
         {
             if (entry == null) return;

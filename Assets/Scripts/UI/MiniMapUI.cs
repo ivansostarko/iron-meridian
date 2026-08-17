@@ -427,8 +427,8 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// Every published stretch of front — both sides' edges, pockets and
-        /// the manual trace — read straight off the front-line system's own
+        /// Every published stretch of front — both sides' edges, or the manual
+        /// trace — read straight off the front-line system's own
         /// segments, so the minimap can never disagree with the map about
         /// where the fighting is. Blue edge blue, red edge red, the manual
         /// line in the front-line red.

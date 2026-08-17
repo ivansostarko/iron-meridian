@@ -20,9 +20,9 @@ The rule everything below serves:
 units
   → eligibility        FlotEligibility — who gets a vote
   → clustering         mutually supporting groups, per side (12 km link)
-  → outlier filtering  lone probes dropped; strong isolated groups → pockets
-  → engagements        each friendly cluster paired with the enemy cluster
-                       it faces — the pairing IS the operational direction
+  → outlier filtering  lone probes dropped; cut-off groups stop voting
+  → one engagement     each side's remaining clusters merged into one body;
+                       the two bodies' centres ARE the operational direction
   → forward edges      per band, one edge per side (influence field)
   → smoothing          Chaikin + stability damping
   → terrain            MapLine drapes and grounds every flat kind
@@ -30,6 +30,19 @@ units
 ```
 
 Not "connect all friendly units" — each stage exists to throw something out.
+
+**Exactly two lines are ever published: ours (`flot-user`) and theirs
+(`flot-enemy`)**, or the drawn trace (`flot-manual`) in MANUAL mode. The solver
+used to pair every friendly cluster with the enemy cluster it faced and publish
+an edge per battle, plus a closed ring round every pocket — so a dispersed order
+of battle put four or five identically-coloured traces on the map and left the
+player working out which of them was the front. The FLOT answers one question, so
+it is one line per side.
+
+Nothing downstream lost anything to the merge: territory, breach detection,
+manning and history all read the engagement's **nodes**, not the published
+geometry. A scenario saved before this carries the old `flot-user-0`,
+`flot-pocket-…` ids in its line list; the first solve sweeps them off the map.
 
 ## 2. Eligibility
 
@@ -49,26 +62,32 @@ Derived from what a unit *is* (category, branch, support flag) rather than a
 per-unit field in units.json — one mapping in one place, nothing to keep in
 step.
 
-## 3. Outliers and pockets
+## 3. Outliers and cut-off groups
 
 Units are clustered by mutual support (transitively within 12 km). A cluster
 more than 30 km from its side's main body is on its own:
 
-- **Under 5% of the side's power** → an outlier. No vote at all — a recon car
-  deep in enemy ground must not drag the whole front with it.
-- **Real combat power** → a **POCKET**: its own closed ring segment, state
-  `ISOLATED`. A breakthrough moves lines only when force is behind it.
+- **Under 5% of the side's power** → an outlier. Dropped from the solve entirely
+  — a recon car deep in enemy ground must not drag the whole front with it.
+- **Real combat power** → **isolated**. It stays in the order of battle but is
+  left out of the merged body, so a cut-off battalion does not pull its side's
+  front back across the map to reach it.
 
-## 4. Two edges, engagements, direction
+A side that is *only* isolated clusters still gets a line, built from them: being
+surrounded is a shape of front rather than the absence of one, and the
+alternative is a side with no front at all.
 
-Each engagement (a friendly cluster paired with the enemy cluster it faces)
-solves **both sides' forward edges** across banded laterals — the same
-influence field as before (power × Gaussian along the front × exponential
-toward the enemy), but per side. The ground between the edges is **contested**.
+## 4. Two edges, one engagement, direction
 
-The axis comes from the pairing, per engagement — so two separated battles get
-two forwards, and a curved front is several honest ones rather than one wrong
-one.
+Each side's surviving clusters are merged into a single body — the union of their
+units, at a power-weighted centre. The engagement between the two bodies solves
+**both sides' forward edges** across banded laterals with the same influence
+field as before (power × Gaussian along the front × exponential toward the
+enemy), one edge per side. The ground between the edges is **contested**.
+
+The axis comes from the two bodies' centres. A front that curves comes out curved
+because the influence field is solved per band, not because the map is carrying
+several axes at once.
 
 ## 5. Stability
 
@@ -83,12 +102,13 @@ one.
 Compared solve to solve, shown in the panel readout and on `FlotSegment.State`:
 
 ```
-STABLE · ADVANCING · RETREATING · CONTESTED · BREACHED · COLLAPSING · ISOLATED
+STABLE · ADVANCING · RETREATING · CONTESTED · BREACHED · COLLAPSING
 ```
 
 Advancing/retreating at ±0.1 km per solve; collapsing at −1 km; contested when
 the mean gap between the two edges is under 1 km (or they interpenetrate);
-breached while an intrusion is active; isolated = pocket.
+breached while an intrusion is active. (`ISOLATED` is still on the enum; nothing
+publishes it now that pockets do not get a segment of their own.)
 
 ## 7. FLOT_BREACH
 

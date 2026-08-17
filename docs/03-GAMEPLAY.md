@@ -90,7 +90,7 @@ Hidden rows are **re-flowed, not merely switched off** — the rows sit at absol
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
-| **REINFORCEMENTS** | The same panel as UNITS, for formations that are not here yet: pick a type and it arrives at H+n in its side's deployment zone. See [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) |
+| **REINFORCEMENTS** | *Battle mode.* The same panel as UNITS, for formations called forward: pick a type and it lands at once in its side's deployment zone. See [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) |
 | **MINES AND OBSTACLES** | The barrier plan: mines, minefields, AP/AT mines, wire, AT ditch, obstacles and roadblocks, laid as NATO graphics on the ground. See [31-OBSTACLES.md](31-OBSTACLES.md) |
 | **SUSTAINMENT** | What the force fights on: fuel, ammunition natures, manpower, rations and the rest — with the burn rate its own order of battle implies. See [27-SUSTAINMENT.md](27-SUSTAINMENT.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
@@ -98,10 +98,10 @@ Hidden rows are **re-flowed, not merely switched off** — the rows sit at absol
 | **ENVIRONMENT** | Scenario H-hour and presets, sky phase, auto day/night, weather condition — **one section**, because they are one decision: a designer setting a night attack is choosing the hour *and* the sky in the same breath |
 | **MAP CONFIG** | Tile style, 2D/3D, layers, unit-label size |
 | **SECTORS** | *Battle mode.* The derived control measures: generate or clear the sector boundaries and the FEBA, and keep them redrawing as the battle moves |
-| **STATS** | *Empty.* Reserved — see *Reserved sections* below |
+| **STATS** | *Battle mode.* What the fight has cost, both sides — the same ledger the **TAB** page reads, in a column you can keep open while you fight. See *Stats and supplies* below |
 | **ZONES** | The mission's **HQ zones** and **deployment zones**, with their sizes. Moved off the MISSIONS page: they are places on the map, put there by clicking it, not fields of a record |
 | **OBJECTS** | Infrastructure drawn on the ground — bridges, airfields, ports, built-up areas, ten kinds in all, four corners minimum. See [33-MAP-OBJECTS.md](33-MAP-OBJECTS.md) |
-| **SUPPLIES** | *Empty.* Reserved — see *Reserved sections* below |
+| **SUPPLIES** | *Battle mode.* What every friendly formation is carrying — ammunition, fuel and rations, formation by formation. See *Stats and supplies* below |
 | **GROUPS** | *Battle mode.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
 
 The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
@@ -160,20 +160,44 @@ It is the **same** side, not one per panel: one side is selected in the editor a
 a time, every panel reads it, and the tabs everywhere repaint together. Two side
 pickers that could disagree would be a bug with a UI.
 
-### Reserved sections
+### Stats and supplies
 
-**STATS**, **ZONES**, **OBJECTS** and **SUPPLIES** are a nav row and an empty page each, and nothing else yet. They are places to build in: the row, the section, the panel and the title are wired, so filling one is writing its controls and nothing else.
+Two battle-mode pages that answer the two questions a commander asks between
+orders: what has this cost, and what is left to fight with.
 
-Each page says on its face that it is empty — a page that merely rendered blank would read as a section that had broken — and each names its nearest built neighbours, so the next person to fill one is told what already exists rather than building a second way of doing it:
+**STATS** is the same ledger the **TAB** page reads (`LossLedger`), in the shape
+the rail can hold: a headline for both sides, then FRIENDLY and HOSTILE blocks
+one under the other, each with its destroyed / still-standing / men summary and a
+table of the types that have been lost. **FORM** is formations destroyed
+outright; **MEN** is the manpower behind every point of strength lost, in
+surviving formations as well as dead ones.
 
-| Section | Where the nearest existing thing lives |
-|---|---|
-| **STATS** | Casualties on **TAB** (the losses list); stocks under **SUSTAINMENT** |
-| **ZONES** | Mission boundary, HQ zones and deployment zones, all under **MISSIONS** |
-| **OBJECTS** | Barrier plans under **MINES AND OBSTACLES**; installations under **LOGISTICS** |
-| **SUPPLIES** | Stocks under **SUSTAINMENT**, depots under **LOGISTICS**, air-dropped loads on the **AIR SUPPLY** fire menu |
+Both exist because they are different postures, not different numbers. TAB is a
+page you stop and read — two columns side by side, the whole comparison at once.
+STATS is a column you keep open while you fight, in the rail your hand is already
+on, at the cost of reading the two sides one under the other. Neither keeps a
+figure of its own, so the two cannot drift.
 
-They are built by `UnitPaletteUI.BuildEmptySection`, one shared page so the four cannot drift into four different ways of saying "empty".
+**SUPPLIES** lists every friendly formation with the three stocks it carries —
+**AMM** against the type's scale, **FUEL** in litres, **RAT** in days — each
+coloured amber below a third and red when it is out, with a headline counting how
+many are dry. Clicking a row selects that formation.
+
+It is not SUSTAINMENT in miniature. SUSTAINMENT is the theatre's stocks: one set
+of figures for the whole side and the rate the force burns them, answering "how
+long can this army fight". SUPPLIES answers the question you ask before ordering
+an attack — *which battalion is out of ammunition* — which a total cannot say,
+because a side with three days of fuel in depot still has a company that cannot
+move.
+
+**Friendly only.** What the enemy is carrying is not something a commander knows,
+and a page that told them would undo fog of war more completely than any
+reconnaissance could — see [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
+
+Both pages are read live off the ledger and the registry on every rebuild, and
+both are silent while shut: STATS follows `LossLedger.Changed`, SUPPLIES rebuilds
+once a second while it is open, because ammunition is spent by combat rather than
+by anything that raises an event.
 
 **Hand-placed effects are permanent.** A fire, smoke column or explosion put down from the EFFECTS section burns until it is cleared — never evicted by the concurrent-effect budget, never given a lifetime, in battle mode or out of it. Two things used to end one and both looked like a bug: the budget is 48 effects and an incoming explosion outranks a standing fire, so the marker a player put down vanished exactly when the fighting got interesting; and a placed explosion left a wreck on a timer that went out by itself. Effects the *game* creates still burn out and are still evictable — otherwise a long battle ends up carpeted in permanent fires.
 
@@ -348,6 +372,12 @@ Each row carries the group's name, its size, a side stripe, and two controls:
 | **The row** | Selects the group's formations |
 | **◎** | Selects them and flies the camera so the whole group is framed |
 | **FLOT** | Puts the group on the front line |
+
+**The list follows the right-hand panel.** A group is a property of the units in
+it rather than an object of its own, so forming or breaking one mutates unit
+state without the registry changing — nothing would otherwise tell this list that
+`GROUP 3` now exists, and it sat at whatever it held when the section was last
+opened. GROUP SELECTION, UNGROUP, **＋** and **⇄** all repaint it.
 
 **FLOT is the one thing you can do to a group that is not an order.** The front
 line is *derived* — it is where the fighting is, not a control measure anybody
@@ -658,7 +688,8 @@ and known leaks: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
 
 ### On-map controls
 
-- **Bottom-left cluster** — zoom, face north, 2D/3D, frame the order of battle, and an altitude readout. Every button has a hover caption naming it and its keyboard equivalent.
+- **Bottom-left cluster** — zoom, face north, a **2D / 3D** pair, frame the order of battle, and an altitude readout. Every button has a hover caption naming it and its keyboard equivalent.
+- **The projection is a pair, not a toggle.** Two buttons, and whichever one the map is currently in is lit. A toggle carrying a layers glyph said neither which projection you were in nor which one pressing it would give you — it was only readable after you had pressed it and looked at the terrain. Pressing the lit one is harmlessly idempotent rather than a silent flip back, and the pair follows the map, so setting the projection from **MAP CONFIG** or loading a scenario relights it.
 - **Bottom-right compass** — the rose turns so its N tick sits where north actually is; the fixed index at the top of the bezel reads against it, and that bearing is printed underneath. Click it to face north. It steps aside when the unit info panel opens.
 - Both are opt-in from **MAP → LAYERS**.
 
@@ -717,7 +748,7 @@ adjacent pair to bound and no forward edge worth calling a FEBA.
 
 **The FLOT is a gameplay object, not a drawing** — full register in [28-FLOT.md](28-FLOT.md). The one-paragraph version:
 
-Each side gets its **own forward edge**, solved every few seconds from its **combat formations only** — infantry, mechanised and armour that are still combat-effective. Logistics, artillery, air and broken units do not move the line, and an isolated group either becomes a **POCKET** ring (real combat power) or is ignored (a lone probe). The ground between the two edges is **contested**. Each stretch carries a live state — `STABLE · ADVANCING · RETREATING · CONTESTED · BREACHED · COLLAPSING · ISOLATED` — read out in the line's own panel, and an enemy force established more than 2 km behind an edge with real combat power raises a **FLOT BREACHED** alert.
+Each side gets **one forward edge** — exactly one, ours and theirs, never a line per battle — solved every few seconds from its **combat formations only**: infantry, mechanised and armour that are still combat-effective. Logistics, artillery, air and broken units do not move the line, and a group cut off from its side's main body stops voting on where the front runs (a lone probe is ignored outright). The ground between the two edges is **contested**. Each line carries a live state — `STABLE · ADVANCING · RETREATING · CONTESTED · BREACHED · COLLAPSING` — read out in the line's own panel, and an enemy force established more than 2 km behind an edge with real combat power raises a **FLOT BREACHED** alert.
 
 Three modes, switched in the panel (click any FLOT line): **AUTO** (solved from the force), **MANUAL** (drawn by the designer, click by click), **HYBRID** (drawn first, solved once the battle starts). With fog of war on, the enemy edge you see is an **estimate** from visible formations only, drawn broken.
 

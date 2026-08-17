@@ -449,15 +449,14 @@ namespace IronMeridian.UI
                 (moved > 0.05 ? $"  ·  moved {moved:0.#} km" : "");
             _statusLabel.color = UiTheme.TextFaint;
 
-            // One clause per stretch: "FRIENDLY ADVANCING · ENEMY RETREATING ·
-            // POCKET ISOLATED". The states are compared solve to solve, so
-            // this line is where the battle's direction is read.
+            // One clause per side: "FRIENDLY ADVANCING · ENEMY RETREATING".
+            // The states are compared solve to solve, so this line is where the
+            // battle's direction is read.
             var sb = new System.Text.StringBuilder();
             foreach (var seg in _front.Segments)
             {
                 if (sb.Length > 0) sb.Append("  ·  ");
-                sb.Append(seg.Pocket ? "POCKET"
-                    : seg.Manual ? "DRAWN"
+                sb.Append(seg.Manual ? "DRAWN"
                     : seg.Team == Team.User ? "FRIENDLY" : "ENEMY");
                 sb.Append(' ').Append(seg.State.ToString().ToUpperInvariant());
                 if (seg.Estimated) sb.Append(" (EST)");
