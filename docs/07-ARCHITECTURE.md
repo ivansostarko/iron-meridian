@@ -59,6 +59,9 @@ Assets/Scripts/
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
+    ScreenBackdrop.cs    a screen's background when the screen changes it: a page
+                          image with a hover preview over it, applied once per
+                          frame (docs/11-GAME-MENU.md §3.4)
     LoadingScreenUI.cs   full-screen loading overlay — see docs/12-LOADERS.md
     DateTimeDialog.cs    H-hour picker — see docs/13-DATE-AND-TIME.md
     FrontlinePanelUI.cs  docked right panel: front-line settings, opened by clicking the line

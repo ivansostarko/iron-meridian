@@ -389,9 +389,9 @@ namespace IronMeridian.UI
         {
             Heading(page, "CAMERA");
             Control(page, "Pan the map", "Hold to keep moving", "W", "A", "S", "D");
-            Control(page, "Pan the map", "The arrow keys do the same", "\u2191", "\u2193", "\u2190", "\u2192");
+            Control(page, "Pan the map", "The arrow keys do the same", "↑", "↓", "←", "→");
             Control(page, "Zoom in and out", "Wheel, or hold either key", "Wheel", "or", "R", "F");
-            Control(page, "Rotate the view", "3D mode only \u2014 2D is locked north-up", "Q", "E");
+            Control(page, "Rotate the view", "3D mode only — 2D is locked north-up", "Q", "E");
             Control(page, "Orbit and tilt", "3D mode only", "Middle-drag");
 
             Heading(page, "SELECTION");
@@ -423,7 +423,7 @@ namespace IronMeridian.UI
             Control(page, "Casualty list", "Battle mode, or once a battle has been fought", "Tab");
             Control(page, "Back out of a screen", "Closes a dialog first, if one is open", "Esc");
 
-            Note(page, "Controls are fixed for now \u2014 the game reads the keyboard directly rather than through a " +
+            Note(page, "Controls are fixed for now — the game reads the keyboard directly rather than through a " +
                        "binding table, so there is nothing here to rebind yet. The map screen carries the same " +
                        "shortcuts in a single line under the map.");
         }
@@ -433,7 +433,7 @@ namespace IronMeridian.UI
         /// as chips ending flush with the right-hand edge.
         ///
         /// The word "or" may be passed among the keys and is drawn as text
-        /// rather than as a chip \u2014 it is the one thing in the row that is not
+        /// rather than as a chip — it is the one thing in the row that is not
         /// something you press.
         /// </summary>
         void Control(RectTransform page, string action, string detail, params string[] keys)

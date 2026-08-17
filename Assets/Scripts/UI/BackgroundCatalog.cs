@@ -11,10 +11,27 @@ namespace IronMeridian.UI
         None,
         /// <summary>The shared menu//screen artwork.</summary>
         Default,
-        /// <summary>Single-player campaign screen.</summary>
+        /// <summary>Single-player campaign board — the list of theatres.</summary>
         SinglePlayer,
         /// <summary>Multiplayer lobby screen.</summary>
         Multiplayer,
+        /// <summary>
+        /// What the main menu shows behind its EXTRAS row. The Extras *screen*
+        /// itself uses <see cref="Interior"/> with the rest of the inner pages —
+        /// this is the preview, and a preview is part of the main menu.
+        /// </summary>
+        Extras,
+
+        // One per campaign, shown while its mission board is open. The theatre
+        // is the thing being chosen, so the screen changes with it rather than
+        // holding one picture behind six different lists.
+        CampaignEurope,
+        CampaignAfrica,
+        CampaignAsia,
+        CampaignNorthAmerica,
+        CampaignSouthAmerica,
+        CampaignAustralia,
+
         /// <summary>
         /// The inner screens — settings, extras, and the pages behind extras.
         /// One image for the family rather than five ids naming one file: they
@@ -80,24 +97,86 @@ namespace IronMeridian.UI
                               "testing, units list and the placeholder pages."
             },
 
-            // The three below have no artwork of their own yet and fall back to
-            // the shared image. Drop a file at the path named here and it is
-            // used automatically — see docs/11-GAME-MENU.md.
+            // Every row below names its own file and falls back if it is not
+            // there. Drop a file at the path named here and it is used
+            // automatically — see docs/11-GAME-MENU.md.
             new BackgroundDef
             {
                 id = BackgroundId.SinglePlayer,
-                resourcePath = "Graphics/Backgrounds/single_player",
+                resourcePath = "Graphics/Backgrounds/single-player",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
-                description = "Single-player campaign screen. Awaiting artwork."
+                description = "The single-player campaign board, and the fallback behind any " +
+                              "campaign that has no artwork of its own."
             },
             new BackgroundDef
             {
                 id = BackgroundId.Multiplayer,
-                resourcePath = "Graphics/Backgrounds/multiplayer",
+                resourcePath = "Graphics/Backgrounds/multi-player",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
-                description = "Multiplayer lobby screen. Awaiting artwork."
+                description = "Multiplayer lobby screen, and the main menu's preview of it."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.Extras,
+                resourcePath = "Graphics/Backgrounds/extras",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "The main menu's preview behind its EXTRAS row."
+            },
+
+            // The six theatres. Each falls back to the campaign board's own
+            // artwork rather than to the shared menu image: a campaign with no
+            // picture yet should look like the screen it was opened from, not
+            // like the main menu.
+            new BackgroundDef
+            {
+                id = BackgroundId.CampaignEurope,
+                resourcePath = "Graphics/Backgrounds/Missions/Europe/single-player-europe-background",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.SinglePlayer,
+                description = "EUROPE mission board."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.CampaignAfrica,
+                resourcePath = "Graphics/Backgrounds/Missions/Africa/single-player-africa-background",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.SinglePlayer,
+                description = "AFRICA mission board."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.CampaignAsia,
+                resourcePath = "Graphics/Backgrounds/Missions/Asia/single-player-asia-background",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.SinglePlayer,
+                description = "ASIA mission board."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.CampaignNorthAmerica,
+                resourcePath = "Graphics/Backgrounds/Missions/NorthAmerica/single-player-north-america-background",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.SinglePlayer,
+                description = "NORTH AMERICA mission board."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.CampaignSouthAmerica,
+                resourcePath = "Graphics/Backgrounds/Missions/SouthAmerica/single-player-south-america-background",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.SinglePlayer,
+                description = "SOUTH AMERICA mission board."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.CampaignAustralia,
+                resourcePath = "Graphics/Backgrounds/Missions/Australia/single-player-australia-background",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.SinglePlayer,
+                description = "AUSTRALIA mission board."
             },
             new BackgroundDef
             {

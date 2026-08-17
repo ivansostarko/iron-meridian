@@ -54,15 +54,24 @@ All three layers set `raycastTarget = false`, so the background never intercepts
 | Asset | Path | Resource path | Screens | Scrim | Description |
 |---|---|---|---|---|---|
 | Default menu artwork | `Assets/Resources/Graphics/Backgrounds/default_background.png` | `Graphics/Backgrounds/default_background` | Main Menu, Development, Units List, Particles, Audio — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
-| Single player | *not supplied yet* | `Graphics/Backgrounds/single_player` | Single Player | 0.62 | **Awaiting artwork.** Falls back to the default image. |
-| Multiplayer | *not supplied yet* | `Graphics/Backgrounds/multiplayer` | Multiplayer | 0.62 | **Awaiting artwork.** Falls back to the default image. |
+| Single player | `Assets/Resources/Graphics/Backgrounds/single-player.png` | `Graphics/Backgrounds/single-player` | Single Player — the campaign board, and the main menu's preview of it | 0.62 | The list of theatres, and the fallback behind any campaign with no artwork of its own. |
+| Multiplayer | `Assets/Resources/Graphics/Backgrounds/multi-player.png` | `Graphics/Backgrounds/multi-player` | Multiplayer, and the main menu's preview of it | 0.62 | The lobby screen. |
+| Extras | `Assets/Resources/Graphics/Backgrounds/extras.png` | `Graphics/Backgrounds/extras` | The main menu's EXTRAS row, on hover | 0.42 | The preview only. The Extras *screen* uses the interior artwork with the rest of the inner pages. |
+| Europe | `…/Graphics/Backgrounds/Missions/Europe/single-player-europe-background.png` | `Graphics/Backgrounds/Missions/Europe/single-player-europe-background` | EUROPE mission board | 0.62 | The theatre behind its own mission list. |
+| Africa | `…/Missions/Africa/single-player-africa-background.png` | `Graphics/Backgrounds/Missions/Africa/single-player-africa-background` | AFRICA mission board | 0.62 | ″ |
+| Asia | `…/Missions/Asia/single-player-asia-background.png` | `Graphics/Backgrounds/Missions/Asia/single-player-asia-background` | ASIA mission board | 0.62 | ″ |
+| North America | `…/Missions/NorthAmerica/single-player-north-america-background.png` | `Graphics/Backgrounds/Missions/NorthAmerica/single-player-north-america-background` | NORTH AMERICA mission board | 0.62 | ″ |
+| South America | `…/Missions/SouthAmerica/single-player-south-america-background.png` | `Graphics/Backgrounds/Missions/SouthAmerica/single-player-south-america-background` | SOUTH AMERICA mission board | 0.62 | ″ |
+| Australia | `…/Missions/Australia/single-player-australia-background.png` | `Graphics/Backgrounds/Missions/Australia/single-player-australia-background` | AUSTRALIA mission board | 0.62 | ″ |
 | Interior artwork | `Assets/Resources/Graphics/Backgrounds/background.png` | `Graphics/Backgrounds/background` | Settings, Extras, Unit Library, DLC, Credits | 0.78 (Settings and Unit Library: 0.86) | A front line seen from altitude, blue against red. One image for the screens behind the main menu rather than five ids naming one file — they are the pages you pass *through*, and giving each its own artwork would make the menu read as five different products. |
 
 ### Fallbacks
 
-A `BackgroundDef` may name a `fallback`. The three rows above have no image file
-yet and fall back to the default artwork, so those screens look finished rather
-than showing a flat colour — which reads as broken rather than as unbuilt.
+A `BackgroundDef` may name a `fallback`, so a screen whose own artwork is not
+there yet looks finished rather than showing a flat colour — which reads as
+broken rather than as unbuilt. **The six campaigns fall back to the single-player
+board's image, not to the shared menu one**: a theatre with no picture yet should
+look like the screen it was opened from.
 
 **Adding the real artwork is the whole of the work.** Drop a PNG at the resource
 path the row names and it is used on the next run; no code change, no catalogue
@@ -92,7 +101,7 @@ Map terrain and imagery are streamed by Cesium, not shipped as textures — see 
 | Screen | Scene | Background | Scrim | Notes |
 |---|---|---|---|---|
 | Main Menu | `MainMenu` | Default | 0.42 | Artwork behind the command board. The scrim is lighter than a working screen's because the board carries its own darker field down the left-hand edge, so the artwork on the right stays close to how it was authored. The board's entries now sit in a **scroll view** between the masthead and the footer, so the list can outgrow a short window instead of running off the bottom of it — see §3.1. |
-| Single Player | `SinglePlayer` | Single Player | 0.62 | Behind the campaign board and the mission board — two pages of one scene. See docs/22-MISSIONS.md. |
+| Single Player | `SinglePlayer` | Single Player, **then the campaign's own** | 0.62 | Two pages of one scene, and the artwork changes with the page — see §3.4. |
 | Settings | `Settings` | **Interior** | **0.86** | Behind the vertical tab rail and its pages — a page of dense rows, so it takes the dense-screen scrim over the interior artwork. |
 | Development | `Testing` | Default | 0.62 | Behind the hub's four cards, laid out in centred rows by hand — `LayoutGroup` is `[DisallowMultipleComponent]`, so a `GridLayoutGroup` cannot be swapped into a scroll view's content. |
 | Particles | `EffectsList` | Default | 0.86 | Dense table + 3D preview; the heavier scrim keeps rows legible. |
@@ -234,6 +243,48 @@ pushed first and on its own: switching level rewrites shadows, anti-aliasing and
 the rest wholesale, so anything set before it would be thrown away by it.
 
 Audio levels live in `AudioManager` (`im.vol.*`) — see `docs/10-AUDIO.md`.
+
+### 3.4 Backgrounds that change
+
+Two screens change their artwork while you are on them, and both do it through
+`UI/ScreenBackdrop.cs`.
+
+**The main menu previews where a row leads.** Crossing SINGLE PLAYER puts the
+single-player image up, MULTIPLAYER the lobby's, EXTRAS its own. DEVELOPMENT,
+SETTINGS and QUIT have no picture of their own and leave the menu artwork alone —
+blanking it would make the background flicker as the cursor crossed the list. The
+menu says where you are going before you go there, and a photograph of the place
+does that better than a line of text under a heading.
+
+**The single-player screen shows the theatre.** The campaign board carries
+`single-player.png`; hovering a campaign previews its ground, and opening one
+puts that image behind its fifteen missions until you back out. Mission rows
+carry no preview — the artwork is already that campaign's.
+
+| Concept | What it is |
+|---|---|
+| **Page** | What the screen shows when nothing is hovered |
+| **Preview** | What the cursor is currently promising; cleared on exit, back to the page |
+
+Three things make it behave:
+
+**Applied in `LateUpdate`, not on the event.** uGUI sends PointerExit for the row
+being left and PointerEnter for the row being entered in the *same frame*, so
+applying immediately would rebuild the background twice per row crossed — once
+back to the page, once to the new row — and flash the page image in between.
+Collapsing to one apply per frame halves the work and removes the flash.
+
+**Rebuilt, not re-pointed.** A background is three layers — base, artwork, scrim —
+and the artwork's size comes from the sprite's aspect through an
+`AspectRatioFitter`; swapping the sprite alone would leave the fitter set for the
+picture before it. The new root is pushed to the back of the hierarchy (uGUI
+draws in that order and it is created after everything else on the screen), and
+the outgoing one is switched off before `Destroy`, which is deferred to the end
+of the frame — without that the old picture draws over the new for one frame.
+
+**Sprites are cached by path** in `UIFactory.LoadSprite`, so a picture is read off
+disk once however many times it is shown. Only images actually hovered are
+loaded, which is why the six campaign images are not pre-built.
 
 ---
 

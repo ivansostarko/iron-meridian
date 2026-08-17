@@ -108,6 +108,7 @@ namespace IronMeridian.UI
         const float GlyphX = ContentInset + 30f, TextX = ContentInset + 92f;
 
         GameObject _quitModal;
+        ScreenBackdrop _backdrop;
 
         /// <summary>
         /// The parts of one menu row that change under the cursor. Held together
@@ -138,7 +139,11 @@ namespace IronMeridian.UI
 
             // A light scrim overall: the board carries its own darker field, so
             // the artwork on the right stays as bright as it was authored.
-            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Default, 0.42f);
+            //
+            // Through a backdrop rather than a plain call, because the entries
+            // change it as the cursor crosses them — see MenuEntry.
+            _backdrop = ScreenBackdrop.Attach(gameObject, canvas.transform,
+                BackgroundId.Default, 0.42f);
 
             BuildBoardField(canvas.transform);
             BuildMasthead(canvas.transform);
@@ -256,18 +261,25 @@ namespace IronMeridian.UI
             layout.spacing = EntryGap;
             layout.padding = new RectOffset(0, 0, 0, 12);
 
+            // The three entries that lead somewhere with a picture of its own
+            // show it as the cursor crosses them: the menu says where you are
+            // going before you go there, and a still photograph of the place
+            // does that better than a line of text under a heading.
             MenuEntry(content, UiIcons.Layers, "SINGLE PLAYER",
                 "Fight a scenario against the enemy commander",
-                () => SceneManager.LoadScene(GameConfig.SceneSinglePlayer));
+                () => SceneManager.LoadScene(GameConfig.SceneSinglePlayer),
+                preview: BackgroundId.SinglePlayer);
             MenuEntry(content, UiIcons.Swords, "MULTIPLAYER",
                 "Take one side against another commander",
-                () => SceneManager.LoadScene(GameConfig.SceneMultiplayer));
+                () => SceneManager.LoadScene(GameConfig.SceneMultiplayer),
+                preview: BackgroundId.Multiplayer);
             MenuEntry(content, UiIcons.Blueprint, "DEVELOPMENT",
-                "The map editor and the reference labs \u2014 units, effects and audio",
+                "The map editor and the reference labs — units, effects and audio",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting));
             MenuEntry(content, UiIcons.Folder, "EXTRAS",
                 "Background material, credits and reference reading",
-                () => SceneManager.LoadScene(GameConfig.SceneExtras));
+                () => SceneManager.LoadScene(GameConfig.SceneExtras),
+                preview: BackgroundId.Extras);
             MenuEntry(content, UiIcons.Gear, "SETTINGS",
                 "Display, audio and map data",
                 () => SceneManager.LoadScene(GameConfig.SceneSettings));
@@ -278,7 +290,7 @@ namespace IronMeridian.UI
         /// <summary>
         /// One entry: a flat row carrying a glyph, a title and a line of detail.
         ///
-        /// **Flat, not a card.** The rows used to be hairline-bordered panels \u2014
+        /// **Flat, not a card.** The rows used to be hairline-bordered panels —
         /// six boxes stacked with a gap between each, which is six frames the
         /// eye has to cross to read a list of six things. They are now one
         /// column of faint fills separated by a rule, so the list reads as a
@@ -290,7 +302,7 @@ namespace IronMeridian.UI
         /// it reads as an index down the side of the list.
         /// </summary>
         void MenuEntry(Transform parent, Sprite glyph, string label, string detail,
-            UnityEngine.Events.UnityAction action)
+            UnityEngine.Events.UnityAction action, BackgroundId? preview = null)
         {
             var frame = UIFactory.CreatePanel(parent, "Entry_" + label, RowRest);
             // Width is driven by the layout group; only the height is ours.
@@ -362,12 +374,23 @@ namespace IronMeridian.UI
             // tint: the tint multiplies the whole row including the glyph and
             // the strip, which washes the accent out instead of lifting it.
             var trigger = frame.gameObject.AddComponent<EventTrigger>();
-            AddEvent(trigger, EventTriggerType.PointerEnter, () => Paint(entry, true));
-            AddEvent(trigger, EventTriggerType.PointerExit, () => Paint(entry, false));
+            AddEvent(trigger, EventTriggerType.PointerEnter, () =>
+            {
+                Paint(entry, true);
+                // Rows with nothing of their own to show — DEVELOPMENT,
+                // SETTINGS, QUIT — leave the menu's own artwork up rather than
+                // clearing it to something blank.
+                if (preview.HasValue) _backdrop.Preview(preview.Value);
+            });
+            AddEvent(trigger, EventTriggerType.PointerExit, () =>
+            {
+                Paint(entry, false);
+                if (preview.HasValue) _backdrop.ClearPreview();
+            });
             Paint(entry, false);
         }
 
-        /// <summary>Row fill at rest and under the cursor \u2014 washes over the artwork, not slabs.</summary>
+        /// <summary>Row fill at rest and under the cursor — washes over the artwork, not slabs.</summary>
         static readonly Color RowRest = new Color(1f, 1f, 1f, 0.030f);
         static readonly Color RowHover = new Color(0.180f, 0.506f, 0.941f, 0.16f);
         /// <summary>Every rule on this screen, so they cannot drift apart.</summary>

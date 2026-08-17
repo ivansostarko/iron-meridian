@@ -50,8 +50,33 @@ namespace IronMeridian.UI
 
         const float RowHeight = 96f, RowGap = 8f;
         const float StripRest = 4f, StripHover = 8f;
+
+        /// <summary>
+        /// How far a row's contents are inset from its own edges.
+        ///
+        /// The fill and the accent strip still run edge to edge — the strip is
+        /// what marks the row, and one starting 35 px in would be a floating
+        /// tick rather than a leading edge. What moves is everything you read:
+        /// the glyph, both lines of text, and the caption column at the far end.
+        /// </summary>
+        const float RowPadLeft = 35f, RowPadRight = 20f;
+
+        /// <summary>
+        /// The right-hand inset each page uses: the base above plus 30 px on the
+        /// campaign board and 40 px on a mission board.
+        ///
+        /// The two boards carry different things at that end — a campaign row
+        /// ends in a mission count, a mission row in a date over a place — and
+        /// the mission board's block is the deeper of the two, so it is given
+        /// the most air to sit in.
+        /// </summary>
+        const float CampaignPadRight = RowPadRight + 30f;
+        const float MissionPadRight = RowPadRight + 40f;
+
+        /// <summary>Left inset of a row's glyph.</summary>
+        const float GlyphX = RowPadLeft + 34f;
         /// <summary>Where a row's text column starts: clear of the glyph.</summary>
-        const float TextX = 84f;
+        const float TextX = RowPadLeft + 84f;
 
         enum Page { Campaigns, Missions }
 
@@ -71,6 +96,10 @@ namespace IronMeridian.UI
         RectTransform _listContent;
         Button _backButton;
 
+        ScreenBackdrop _backdrop;
+        /// <summary>The right-hand inset the page being built wants. Set by Show*.</summary>
+        float _rowPadRight = RowPadRight;
+
         Page _page = Page.Campaigns;
         Campaign _campaign = Campaign.Europe;
 
@@ -88,11 +117,26 @@ namespace IronMeridian.UI
             MissionLibrary.Reload();
 
             _canvas = UIFactory.CreateCanvas("SinglePlayerCanvas");
-            UIFactory.CreateScreenBackground(_canvas.transform, BackgroundId.SinglePlayer, 0.62f);
+            _backdrop = ScreenBackdrop.Attach(gameObject, _canvas.transform,
+                BackgroundId.SinglePlayer, 0.62f);
 
             BuildFrame();
             ShowCampaigns();
         }
+
+        // -------------------------------------------------------- background
+
+        /// <summary>The artwork behind a campaign's mission board, and its hover preview.</summary>
+        static BackgroundId BackgroundFor(Campaign c) => c switch
+        {
+            Campaign.Europe => BackgroundId.CampaignEurope,
+            Campaign.Africa => BackgroundId.CampaignAfrica,
+            Campaign.Asia => BackgroundId.CampaignAsia,
+            Campaign.NorthAmerica => BackgroundId.CampaignNorthAmerica,
+            Campaign.SouthAmerica => BackgroundId.CampaignSouthAmerica,
+            Campaign.Australia => BackgroundId.CampaignAustralia,
+            _ => BackgroundId.SinglePlayer
+        };
 
         // ------------------------------------------------------------- frame
 
@@ -158,6 +202,8 @@ namespace IronMeridian.UI
         void ShowCampaigns()
         {
             _page = Page.Campaigns;
+            _backdrop.SetPage(BackgroundId.SinglePlayer);
+            _rowPadRight = CampaignPadRight;
             _title.text = "SINGLE PLAYER";
             _subtitle.text = "Choose a campaign. Each one is a theatre, and each mission in it is " +
                              "a piece of real ground you fight over.";
@@ -176,7 +222,11 @@ namespace IronMeridian.UI
                     count == 1 ? "1 MISSION" : $"{count} MISSIONS",
                     null,
                     enabled: count > 0,
-                    () => ShowMissions(c));
+                    () => ShowMissions(c),
+                    // The row shows you the ground before you commit to it. A
+                    // campaign is a place, and a name and a blurb are a poor way
+                    // to say which place.
+                    preview: BackgroundFor(c));
             }
         }
 
@@ -184,6 +234,8 @@ namespace IronMeridian.UI
         {
             _page = Page.Missions;
             _campaign = campaign;
+            _backdrop.SetPage(BackgroundFor(campaign));
+            _rowPadRight = MissionPadRight;
             _title.text = CampaignInfo.DisplayName(campaign);
             _subtitle.text = CampaignInfo.Blurb(campaign);
             SetBackLabel("BACK TO CAMPAIGNS");
@@ -316,8 +368,10 @@ namespace IronMeridian.UI
         /// away.
         /// </summary>
         void AddRow(Sprite glyph, string label, string detail, string caption, string captionSub,
-            bool enabled, UnityEngine.Events.UnityAction action)
+            bool enabled, UnityEngine.Events.UnityAction action,
+            BackgroundId? preview = null)
         {
+            float padRight = _rowPadRight;
             var frame = UIFactory.CreateBorderedPanel(_listContent, "Row_" + label,
                 UiTheme.Surface, UiTheme.Border);
             frame.sizeDelta = new Vector2(0, RowHeight);
@@ -340,11 +394,12 @@ namespace IronMeridian.UI
             icon.color = accent;
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
-                new Vector2(34, 0), new Vector2(30, 30));
+                new Vector2(GlyphX, 0), new Vector2(30, 30));
 
             float captionWidth = string.IsNullOrEmpty(caption) ? 0f
                 : string.IsNullOrEmpty(captionSub) ? 150f : 190f;
-            float textWidth = BoardWidth - ListIndent - UIFactory.ScrollbarWidth - TextX - 24f - captionWidth;
+            float textWidth = BoardWidth - ListIndent - UIFactory.ScrollbarWidth
+                              - TextX - padRight - 4f - captionWidth;
 
             var title = UIFactory.CreateText(frame, label, 24, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -367,7 +422,7 @@ namespace IronMeridian.UI
                     TextAnchor.MiddleRight, FontStyle.Bold);
                 chip.raycastTarget = false;
                 UIFactory.Place(chip.rectTransform, new Vector2(1f, 0.5f),
-                    new Vector2(-22, stacked ? 10 : 0), new Vector2(captionWidth, 18));
+                    new Vector2(-padRight, stacked ? 10 : 0), new Vector2(captionWidth, 18));
                 UIFactory.Fit(chip, 9);
 
                 if (stacked)
@@ -376,7 +431,7 @@ namespace IronMeridian.UI
                         UiTheme.TextFaint, TextAnchor.MiddleRight);
                     where.raycastTarget = false;
                     UIFactory.Place(where.rectTransform, new Vector2(1f, 0.5f),
-                        new Vector2(-22, -9), new Vector2(captionWidth, 16));
+                        new Vector2(-padRight, -9), new Vector2(captionWidth, 16));
                     UIFactory.Fit(where, 9);
                 }
             }
@@ -395,8 +450,20 @@ namespace IronMeridian.UI
             // multiplies the whole row including the glyph and the strip, which
             // washes the accent out instead of lifting it.
             var trigger = frame.gameObject.AddComponent<EventTrigger>();
-            AddEvent(trigger, EventTriggerType.PointerEnter, () => Paint(row, true));
-            AddEvent(trigger, EventTriggerType.PointerExit, () => Paint(row, false));
+            AddEvent(trigger, EventTriggerType.PointerEnter, () =>
+            {
+                Paint(row, true);
+                // A row with no preview leaves the page's picture alone rather
+                // than clearing it — the mission board's artwork is already the
+                // campaign's, and blanking it under the cursor would be the
+                // screen flickering at every mouse movement.
+                if (preview.HasValue && enabled) _backdrop.Preview(preview.Value);
+            });
+            AddEvent(trigger, EventTriggerType.PointerExit, () =>
+            {
+                Paint(row, false);
+                if (preview.HasValue) _backdrop.ClearPreview();
+            });
             Paint(row, false);
         }
 
