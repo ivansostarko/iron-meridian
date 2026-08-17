@@ -453,6 +453,41 @@ namespace IronMeridian.UI
             Mathf.Max(RectOutline(u, v, 0.08f, 0.16f, 0.92f, 0.74f, 0.07f),
                       InPoly(u, v, new[] { 0.08f, 0.74f, 0.40f, 0.74f, 0.50f, 0.86f, 0.08f, 0.86f })));
 
+        // --------------------------------------------------- unit statistics
+        //
+        // Three marks for the three numbers a unit card carries. They are read
+        // together at 12 px, so each is a different *shape* rather than a
+        // different picture: a wedge, a shield, a dial.
+
+        /// <summary>Attack: a blade's point, driving right.</summary>
+        public static Sprite Attack => Get(nameof(Attack), (u, v) =>
+            Mathf.Max(InPoly(u, v, new[] { 0.10f, 0.30f, 0.62f, 0.50f, 0.10f, 0.70f }),
+                      Rect(u, v, 0.62f, 0.44f, 0.94f, 0.56f)));
+
+        /// <summary>Defence: a shield, the same silhouette as the emblem but solid.</summary>
+        public static Sprite Guard => Get(nameof(Guard), (u, v) =>
+        {
+            float dx = (u - 0.5f) / 0.40f;
+            float dy = (v - 0.44f) / 0.46f;
+            float body = dx * dx + dy * dy <= 1f && v <= 0.92f ? 1f : 0f;
+            // Cut the point in: a shield tapers to the bottom rather than
+            // ending in a curve, which is what tells it from a disc at 12 px.
+            float taper = v < 0.44f && Mathf.Abs(u - 0.5f) > (v + 0.10f) * 0.62f ? 0f : 1f;
+            return body * taper;
+        });
+
+        /// <summary>Speed: a dial with its needle over.</summary>
+        public static Sprite Gauge => Get(nameof(Gauge), (u, v) =>
+        {
+            float dx = u - 0.5f, dy = v - 0.36f;
+            float r = Mathf.Sqrt(dx * dx + dy * dy);
+            // Upper half of a ring — a speedometer's arc, not a clock face.
+            float arc = r > 0.30f && r < 0.42f && v >= 0.34f ? 1f : 0f;
+            float needle = Seg(u, v, 0.5f, 0.36f, 0.72f, 0.66f, 0.055f);
+            float hub = DiscAt(u, v, 0.5f, 0.36f, 0.075f);
+            return Mathf.Max(arc, Mathf.Max(needle, hub));
+        });
+
         /// <summary>Quit: a door with an arrow leaving it. Not a cross — a cross is "close a panel".</summary>
         public static Sprite Exit => Get(nameof(Exit), (u, v) =>
             Mathf.Max(

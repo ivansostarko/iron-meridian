@@ -172,8 +172,7 @@ namespace IronMeridian.UI
             UIFactory.Place(_statusLine.rectTransform, new Vector2(1f, 1f), new Vector2(-80, -136), new Vector2(760, 24));
 
             UIFactory.CreateBackButton(parent, "BACK TO DEVELOPMENT",
-                () => SceneManager.LoadScene(GameConfig.SceneTesting),
-                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
+                () => SceneManager.LoadScene(GameConfig.SceneTesting));
 
             // The tuning controls. Grouped at the right of the header rather
             // than in the detail panel: SAVE and RESET ALL act on the whole

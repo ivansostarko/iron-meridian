@@ -8,7 +8,7 @@ using IronMeridian.Core;
 namespace IronMeridian.UI
 {
     /// <summary>
-    /// The DEVELOPMENT hub — the way in to the map editor and to the three
+    /// The DEVELOPMENT hub — the way in to the map editor and to the five
     /// reference labs that let the game's own data be inspected without playing
     /// a scenario to find it.
     ///
@@ -16,6 +16,8 @@ namespace IronMeridian.UI
     ///   UNITS LIST      -> every unit type and weapon system, editable
     ///   PARTICLES       -> every VfxId, shown in 3D with its sound
     ///   AUDIO           -> every music, ambience and effect sound, with transport
+    ///   VIDEOS          -> every film, with a transport to watch it
+    ///   3D MODELS       -> every model in the library, shown in 3D
     ///
     /// **MAP EAST FRANCE is gone.** It was a card leading to a page that said
     /// "under development" — a menu entry whose whole content was the news that
@@ -42,9 +44,9 @@ namespace IronMeridian.UI
     {
         const float CardW = 430f, CardH = 240f, CardGap = 26f;
         /// <summary>
-        /// Cards per row. Four entries read as 3 + 1; the rows centre
-        /// themselves, so the odd one sits under the middle of the three rather
-        /// than off to one side.
+        /// Cards per row. Six entries read as 3 + 3; the rows centre
+        /// themselves, so a short last row sits under the middle of the one
+        /// above rather than off to one side.
         /// </summary>
         const int Columns = 3;
         /// <summary>Top of the first row, measured from the top of the screen.</summary>
@@ -78,8 +80,7 @@ namespace IronMeridian.UI
             UIFactory.Place(sub.rectTransform, new Vector2(0f, 1f), new Vector2(80, -126), new Vector2(900, 28));
 
             UIFactory.CreateBackButton(canvas.transform, "BACK TO MAIN MENU",
-                () => SceneManager.LoadScene(GameConfig.SceneMainMenu),
-                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
+                () => SceneManager.LoadScene(GameConfig.SceneMainMenu));
 
             var entries = new List<Entry>
             {
@@ -110,6 +111,20 @@ namespace IronMeridian.UI
                     Body = "Every music bed, weather ambience and effect sound, with its name, its " +
                            "resource path and a transport to play it.",
                     Tone = new Color(0.14f, 0.24f, 0.26f), Scene = GameConfig.SceneAudioList
+                },
+                new Entry
+                {
+                    Glyph = UiIcons.Play, Title = "VIDEOS",
+                    Body = "Every film the game plays, with the file behind it and a transport to " +
+                           "watch it — play, pause, restart and scrub.",
+                    Tone = new Color(0.24f, 0.16f, 0.30f), Scene = GameConfig.SceneVideoList
+                },
+                new Entry
+                {
+                    Glyph = UiIcons.Blueprint, Title = "3D MODELS",
+                    Body = "Every model in the library, shown in 3D — whether its prefab is " +
+                           "installed, what it came from and which units wear it.",
+                    Tone = new Color(0.18f, 0.20f, 0.30f), Scene = GameConfig.SceneModelList
                 }
             };
 

@@ -26,7 +26,7 @@ orders, call fire, and fight the battle out.
 |---|---|
 | Fight a scenario | Main menu → **SINGLE PLAYER** → a campaign → a mission |
 | Build one | Main menu → **DEVELOPMENT** → **MAP EDITOR** |
-| Inspect the data behind it | **DEVELOPMENT** → Units List · Particles · Audio |
+| Inspect the data behind it | **DEVELOPMENT** → Units List · Particles · Audio · Videos · 3D Models |
 
 Six campaigns are laid in with ninety missions across real ground — Europe,
 Africa, Asia, North America, South America and Australia, spanning 1990 to 2025.
@@ -87,7 +87,7 @@ Full guide: [docs/01-GETTING-STARTED.md](docs/01-GETTING-STARTED.md)
 
 ## Documentation
 
-Thirty-one documents under [`docs/`](docs/). Several are **registers** — the
+Thirty-two documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -142,6 +142,7 @@ in the same change as the catalogue, never afterwards.
 | [10-AUDIO](docs/10-AUDIO.md) | **Audio register** — music, weather beds, effect sounds, interface |
 | [11-GAME-MENU](docs/11-GAME-MENU.md) | **Background register** — the menus and their artwork |
 | [12-LOADERS](docs/12-LOADERS.md) | **Loader register** — everything that makes the player wait |
+| [32-VIDEO](docs/32-VIDEO.md) | **Video register** — every film, and the lab that plays them |
 | [13-DATE-AND-TIME](docs/13-DATE-AND-TIME.md) | The operational clock |
 | [14-WEATHER](docs/14-WEATHER.md) | Sky phase, weather conditions and the day/night cycle |
 
@@ -185,7 +186,7 @@ Assets/
     Data/missions.json      the mission book — 6 campaigns, 90 missions
     Maps/lyon_dev.json      the default Lyon scenario
     cesium-token.txt        <- YOUR CESIUM ION TOKEN GOES HERE (git-ignored)
-docs/                       31 documents; several are registers — see above
+docs/                       32 documents; several are registers — see above
 scripts/                    generate_units.py · generate_icons.py ·
                             generate_stat_icons.py · generate_units_doc.py ·
                             build-windows.ps1

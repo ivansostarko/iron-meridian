@@ -126,6 +126,10 @@ Assets/Scripts/
     EffectsListUI.cs     PARTICLES lab (docs/08-PARTICLE-SYSTEMS.md §3)
     AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
                           (docs/10-AUDIO.md §3)
+    VideoListUI.cs       VIDEOS lab: every film, whether its file resolves, and a
+                          transport — play, pause, restart, scrub (docs/32-VIDEO.md)
+    ModelListUI.cs       3D MODELS lab: every model in the library shown in 3D,
+                          with whether its prefab is installed (docs/09-3D-MODELS.md)
     EastFranceUI.cs      "Under development" placeholder — no longer linked from
                           the Development hub; its scene is still in Build Settings
     GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.

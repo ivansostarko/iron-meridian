@@ -62,7 +62,7 @@ namespace IronMeridian.UI
         const float RowPadLeft = 35f, RowPadRight = 20f;
 
         /// <summary>
-        /// The right-hand inset each page uses: the base above plus 30 px on the
+        /// The right-hand inset each page uses: the base above plus 50 px on the
         /// campaign board and 40 px on a mission board.
         ///
         /// The two boards carry different things at that end — a campaign row
@@ -70,7 +70,7 @@ namespace IronMeridian.UI
         /// the mission board's block is the deeper of the two, so it is given
         /// the most air to sit in.
         /// </summary>
-        const float CampaignPadRight = RowPadRight + 30f;
+        const float CampaignPadRight = RowPadRight + 50f;
         const float MissionPadRight = RowPadRight + 40f;
 
         /// <summary>Left inset of a row's glyph.</summary>
@@ -193,8 +193,7 @@ namespace IronMeridian.UI
             layout.spacing = RowGap;
             layout.padding = new RectOffset(0, 0, 0, 12);
 
-            _backButton = UIFactory.CreateBackButton(_canvas.transform, "BACK", GoBack,
-                new Vector2(0f, 0f), new Vector2(BoardX, 24f), new Vector2(320, 56));
+            _backButton = UIFactory.CreateBackButton(_canvas.transform, "BACK", GoBack);
         }
 
         // -------------------------------------------------------------- pages

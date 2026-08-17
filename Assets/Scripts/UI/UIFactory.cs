@@ -416,6 +416,11 @@ namespace IronMeridian.UI
             return btn;
         }
 
+        /// <summary>Where every menu screen's BACK control sits: the top-right corner.</summary>
+        public static readonly Vector2 BackAnchor = new Vector2(1f, 1f);
+        public static readonly Vector2 BackPosition = new Vector2(-80f, -62f);
+        public static readonly Vector2 BackSize = new Vector2(300f, 62f);
+
         /// <summary>
         /// The one BACK control every menu screen uses.
         ///
@@ -429,17 +434,25 @@ namespace IronMeridian.UI
         /// widens under the cursor, and a **glyph** so the direction is legible
         /// before the label is read.
         ///
-        /// Placement is the caller's: pass <paramref name="anchor"/> and
-        /// <paramref name="position"/> as for <see cref="Place"/>. The default
-        /// is the top-left corner, which is where a back control belongs on a
-        /// page you read left to right.
+        /// **Placement is decided here, not by the caller.** The screens had
+        /// drifted into three: top-right on the six data screens, bottom-centre
+        /// on the placeholders, bottom-left on the single-player board. A
+        /// control that moves between pages is a control the player has to find
+        /// again on each one, which is the one thing a back button must never
+        /// cost. The top-right corner wins because every menu screen puts its
+        /// title top-left and its content below, so that corner is the only one
+        /// free on all of them.
+        ///
+        /// The overrides remain for a screen that one day has a real reason;
+        /// nothing passes them today, and "this screen is different" is not a
+        /// reason.
         /// </summary>
         public static Button CreateBackButton(Transform parent, string label, UnityAction onClick,
             Vector2? anchor = null, Vector2? position = null, Vector2? size = null)
         {
-            Vector2 a = anchor ?? new Vector2(0f, 1f);
-            Vector2 p = position ?? new Vector2(64f, -60f);
-            Vector2 s = size ?? new Vector2(300f, 62f);
+            Vector2 a = anchor ?? BackAnchor;
+            Vector2 p = position ?? BackPosition;
+            Vector2 s = size ?? BackSize;
 
             var frame = CreateBorderedPanel(parent, "BackButton", UiTheme.Surface, UiTheme.BorderStrong);
             Place(frame, a, p, s);

@@ -220,6 +220,33 @@ Game-facing names live in `ModelClips` (`combat_idle`, `combat_run`, `combat_sho
 
 ---
 
+
+## The 3D MODELS lab
+
+**DEVELOPMENT → 3D MODELS** (`UI/ModelListUI.cs`) lists every entry in
+`UnitModelLibrary` and shows the selected one in 3D — drag to orbit, wheel to
+zoom, through the same `ModelPreview` rig the unit library and the catalogue
+editor use.
+
+| Column | What it says |
+|---|---|
+| Model id | The library key |
+| Source | The asset pack the mesh came from, or "Built in code" |
+| State | **INSTALLED** (prefab resolves) · **PROCEDURAL** (built in code, cannot be missing) · **NOT INSTALLED** |
+
+Rows are ordered installed → procedural → missing, which is the order somebody
+opening the screen is looking for, and each says how many unit types wear it —
+resolved through `UnitModelLibrary.Resolve`, the same call the map makes, so the
+screen cannot disagree with what is actually spawned.
+
+**It reports the truth, not the register.** A library naming a prefab path is not
+the same as the prefab existing: an art pack that was never imported, or an
+installer run that was never made, shows here as NOT INSTALLED. Before this
+screen the only way to find that out was to deploy a unit on the map and fly the
+camera to it.
+
+---
+
 ## Rules
 
 1. **This document is the register of every 3D model in the game.** Adding, replacing or reassigning a model, adding an animation clip, or showing a model in a new place is not done until §1 and §3 here are updated in the same commit.

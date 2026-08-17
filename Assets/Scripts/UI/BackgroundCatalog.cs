@@ -21,6 +21,12 @@ namespace IronMeridian.UI
         /// this is the preview, and a preview is part of the main menu.
         /// </summary>
         Extras,
+        /// <summary>The main menu's preview behind DEVELOPMENT.</summary>
+        Development,
+        /// <summary>The main menu's preview behind SETTINGS.</summary>
+        SettingsPreview,
+        /// <summary>The main menu's preview behind QUIT.</summary>
+        Quit,
 
         // One per campaign, shown while its mission board is open. The theatre
         // is the thing being chosen, so the screen changes with it rather than
@@ -103,7 +109,7 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.SinglePlayer,
-                resourcePath = "Graphics/Backgrounds/single-player",
+                resourcePath = "Graphics/Backgrounds/MainMenu/single-player",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "The single-player campaign board, and the fallback behind any " +
@@ -112,7 +118,7 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.Multiplayer,
-                resourcePath = "Graphics/Backgrounds/multi-player",
+                resourcePath = "Graphics/Backgrounds/MainMenu/multi-player",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "Multiplayer lobby screen, and the main menu's preview of it."
@@ -120,10 +126,34 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.Extras,
-                resourcePath = "Graphics/Backgrounds/extras",
+                resourcePath = "Graphics/Backgrounds/MainMenu/extras",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "The main menu's preview behind its EXTRAS row."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.Development,
+                resourcePath = "Graphics/Backgrounds/MainMenu/development",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "The main menu's preview behind its DEVELOPMENT row."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.SettingsPreview,
+                resourcePath = "Graphics/Backgrounds/MainMenu/settings",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "The main menu's preview behind its SETTINGS row."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.Quit,
+                resourcePath = "Graphics/Backgrounds/MainMenu/quit",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Default,
+                description = "The main menu's preview behind its QUIT row."
             },
 
             // The six theatres. Each falls back to the campaign board's own

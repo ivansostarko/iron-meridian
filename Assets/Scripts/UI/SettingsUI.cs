@@ -93,8 +93,7 @@ namespace IronMeridian.UI
             UIFactory.Place(sub.rectTransform, new Vector2(0f, 1f), new Vector2(RailX, -126), new Vector2(1100, 28));
 
             UIFactory.CreateBackButton(canvas.transform, "BACK TO MAIN MENU",
-                () => SceneManager.LoadScene(GameConfig.SceneMainMenu),
-                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
+                () => SceneManager.LoadScene(GameConfig.SceneMainMenu));
 
             BuildPage(canvas.transform, "VIDEO", "Resolution, quality and the frame rate", BuildVideoPage);
             BuildPage(canvas.transform, "AUDIO", "Master volume and the four channels under it", BuildAudioPage);

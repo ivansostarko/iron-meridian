@@ -168,7 +168,18 @@ namespace IronMeridian.UI
             ((RectTransform)home.transform).SetAsFirstSibling();
         }
 
-        /// <summary>Which rule set right-click and movement are following.</summary>
+        /// <summary>
+        /// Which rule set right-click and movement are following — and the
+        /// switch between them.
+        ///
+        /// **The chip is a control, not a readout.** It says which mode the map
+        /// is in, sits in the top bar where the player is already looking to
+        /// find that out, and was the obvious thing to click to change it — so
+        /// it now does. It is the same call the START BATTLE button makes
+        /// (<c>CombatSystem.Toggle</c>), not a second path into the same state:
+        /// two ways to switch modes is a convenience, two implementations of
+        /// switching modes is a bug waiting to happen.
+        /// </summary>
         void BuildModeChip(RectTransform bar)
         {
             _modeChip = UIFactory.CreateBorderedPanel(bar, "ModeChip", UiTheme.Surface, UiTheme.Border);
@@ -176,9 +187,20 @@ namespace IronMeridian.UI
             _modeChip.pivot = new Vector2(0, 0.5f);
             _modeChipFill = _modeChip.Find("Fill").GetComponent<Image>();
 
+            var btn = UIFactory.CreateButton(_modeChip, "", () => _combat.Toggle(),
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)btn.transform);
+            var made = btn.GetComponentInChildren<Text>(true);
+            if (made != null) made.gameObject.SetActive(false);
+
             _modeLabel = UIFactory.CreateText(_modeChip, "SCENARIO MODE", UiTheme.FontSmall,
                 UiTheme.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Stretch(_modeLabel.rectTransform);
+            _modeLabel.raycastTarget = false;
+
+            UiTooltip.Attach(btn.gameObject,
+                "Click to switch mode — scenario lays the battle out, battle fights it",
+                UiTooltip.Side.Below);
         }
 
         void BuildRightControls(RectTransform bar)

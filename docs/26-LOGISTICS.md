@@ -7,6 +7,14 @@ the same change.**
 
 ---
 
+> **Choosing a side.** The panel carries its own **FRIENDLY / ENEMY** selector at
+> the top. It used only to report the side, which was chosen on the UNITS tab —
+> so working on the enemy's logistic installations meant leaving this panel to switch, coming
+> back, and remembering to switch again afterwards. It is the same side every
+> other panel uses, and all of their tabs repaint together; there is one selected
+> side in the editor, not one per panel.
+
+
 ## 1. What a logistic site is
 
 A **place on the map that supports the force**: a depot, a supply point, or one

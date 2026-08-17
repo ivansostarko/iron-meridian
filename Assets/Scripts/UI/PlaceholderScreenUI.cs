@@ -59,8 +59,7 @@ namespace IronMeridian.UI
             UIFactory.Place(sub.rectTransform, new Vector2(0.5f, 0.5f),
                 new Vector2(0, -90), new Vector2(1200, 60));
 
-            UIFactory.CreateBackButton(canvas.transform, BackLabel, GoBack,
-                new Vector2(0.5f, 0f), new Vector2(0, 90), new Vector2(380, 66));
+            UIFactory.CreateBackButton(canvas.transform, BackLabel, GoBack);
         }
 
         void GoBack() => SceneManager.LoadScene(BackScene);

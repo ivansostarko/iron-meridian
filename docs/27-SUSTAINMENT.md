@@ -9,6 +9,14 @@ Left rail → **SUSTAINMENT**.
 
 ---
 
+> **Choosing a side.** The panel carries its own **FRIENDLY / ENEMY** selector at
+> the top. It used only to report the side, which was chosen on the UNITS tab —
+> so working on the enemy's stocks meant leaving this panel to switch, coming
+> back, and remembering to switch again afterwards. It is the same side every
+> other panel uses, and all of their tabs repaint together; there is one selected
+> side in the editor, not one per panel.
+
+
 ## 1. Why it is called that
 
 *Resources* is what a strategy game calls the numbers in the corner of the

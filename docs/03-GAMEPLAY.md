@@ -17,7 +17,9 @@ Main Menu ── SINGLE PLAYER ──┬── EUROPE ........... 15 missions, 1
     ├── TESTING ──┬── MAP EDITOR ........ map editor (Lyon)
     │             ├── UNITS LIST ......... unit catalogue
     │             ├── PARTICLES .......... effect catalogue
-    │             └── AUDIO ............. sound catalogue
+    │             ├── AUDIO ............. sound catalogue
+    │             ├── VIDEOS ............ film catalogue + transport
+    │             └── 3D MODELS ......... model library, shown in 3D
     ├── SETTINGS ──┬── VIDEO (resolution, window mode, quality, frame rate)
     │              ├── AUDIO (master + music/ambience/effects/interface)
     │              └── CONTROLS (every key and mouse button)
@@ -84,7 +86,7 @@ Hidden rows are **re-flowed, not merely switched off** — the rows sit at absol
 | Nav row | What the panel shows |
 |---|---|
 | **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight**, **max weapon range** and **fog of war** |
-| **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right). The palette every formation on the map is dragged from, so scenario mode cannot do without it |
+| **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right). The palette every formation on the map is dragged from, so scenario mode cannot do without it — see *The units panel* below |
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
@@ -103,11 +105,51 @@ Hidden rows are **re-flowed, not merely switched off** — the rows sit at absol
 
 The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
 
+**The top bar's mode chip is a switch.** Clicking it starts or stops the battle, exactly as START BATTLE does — it is the same `CombatSystem.Toggle` call, not a second path into the same state. The chip says which mode the map is in, sits where the player already looks to find that out, and was the obvious thing to click to change it.
+
 **Thirteen rows in scenario mode, three in battle** — the two lists above. The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, who is fighting, who commands, what supplies them and what they fight on, then the dressing, then the reserved pages.
 
 **The nav scrolls.** The full row set does not fit the rail on a 1280×720 screen, and a row that ran under the tool strip would be a section that could not be opened at all — the one failure a nav is not allowed. The emblem above and the tools below stay put; only the list between them moves. The scrollbar shows itself only when the mode's list is actually longer than the rail, so battle mode's three rows never carry one.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
+
+### The units panel
+
+**AVAILABLE is an accordion by arm of service.** A closed section carries its
+name and how many types are inside it — the answer to the question a closed
+section raises. Its cards are **inset 30 px** from the panel edge so they read as
+nested under the header that opened them; the header keeps the edge, because a
+heading indented as far as its contents stops looking like a heading.
+
+**A card's three numbers are marks and figures, not a sentence.** `ATK 12 · DEF 8
+· 45 km/h` was data written as prose: the words are three quarters of it, they
+repeat on every card, and at 11 px the eye has to parse the separators to find
+the figures. Each is now a glyph and a value — a blade, a shield, a dial — laid
+out on a fixed pitch so the numbers line up down the column. A list of cards is
+compared far more often than any one card is read, and columns are what make that
+possible. Each glyph carries a hover caption, since a mark is only self-evident
+to somebody who already knows it.
+
+**DEPLOYED is split by side.** It used to be one list in registry order — the
+order things happened to be spawned in — so a scenario with both sides laid out
+interleaved them, and the only thing telling a blue card from a red one was a
+3 px stripe down its edge. There are now two headed blocks, FRIENDLY and ENEMY,
+each with its own count. Both are always drawn: "nothing deployed for the enemy"
+is information a designer wants, not a row to hide.
+
+### Choosing a side
+
+LOGISTICS, SUSTAINMENT and MINES AND OBSTACLES each carry a **FRIENDLY / ENEMY**
+selector at the top of the panel.
+
+They used only to *report* the side — "FOR ENEMY" in the corner — because it was
+the UNITS tab's to choose. Laying an enemy minefield therefore meant opening
+UNITS, switching side, coming back, and remembering to switch it again
+afterwards. The control now sits where the work is.
+
+It is the **same** side, not one per panel: one side is selected in the editor at
+a time, every panel reads it, and the tabs everywhere repaint together. Two side
+pickers that could disagree would be a bug with a UI.
 
 ### Reserved sections
 

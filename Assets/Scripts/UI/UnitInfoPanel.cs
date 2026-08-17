@@ -59,8 +59,21 @@ namespace IronMeridian.UI
         /// </summary>
         const float ContentShift = 25f;
 
+        /// <summary>
+        /// Extra left padding on the content block — the section headings and
+        /// every label/value row under GENERAL, POSITION and COMBAT POWER.
+        ///
+        /// The panel widened to 330 px (see <see cref="UiTheme.RightPanelWidth"/>)
+        /// and the table kept its old gutter, which left the labels sitting
+        /// closer to the panel's edge than to anything else on it. The value
+        /// column is unaffected: it is anchored to the right, so the padding is
+        /// paid out of the gutter between the two columns rather than out of the
+        /// numbers.
+        /// </summary>
+        const float ContentPadLeft = 30f;
+
         /// <summary>Inset from the panel's left edge to the content — the table's own gutter, shifted.</summary>
-        const float TableLeftInset = TableInset - ContentShift;
+        const float TableLeftInset = TableInset - ContentShift + ContentPadLeft;
         /// <summary>Inset from the panel's right edge. The 25 px the left gave up ends up here.</summary>
         const float TableRightInset = TableInset + ContentShift;
 

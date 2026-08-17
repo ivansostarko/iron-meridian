@@ -54,9 +54,12 @@ All three layers set `raycastTarget = false`, so the background never intercepts
 | Asset | Path | Resource path | Screens | Scrim | Description |
 |---|---|---|---|---|---|
 | Default menu artwork | `Assets/Resources/Graphics/Backgrounds/default_background.png` | `Graphics/Backgrounds/default_background` | Main Menu, Development, Units List, Particles, Audio — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
-| Single player | `Assets/Resources/Graphics/Backgrounds/single-player.png` | `Graphics/Backgrounds/single-player` | Single Player — the campaign board, and the main menu's preview of it | 0.62 | The list of theatres, and the fallback behind any campaign with no artwork of its own. |
-| Multiplayer | `Assets/Resources/Graphics/Backgrounds/multi-player.png` | `Graphics/Backgrounds/multi-player` | Multiplayer, and the main menu's preview of it | 0.62 | The lobby screen. |
-| Extras | `Assets/Resources/Graphics/Backgrounds/extras.png` | `Graphics/Backgrounds/extras` | The main menu's EXTRAS row, on hover | 0.42 | The preview only. The Extras *screen* uses the interior artwork with the rest of the inner pages. |
+| Single player | `…/Graphics/Backgrounds/MainMenu/single-player.png` | `Graphics/Backgrounds/MainMenu/single-player` | Single Player — the campaign board, and the main menu's preview of it | 0.62 | The list of theatres, and the fallback behind any campaign with no artwork of its own. |
+| Multiplayer | `…/Graphics/Backgrounds/MainMenu/multi-player.png` | `Graphics/Backgrounds/MainMenu/multi-player` | Multiplayer, and the main menu's preview of it | 0.62 | The lobby screen. |
+| Extras | `…/Graphics/Backgrounds/MainMenu/extras.png` | `Graphics/Backgrounds/MainMenu/extras` | The main menu's EXTRAS row, on hover | 0.42 | The preview only. The Extras *screen* uses the interior artwork with the rest of the inner pages. |
+| Development | `…/Graphics/Backgrounds/MainMenu/development.png` | `Graphics/Backgrounds/MainMenu/development` | The main menu's DEVELOPMENT row, on hover | 0.42 | Preview only. |
+| Settings | `…/Graphics/Backgrounds/MainMenu/settings.png` | `Graphics/Backgrounds/MainMenu/settings` | The main menu's SETTINGS row, on hover | 0.42 | Preview only. |
+| Quit | `…/Graphics/Backgrounds/MainMenu/quit.png` | `Graphics/Backgrounds/MainMenu/quit` | The main menu's QUIT row, on hover | 0.42 | Preview only. |
 | Europe | `…/Graphics/Backgrounds/Missions/Europe/single-player-europe-background.png` | `Graphics/Backgrounds/Missions/Europe/single-player-europe-background` | EUROPE mission board | 0.62 | The theatre behind its own mission list. |
 | Africa | `…/Missions/Africa/single-player-africa-background.png` | `Graphics/Backgrounds/Missions/Africa/single-player-africa-background` | AFRICA mission board | 0.62 | ″ |
 | Asia | `…/Missions/Asia/single-player-asia-background.png` | `Graphics/Backgrounds/Missions/Asia/single-player-asia-background` | ASIA mission board | 0.62 | ″ |
@@ -195,9 +198,25 @@ has an edge of its own, an accent strip down its leading edge that widens under
 the cursor, and a `UiIcons.ArrowLeft` glyph so the direction is legible before the
 label is read.
 
-Used by `PlaceholderScreenUI` (Multiplayer, DLC, Credits), `TestingUI`,
-`SettingsUI`, `UnitLibraryUI`, `EastFranceUI` and `UnitsListUI`. Each passes its own anchor and
-position; the default is the top-left corner.
+**Placement is decided in `UIFactory`, not by the screen.** The screens had
+drifted into three: top-right on the six data screens, bottom-centre on the
+placeholders, bottom-left on the single-player board. A control that moves
+between pages is a control the player has to find again on each one, which is the
+one thing a back button must never cost. It now sits in the **top-right corner**
+of every menu screen — every one puts its title top-left and its content below,
+so that corner is the only one free on all of them. `BackAnchor` / `BackPosition`
+/ `BackSize` are the values; the per-call overrides remain for a screen that one
+day has a real reason, and nothing passes them today.
+
+**Escape does exactly what BACK does**, on every screen, including stepping back
+one page rather than out: missions → campaigns → main menu on the single-player
+board, an arm → the board → EXTRAS in the unit library. Screens with text fields
+let Escape leave the field first — `UnitsListUI`, `EffectsListUI`, `AudioListUI`
+and `UnitLibraryUI` all check for a focused `InputField` before leaving.
+
+Used by every menu screen: `MainMenuUI`'s children — `SinglePlayerUI`,
+`PlaceholderScreenUI` (Multiplayer, DLC, Credits), `TestingUI`, `SettingsUI`,
+`ExtrasUI` — and the five labs.
 
 ### 3.3 The settings screen
 
@@ -249,12 +268,12 @@ Audio levels live in `AudioManager` (`im.vol.*`) — see `docs/10-AUDIO.md`.
 Two screens change their artwork while you are on them, and both do it through
 `UI/ScreenBackdrop.cs`.
 
-**The main menu previews where a row leads.** Crossing SINGLE PLAYER puts the
-single-player image up, MULTIPLAYER the lobby's, EXTRAS its own. DEVELOPMENT,
-SETTINGS and QUIT have no picture of their own and leave the menu artwork alone —
-blanking it would make the background flicker as the cursor crossed the list. The
-menu says where you are going before you go there, and a photograph of the place
-does that better than a line of text under a heading.
+**The main menu previews where a row leads.** All six rows have a picture of
+their own, under `Graphics/Backgrounds/MainMenu/`: single-player, multi-player,
+extras, development, settings and quit. The menu says where you are going before
+you go there, and a photograph of the place does that better than a line of text
+under a heading. A row with no preview named would leave the menu's own artwork
+up rather than blanking it — the guard is what keeps adding a seventh row cheap.
 
 **The single-player screen shows the theatre.** The campaign board carries
 `single-player.png`; hovering a campaign previews its ground, and opening one

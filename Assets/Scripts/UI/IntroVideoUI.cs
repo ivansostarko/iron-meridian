@@ -31,8 +31,12 @@ namespace IronMeridian.UI
     /// </summary>
     public class IntroVideoUI : MonoBehaviour
     {
-        /// <summary>Resources path of the film, without extension.</summary>
-        const string ClipPath = "Videos/intro-video/game_intro";
+        /// <summary>
+        /// Resources path of the film. Read from the register rather than
+        /// written here, so the VIDEOS lab lists the same file this plays.
+        /// </summary>
+        static string ClipPath =>
+            IronMeridian.Data.VideoCatalog.Get(IronMeridian.Data.VideoId.GameIntro)?.resourcePath ?? "";
 
         /// <summary>Above every other canvas the game builds, the loader included.</summary>
         const int SortingOrder = 1000;

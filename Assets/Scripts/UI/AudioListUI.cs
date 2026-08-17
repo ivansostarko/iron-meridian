@@ -290,8 +290,7 @@ namespace IronMeridian.UI
             _resultCount = UIFactory.CreateText(parent, "", 19, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
             UIFactory.Place(_resultCount.rectTransform, new Vector2(0f, 1f), new Vector2(80, -116), new Vector2(1000, 28));
 
-            UIFactory.CreateBackButton(parent, "BACK TO DEVELOPMENT", Leave,
-                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
+            UIFactory.CreateBackButton(parent, "BACK TO DEVELOPMENT", Leave);
         }
 
         void Leave()

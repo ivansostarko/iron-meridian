@@ -36,6 +36,12 @@ EditorBuildSettings:
     path: Assets/Scenes/AudioList.unity
     guid: b1d343254570e3a48936a4d5f1c6a282
   - enabled: 1
+    path: Assets/Scenes/VideoList.unity
+    guid: 300eea2268cc04e4492b2c320eac8fdb
+  - enabled: 1
+    path: Assets/Scenes/ModelList.unity
+    guid: 4824346371dcec74e8757509b829db0c
+  - enabled: 1
     path: Assets/Scenes/UnitLibrary.unity
     guid: 64920884d666acc48b5e9d7adc4c022a
   - enabled: 1

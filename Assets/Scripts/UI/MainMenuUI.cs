@@ -261,10 +261,10 @@ namespace IronMeridian.UI
             layout.spacing = EntryGap;
             layout.padding = new RectOffset(0, 0, 0, 12);
 
-            // The three entries that lead somewhere with a picture of its own
-            // show it as the cursor crosses them: the menu says where you are
-            // going before you go there, and a still photograph of the place
-            // does that better than a line of text under a heading.
+            // Every entry shows where it leads as the cursor crosses it. The
+            // menu says where you are going before you go there, and a still
+            // photograph of the place does that better than a line of text
+            // under a heading.
             MenuEntry(content, UiIcons.Layers, "SINGLE PLAYER",
                 "Fight a scenario against the enemy commander",
                 () => SceneManager.LoadScene(GameConfig.SceneSinglePlayer),
@@ -275,16 +275,19 @@ namespace IronMeridian.UI
                 preview: BackgroundId.Multiplayer);
             MenuEntry(content, UiIcons.Blueprint, "DEVELOPMENT",
                 "The map editor and the reference labs — units, effects and audio",
-                () => SceneManager.LoadScene(GameConfig.SceneTesting));
+                () => SceneManager.LoadScene(GameConfig.SceneTesting),
+                preview: BackgroundId.Development);
             MenuEntry(content, UiIcons.Folder, "EXTRAS",
                 "Background material, credits and reference reading",
                 () => SceneManager.LoadScene(GameConfig.SceneExtras),
                 preview: BackgroundId.Extras);
             MenuEntry(content, UiIcons.Gear, "SETTINGS",
-                "Display, audio and map data",
-                () => SceneManager.LoadScene(GameConfig.SceneSettings));
+                "Display, audio and the controls",
+                () => SceneManager.LoadScene(GameConfig.SceneSettings),
+                preview: BackgroundId.SettingsPreview);
             MenuEntry(content, UiIcons.Exit, "QUIT",
-                "Leave Iron Meridian", ShowQuitModal);
+                "Leave Iron Meridian", ShowQuitModal,
+                preview: BackgroundId.Quit);
         }
 
         /// <summary>
@@ -377,9 +380,9 @@ namespace IronMeridian.UI
             AddEvent(trigger, EventTriggerType.PointerEnter, () =>
             {
                 Paint(entry, true);
-                // Rows with nothing of their own to show — DEVELOPMENT,
-                // SETTINGS, QUIT — leave the menu's own artwork up rather than
-                // clearing it to something blank.
+                // A row with no preview named leaves the menu's own artwork up
+                // rather than clearing it to something blank. Every row has one
+                // today; the guard is what keeps adding a seventh cheap.
                 if (preview.HasValue) _backdrop.Preview(preview.Value);
             });
             AddEvent(trigger, EventTriggerType.PointerExit, () =>

@@ -182,8 +182,7 @@ namespace IronMeridian.UI
             UIFactory.CreateScreenBackground(_canvas.transform, BackgroundId.Interior,
                 BackgroundCatalog.DenseScreenScrim);
 
-            _back = UIFactory.CreateBackButton(_canvas.transform, "BACK TO EXTRAS", GoBack,
-                new Vector2(1f, 1f), new Vector2(-80, -62), new Vector2(300, 62));
+            _back = UIFactory.CreateBackButton(_canvas.transform, "BACK TO EXTRAS", GoBack);
 
             BuildBoard();
             BuildList();

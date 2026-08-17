@@ -62,8 +62,7 @@ namespace IronMeridian.UI
                 "Who built Iron Meridian, and what it was built from.",
                 GameConfig.SceneCredits);
 
-            UIFactory.CreateBackButton(canvas.transform, "BACK TO MAIN MENU", GoBack,
-                new Vector2(0.5f, 0f), new Vector2(0, 90), new Vector2(380, 66));
+            UIFactory.CreateBackButton(canvas.transform, "BACK TO MAIN MENU", GoBack);
         }
 
         /// <summary>

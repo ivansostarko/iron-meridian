@@ -129,7 +129,18 @@ namespace IronMeridian.UI
         /// gives up exactly the width the icon column takes — everything in a
         /// card is best-fitted, so that is paid in type size, not truncation.
         /// </summary>
-        const float CardIconX = 43f;
+        const float CardIconX = SectionIndent + 13f;
+
+        /// <summary>
+        /// How far an arm's contents are inset from the panel, so the cards read
+        /// as nested under the header that opened them rather than as a list the
+        /// header happens to sit in.
+        ///
+        /// The header keeps the panel's own edge: it is the thing you click to
+        /// find the section, and a heading indented as far as its contents stops
+        /// looking like a heading.
+        /// </summary>
+        const float SectionIndent = 30f;
         /// <summary>Where a card's text column starts: icon inset + icon + gutter.</summary>
         const float CardTextX = CardIconX + CardIconSize + 6f;
         /// <summary>
@@ -138,7 +149,7 @@ namespace IronMeridian.UI
         /// so all three come off the panel width here.
         /// </summary>
         const float CardTextWidth = InnerWidth - CardTextX - UIFactory.ScrollbarWidth - 8f;
-        const float AvailableCardHeight = 58f;
+        const float AvailableCardHeight = 66f;
         const float DeployedCardHeight = 66f;
         /// <summary>Y of the list's tab row, measured from the section's top edge.</summary>
         /// <summary>
@@ -1065,6 +1076,88 @@ namespace IronMeridian.UI
             b.GetComponent<Image>().color = active ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
         }
 
+        /// <summary>
+        /// FRIENDLY / ENEMY at the head of a panel that puts something on the
+        /// map for one side.
+        ///
+        /// **Why the panels grew their own.** The side was the UNITS tab's, and
+        /// LOGISTICS, SUSTAINMENT and MINES AND OBSTACLES only *reported* it —
+        /// "FOR ENEMY" in the corner, decided on a different page. Laying an
+        /// enemy minefield therefore meant opening UNITS, switching side, coming
+        /// back, and remembering to switch it again afterwards. The control now
+        /// sits where the work is.
+        ///
+        /// It is the **same** `_team`, not a second one: one side is selected in
+        /// the editor at a time, every one of these panels reads it, and the
+        /// tabs everywhere repaint together. Two side pickers that could
+        /// disagree would be a bug with a UI.
+        /// </summary>
+        void SideSelector(RectTransform content, float y)
+        {
+            float half = (InnerWidth - 4f) / 2f;
+            Tab(Team.User, "FRIENDLY", 0);
+            Tab(Team.Enemy, "ENEMY", 1);
+
+            void Tab(Team team, string label, int index)
+            {
+                var frame = UIFactory.CreateBorderedPanel(content, "Side_" + label,
+                    UiTheme.Surface, UiTheme.Border);
+                UIFactory.Place(frame, new Vector2(0f, 1f),
+                    new Vector2(Pad + index * (half + 4f), y), new Vector2(half, 28));
+
+                var captured = team;
+                var btn = UIFactory.CreateButton(frame, label, () => SetTeam(captured),
+                    new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontSmall);
+                UIFactory.Stretch((RectTransform)btn.transform);
+
+                var text = btn.GetComponentInChildren<Text>(true);
+                UIFactory.Fit(text, 9);
+
+                _sideTabs.Add((team, frame.Find("Fill").GetComponent<Image>(), text));
+            }
+
+            PaintSideTabs();
+        }
+
+        /// <summary>Every side tab on every panel, repainted together — see <see cref="SideSelector"/>.</summary>
+        readonly List<(Team team, Image fill, Text label)> _sideTabs =
+            new List<(Team, Image, Text)>();
+
+        /// <summary>Height a <see cref="SideSelector"/> takes, so a page can leave room for it.</summary>
+        const float SideBlock = 34f;
+
+        void PaintSideTabs()
+        {
+            foreach (var (team, fill, label) in _sideTabs)
+            {
+                if (fill == null || label == null) continue;
+                bool on = team == _team;
+                fill.color = on ? (team == Team.User ? UiTheme.Friendly : UiTheme.Hostile)
+                                : UiTheme.Surface;
+                label.color = on ? Color.white : UiTheme.TextDim;
+            }
+        }
+
+        /// <summary>
+        /// A page that lays something down for one side: the selector, then the
+        /// page's own content shifted below it.
+        ///
+        /// The content is re-parented into a group rather than every offset in
+        /// the builder being moved down — the builders place by absolute offsets
+        /// from the top, and shifting a page by hand is a page of arithmetic
+        /// that has to be redone every time a row is added to it.
+        /// </summary>
+        RectTransform SidedPage(RectTransform content)
+        {
+            SideSelector(content, -8f);
+
+            var body = UIFactory.CreateGroup(content, "Body");
+            body.anchorMin = new Vector2(0, 0); body.anchorMax = new Vector2(1, 1);
+            body.offsetMin = Vector2.zero;
+            body.offsetMax = new Vector2(0, -SideBlock);
+            return body;
+        }
+
         void SetTeam(Team team)
         {
             _team = team;
@@ -1078,6 +1171,7 @@ namespace IronMeridian.UI
             // for — see BuildAirSupplySection.
             if (_airSupply != null) _airSupply.Team = team;
             if (_obstacles != null) _obstacles.Team = team;
+            PaintSideTabs();
             RefreshLogistics();
             RefreshSustainment();
             RefreshObstacles();
@@ -1211,25 +1305,97 @@ namespace IronMeridian.UI
                 new Vector2(-10f, 0f), new Vector2(40f, 16f));
         }
 
+        /// <summary>
+        /// The DEPLOYED list, **split by side**.
+        ///
+        /// It used to be one list in registry order, which is the order things
+        /// happened to be spawned in — so a scenario with both sides laid out
+        /// interleaved them, and the only thing telling a blue card from a red
+        /// one was a 3 px stripe down its edge. Two headed blocks answer the
+        /// question the list is actually opened with: what has each side got.
+        ///
+        /// Both blocks are always drawn, even when empty, because "nothing
+        /// deployed for the enemy" is information a designer wants rather than a
+        /// row to be hidden.
+        /// </summary>
         int PopulateDeployed()
         {
-            int count = 0, index = 0;
-            foreach (var actor in UnitRegistry.All)
+            int shown = 0, onMap = 0;
+
+            foreach (var team in new[] { Team.User, Team.Enemy })
             {
-                if (actor == null || !actor.IsAlive) continue;
-                // A formation the fog has taken off the map must not still be
-                // listed here with its call sign and readiness — the list would
-                // hand back exactly what the fog is withholding.
-                if (actor.HiddenByFog) continue;
-                index++;
-                if (!Matches(actor.Def.name, actor.Def.id, actor.State.customName)) continue;
-                CreateDeployedCard(actor, index);
-                count++;
+                var matching = new List<UnitActor>();
+                int held = 0;
+
+                foreach (var actor in UnitRegistry.All)
+                {
+                    if (actor == null || !actor.IsAlive) continue;
+                    // A formation the fog has taken off the map must not still
+                    // be listed here with its call sign and readiness — the list
+                    // would hand back exactly what the fog is withholding.
+                    if (actor.HiddenByFog) continue;
+                    if (actor.State.TeamEnum != team) continue;
+
+                    held++;
+                    if (!Matches(actor.Def.name, actor.Def.id, actor.State.customName)) continue;
+                    matching.Add(actor);
+                }
+
+                onMap += held;
+                SideHeader(team, matching.Count);
+
+                if (matching.Count == 0)
+                {
+                    EmptyRow(held == 0
+                        ? "Nothing deployed for this side."
+                        : "No formation on this side matches that search.");
+                    continue;
+                }
+
+                int index = 0;
+                foreach (var actor in matching) CreateDeployedCard(actor, ++index);
+                shown += matching.Count;
             }
-            if (count == 0) EmptyRow(index == 0
-                ? "Nothing deployed yet — drag a unit from AVAILABLE onto the map."
-                : "No deployed unit matches that search.");
-            return count;
+
+            if (onMap == 0 && string.IsNullOrEmpty(_search))
+                EmptyRow("Drag a unit from AVAILABLE onto the map to deploy it.");
+
+            return shown;
+        }
+
+        /// <summary>
+        /// A side's heading in the DEPLOYED list: a colour bar, the side's name
+        /// and how many of it are listed. Coloured, because the side is the one
+        /// thing the block is separating on.
+        /// </summary>
+        void SideHeader(Team team, int count)
+        {
+            bool friendly = team == Team.User;
+            var colour = friendly ? UiTheme.Friendly : UiTheme.Hostile;
+
+            var row = UIFactory.CreatePanel(_listContent, "Side_" + team, new Color(0, 0, 0, 0));
+            row.sizeDelta = new Vector2(0, 26);
+
+            var bar = UIFactory.CreatePanel(row, "Bar", colour);
+            bar.anchorMin = new Vector2(0, 0); bar.anchorMax = new Vector2(0, 1);
+            bar.pivot = new Vector2(0, 0.5f);
+            bar.offsetMin = new Vector2(0, 5f);
+            bar.offsetMax = new Vector2(3f, -5f);
+            bar.GetComponent<Image>().raycastTarget = false;
+
+            var text = UIFactory.CreateSectionHeader(row,
+                friendly ? "FRIENDLY" : "ENEMY", colour);
+            text.alignment = TextAnchor.MiddleLeft;
+            text.raycastTarget = false;
+            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(14f, 0f),
+                new Vector2(InnerWidth - 70f, 16f));
+            UIFactory.Fit(text, 8);
+
+            var badge = UIFactory.CreateText(row, count.ToString(), UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
+            badge.raycastTarget = false;
+            UIFactory.Place(badge.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10f, 0f),
+                new Vector2(40f, 16f));
         }
 
         bool Matches(params string[] fields)
@@ -1256,14 +1422,60 @@ namespace IronMeridian.UI
 
             var sprite = CardIcon(card, folder, def.id);
 
-            UIFactory.CreateStackedLabels(card, def.name,
-                $"ATK {def.attack:0}  ·  DEF {def.defence:0}  ·  {def.speedKmh:0} km/h",
-                CardTextX, CardTextWidth, topInset: 12f, titleSize: UiTheme.FontBody);
+            var name = UIFactory.CreateText(card, def.name, UiTheme.FontBody, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(name.rectTransform, CardTextX, 10f, CardTextWidth, 18f);
+            UIFactory.Fit(name, 9);
+
+            // The three numbers, as marks and values rather than as a sentence.
+            // "ATK 12 · DEF 8 · 45 km/h" was one line of prose read as data:
+            // the words are three quarters of it, they repeat on every card,
+            // and at 11 px the eye has to parse the dots to find the figures.
+            StatChips(card, def);
 
             var trigger = card.gameObject.AddComponent<EventTrigger>();
             AddEvent(trigger, EventTriggerType.BeginDrag, e => BeginDrag(def, sprite));
             AddEvent(trigger, EventTriggerType.Drag, e => Drag((PointerEventData)e));
             AddEvent(trigger, EventTriggerType.EndDrag, e => EndDrag((PointerEventData)e));
+        }
+
+        /// <summary>
+        /// The attack / defence / speed row on an AVAILABLE card: a glyph and a
+        /// figure, three times across.
+        ///
+        /// Laid out on a fixed pitch rather than flowed, so the numbers line up
+        /// down the column — a list of cards is compared far more often than any
+        /// single card is read, and columns are what make that possible. Each
+        /// pair carries a hover caption, because a glyph is only self-evident to
+        /// somebody who already knows what it stands for.
+        /// </summary>
+        void StatChips(RectTransform card, UnitDefinition def)
+        {
+            const float Pitch = 66f, Top = 34f, GlyphSize = 13f;
+
+            void Chip(int index, Sprite glyph, string value, Color tint, string caption)
+            {
+                float x = CardTextX + index * Pitch;
+
+                var icon = UIFactory.CreateImage(card, glyph, "Stat");
+                icon.color = tint;
+                icon.raycastTarget = false;
+                UIFactory.PlaceTopLeft((RectTransform)icon.transform, x, Top + 2f,
+                    GlyphSize, GlyphSize);
+
+                var text = UIFactory.CreateText(card, value, UiTheme.FontSmall, UiTheme.Text,
+                    TextAnchor.MiddleLeft, FontStyle.Bold);
+                UIFactory.PlaceTopLeft(text.rectTransform, x + GlyphSize + 5f, Top,
+                    Pitch - GlyphSize - 10f, 17f);
+                UIFactory.Fit(text, 8);
+                text.raycastTarget = false;
+
+                UiTooltip.Attach(icon.gameObject, caption, UiTooltip.Side.Right);
+            }
+
+            Chip(0, UiIcons.Attack, $"{def.attack:0}", UiTheme.Hostile, "Attack");
+            Chip(1, UiIcons.Guard, $"{def.defence:0}", UiTheme.Accent, "Defence");
+            Chip(2, UiIcons.Gauge, $"{def.speedKmh:0}", UiTheme.TextDim, "Speed, km/h");
         }
 
         /// <summary>A unit actually on the map: call sign, type and readiness.</summary>
@@ -1475,7 +1687,7 @@ namespace IronMeridian.UI
             new List<(ResourceKind, InputField, Text)>();
         readonly List<(BurnPeriod period, Image fill, Text label)> _burnTabs =
             new List<(BurnPeriod, Image, Text)>();
-        Text _manpowerFigure, _manpowerDetail, _sustainSide, _sustainVerdict;
+        Text _manpowerFigure, _manpowerDetail, _sustainVerdict;
         /// <summary>Suppresses the write-back while the fields are being filled from the model.</summary>
         bool _sustainSyncing;
 
@@ -1503,14 +1715,9 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildSustainmentSection(RectTransform section)
         {
-            var content = ScrollableSection(section, SustainmentPageHeight);
+            var content = SidedPage(ScrollableSection(section, SustainmentPageHeight + SideBlock));
 
             SectionLabel(content, "FORCE ON THE MAP", -8);
-
-            _sustainSide = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextDim,
-                TextAnchor.MiddleRight, FontStyle.Bold);
-            UIFactory.Place(_sustainSide.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad + InnerWidth - 110f, -8), new Vector2(110, 18));
 
             // The head count is the one figure on this page that is not a stock
             // at all, so it gets its own card rather than a row in the table.
@@ -1647,13 +1854,6 @@ namespace IronMeridian.UI
         public void RefreshSustainment()
         {
             if (_sustainment == null || _manpowerFigure == null) return;
-
-            bool enemy = _team == Team.Enemy;
-            if (_sustainSide != null)
-            {
-                _sustainSide.text = enemy ? "ENEMY" : "FRIENDLY";
-                _sustainSide.color = enemy ? GameConfig.RedTeam : GameConfig.BlueTeam;
-            }
 
             int onField = _sustainment.ManpowerOnField(_team);
             int establishment = _sustainment.EstablishmentOnField(_team);
@@ -2342,7 +2542,7 @@ namespace IronMeridian.UI
         readonly List<(ObstacleKind kind, Image fill, Text label)> _obstacleButtons =
             new List<(ObstacleKind, Image, Text)>();
         RectTransform _obstacleList;
-        Text _obstacleCount, _obstacleSide;
+        Text _obstacleCount;
 
         /// <summary>Drop every mine and obstacle graphic on the map.</summary>
         public System.Action ObstaclesClearRequested;
@@ -2373,14 +2573,9 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildObstacleSection(RectTransform section)
         {
-            var content = ScrollableSection(section, ObstaclePageHeight);
+            var content = SidedPage(ScrollableSection(section, ObstaclePageHeight + SideBlock));
 
             SectionLabel(content, "LAY ON MAP", -8);
-
-            _obstacleSide = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextDim,
-                TextAnchor.MiddleRight, FontStyle.Bold);
-            UIFactory.Place(_obstacleSide.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad + InnerWidth - 110f, -8), new Vector2(110, 18));
 
             float y = -34f;
             bool started = false;
@@ -2482,13 +2677,6 @@ namespace IronMeridian.UI
                 label.color = on ? UiTheme.Accent : UiTheme.Text;
             }
 
-            if (_obstacleSide != null)
-            {
-                bool enemySide = _team == Team.Enemy;
-                _obstacleSide.text = enemySide ? "FOR ENEMY" : "FOR FRIENDLY";
-                _obstacleSide.color = enemySide ? GameConfig.RedTeam : GameConfig.BlueTeam;
-            }
-
             if (_obstacleList == null) return;
 
             int blue = _obstacles.CountFor(Team.User), red = _obstacles.CountFor(Team.Enemy);
@@ -2541,7 +2729,7 @@ namespace IronMeridian.UI
         readonly List<(LogisticsKind kind, Image fill, Text label)> _logisticsButtons =
             new List<(LogisticsKind, Image, Text)>();
         RectTransform _logisticsList;
-        Text _logisticsCount, _logisticsSide;
+        Text _logisticsCount;
 
         /// <summary>
         /// The rear area, laid out on the map.
@@ -2562,16 +2750,9 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildLogisticsSection(RectTransform content)
         {
-            SectionLabel(content, "DEPLOY ON MAP", -8);
+            content = SidedPage(content);
 
-            // Which army the next site belongs to. The panel takes the side
-            // from the UNITS tab rather than carrying its own control, so it
-            // has to *say* which one that is — a deploy button whose side is
-            // decided on another page is a button you press to find out.
-            _logisticsSide = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextDim,
-                TextAnchor.MiddleRight, FontStyle.Bold);
-            UIFactory.Place(_logisticsSide.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad + InnerWidth - 110f, -8), new Vector2(110, 18));
+            SectionLabel(content, "DEPLOY ON MAP", -8);
 
             float y = -28f;
             foreach (var def in LogisticsCatalog.All)
@@ -2664,13 +2845,6 @@ namespace IronMeridian.UI
             }
 
             if (_logisticsList == null) return;
-
-            if (_logisticsSide != null)
-            {
-                bool enemySide = _team == Team.Enemy;
-                _logisticsSide.text = enemySide ? "FOR ENEMY" : "FOR FRIENDLY";
-                _logisticsSide.color = enemySide ? GameConfig.RedTeam : GameConfig.BlueTeam;
-            }
 
             int blue = _logistics.CountFor(Team.User), red = _logistics.CountFor(Team.Enemy);
             if (_logisticsCount != null)
