@@ -34,7 +34,7 @@ Unity 6 (6000.0 LTS) real-terrain operational wargame using **Cesium for Unity 1
 | Install authored VFX prefabs | **Tools → Iron Meridian → Install VFX Prefabs** (copies them into `Assets/Resources/VFX/`) |
 | Add a 3D model | Entry in `UnitModelLibrary.cs` → register FBXs in `ModelInstaller.cs` → **Tools → Iron Meridian → Install Unit Models** → **update `docs/09-3D-MODELS.md`** |
 | Add audio | File under `Assets/Resources/Audio/` → row in `AudioCatalog.cs` → play via `MusicManager` → **update `docs/10-AUDIO.md`** |
-| Add a screen background | Image under `Assets/Resources/Backgrounds/` → row in `BackgroundCatalog.cs` → `UIFactory.CreateScreenBackground` → **update `docs/11-GAME-MENU.md`** |
+| Add a screen background | Image under `Assets/Resources/Graphics/Backgrounds/` → row in `BackgroundCatalog.cs` → `UIFactory.CreateScreenBackground` → **update `docs/11-GAME-MENU.md`** |
 | Add a loader | `LoadingScreenUI.Show(...)` + `Track(progress, isComplete)` → block the screen's input guards → **update `docs/12-LOADERS.md`** |
 | Add an order-bar task | Enum value in `Enums.cs` → row in the matching catalogue (`MoveTaskCatalog` / `AttackTaskCatalog` / `ReconTaskCatalog`) → name a `TaskAreaShape` if it is placed → **update `docs/15-COMBAT-ORDERS.md`**. The submenu and the order loop are both driven by the catalogue |
 | Draw a task's ground | `TaskAreaSystem.Show` — ring, line or quadrants, with labels, motes and the select pulse. Never build the graphic at the call site. **`docs/15-COMBAT-ORDERS.md` §1a** |

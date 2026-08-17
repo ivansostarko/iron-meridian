@@ -83,7 +83,30 @@ namespace IronMeridian.UI
 
             btn.onClick.AddListener(() => IronMeridian.Audio.AudioManager.PlayClick(rt.gameObject));
             btn.onClick.AddListener(onClick);
+            AttachHoverSound(rt.gameObject);
             return btn;
+        }
+
+        /// <summary>
+        /// Gives a control the interface's hover sound.
+        ///
+        /// An <see cref="EventTrigger"/> rather than Button's own transition
+        /// hooks, because the rows that most want it — the menu entries, the
+        /// back button — paint their hover by hand and never use Button's
+        /// colour tint at all. Whether the sound is actually heard is
+        /// <c>AudioManager.UiHoverEnabled</c>'s decision, not this one: the map
+        /// editor switches it off, and it does so for controls that were built
+        /// long before it had the chance.
+        /// </summary>
+        public static void AttachHoverSound(GameObject control)
+        {
+            if (control == null) return;
+            var trigger = control.GetComponent<EventTrigger>();
+            if (trigger == null) trigger = control.AddComponent<EventTrigger>();
+
+            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            entry.callback.AddListener(_ => IronMeridian.Audio.AudioManager.PlayHover(control));
+            trigger.triggers.Add(entry);
         }
 
         public static Slider CreateSlider(Transform parent, float value, UnityAction<float> onChanged)
@@ -226,8 +249,17 @@ namespace IronMeridian.UI
         /// way to move it — which is invisible to anyone who does not try it.
         /// The bar is both the affordance and the fallback.
         /// </summary>
+        /// <param name="autoHideScrollbar">
+        /// Take the scrollbar off the screen while the content fits.
+        ///
+        /// A bar that is always there is a bar that says "there is more below"
+        /// when there is not — on a list whose length depends on the window, on
+        /// the map, or on what the player has built, that is a permanent small
+        /// lie. Unity's own <c>AutoHide</c> does the work; the viewport keeps
+        /// its inset either way, so nothing reflows as the bar comes and goes.
+        /// </param>
         public static ScrollRect CreateScrollView(Transform parent, out RectTransform content,
-            bool withScrollbar = false)
+            bool withScrollbar = false, bool autoHideScrollbar = false)
         {
             var root = CreatePanel(parent, "ScrollView", new Color(0, 0, 0, 0.25f));
             var scroll = root.gameObject.AddComponent<ScrollRect>();
@@ -255,7 +287,12 @@ namespace IronMeridian.UI
             scroll.viewport = viewport;
             scroll.horizontal = false;
             scroll.scrollSensitivity = 30;
-            if (withScrollbar) scroll.verticalScrollbar = CreateVerticalScrollbar(root);
+            if (withScrollbar)
+            {
+                scroll.verticalScrollbar = CreateVerticalScrollbar(root);
+                if (autoHideScrollbar)
+                    scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+            }
             return scroll;
         }
 
@@ -375,6 +412,7 @@ namespace IronMeridian.UI
 
             btn.onClick.AddListener(() => IronMeridian.Audio.AudioManager.PlayClick(rt.gameObject));
             btn.onClick.AddListener(onClick);
+            AttachHoverSound(rt.gameObject);
             return btn;
         }
 
@@ -556,6 +594,91 @@ namespace IronMeridian.UI
             scrim.GetComponent<Image>().raycastTarget = false;
 
             return root;
+        }
+
+        /// <summary>
+        /// A panel that fades out horizontally — opaque at its left edge,
+        /// transparent at its right.
+        ///
+        /// uGUI has no gradient fill, and the alternative — three or four
+        /// stacked panels at stepping alphas — bands visibly on a dark
+        /// photograph. One 64×1 texture stretched across the rect is smooth,
+        /// costs a single draw call, and is built once and cached like the
+        /// icons are.
+        ///
+        /// Used for the main menu's board field, so the interface sits on a
+        /// darkened column that dissolves into the artwork rather than ending
+        /// at a hard vertical seam.
+        /// </summary>
+        public static RectTransform CreateHorizontalFade(Transform parent, string name,
+            Color color, float leftAlpha, float rightAlpha)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+
+            var img = go.GetComponent<Image>();
+            img.sprite = FadeSprite();
+            img.type = Image.Type.Simple;
+            // Full alpha on the tint: the ramp is drawn per vertex by FadeTint,
+            // and an alpha here would multiply on top of it.
+            img.color = new Color(color.r, color.g, color.b, 1f);
+            img.raycastTarget = false;
+
+            go.AddComponent<FadeTint>().Set(img, leftAlpha, rightAlpha);
+
+            return (RectTransform)go.transform;
+        }
+
+        /// <summary>
+        /// Applies the right-hand alpha of a horizontal fade by driving the
+        /// image's per-vertex colours. `Image` has no gradient of its own, and
+        /// tinting alone cannot say "opaque here, clear there".
+        /// </summary>
+        class FadeTint : BaseMeshEffect
+        {
+            float _left = 1f, _right = 0f;
+
+            public void Set(Image image, float left, float right)
+            {
+                _left = left; _right = right;
+                if (image != null) image.SetVerticesDirty();
+            }
+
+            public override void ModifyMesh(VertexHelper helper)
+            {
+                if (!IsActive()) return;
+
+                var rect = ((RectTransform)transform).rect;
+                var vertex = new UIVertex();
+                for (int i = 0; i < helper.currentVertCount; i++)
+                {
+                    helper.PopulateUIVertex(ref vertex, i);
+                    float t = rect.width <= 0f ? 0f
+                        : Mathf.Clamp01((vertex.position.x - rect.xMin) / rect.width);
+                    var c = vertex.color;
+                    c.a = (byte)Mathf.RoundToInt(Mathf.Lerp(_left, _right, t) * 255f);
+                    vertex.color = c;
+                    helper.SetUIVertex(vertex, i);
+                }
+            }
+        }
+
+        static Sprite _fadeSprite;
+
+        /// <summary>A plain white 4×4 sprite — the fade's colour comes from the mesh tint.</summary>
+        static Sprite FadeSprite()
+        {
+            if (_fadeSprite != null) return _fadeSprite;
+
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false) { name = "FadeRamp" };
+            var pixels = new Color32[16];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(255, 255, 255, 255);
+            tex.SetPixels32(pixels);
+            tex.Apply(false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+
+            _fadeSprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 100f);
+            return _fadeSprite;
         }
 
         /// <summary>

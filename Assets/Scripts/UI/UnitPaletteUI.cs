@@ -647,50 +647,110 @@ namespace IronMeridian.UI
             // list between them moves.
             var nav = BuildNavList(panel);
 
-            // The authoring nav, in the order a scenario is actually built: the
+            // Every row the rail can show, in the order it shows them: the
             // ground rules, the forces, who is fighting, who commands, then the
-            // dressing. The five fire menus are not here — they went to the
-            // strike dock at the top right, being things you *do* in a scenario
-            // rather than things you set one up with.
-            float y = -NavPad;
-            AddNavRow(nav, Section.General, "GENERAL", UiIcons.Flag, ref y);
-            AddNavRow(nav, Section.Units, "UNITS", UiIcons.Person, ref y);
-            AddNavRow(nav, Section.Players, "PLAYERS", UiIcons.Shield, ref y);
-            AddNavRow(nav, Section.Commanders, "COMMANDERS", UiIcons.Orders, ref y);
-            AddNavRow(nav, Section.Logistics, "LOGISTICS", UiIcons.Pallet, ref y);
-            AddNavRow(nav, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop, ref y);
-            AddNavRow(nav, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute, ref y);
-            AddNavRow(nav, Section.Obstacles, "MINES AND OBSTACLES", UiIcons.Obstacles, ref y);
-            AddNavRow(nav, Section.Effects, "EFFECTS", UiIcons.Flame, ref y);
+            // dressing. Which of them are actually on screen depends on the
+            // mode — see ApplyModeVisibility. The five fire menus are not here;
+            // they went to the strike dock at the top right, being things you
+            // *do* in a scenario rather than things you set one up with.
+            AddNavRow(nav, Section.General, "GENERAL", UiIcons.Flag);
+            AddNavRow(nav, Section.Units, "UNITS", UiIcons.Person);
+            AddNavRow(nav, Section.Players, "PLAYERS", UiIcons.Shield);
+            AddNavRow(nav, Section.Commanders, "COMMANDERS", UiIcons.Orders);
+            AddNavRow(nav, Section.Logistics, "LOGISTICS", UiIcons.Pallet);
+            AddNavRow(nav, Section.Sustainment, "SUSTAINMENT", UiIcons.FuelDrop);
+            AddNavRow(nav, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute);
+            AddNavRow(nav, Section.Obstacles, "MINES AND OBSTACLES", UiIcons.Obstacles);
+            AddNavRow(nav, Section.Effects, "EFFECTS", UiIcons.Flame);
             // The single-player campaign's missions, edited here and played from
             // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(nav, Section.Missions, "MISSIONS", UiIcons.Pin, ref y);
+            AddNavRow(nav, Section.Missions, "MISSIONS", UiIcons.Pin);
             // Time and weather are one section, not two: they are the same
             // decision — what the light and the going are like — and a designer
             // who sets a night attack is choosing both in the same breath.
-            AddNavRow(nav, Section.Environment, "ENVIRONMENT", UiIcons.Cloud, ref y);
-            AddNavRow(nav, Section.Map, "MAP CONFIG", UiIcons.Layers, ref y);
+            AddNavRow(nav, Section.Environment, "ENVIRONMENT", UiIcons.Cloud);
+            AddNavRow(nav, Section.Map, "MAP CONFIG", UiIcons.Layers);
+            AddNavRow(nav, Section.Stats, "STATS", UiIcons.Chart);
+            AddNavRow(nav, Section.Zones, "ZONES", UiIcons.Square);
+            AddNavRow(nav, Section.Objects, "OBJECTS", UiIcons.Equipment);
+            AddNavRow(nav, Section.Supplies, "SUPPLIES", UiIcons.Crates);
+            AddNavRow(nav, Section.Groups, "GROUPS", UiIcons.Group);
 
-            // Four sections that exist as rows and empty pages, in the order
-            // they were asked for. Each is a place to build in rather than a
-            // feature — see the builders for what belongs in them.
-            AddNavRow(nav, Section.Stats, "STATS", UiIcons.Chart, ref y);
-            AddNavRow(nav, Section.Zones, "ZONES", UiIcons.Square, ref y);
-            AddNavRow(nav, Section.Objects, "OBJECTS", UiIcons.Equipment, ref y);
-            AddNavRow(nav, Section.Supplies, "SUPPLIES", UiIcons.Crates, ref y);
-
-            // Last, and hidden until a battle starts — see SetBattleMode. A
-            // group is something you command, not something you author, so the
-            // row appears with the rest of the battle chrome rather than
-            // sitting greyed out through the whole of a scenario's layout.
-            _groupsNavRow = AddNavRow(nav, Section.Groups, "GROUPS", UiIcons.Group, ref y);
-            _groupsNavRow.gameObject.SetActive(false);
-
-            // The list is as tall as the rows put in it, so the scroll knows
-            // when there is nothing more to show — and does not scroll at all
-            // on a screen tall enough to hold the lot.
-            nav.sizeDelta = new Vector2(0, -y + NavPad);
+            ApplyModeVisibility(false);
         }
+
+        // ------------------------------------------------------ nav by mode
+
+        /// <summary>
+        /// The rail in **scenario mode**: everything a scenario is laid out
+        /// with. Order follows the rows' build order, not this array.
+        /// </summary>
+        static readonly Section[] ScenarioSections =
+        {
+            // UNITS is here because it is the one section a scenario cannot be
+            // built without — it is the palette every formation on the map is
+            // dragged from.
+            Section.General, Section.Units, Section.Players, Section.Commanders,
+            Section.Logistics, Section.Sustainment, Section.Obstacles, Section.Effects,
+            Section.Missions, Section.Environment, Section.Map, Section.Zones, Section.Objects
+        };
+
+        /// <summary>
+        /// The rail in **battle mode**: what a fight in progress is managed
+        /// with. Deliberately short — during a battle the rail is not where the
+        /// player's attention should be.
+        /// </summary>
+        static readonly Section[] BattleSections =
+        {
+            Section.Reinforcements, Section.Stats, Section.Supplies
+        };
+
+        static bool Allowed(Section section, bool battle) =>
+            System.Array.IndexOf(battle ? BattleSections : ScenarioSections, section) >= 0;
+
+        /// <summary>
+        /// Shows the rows this mode has and re-flows the list around the ones it
+        /// does not.
+        ///
+        /// **Hidden rows are re-flowed, not merely switched off.** The rows are
+        /// placed at absolute offsets inside the scrolling list, so a hidden one
+        /// would otherwise leave a 36 px hole where it used to be and the rail
+        /// would read as a list with pieces missing rather than as a shorter
+        /// list.
+        ///
+        /// If the open section is not in the new mode's list, the panel closes.
+        /// Switching it to some other section would be the rail deciding what
+        /// the player is looking at; closing hands the screen back to the map,
+        /// which is what starting a battle is for.
+        /// </summary>
+        void ApplyModeVisibility(bool battle)
+        {
+            float y = -NavPad;
+
+            foreach (var (section, row) in _navOrder)
+            {
+                bool show = Allowed(section, battle);
+                row.gameObject.SetActive(show);
+                if (!show) continue;
+
+                row.anchoredPosition = new Vector2(0, y);
+                y -= NavRowPitch;
+            }
+
+            // The list is as tall as the rows actually in it, so the scroll
+            // knows when there is nothing more to show — and does not scroll at
+            // all when the mode's list fits.
+            if (_navList != null) _navList.sizeDelta = new Vector2(0, -y + NavPad);
+
+            if (_panelOpen && !Allowed(_section, battle)) ClosePanel();
+        }
+
+        /// <summary>Every nav row in build order, so the list can be re-flowed by mode.</summary>
+        readonly List<(Section section, RectTransform row)> _navOrder =
+            new List<(Section, RectTransform)>();
+
+        /// <summary>The scrolling list's content, sized to whichever rows are showing.</summary>
+        RectTransform _navList;
 
         /// <summary>
         /// The scrolling viewport the nav rows live in: from under the emblem
@@ -704,7 +764,11 @@ namespace IronMeridian.UI
         /// </summary>
         RectTransform BuildNavList(RectTransform panel)
         {
-            var scroll = UIFactory.CreateScrollView(panel, out RectTransform nav, withScrollbar: true);
+            // The bar hides itself when the mode's list fits, which is most of
+            // the time in battle mode — three rows never scroll.
+            var scroll = UIFactory.CreateScrollView(panel, out RectTransform nav,
+                withScrollbar: true, autoHideScrollbar: true);
+            _navList = nav;
             var rt = (RectTransform)scroll.transform;
             rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(1, 1);
             rt.offsetMin = new Vector2(0, ToolStripHeight);
@@ -722,16 +786,18 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// One nav row, placed at <paramref name="y"/> and stepping it on to the
-        /// next. Rows used to carry their own hand-written offsets, which meant
-        /// inserting a section in the middle was renumbering every row under it.
+        /// One nav row, added to the list in build order. Where it ends up
+        /// vertically is <see cref="ApplyModeVisibility"/>'s business — rows
+        /// used to carry hand-written offsets, which meant a row that was hidden
+        /// left a hole and a row inserted in the middle renumbered every row
+        /// under it.
         /// </summary>
-        RectTransform AddNavRow(RectTransform panel, Section section, string label, Sprite glyph, ref float y)
+        RectTransform AddNavRow(RectTransform panel, Section section, string label, Sprite glyph)
         {
             var row = UIFactory.CreatePanel(panel, "Nav_" + label, new Color(0, 0, 0, 0));
-            UIFactory.Place(row, new Vector2(0f, 1f), new Vector2(0, y), new Vector2(NavRowWidth, 34));
+            UIFactory.Place(row, new Vector2(0f, 1f), Vector2.zero, new Vector2(NavRowWidth, 34));
             row.pivot = new Vector2(0f, 1f);
-            y -= NavRowPitch;
+            _navOrder.Add((section, row));
 
             var btn = row.gameObject.AddComponent<Button>();
             btn.targetGraphic = row.GetComponent<Image>();
@@ -2034,7 +2100,7 @@ namespace IronMeridian.UI
         /// <summary>Release whichever group is holding the front line.</summary>
         public System.Action GroupFlotClearRequested;
 
-        RectTransform _groupsNavRow, _groupsList;
+        RectTransform _groupsList;
         Text _modeHeading;
         Text _groupsFlotState;
         string _flotHolder = "";
@@ -2263,10 +2329,11 @@ namespace IronMeridian.UI
                 _modeHeading.color = running ? UiTheme.Success : UiTheme.TextDim;
             }
 
-            if (_groupsNavRow != null) _groupsNavRow.gameObject.SetActive(running);
+            // The two modes carry two different rails — see ApplyModeVisibility,
+            // ScenarioSections and BattleSections.
+            ApplyModeVisibility(running);
 
             if (running) RefreshGroups();
-            else if (_section == Section.Groups && _panelOpen) ClosePanel();
         }
 
         // ------------------------------------------- mines and obstacles section

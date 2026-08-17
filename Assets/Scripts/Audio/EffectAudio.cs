@@ -122,7 +122,11 @@ namespace IronMeridian.Audio
             src.minDistance = Mathf.Max(20f, audibleRadius);
             src.maxDistance = Mathf.Max(400f, audibleRadius * 26f);
             src.dopplerLevel = 0f;                       // the camera is not a listener in motion
-            src.volume = BaseVolume;
+            // The effects channel is a mix level under the master volume, set
+            // on the settings screen — see AudioManager. Read at Play rather
+            // than held, because a source lives as long as its effect does and
+            // the slider can move while a fire is burning.
+            src.volume = BaseVolume * AudioManager.EffectsVolume;
             src.priority = 160;                          // below music and ambience
             src.loop = Loops(sound);
             src.Play();

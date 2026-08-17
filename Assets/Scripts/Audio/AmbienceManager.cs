@@ -61,8 +61,24 @@ namespace IronMeridian.Audio
             mgr._source.volume = 0f;
             mgr._source.Play();
             Current = track;
+            _mixLevel = def.volume;
 
-            mgr.FadeTo(def.volume, FadeSeconds);
+            mgr.FadeTo(_mixLevel * AudioManager.AmbienceVolume, FadeSeconds);
+        }
+
+        /// <summary>The playing bed's catalogue level, before the ambience channel is applied.</summary>
+        static float _mixLevel;
+
+        /// <summary>
+        /// Re-applies the ambience channel volume to whatever is playing —
+        /// the settings screen's slider, reaching a bed that is already running.
+        /// </summary>
+        public static void RefreshVolume()
+        {
+            if (Active == null || Active._source == null) return;
+            if (Current == AmbienceTrack.None) return;
+            if (Active._fade != null) { Active.StopCoroutine(Active._fade); Active._fade = null; }
+            Active._source.volume = _mixLevel * AudioManager.AmbienceVolume;
         }
 
         /// <summary>Fades the bed out and stops it.</summary>

@@ -33,6 +33,33 @@ namespace IronMeridian.Audio
         Snow
     }
 
+    /// <summary>
+    /// The interface's own sounds — the ones a button makes rather than the
+    /// ones the world makes.
+    /// </summary>
+    public enum UiSound
+    {
+        /// <summary>A button was pressed.</summary>
+        Click,
+        /// <summary>The cursor came to rest on a button.</summary>
+        Hover
+    }
+
+    /// <summary>One interface sound: where to load it and how loud it should sit.</summary>
+    public class UiSoundDef
+    {
+        public UiSound sound;
+
+        /// <summary>Resources path, without extension. Must live under an <c>Assets/Resources</c> folder.</summary>
+        public string resourcePath;
+
+        /// <summary>Playback level before the interface channel and the master volume are applied.</summary>
+        public float volume;
+
+        /// <summary>What this sound is for — mirrored in docs/10-AUDIO.md.</summary>
+        public string description;
+    }
+
     /// <summary>One music track: where to load it and how loud it should sit.</summary>
     public class MusicDef
     {
@@ -151,6 +178,48 @@ namespace IronMeridian.Audio
                 description = "Muffled wind bed for the Snow condition."
             }
         };
+
+        /// <summary>
+        /// The interface's two sounds.
+        ///
+        /// **Hover sits well under click.** A click happens when the player
+        /// decided something; a hover happens every time the cursor crosses a
+        /// row on its way somewhere else. At equal level the menu chatters, so
+        /// the hover is quiet enough to register as texture rather than as an
+        /// event, and it is suppressed altogether in the map editor — see
+        /// <c>AudioManager.UiHoverEnabled</c>.
+        /// </summary>
+        static readonly UiSoundDef[] Ui =
+        {
+            new UiSoundDef
+            {
+                sound = UiSound.Click,
+                resourcePath = "Audio/sfx/button/click-button",
+                volume = 0.70f,
+                description = "Every button press in the game. Falls back to the synthesised click when the file is missing."
+            },
+            new UiSoundDef
+            {
+                sound = UiSound.Hover,
+                resourcePath = "Audio/sfx/button/hover-button",
+                volume = 0.35f,
+                description = "The cursor coming to rest on a button, on the menu screens. Silent in the map editor."
+            }
+        };
+
+        static Dictionary<UiSound, UiSoundDef> _byUi;
+
+        public static UiSoundDef GetUi(UiSound sound)
+        {
+            if (_byUi == null)
+            {
+                _byUi = new Dictionary<UiSound, UiSoundDef>(Ui.Length);
+                foreach (var u in Ui) _byUi[u.sound] = u;
+            }
+            return _byUi.TryGetValue(sound, out var def) ? def : null;
+        }
+
+        public static IReadOnlyList<UiSoundDef> AllUi => Ui;
 
         static Dictionary<AmbienceTrack, AmbienceDef> _byAmbience;
 

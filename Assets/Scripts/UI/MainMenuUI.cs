@@ -36,48 +36,66 @@ namespace IronMeridian.UI
     /// the list — position, not a heading, is what keeps it clear of the cursor's
     /// resting place.
     ///
+    /// Three things carry the finish, and each replaced something assembled at
+    /// runtime out of interface parts:
+    ///
+    /// • **The logo is artwork**, not a procedural shield beside the game's name
+    ///   set in the UI font under a two-part rule. See <see cref="BuildMasthead"/>.
+    ///
+    /// • **The field fades into the map** rather than ending at a hairline. A
+    ///   flat panel with an edge reads as a dialog over a photograph; a gradient
+    ///   reads as shadow. See <see cref="BuildBoardField"/>.
+    ///
+    /// • **The rows are flat**, divided by rules rather than boxed one by one.
+    ///   Six bordered cards is six frames to cross to read six things; the
+    ///   border is what the hover adds. See <see cref="MenuEntry"/>.
+    ///
     /// Built entirely at runtime like every other screen (golden rule 2), from
     /// <see cref="UIFactory"/> and the <see cref="UiTheme"/> palette.
     /// </summary>
     public class MainMenuUI : MonoBehaviour
     {
         // ------------------------------------------------------------ layout
-        /// <summary>Left inset of the command board, and the width it occupies.</summary>
-        const float BoardX = 96f, BoardWidth = 560f;
-        /// <summary>Width of the darkened panel behind the board — wider than the board so it reads as a field, not a box.</summary>
-        const float ScrimWidth = BoardX * 2f + BoardWidth;
-        /// <summary>Y of the emblem row, measured from the top of the screen.</summary>
-        const float TitleY = -96f;
         /// <summary>
-        /// Drop from the title to the rule under it. Tightened when the
-        /// strapline between them was removed — a rule left at the old distance
-        /// would be a rule floating in the gap where a line of text used to be.
+        /// The board: a column down the left-hand edge carrying the logo, the
+        /// entries and the version line. Everything else on the screen is the
+        /// artwork behind it.
         /// </summary>
-        const float RuleDrop = 46f;
+        const float BoardX = 56f, BoardWidth = 500f;
         /// <summary>
-        /// Y the scrolling list starts at, measured from the top of the screen.
-        /// Higher than it used to be: the blurb that sat between the masthead
-        /// rule and the first entry is gone, and so is the strapline; the list
-        /// took both.
+        /// The darkened field the board stands on: solid this far, then
+        /// <see cref="FadeWidth"/> of gradient — see
+        /// <see cref="BuildBoardField"/>. The interface sits on a column of
+        /// shadow that dissolves into the map rather than ending at a seam.
         /// </summary>
-        const float MenuTop = -172f;
-        /// <summary>Clear space under the list, above the footer rule and version line.</summary>
-        const float MenuBottom = 100f;
+        const float FieldWidth = BoardX + BoardWidth + 40f;
+        const float FadeWidth = 260f;
+        /// <summary>Opacity of the field under the interface, and the colour both parts use.</summary>
+        const float FieldAlpha = 0.88f;
+
+        static Color FieldColour(float alpha) => new Color(0.012f, 0.020f, 0.031f, alpha);
+
+        /// <summary>The hairline down the board's leading edge, and its inset.</summary>
+        const float RuleX = BoardX - 12f;
+
+        /// <summary>Logo block: top-left inset, and the width it is fitted into.</summary>
+        const float LogoX = BoardX + 20f, LogoTop = 74f, LogoWidth = 470f;
+
+        /// <summary>Y the list starts at, measured from the top of the screen.</summary>
+        const float MenuTop = -292f;
+        /// <summary>Clear space under the list, above the version line.</summary>
+        const float MenuBottom = 92f;
 
         /// <summary>
-        /// How far the entry rows are indented from the board's own left edge.
-        ///
-        /// The masthead — emblem, title, accent rule — stays hard against the
-        /// board edge, and the list steps in from it. That is what turns a
-        /// column of cards into a menu *under* a heading rather than a stack of
-        /// panels beside one, and it gives the accent strip down each row's left
-        /// edge somewhere to be read against.
+        /// One entry row. Tall enough for a 24 px title over a wrapped line of
+        /// detail with air around both — the rows are the screen's one piece of
+        /// interface and they are read before they are clicked.
         /// </summary>
-        const float MenuIndent = 60f;
-
-        const float EntryHeight = 72f, EntryGap = 6f;
-        /// <summary>Accent strip down an entry's left edge, at rest and under the cursor.</summary>
-        const float StripRest = 4f, StripHover = 8f;
+        const float EntryHeight = 96f, EntryGap = 2f;
+        /// <summary>Accent strip down an entry's leading edge, at rest and under the cursor.</summary>
+        const float StripRest = 0f, StripHover = 4f;
+        /// <summary>Left inset of a row's glyph, and of the text column beside it.</summary>
+        const float GlyphX = 30f, TextX = 92f;
 
         GameObject _quitModal;
 
@@ -97,7 +115,15 @@ namespace IronMeridian.UI
         void Start()
         {
             IronMeridian.Audio.AudioManager.Apply();
-            IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
+            IronMeridian.Core.DisplaySettings.Apply();
+
+            // The opening film, once per launch. The menu is built behind it
+            // either way — the video's canvas sorts on top — so nothing here
+            // waits on it except the music, which would otherwise play under a
+            // film that has a score of its own.
+            IntroVideoUI.PlayOnce(() =>
+                IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme));
+
             var canvas = UIFactory.CreateCanvas("MainMenuCanvas");
 
             // A light scrim overall: the board carries its own darker field, so
@@ -114,60 +140,79 @@ namespace IronMeridian.UI
         // ---------------------------------------------------------- masthead
 
         /// <summary>
-        /// The darkened field the board stands on. Anchored to the left edge and
-        /// stretched full height so it reads as part of the frame rather than as
-        /// a floating card, and so the entries have guaranteed contrast whatever
-        /// the background image happens to be doing behind them.
+        /// The darkened field the board stands on: a column down the left-hand
+        /// edge, **faded out along its inboard side** rather than cut off at a
+        /// hard seam.
+        ///
+        /// The seam was the tell. A flat panel with a hairline down its edge
+        /// reads as a dialog laid over a photograph; a gradient reads as
+        /// shadow, and the artwork appears to run under the interface instead
+        /// of stopping behind it. It also lets the field be *darker* where the
+        /// text is, which is where contrast is actually needed.
         /// </summary>
         void BuildBoardField(Transform parent)
         {
-            var field = UIFactory.CreatePanel(parent, "BoardField", new Color(0.02f, 0.03f, 0.05f, 0.80f));
+            // Solid under the interface, fading only *past* it. A gradient that
+            // started at the screen's edge would be palest exactly where the
+            // second line of each entry is — the field's job is contrast under
+            // the text, and the fade's job is the join, so they are two rects.
+            var field = UIFactory.CreatePanel(parent, "BoardField", FieldColour(FieldAlpha));
             field.anchorMin = new Vector2(0, 0);
             field.anchorMax = new Vector2(0, 1);
             field.pivot = new Vector2(0, 0.5f);
-            field.sizeDelta = new Vector2(ScrimWidth, 0);
+            field.sizeDelta = new Vector2(FieldWidth, 0);
+            field.anchoredPosition = Vector2.zero;
             field.GetComponent<Image>().raycastTarget = false;
 
-            // Hairline down its inboard edge, where the board meets the artwork.
-            var edge = UIFactory.CreatePanel(field, "Edge", UiTheme.BorderStrong);
-            edge.anchorMin = new Vector2(1, 0); edge.anchorMax = new Vector2(1, 1);
-            edge.pivot = new Vector2(1, 0.5f);
-            edge.sizeDelta = new Vector2(1, 0);
-            edge.GetComponent<Image>().raycastTarget = false;
-        }
+            var fade = UIFactory.CreateHorizontalFade(parent, "BoardFade",
+                FieldColour(1f), FieldAlpha, 0f);
+            fade.anchorMin = new Vector2(0, 0);
+            fade.anchorMax = new Vector2(0, 1);
+            fade.pivot = new Vector2(0, 0.5f);
+            fade.sizeDelta = new Vector2(FadeWidth, 0);
+            fade.anchoredPosition = new Vector2(FieldWidth, 0);
 
-        void BuildMasthead(Transform parent)
-        {
-            var emblem = UIFactory.CreateImage(parent, UiIcons.Shield, "Emblem");
-            emblem.color = UiTheme.Accent;
-            emblem.raycastTarget = false;
-            UIFactory.Place((RectTransform)emblem.transform, new Vector2(0f, 1f),
-                new Vector2(BoardX, TitleY), new Vector2(44, 44));
-
-            var title = UIFactory.CreateText(parent, GameConfig.GameName.ToUpperInvariant(),
-                64, UiTheme.Text, TextAnchor.LowerLeft, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f),
-                new Vector2(BoardX + 60f, TitleY + 6f), new Vector2(BoardWidth - 60f, 64));
-
-            // There is no strapline under the title. "REAL-TERRAIN OPERATIONAL
-            // WARGAME" described the genre to somebody who had already bought
-            // the game and opened it — every entry below says what it does, and
-            // the line cost the list a row of vertical space to say nothing.
-
-            // Rule under the masthead: accent for the first stretch, then a
-            // hairline running out to the edge of the board. The two-part rule
-            // is the same device the section headers below use, so the whole
-            // column reads as one system.
-            var accentRule = UIFactory.CreatePanel(parent, "AccentRule", UiTheme.Accent);
-            UIFactory.Place(accentRule, new Vector2(0f, 1f),
-                new Vector2(BoardX, TitleY - RuleDrop), new Vector2(84, 3));
-            accentRule.GetComponent<Image>().raycastTarget = false;
-
-            var rule = UIFactory.CreatePanel(parent, "Rule", UiTheme.Border);
-            UIFactory.Place(rule, new Vector2(0f, 1f),
-                new Vector2(BoardX + 90f, TitleY - RuleDrop), new Vector2(BoardWidth - 90f, 1));
+            // The one hard line on the screen, down the board's leading edge —
+            // a spine for the logo and the list to hang off. It stops short of
+            // both ends so it reads as a rule rather than as a screen border.
+            var rule = UIFactory.CreatePanel(parent, "Spine", new Color(1f, 1f, 1f, 0.10f));
+            rule.anchorMin = new Vector2(0, 0); rule.anchorMax = new Vector2(0, 1);
+            rule.pivot = new Vector2(0, 0.5f);
+            rule.offsetMin = new Vector2(RuleX, 60f);
+            rule.offsetMax = new Vector2(RuleX + 1f, -60f);
             rule.GetComponent<Image>().raycastTarget = false;
         }
+
+        /// <summary>
+        /// The masthead is the logo artwork and nothing else.
+        ///
+        /// It used to be a procedural shield beside the game's name set in the
+        /// UI font, with a two-part rule under it — a wordmark assembled at
+        /// runtime out of the parts the interface happened to have. The real
+        /// logo carries the name, the emblem and the strapline together, in the
+        /// typeface they were drawn in, so all three of those devices go.
+        ///
+        /// Fitted by width with its aspect preserved: the artwork is 2140×735,
+        /// and a logo stretched to a rect is the most obvious sign of a menu
+        /// built by somebody who was not looking at it.
+        /// </summary>
+        void BuildMasthead(Transform parent)
+        {
+            var sprite = UIFactory.LoadSprite(LogoPath);
+            if (sprite == null) return;      // LoadSprite has already warned
+
+            var logo = UIFactory.CreateImage(parent, sprite, "Logo");
+            logo.raycastTarget = false;
+            logo.preserveAspect = true;
+
+            float height = sprite.rect.width > 0f
+                ? LogoWidth * (sprite.rect.height / sprite.rect.width)
+                : LogoWidth * 0.34f;
+            UIFactory.PlaceTopLeft((RectTransform)logo.transform, LogoX, LogoTop, LogoWidth, height);
+        }
+
+        /// <summary>Resources path of the wordmark — see docs/11-GAME-MENU.md §2.2.</summary>
+        const string LogoPath = "Graphics/Logo/game-logo";
 
         // -------------------------------------------------------------- menu
 
@@ -182,8 +227,11 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildMenu(Transform parent)
         {
+            // The scrollbar shows itself only when the list is actually longer
+            // than the board. Six entries fit any window worth supporting, so a
+            // permanent bar was a permanent claim that there was more below.
             var scroll = UIFactory.CreateScrollView(parent, out RectTransform content,
-                withScrollbar: true);
+                withScrollbar: true, autoHideScrollbar: true);
             // The board field behind it already carries the darkening; the
             // scroll view's own default wash would double it up into a slab.
             scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
@@ -191,40 +239,50 @@ namespace IronMeridian.UI
             var rt = (RectTransform)scroll.transform;
             rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(0, 1);
             rt.pivot = new Vector2(0, 0.5f);
-            rt.offsetMin = new Vector2(BoardX + MenuIndent, MenuBottom);
+            rt.offsetMin = new Vector2(BoardX, MenuBottom);
             rt.offsetMax = new Vector2(BoardX + BoardWidth, MenuTop);
 
-            // The shared scroll defaults are tuned for the map editor's small
-            // cards; these rows are 72 px tall and carry their own left inset,
-            // so they want no padding of their own.
             var layout = content.GetComponent<VerticalLayoutGroup>();
             layout.spacing = EntryGap;
             layout.padding = new RectOffset(0, 0, 0, 12);
 
-            MenuEntry(content, UiIcons.Flag, "SINGLE PLAYER",
+            MenuEntry(content, UiIcons.Layers, "SINGLE PLAYER",
                 "Fight a scenario against the enemy commander",
                 () => SceneManager.LoadScene(GameConfig.SceneSinglePlayer));
-            MenuEntry(content, UiIcons.Person, "MULTIPLAYER",
+            MenuEntry(content, UiIcons.Swords, "MULTIPLAYER",
                 "Take one side against another commander",
                 () => SceneManager.LoadScene(GameConfig.SceneMultiplayer));
-            MenuEntry(content, UiIcons.Layers, "DEVELOPMENT",
-                "The map editor and the reference labs — units, effects and audio",
+            MenuEntry(content, UiIcons.Blueprint, "DEVELOPMENT",
+                "The map editor and the reference labs \u2014 units, effects and audio",
                 () => SceneManager.LoadScene(GameConfig.SceneTesting));
-            MenuEntry(content, UiIcons.Chart, "EXTRAS",
+            MenuEntry(content, UiIcons.Folder, "EXTRAS",
                 "Background material, credits and reference reading",
                 () => SceneManager.LoadScene(GameConfig.SceneExtras));
             MenuEntry(content, UiIcons.Gear, "SETTINGS",
                 "Display, audio and map data",
                 () => SceneManager.LoadScene(GameConfig.SceneSettings));
-            MenuEntry(content, UiIcons.Close, "QUIT",
-                "Leave Iron Meridian", ShowQuitModal, danger: true);
+            MenuEntry(content, UiIcons.Exit, "QUIT",
+                "Leave Iron Meridian", ShowQuitModal);
         }
 
+        /// <summary>
+        /// One entry: a flat row carrying a glyph, a title and a line of detail.
+        ///
+        /// **Flat, not a card.** The rows used to be hairline-bordered panels \u2014
+        /// six boxes stacked with a gap between each, which is six frames the
+        /// eye has to cross to read a list of six things. They are now one
+        /// column of faint fills separated by a rule, so the list reads as a
+        /// single object; the border is what the *hover* adds, along with the
+        /// accent strip and a lift in the fill.
+        ///
+        /// **The glyph column is separated by a rule**, not by whitespace alone.
+        /// At 26 px an icon beside a 25 px title competes with it; behind a rule
+        /// it reads as an index down the side of the list.
+        /// </summary>
         void MenuEntry(Transform parent, Sprite glyph, string label, string detail,
-            UnityEngine.Events.UnityAction action, bool danger = false)
+            UnityEngine.Events.UnityAction action)
         {
-            var frame = UIFactory.CreateBorderedPanel(parent, "Entry_" + label,
-                UiTheme.Surface, UiTheme.Border);
+            var frame = UIFactory.CreatePanel(parent, "Entry_" + label, RowRest);
             // Width is driven by the layout group; only the height is ours.
             frame.sizeDelta = new Vector2(0, EntryHeight);
 
@@ -236,41 +294,55 @@ namespace IronMeridian.UI
             var caption = btn.GetComponentInChildren<Text>(true);
             if (caption != null) caption.gameObject.SetActive(false);
 
-            Color accent = danger ? UiTheme.Hostile : UiTheme.Accent;
-
-            var strip = UIFactory.CreatePanel(frame, "Strip", accent);
+            var strip = UIFactory.CreatePanel(frame, "Strip", UiTheme.Accent);
             strip.anchorMin = new Vector2(0, 0); strip.anchorMax = new Vector2(0, 1);
             strip.pivot = new Vector2(0, 0.5f);
             strip.sizeDelta = new Vector2(StripRest, 0);
             strip.GetComponent<Image>().raycastTarget = false;
 
+            // Hairline under the row. The last one is harmless: the list ends
+            // where the version line begins, and a rule there closes it.
+            var rule = UIFactory.CreatePanel(frame, "Rule", HairLine);
+            rule.anchorMin = new Vector2(0, 0); rule.anchorMax = new Vector2(1, 0);
+            rule.pivot = new Vector2(0.5f, 0);
+            rule.sizeDelta = new Vector2(0, 1);
+            rule.anchoredPosition = Vector2.zero;
+            rule.GetComponent<Image>().raycastTarget = false;
+
+            var divider = UIFactory.CreatePanel(frame, "GlyphRule", HairLine);
+            divider.anchorMin = new Vector2(0, 0); divider.anchorMax = new Vector2(0, 1);
+            divider.pivot = new Vector2(0, 0.5f);
+            divider.offsetMin = new Vector2(TextX - 22f, 22f);
+            divider.offsetMax = new Vector2(TextX - 21f, -22f);
+            divider.GetComponent<Image>().raycastTarget = false;
+
             var icon = UIFactory.CreateImage(frame, glyph, "Glyph");
-            icon.color = accent;
             icon.raycastTarget = false;
             UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
-                new Vector2(30, 0), new Vector2(24, 24));
+                new Vector2(GlyphX, 0), new Vector2(26, 26));
 
             // Placed by hand rather than through CreateStackedLabels: that
             // helper is built for the compact 12/11 px pairs the map panels use
-            // and fits its text into 16 px rows, which would shrink a 24 px
+            // and fits its text into 16 px rows, which would shrink a 25 px
             // menu label straight back down to panel size.
-            const float TextX = 72f;
-            // The row is as wide as the board less the indent and the scrollbar
-            // the list carries, so the text column stops clear of all three.
-            float textWidth = BoardWidth - MenuIndent - UIFactory.ScrollbarWidth - TextX - 24f;
+            //
+            // The column stops clear of the scrollbar's lane whether or not the
+            // bar is showing, so the text does not reflow as it appears.
+            float textWidth = BoardWidth - TextX - UIFactory.ScrollbarWidth - 16f;
 
-            var title = UIFactory.CreateText(frame, label, 24, UiTheme.Text,
-                TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(title.rectTransform, TextX, 13f, textWidth, 28f);
+            var title = UIFactory.CreateText(frame, label, 25, UiTheme.Text,
+                TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(title.rectTransform, TextX, 22f, textWidth, 30f);
             UIFactory.Fit(title, 16);
 
-            var sub = UIFactory.CreateText(frame, detail, 15, UiTheme.TextDim, TextAnchor.MiddleLeft);
-            UIFactory.PlaceTopLeft(sub.rectTransform, TextX, 41f, textWidth, 20f);
-            UIFactory.Fit(sub, 11);
+            // Two lines of room: DEVELOPMENT's description does not fit one, and
+            // a row that grew for it alone would break the column's rhythm.
+            var sub = UIFactory.CreateText(frame, detail, 15, UiTheme.TextDim, TextAnchor.UpperLeft);
+            UIFactory.PlaceTopLeft(sub.rectTransform, TextX, 54f, textWidth, 38f);
 
             var entry = new Entry
             {
-                Fill = frame.Find("Fill").GetComponent<Image>(),
+                Fill = frame.GetComponent<Image>(),
                 Strip = strip,
                 Glyph = icon,
                 Label = title,
@@ -280,16 +352,22 @@ namespace IronMeridian.UI
             // tint: the tint multiplies the whole row including the glyph and
             // the strip, which washes the accent out instead of lifting it.
             var trigger = frame.gameObject.AddComponent<EventTrigger>();
-            AddEvent(trigger, EventTriggerType.PointerEnter, () => Paint(entry, accent, true));
-            AddEvent(trigger, EventTriggerType.PointerExit, () => Paint(entry, accent, false));
-            Paint(entry, accent, false);
+            AddEvent(trigger, EventTriggerType.PointerEnter, () => Paint(entry, true));
+            AddEvent(trigger, EventTriggerType.PointerExit, () => Paint(entry, false));
+            Paint(entry, false);
         }
 
-        static void Paint(Entry e, Color accent, bool hover)
+        /// <summary>Row fill at rest and under the cursor \u2014 washes over the artwork, not slabs.</summary>
+        static readonly Color RowRest = new Color(1f, 1f, 1f, 0.030f);
+        static readonly Color RowHover = new Color(0.180f, 0.506f, 0.941f, 0.16f);
+        /// <summary>Every rule on this screen, so they cannot drift apart.</summary>
+        static readonly Color HairLine = new Color(1f, 1f, 1f, 0.055f);
+
+        static void Paint(Entry e, bool hover)
         {
-            e.Fill.color = hover ? UiTheme.SurfaceHover : UiTheme.Surface;
+            e.Fill.color = hover ? RowHover : RowRest;
             e.Strip.sizeDelta = new Vector2(hover ? StripHover : StripRest, 0);
-            e.Glyph.color = hover ? Color.white : accent;
+            e.Glyph.color = hover ? Color.white : UiTheme.Accent;
             e.Label.color = hover ? Color.white : UiTheme.Text;
             e.Detail.color = hover ? UiTheme.Text : UiTheme.TextDim;
         }
@@ -303,22 +381,32 @@ namespace IronMeridian.UI
 
         // ------------------------------------------------------------ footer
 
+        /// <summary>
+        /// The version line, and the small accent tick that marks the foot of
+        /// the board's spine.
+        ///
+        /// Quiet on purpose: a build number is for the person filing a bug, not
+        /// for the person about to play, so it is the faintest text on the
+        /// screen and sits under everything else. The tick is what stops it
+        /// floating — it ties the line back to the rule the whole column hangs
+        /// off.
+        /// </summary>
         void BuildFooter(Transform parent)
         {
-            var rule = UIFactory.CreatePanel(parent, "FooterRule", UiTheme.Border);
-            UIFactory.Place(rule, new Vector2(0f, 0f), new Vector2(BoardX, 76), new Vector2(BoardWidth, 1));
-            rule.GetComponent<Image>().raycastTarget = false;
+            var tick = UIFactory.CreatePanel(parent, "FooterTick", UiTheme.Accent);
+            UIFactory.Place(tick, new Vector2(0f, 0f), new Vector2(RuleX - 3f, 40f), new Vector2(7, 7));
+            tick.GetComponent<Image>().raycastTarget = false;
 
             var version = UIFactory.CreateText(parent,
-                $"{GameConfig.GameName}  ·  {GameConfig.Version}", 15, UiTheme.TextDim,
+                $"{GameConfig.GameName}   ·   {GameConfig.Version}", 14, UiTheme.TextFaint,
                 TextAnchor.LowerLeft);
             UIFactory.Place(version.rectTransform, new Vector2(0f, 0f),
-                new Vector2(BoardX, 44), new Vector2(BoardWidth, 24));
+                new Vector2(BoardX + 6f, 36f), new Vector2(BoardWidth, 20));
 
-            var hint = UIFactory.CreateText(parent, "Esc — quit", 14, UiTheme.TextFaint,
-                TextAnchor.LowerLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 0f),
-                new Vector2(BoardX, 22), new Vector2(BoardWidth, 22));
+            // No "Esc — quit" line. QUIT is the last row of the list, in words,
+            // where somebody looking for the way out will look — a shortcut
+            // caption under it was a second answer to a question the menu had
+            // already answered. Escape still works; see Update.
         }
 
         // ------------------------------------------------------------- modal
@@ -371,6 +459,10 @@ namespace IronMeridian.UI
 
         void Update()
         {
+            // While the opening film is up, every key belongs to it — Escape
+            // skips the video rather than opening the quit dialog behind it.
+            if (IntroVideoUI.Showing) return;
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 if (_quitModal != null && _quitModal.activeSelf) HideQuitModal();

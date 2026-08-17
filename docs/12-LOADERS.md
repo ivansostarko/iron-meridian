@@ -47,7 +47,7 @@ loading.Track(
 
 | Asset | Path | Resource path | Used by | Scrim | Description |
 |---|---|---|---|---|---|
-| Default menu artwork | `Assets/Resources/Backgrounds/default_background.png` | `Backgrounds/default_background` | Map editor loader (§3.1) | **0.48** (`BackgroundCatalog.LoaderScrim`) | Shared game artwork. Loaders use a lighter scrim than working screens — there is little text to read and the art is the point while waiting. |
+| Default menu artwork | `Assets/Resources/Graphics/Backgrounds/default_background.png` | `Graphics/Backgrounds/default_background` | Map editor loader (§3.1) | **0.48** (`BackgroundCatalog.LoaderScrim`) | Shared game artwork. Loaders use a lighter scrim than working screens — there is little text to read and the art is the point while waiting. |
 
 Loader artwork goes through the same builder as screen backgrounds, so it is aspect-preserved and never stretched. See `docs/11-GAME-MENU.md` for the layer stack.
 
@@ -79,7 +79,7 @@ All navigation uses synchronous `SceneManager.LoadScene`. Menu scenes build thei
 | Main Menu → Development / Settings | Menu buttons | Runtime-built uGUI only |
 | Development → Game | "MAP EDITOR" card | The `Game` scene shows its own loader (§3.1) once it starts |
 | Single player ↔ campaign / mission boards | Row clicks, Escape | Two pages of one scene — nothing is loaded between them |
-| Development → East France / Units List / Particles / Audio | Cards | Runtime-built uGUI only |
+| Development → Units List / Particles / Audio | Cards | Runtime-built uGUI only |
 | Any → previous screen | Back buttons, Escape | Runtime-built uGUI only |
 
 If a screen ever gains a slow build step, give it a `LoadingScreenUI` and add it to §3.1.
@@ -105,7 +105,7 @@ Fast enough to be invisible. Listed so the inventory is complete and so anything
 | Map save | `Assets/StreamingAssets/Maps/*.json` | `SaveSystem.LoadMap` | `Game` scene start, F9, opening a mission |
 | Mission list | `Assets/StreamingAssets/Data/missions.json` | `MissionLibrary` | Campaign screen, editor MISSIONS panel; cached for the session |
 | Unit icons | `Assets/Resources/Icons/**` | `UIFactory.LoadSprite` | On demand, cached by path |
-| Screen backgrounds | `Assets/Resources/Backgrounds/**` | `UIFactory.LoadSprite` | On demand, cached by path |
+| Screen backgrounds | `Assets/Resources/Graphics/Backgrounds/**` | `UIFactory.LoadSprite` | On demand, cached by path |
 | Unit 3D model | `Assets/Resources/Models/**` | `ModelPreview` | Units List row selection |
 | VFX prefabs | `Assets/Resources/VFX/**` | `VfxSystem` | First use of each effect, cached per id |
 

@@ -16,7 +16,13 @@ namespace IronMeridian.UI
     ///   UNITS LIST      -> every unit type and weapon system, editable
     ///   PARTICLES       -> every VfxId, shown in 3D with its sound
     ///   AUDIO           -> every music, ambience and effect sound, with transport
-    ///   MAP EAST FRANCE -> placeholder page ("Under development")
+    ///
+    /// **MAP EAST FRANCE is gone.** It was a card leading to a page that said
+    /// "under development" — a menu entry whose whole content was the news that
+    /// it had no content. Scenario maps are chosen inside the map editor, which
+    /// is where a second one will appear when there is one. The scene and its
+    /// placeholder script still exist and are still in Build Settings; nothing
+    /// links to them.
     ///
     /// **The grid is placed by hand, not by a layout group.** It was briefly a
     /// <see cref="GridLayoutGroup"/> swapped into a scroll view's content, which
@@ -35,7 +41,11 @@ namespace IronMeridian.UI
     public class TestingUI : MonoBehaviour
     {
         const float CardW = 430f, CardH = 240f, CardGap = 26f;
-        /// <summary>Cards per row. Five entries read as 3 + 2 at any window worth supporting.</summary>
+        /// <summary>
+        /// Cards per row. Four entries read as 3 + 1; the rows centre
+        /// themselves, so the odd one sits under the middle of the three rather
+        /// than off to one side.
+        /// </summary>
         const int Columns = 3;
         /// <summary>Top of the first row, measured from the top of the screen.</summary>
         const float GridTop = 210f;
@@ -100,12 +110,6 @@ namespace IronMeridian.UI
                     Body = "Every music bed, weather ambience and effect sound, with its name, its " +
                            "resource path and a transport to play it.",
                     Tone = new Color(0.14f, 0.24f, 0.26f), Scene = GameConfig.SceneAudioList
-                },
-                new Entry
-                {
-                    Glyph = UiIcons.Pin, Title = "MAP EAST FRANCE",
-                    Body = "Eastern France scenario map. Operational theatre from Lyon to the Rhine.",
-                    Tone = new Color(0.28f, 0.16f, 0.13f), Scene = GameConfig.SceneEastFrance
                 }
             };
 

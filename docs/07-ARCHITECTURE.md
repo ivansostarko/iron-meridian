@@ -12,6 +12,8 @@
 Assets/Scripts/
   Core/
     GameConfig.cs        constants: scenes, colours, tuning
+    DisplaySettings.cs   the player's video settings and the one place they are
+                          applied (quality, AA, shadows, textures, frame cap)
     CesiumTokenConfig.cs Cesium ion token resolution (file > constant)
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
@@ -47,7 +49,8 @@ Assets/Scripts/
     TuningStore.cs       the player's sparse patch over units.json and the weapon
                           catalogues, with shipped-value baselines so REVERT works
   Audio/                 sound — see docs/10-AUDIO.md
-    AudioManager.cs      master volume (AudioListener) + procedural UI click
+    AudioManager.cs      master + channel volumes, and the interface's click and
+                          hover (docs/10-AUDIO.md §2.2)
     AudioCatalog.cs      music tracks: resource path, level, loop
     MusicManager.cs      persistent background music; survives scene loads
     AmbienceManager.cs   weather bed, layered under the music
@@ -100,8 +103,15 @@ Assets/Scripts/
                           group, move formations between groups. It gives no
                           orders — a group's orders are on UnitActionBarUI,
                           where a formation's are
-    MainMenuUI.cs        left-hand command board: grouped entries + quit modal
-    SettingsUI.cs        Video tab (resolution, window mode) + Audio tab (volume)
+    MainMenuUI.cs        left-hand command board: logo, flat entry rows on a
+                          faded field, version line, quit modal
+    SettingsUI.cs        vertical tab rail: VIDEO (resolution, window mode,
+                          quality, AA, shadows, textures, vsync, frame cap),
+                          AUDIO (master + four channels, hover sounds) and
+                          CONTROLS (every key and mouse button, as chips)
+    IntroVideoUI.cs      the opening film, once per launch, over its own canvas
+                          at sorting order 1000. Any input skips it; it always
+                          ends (docs/11-GAME-MENU.md §3.1a)
     TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
     UnitsListUI.cs       UNITS LIST: six catalogues, editable, saved to
                           tuning.json
@@ -113,7 +123,8 @@ Assets/Scripts/
     EffectsListUI.cs     PARTICLES lab (docs/08-PARTICLE-SYSTEMS.md §3)
     AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
                           (docs/10-AUDIO.md §3)
-    EastFranceUI.cs      "Under development" placeholder
+    EastFranceUI.cs      "Under development" placeholder — no longer linked from
+                          the Development hub; its scene is still in Build Settings
     GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.
                          SetMissionMode strips it to the clock (docs/22-MISSIONS.md §3)
     UnitPaletteUI.cs     left rail (scrolling section nav + three tools) + the

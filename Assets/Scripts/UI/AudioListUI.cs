@@ -228,18 +228,29 @@ namespace IronMeridian.UI
                 });
             }
 
-            _entries.Add(new SoundEntry
+            // The interface's own sounds, off the same catalogue every button
+            // plays them from — so this register cannot disagree with what is
+            // actually heard. The click falls back to the synthesised one when
+            // its file is missing; the hover simply goes quiet.
+            foreach (var def in AudioCatalog.AllUi)
             {
-                key = "ui/click",
-                name = "UI click",
-                detail = "Every button in the game. Synthesised — a 1200 Hz sine with a 60 Hz decay.",
-                channel = Channel.Interface,
-                path = "",
-                volume = 1f,
-                loop = false,
-                clip = AudioManager.ClickClip,
-                source = Source.Synthesised
-            });
+                var file = Resources.Load<AudioClip>(def.resourcePath);
+                bool synth = file == null && def.sound == UiSound.Click;
+
+                _entries.Add(new SoundEntry
+                {
+                    key = "ui/" + def.sound,
+                    name = "UI " + def.sound.ToString().ToLowerInvariant(),
+                    detail = def.description,
+                    channel = Channel.Interface,
+                    path = def.resourcePath,
+                    resolvedPath = file != null ? def.resourcePath : "",
+                    volume = def.volume,
+                    loop = false,
+                    clip = file != null ? file : synth ? AudioManager.ClickClip : null,
+                    source = file != null ? Source.File : synth ? Source.Synthesised : Source.Missing
+                });
+            }
         }
 
         /// <summary>

@@ -98,8 +98,29 @@ namespace IronMeridian.Audio
             mgr._source.volume = 0f;
             mgr._source.Play();
             Current = track;
+            _mixLevel = def.volume;
 
-            mgr.FadeTo(def.volume, AudioCatalog.MusicFadeInSeconds);
+            mgr.FadeTo(_mixLevel * AudioManager.MusicVolume, AudioCatalog.MusicFadeInSeconds);
+        }
+
+        /// <summary>The playing track's catalogue level, before the music channel is applied.</summary>
+        static float _mixLevel;
+
+        /// <summary>
+        /// Re-applies the music channel volume to whatever is playing. Called
+        /// when the settings screen moves the slider — the bed is a
+        /// <see cref="DontDestroyOnLoad"/> singleton that is already running,
+        /// so a new level has to reach it rather than waiting for the next
+        /// track to start.
+        /// </summary>
+        public static void RefreshVolume()
+        {
+            if (Active == null || Active._source == null) return;
+            if (Current == MusicTrack.None) return;
+            // Snapped rather than faded: the player is dragging a slider and
+            // wants to hear the level they are choosing, not one a second late.
+            if (Active._fade != null) { Active.StopCoroutine(Active._fade); Active._fade = null; }
+            Active._source.volume = _mixLevel * AudioManager.MusicVolume;
         }
 
         /// <summary>Fades the music out and stops it.</summary>

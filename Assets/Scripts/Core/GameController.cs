@@ -137,6 +137,10 @@ namespace IronMeridian.Core
         void Start()
         {
             IronMeridian.Audio.AudioManager.Apply();
+            // No hover sound on this screen — a policy of the map editor's, not
+            // a change to the player's setting, and lifted again in OnDestroy.
+            // See AudioManager.HoverSuppressed.
+            IronMeridian.Audio.AudioManager.HoverSuppressed = true;
             IronMeridian.Audio.MusicManager.Play(IronMeridian.Audio.MusicTrack.MenuTheme);
             UnitRegistry.Clear();
             // Both static, so they survive a scene load: a fresh scenario
@@ -2368,6 +2372,14 @@ namespace IronMeridian.Core
                 CommanderRegistry.Seed(team);
             }
         }
+
+        /// <summary>
+        /// Hands the interface's hover sound back on the way out. The
+        /// suppression is this screen's, and Unity destroys the old scene
+        /// before the next one's <c>Start</c> runs, so the menu the player
+        /// lands on has it again.
+        /// </summary>
+        void OnDestroy() => IronMeridian.Audio.AudioManager.HoverSuppressed = false;
 
         void Update()
         {

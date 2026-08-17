@@ -9,11 +9,13 @@ Main Menu ── SINGLE PLAYER ──┬── WEST EUROPE ...... Berlin, Oslo
     │                              └── a mission ── loader ── game screen
     ├── MULTIPLAYER ....... "Under development"
     ├── EXTRAS ............ "Under development"
-    ├── TESTING ──┬── DEV ................ map editor (Lyon)
+    ├── TESTING ──┬── MAP EDITOR ........ map editor (Lyon)
     │             ├── UNITS LIST ......... unit catalogue
-    │             └── MAP EAST FRANCE .... "Under development"
-    ├── SETTINGS ──┬── VIDEO SETTINGS (resolution, window mode, v-sync)
-    │              └── AUDIO SETTINGS (master volume for the whole game)
+    │             ├── PARTICLES .......... effect catalogue
+    │             └── AUDIO ............. sound catalogue
+    ├── SETTINGS ──┬── VIDEO (resolution, window mode, quality, frame rate)
+    │              ├── AUDIO (master + music/ambience/effects/interface)
+    │              └── CONTROLS (every key and mouse button)
     └── QUIT ...... confirmation modal
 ```
 
@@ -63,10 +65,21 @@ The editor's left chrome is in two pieces:
 - The **rail** is always there: the emblem, the section nav, and the tool strip along the bottom. (There is no "ORDER OF BATTLE" caption — the labelled nav rows already say what the rail is, and the heading cost a row of vertical space the sections needed more.)
 - The **section panel** slides out from behind the rail carrying that section's controls.
 
+**The rail carries two different lists.** Which rows are on it depends on the mode, because laying a scenario out and fighting one are two different jobs and the rail was showing the whole of both at once:
+
+| Mode | Rows |
+|---|---|
+| **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS |
+| **Battle** | REINFORCEMENTS · STATS · SUPPLIES |
+
+Hidden rows are **re-flowed, not merely switched off** — the rows sit at absolute offsets inside the scrolling list, so a hidden one would otherwise leave a hole and the rail would read as a list with pieces missing rather than as a shorter list. `UnitPaletteUI.ApplyModeVisibility` does both, off `ScenarioSections` / `BattleSections`. If the open section is not in the new mode's list, the panel **closes** rather than switching to some other section: closing hands that strip of screen back to the map, which is what starting a battle is for.
+
+**GROUPS** is in neither list and so is currently unreachable. It is still built and still works — putting it back is one entry in the arrays above.
+
 | Nav row | What the panel shows |
 |---|---|
 | **GENERAL** | Tactical graphics — generate / clear sectors, auto-update — plus **line of sight**, **max weapon range** and **fog of war** |
-| **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right) |
+| **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right). The palette every formation on the map is dragged from, so scenario mode cannot do without it |
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
 | **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
@@ -81,13 +94,13 @@ The editor's left chrome is in two pieces:
 | **ZONES** | *Empty.* Reserved — see *Reserved sections* below |
 | **OBJECTS** | *Empty.* Reserved — see *Reserved sections* below |
 | **SUPPLIES** | *Empty.* Reserved — see *Reserved sections* below |
-| **GROUPS** | *Battle mode only.* Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below |
+| **GROUPS** | Every group on the map, and the one thing you can do to a group that is not an order: put it on the front line. See *Groups* below. *Currently in neither mode's list — see above* |
 
 The rail is headed **SCENARIO MODE** or **BATTLE MODE** — the top bar's chip says the same thing, but the rail is where the player's hands are, and half these sections mean something different depending on the answer.
 
-**Sixteen rows, and a seventeenth in battle.** The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, the forces, who is fighting, who commands, what supplies them and what they fight on, then the dressing, then the four reserved pages. **GROUPS** is added at the bottom when a battle starts and taken away when it stops — a group is something you command, not something you author, and a row that did nothing through the whole of a scenario's layout would be a row in the way.
+**Thirteen rows in scenario mode, three in battle** — the two lists above. The five fire menus moved to the strike dock at the top right (see below) and CONTROL MEASURES went altogether. What is left is the authoring nav, in the order a scenario is actually built: the ground rules, who is fighting, who commands, what supplies them and what they fight on, then the dressing, then the reserved pages.
 
-**The nav scrolls.** Seventeen rows do not fit the rail on a 1280×720 screen, and a row that ran under the tool strip would be a section that could not be opened at all — the one failure a nav is not allowed. The emblem above and the tools below stay put; only the list between them moves, with a scrollbar down its right edge.
+**The nav scrolls.** The full row set does not fit the rail on a 1280×720 screen, and a row that ran under the tool strip would be a section that could not be opened at all — the one failure a nav is not allowed. The emblem above and the tools below stay put; only the list between them moves. The scrollbar shows itself only when the mode's list is actually longer than the rail, so battle mode's three rows never carry one.
 
 Click a row to open it; click the **same** row again, or the **✕** in the panel's header, to close the panel and hand that strip of screen back to the map. Only one section is open at a time, and the active row is marked with an accent bar. The on-map zoom cluster rides the panel's edge, so it is never buried underneath it.
 

@@ -425,6 +425,44 @@ namespace IronMeridian.UI
         /// </summary>
         public static Sprite Disc => Get(nameof(Disc), (u, v) => DiscAt(u, v, 0.5f, 0.5f, 0.48f));
 
+        // ------------------------------------------------------- main menu
+        //
+        // Four glyphs the main menu's entries needed and the HUD had no answer
+        // for. Each says what is *behind* the row rather than decorating it:
+        // the menu's whole argument is that a list of six words is not a menu.
+
+        /// <summary>Multiplayer: two crossed blades — one side against another.</summary>
+        public static Sprite Swords => Get(nameof(Swords), (u, v) =>
+            Mathf.Max(
+                Mathf.Max(SegFilled(u, v, 0.16f, 0.14f, 0.80f, 0.86f, 0.062f),
+                          SegFilled(u, v, 0.84f, 0.14f, 0.20f, 0.86f, 0.062f)),
+                // Cross-guards at the two hilts, so the pair reads as blades
+                // rather than as an X.
+                Mathf.Max(Seg(u, v, 0.06f, 0.26f, 0.28f, 0.06f, 0.055f),
+                          Seg(u, v, 0.94f, 0.26f, 0.72f, 0.06f, 0.055f))));
+
+        /// <summary>Development: a drawing on a board — the map editor and the labs.</summary>
+        public static Sprite Blueprint => Get(nameof(Blueprint), (u, v) =>
+            Mathf.Max(RectOutline(u, v, 0.10f, 0.12f, 0.90f, 0.88f, 0.07f),
+                Mathf.Max(Seg(u, v, 0.10f, 0.66f, 0.90f, 0.66f, 0.055f),
+                    Mathf.Max(Seg(u, v, 0.38f, 0.12f, 0.38f, 0.66f, 0.055f),
+                              Rect(u, v, 0.52f, 0.30f, 0.78f, 0.52f)))));
+
+        /// <summary>Extras: a folder — material kept beside the game rather than in it.</summary>
+        public static Sprite Folder => Get(nameof(Folder), (u, v) =>
+            Mathf.Max(RectOutline(u, v, 0.08f, 0.16f, 0.92f, 0.74f, 0.07f),
+                      InPoly(u, v, new[] { 0.08f, 0.74f, 0.40f, 0.74f, 0.50f, 0.86f, 0.08f, 0.86f })));
+
+        /// <summary>Quit: a door with an arrow leaving it. Not a cross — a cross is "close a panel".</summary>
+        public static Sprite Exit => Get(nameof(Exit), (u, v) =>
+            Mathf.Max(
+                // Three sides of a frame: the fourth is the way out.
+                Mathf.Max(Seg(u, v, 0.14f, 0.10f, 0.14f, 0.90f, 0.075f),
+                    Mathf.Max(Seg(u, v, 0.14f, 0.90f, 0.56f, 0.90f, 0.075f),
+                              Seg(u, v, 0.14f, 0.10f, 0.56f, 0.10f, 0.075f))),
+                Mathf.Max(Seg(u, v, 0.46f, 0.50f, 0.90f, 0.50f, 0.070f),
+                          InPoly(u, v, new[] { 0.74f, 0.28f, 0.96f, 0.50f, 0.74f, 0.72f }))));
+
         // ---------------------------------------------------- missile systems
         //
         // Three glyphs for ten launchers, matching the two things a player is

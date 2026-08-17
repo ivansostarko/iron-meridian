@@ -10,7 +10,7 @@ The register of every sound in Iron Meridian — its file, where it plays, and w
 
 ```
 Assets/Scripts/Audio/
-  AudioManager.cs     master volume (AudioListener) + procedural UI click
+  AudioManager.cs     master + channel volumes, and the interface's click/hover
   AudioCatalog.cs     the register in code: track → resource path, level, loop
   MusicManager.cs     persistent music channel; survives scene loads
   AmbienceManager.cs  persistent weather channel; plays under the music
@@ -44,11 +44,21 @@ Four rules govern all audio:
 ### Volume chain
 
 ```
-clip → AudioSource.volume (per-track level from AudioCatalog)
-     → AudioListener.volume (master volume, Settings → Audio, persisted in PlayerPrefs "im.masterVolume")
+clip → catalogue level (per track / bed / sound, from AudioCatalog)
+     → channel volume  (music · ambience · effects · interface — AudioManager, PlayerPrefs "im.vol.*")
+     → AudioListener.volume (master volume — PlayerPrefs "im.masterVolume")
 ```
 
-There is currently **one** volume slider (master). Separate music/ambience/SFX buses would need a new `AudioManager` pref plus Settings rows — not implemented, though the channel split above is the groundwork for it.
+**Five sliders, on Settings → Audio.** Master goes through `AudioListener.volume`, so one control governs everything including sounds nothing else knows about. The four channel levels are multipliers each player applies to its own sources — which is the only way to let a player turn the music down without turning the battle down with it.
+
+| Channel | Pref | Applied by |
+|---|---|---|
+| Music | `im.vol.music` | `MusicManager` — on the running bed, through `RefreshVolume()` |
+| Ambience | `im.vol.ambience` | `AmbienceManager` — likewise |
+| Effects | `im.vol.effects` | `EffectAudio.PlayAt`, read per source at play time |
+| Interface | `im.vol.interface` | `AudioManager.PlayUi` |
+
+The two beds are `DontDestroyOnLoad` singletons that are **already playing** when a slider moves, so their level has to be pushed to them rather than waiting for the next track — that is what `RefreshVolume` is for, and it snaps rather than fades: a player dragging a slider wants to hear the level they are choosing, not one a second late.
 
 ### Playback behaviour
 
@@ -65,7 +75,7 @@ There is currently **one** volume slider (master). Separate music/ambience/SFX b
 
 | Asset | Path | Resource path | Screens | Level | Loop | Description |
 |---|---|---|---|---|---|---|
-| Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **Every screen except the two labs**: Main Menu, Settings, Development, Units List, East France, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
+| Menu theme | `Assets/Resources/Audio/main-menu/game_menu_background.mp3` | `Audio/main-menu/game_menu_background` | **Every screen except the two labs**: Main Menu, Settings, Development, Units List, Game (map editor) | 0.45 | Yes | Ambient background bed for the whole game. Continues uninterrupted across screen navigation. |
 
 | Single player | *not supplied yet* | `Audio/main-menu/single_player` | Single Player | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
 | Multiplayer | *not supplied yet* | `Audio/main-menu/multiplayer` | Multiplayer | 0.45 | Yes | **Awaiting its own track.** Falls back to the menu theme. |
@@ -102,9 +112,19 @@ Track ids in code: `AmbienceTrack.Rain` / `.Storm` / `.Snow`. The Clear, Overcas
 
 ### 2.2 UI sound effects
 
-| Asset | Path | Screens | Description |
-|---|---|---|---|
-| Button click | *Generated in code* — `AudioManager.BuildClick()` | Every screen, on every `UIFactory.CreateButton` | 1.2 kHz sine with a 50 ms exponential decay, synthesised at runtime. No file: the project must run with no audio assets present. Wired automatically by the button factory — call sites do nothing. |
+Both are wired automatically by the button factory — call sites do nothing. Ids in code: `UiSound.Click` / `.Hover`, rows in `AudioCatalog.AllUi`.
+
+| Asset | Path | Resource path | Screens | Level | Description |
+|---|---|---|---|---|---|
+| Button click | `Assets/Resources/Audio/sfx/button/click-button.mp3` | `Audio/sfx/button/click-button` | Every screen, on every `UIFactory.CreateButton` and `CreateIconButton` | 0.70 | The sound a button makes when it is pressed. |
+| Button hover | `Assets/Resources/Audio/sfx/button/hover-button.mp3` | `Audio/sfx/button/hover-button` | The menu screens only — **silent in the map editor** | 0.35 | The cursor coming to rest on a button. |
+| Synthesised click | *Generated in code* — `AudioManager.BuildClick()` | — | Fallback for the click above | — | 1.2 kHz sine with a 50 ms exponential decay. Kept so the project is still audible with no audio assets present. |
+
+**The click has a fallback and the hover does not.** A game with no click at all reads as unresponsive, so a missing file drops through to the synthesised one; a missing hover simply goes quiet, which is the correct absence for a sound whose whole job is to be barely there.
+
+**Hover is off in the map editor**, and that is a *policy of the screen*, not a change to the player's setting — `AudioManager.HoverSuppressed`, set in `GameController.Start` and lifted in its `OnDestroy`. The rail, the order bar and the fire menus put a hundred controls under a cursor that crosses them constantly on its way to the map; a sound on each one is noise, not feedback. The player's own preference is `AudioManager.HoverSounds` (Settings → Audio → Interface), and visiting the editor never overwrites it.
+
+Both play through `PlayOneShot` on a source borrowed from the control itself, so a row clicked while its own hover is still ringing does not cut the hover off.
 
 ### 2.3 Particle effect sounds
 
@@ -193,7 +213,6 @@ Tracked so the inventory stays honest and licensing stays traceable.
 | Units List | `UnitsList` | Menu theme | — | — | Click |
 | Particles lab | `EffectsList` | **stopped** | — | The selected effect's sound, 2D (§2.3) | Click |
 | Audio lab | `AudioList` | **stopped** | Any bed, on demand | Any effect sound, on demand | Click |
-| East France | `EastFrance` | Menu theme | — | — | Click |
 | Map editor (editing) | `Game` | Menu theme | — | Hand-placed effects (EFFECTS panel) | Click |
 | Map editor (battle running) | `Game` | Menu theme | Weather bed, if the condition has one | Combat, ordered attacks (§2.3) + hand-placed effects | Click |
 

@@ -69,7 +69,7 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.Default,
-                resourcePath = "Backgrounds/default_background",
+                resourcePath = "Graphics/Backgrounds/default_background",
                 scrimAlpha = 0.62f,
                 description = "Shared artwork behind every menu screen: main menu, settings, " +
                               "testing, units list and the placeholder pages."
@@ -81,7 +81,7 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.SinglePlayer,
-                resourcePath = "Backgrounds/single_player",
+                resourcePath = "Graphics/Backgrounds/single_player",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "Single-player campaign screen. Awaiting artwork."
@@ -89,7 +89,7 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.Multiplayer,
-                resourcePath = "Backgrounds/multiplayer",
+                resourcePath = "Graphics/Backgrounds/multiplayer",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "Multiplayer lobby screen. Awaiting artwork."
@@ -97,7 +97,7 @@ namespace IronMeridian.UI
             new BackgroundDef
             {
                 id = BackgroundId.Extras,
-                resourcePath = "Backgrounds/extras",
+                resourcePath = "Graphics/Backgrounds/extras",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "Extras screen. Awaiting artwork."

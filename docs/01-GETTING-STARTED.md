@@ -42,7 +42,6 @@ This creates `Assets/Scenes/` (MainMenu, Settings, Testing, EastFrance, SinglePl
 Press **Play**:
 
 - **TESTING → DEV** — the game screen over Lyon: drag units from the left palette, draw lines, press **START BATTLE**.
-- **TESTING → MAP EAST FRANCE** — placeholder ("Under development").
 - **SETTINGS** — Video (resolution, window mode) and Audio (master volume) tabs.
 - **QUIT** — confirmation modal.
 
