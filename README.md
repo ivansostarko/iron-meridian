@@ -41,17 +41,37 @@ so nothing renders without one. See [Quick start](#quick-start-windows) below.
 
 ## Features
 
-- **Main menu** with Testing, Settings (Video + Audio tabs) and Quit (with confirmation modal)
-- **Cesium 3D world**: real terrain + satellite imagery + OSM buildings, default map centred on **Lyon, France**
-- **2D / 3D switch** for both the game view and drawn lines
-- **117 unit types** — organised into nine arms of service (Infantry, Armour, Mechanised, Artillery, Anti-Aircraft, Air, Navy, Logistics, Other) — each with manpower, training, morale, combat power, ammunition type & stocks, fuel and food
-- **Two teams** (User = Blue, Enemy = Red) with APP-6 style **custom icons** for every unit of both teams, plus Friendly / Hostile / Neutral / Unknown affiliations
-- **Full echelon ladder**: Team → Squad → Section → Platoon → Company → Battalion → Regiment → Brigade → Division → Corps → Army
-- **Drag & drop deployment** from the left-side order-of-battle palette for both teams
-- **Click-to-move** with smooth animated movement and destination markers (LMB select, RMB order)
-- **Boundary & defensive line drawing** (2D or 3D, terrain-following)
-- **Auto front line**: as units move, fight and die, the boundary between the teams updates automatically, weighted by combat power
-- **Per-map JSON saves** storing every unit's position and full status
+**The world**
+
+- **Cesium 3D terrain** — real elevation, satellite imagery and OSM buildings, streamed at runtime. Everything is positioned geodetically (WGS84), so a saved scenario is a place on Earth rather than a set of scene coordinates
+- **2D / 3D switch** for the camera and for every control measure drawn on the ground
+- **Operational clock** with H-hour, time compression, an automatic day/night cycle, and six weather conditions that change what can be seen and heard
+
+**The forces**
+
+- **117 unit types** across nine arms of service, each with manpower, training, morale, combat power, ammunition type and stocks, fuel and food — all data, never hard-coded
+- **APP-6 style icons** generated for both sides, with Friendly / Hostile / Neutral / Unknown affiliations
+- **Full echelon ladder**, Team through Army, with drag-and-drop deployment from the order-of-battle palette
+- **Chain of command** — twenty officers a side in a pyramid; knocking out a headquarters degrades everything under it
+- **Logistics and sustainment** — depots, supply, fuel, ammunition, repair and medical points, and the stocks a force burns through while it fights
+- **Reinforcements** that arrive at H+n in their side's deployment zone
+
+**Fighting**
+
+- **Orders** — move and march, attack, defend, recon, with the ground each order puts down drawn on the map
+- **Called fires** — artillery by nature and calibre, air strikes, UAV sorties, missile systems and naval gunfire, each with its own effects and report
+- **Air defence** that engages drones and aircraft over the formations it covers
+- **Fog of war** — the enemy is seen only where something of yours can see them, with contacts that decay into a growing ring of uncertainty
+- **A front line that answers to the fighting** — the FLOT is derived from where the formations stand and what they are worth, not drawn by hand
+- **Mines and obstacles**, laid as NATO barrier graphics
+
+**Around the game**
+
+- **Six campaigns, ninety missions** on real ground from 1990 to 2025 — see [docs/22-MISSIONS.md](docs/22-MISSIONS.md)
+- **A map editor that is the same scene as the game**, so a mission edited in it is the mission that is played
+- **Settings** — video (resolution, quality, anti-aliasing, shadows, textures, frame rate), audio (master plus four channels), and a controls reference
+- **In-game tuning** of every unit and weapon catalogue, saved as a patch over the shipped data so regenerating the catalogues never discards it
+- **Per-map JSON saves** holding every unit's position and status
 
 ## Quick start (Windows)
 
@@ -67,15 +87,70 @@ Full guide: [docs/01-GETTING-STARTED.md](docs/01-GETTING-STARTED.md)
 
 ## Documentation
 
+Thirty-one documents under [`docs/`](docs/). Several are **registers** — the
+human-readable half of a catalogue in code, and the rule is that they are updated
+in the same change as the catalogue, never afterwards.
+
+### Start here
+
 | Doc | Contents |
 |---|---|
-| [docs/01-GETTING-STARTED.md](docs/01-GETTING-STARTED.md) | Windows setup, first run |
-| [docs/02-CESIUM.md](docs/02-CESIUM.md) | Cesium overview, ion account, **where to put the API token** |
-| [docs/03-GAMEPLAY.md](docs/03-GAMEPLAY.md) | Screens, controls, teams, combat, lines |
-| [docs/04-UNITS.md](docs/04-UNITS.md) | All units, attributes, icon system |
-| [docs/05-MAP-SAVES.md](docs/05-MAP-SAVES.md) | Map save JSON format and locations |
-| [docs/06-WINDOWS-BUILD.md](docs/06-WINDOWS-BUILD.md) | Building the Windows player |
-| [docs/07-ARCHITECTURE.md](docs/07-ARCHITECTURE.md) | Code map and design decisions |
+| [01-GETTING-STARTED](docs/01-GETTING-STARTED.md) | Windows setup, first run |
+| [02-CESIUM](docs/02-CESIUM.md) | Cesium overview, ion account, **where to put the API token** |
+| [03-GAMEPLAY](docs/03-GAMEPLAY.md) | Screens, the editor's rail, controls, teams, combat |
+| [07-ARCHITECTURE](docs/07-ARCHITECTURE.md) | Code map and design decisions — **read this first when changing code** |
+
+### The game
+
+| Doc | Contents |
+|---|---|
+| [04-UNITS](docs/04-UNITS.md) | All 117 unit types, their attributes, the icon system |
+| [15-COMBAT-ORDERS](docs/15-COMBAT-ORDERS.md) | Every order a formation can be given in battle |
+| [16-FOG-OF-WAR](docs/16-FOG-OF-WAR.md) | Limited intelligence, contacts and recon tasks |
+| [22-MISSIONS](docs/22-MISSIONS.md) | The six campaigns and ninety missions, and how a mission is stored |
+| [23-COMMANDERS](docs/23-COMMANDERS.md) | The chain of command above the units, and what breaking it costs |
+| [25-PLAYERS](docs/25-PLAYERS.md) | Teams, players, and the computer's difficulty |
+| [28-FLOT](docs/28-FLOT.md) | The front line as a gameplay object |
+| [30-REINFORCEMENTS](docs/30-REINFORCEMENTS.md) | Formations that arrive after H-hour |
+
+### Fires and effects
+
+| Doc | Contents |
+|---|---|
+| [17-ARTILLERY](docs/17-ARTILLERY.md) | Called fire missions — the artillery nature register |
+| [18-AIR-STRIKES](docs/18-AIR-STRIKES.md) | Tasked air strikes — the airframe register |
+| [19-UAV-STRIKES](docs/19-UAV-STRIKES.md) | Unmanned sorties — the UAV type register |
+| [20-MISSILE-SYSTEMS](docs/20-MISSILE-SYSTEMS.md) | The missile system register |
+| [21-NAVAL-GUNFIRE](docs/21-NAVAL-GUNFIRE.md) | The naval gun register |
+| [24-AIR-DEFENCE](docs/24-AIR-DEFENCE.md) | Automatic engagements against drones and aircraft |
+| [29-AIR-SUPPLY](docs/29-AIR-SUPPLY.md) | Air-dropped loads |
+
+### The rear area
+
+| Doc | Contents |
+|---|---|
+| [26-LOGISTICS](docs/26-LOGISTICS.md) | Depots, supply, fuel, ammunition, repair and medical points |
+| [27-SUSTAINMENT](docs/27-SUSTAINMENT.md) | What a force fights on, and what it burns |
+| [31-OBSTACLES](docs/31-OBSTACLES.md) | Mines, wire, ditches and roadblocks |
+
+### Presentation
+
+| Doc | Contents |
+|---|---|
+| [08-PARTICLE-SYSTEMS](docs/08-PARTICLE-SYSTEMS.md) | Fire, smoke, explosions and dust — **effect register** |
+| [09-3D-MODELS](docs/09-3D-MODELS.md) | **Model register** — where each came from and where it is shown |
+| [10-AUDIO](docs/10-AUDIO.md) | **Audio register** — music, weather beds, effect sounds, interface |
+| [11-GAME-MENU](docs/11-GAME-MENU.md) | **Background register** — the menus and their artwork |
+| [12-LOADERS](docs/12-LOADERS.md) | **Loader register** — everything that makes the player wait |
+| [13-DATE-AND-TIME](docs/13-DATE-AND-TIME.md) | The operational clock |
+| [14-WEATHER](docs/14-WEATHER.md) | Sky phase, weather conditions and the day/night cycle |
+
+### Files and builds
+
+| Doc | Contents |
+|---|---|
+| [05-MAP-SAVES](docs/05-MAP-SAVES.md) | Map save JSON format and locations |
+| [06-WINDOWS-BUILD](docs/06-WINDOWS-BUILD.md) | Building the Windows player |
 
 ## AI-assisted development
 
@@ -85,18 +160,49 @@ The repo ships Claude-ready: [`CLAUDE.md`](CLAUDE.md) gives AI assistants the pr
 
 ```
 Assets/
-  Editor/               ProjectBootstrap (scene generation)
-  Resources/Icons/      Generated APP-6 icons (Friendly, Enemy, Affiliations)
-  Scripts/              All C# gameplay code (runtime-built UI, no binary scenes)
+  Editor/                   ProjectBootstrap — generates every scene from code
+  Scenes/                   Generated; no UI is authored in them (golden rule 2)
+  Scripts/                  All C# — runtime-built UI, no binary prefabs
+    Audio/                  music, weather beds, effect sounds, interface sounds
+    Core/                   GameController, GameConfig, the clock, display settings
+    Data/                   units, missions, commanders, players — the catalogues
+    Lines/                  front line, boundaries, obstacles, mission areas
+    Logistics/              installations and the rear area
+    Map/                    Cesium georeference, camera rig, geodetic maths
+    Models/                 3D model library and the installer
+    Save/                   map saves, mission library, tuning patch
+    UI/                     every screen; UIFactory builds all of it at runtime
+    Units/                  actors, selection, combat, commanders
+    Vfx/                    particle catalogue, strikes, air supply
+    Weather/                sky phase and conditions
+  Resources/                everything loaded at runtime (the only way, see docs)
+    Audio/                  music, weather, interface sounds
+    Graphics/               backgrounds, campaign artwork, logo, commander portraits
+    Icons/                  generated APP-6 icons (Friendly, Enemy, Affiliations)
+    Models/  VFX/  Shaders/  Videos/
   StreamingAssets/
-    Data/units.json     Unit catalogue (117 types, both teams)
-    Maps/lyon_dev.json  Default Lyon scenario
-    cesium-token.txt    <- YOUR CESIUM ION TOKEN GOES HERE
-docs/                   Documentation
-scripts/                Icon/unit generators (Python), Windows build script
-.claude/                Claude Code commands & skills
-CLAUDE.md               AI assistant project brief
+    Data/units.json         unit catalogue — 117 types, both teams
+    Data/missions.json      the mission book — 6 campaigns, 90 missions
+    Maps/lyon_dev.json      the default Lyon scenario
+    cesium-token.txt        <- YOUR CESIUM ION TOKEN GOES HERE (git-ignored)
+docs/                       31 documents; several are registers — see above
+scripts/                    generate_units.py · generate_icons.py ·
+                            generate_stat_icons.py · generate_units_doc.py ·
+                            build-windows.ps1
+.claude/                    Claude Code commands and skills
+CLAUDE.md                   AI assistant project brief and the golden rules
 ```
+
+Third-party art and model packs sit in their own top-level folders under
+`Assets/` (vehicles, aircraft, effects, props). They are optional: every model
+resolves through `UnitModelLibrary` and every effect has a procedural fallback,
+so the game runs with the packs removed — see
+[docs/09-3D-MODELS.md](docs/09-3D-MODELS.md) and
+[docs/08-PARTICLE-SYSTEMS.md](docs/08-PARTICLE-SYSTEMS.md).
+
+The player's own files — saved maps, the mission book, unit tuning, settings —
+live in `%USERPROFILE%/AppData/LocalLow/IvanSostarko/Iron Meridian/`, never in
+the repository.
 
 ## License & data attribution
 
