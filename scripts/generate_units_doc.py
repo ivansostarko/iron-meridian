@@ -6,7 +6,7 @@ rewrites the tables between the marker comments, so the two cannot drift.
 """
 import io, json, os, collections
 
-os.chdir(r'd:\Projects\12 Iron Meridian\iron-meridian')
+os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 data = json.load(io.open('Assets/StreamingAssets/Data/units.json', encoding='utf-8'))
 units = data['units'] if isinstance(data, dict) and 'units' in data else data

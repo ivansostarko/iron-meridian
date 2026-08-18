@@ -7,7 +7,11 @@
 | Unity Hub | latest | https://unity.com/download |
 | Unity Editor | **6000.0 LTS (Unity 6)** | In Hub → Installs → Install Editor. Add module **Windows Build Support (IL2CPP)**. |
 | Git | latest | https://git-scm.com/download/win |
-| Python 3 (optional) | 3.10+ | Only needed to regenerate icons/units (`scripts/*.py`, uses Pillow). |
+| Python 3 (optional) | 3.10+ | Only needed to regenerate icons/units/installer art (`scripts/*.py`, uses Pillow). |
+| Inno Setup 6 (optional) | 6.x | Only needed to package the installer — `winget install --id JRSoftware.InnoSetup`. See `docs/34-INSTALLER.md`. |
+| GNU Make (optional) | 4.x | `make` as a shortcut for every routine job — `winget install --id ezwinports.make`. Without it, `.\scripts\menu.ps1` is the same menu. See `docs/35-TASKS.md`. |
+
+Run **`.\scripts\menu.ps1 -Run doctor`** (or `make doctor`) at any point: it reports which of these are present and the one command that installs each missing one.
 
 Hardware: any 64-bit Windows 10/11 machine with a discrete or recent integrated GPU. Cesium streams tiles over the network, so an internet connection is required at runtime.
 

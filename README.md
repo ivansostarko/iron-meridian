@@ -86,9 +86,31 @@ so nothing renders without one. See [Quick start](#quick-start-windows) below.
 
 Full guide: [docs/01-GETTING-STARTED.md](docs/01-GETTING-STARTED.md)
 
+### Every routine job in one place
+
+```powershell
+make            # the menu: build, installer, data, icons, models, doctor, clean...
+make doctor     # what's installed, what's missing, and the command that fixes it
+```
+
+No make? `.\scripts\menu.ps1` is the same menu with a picker, and every job is a
+script you can run directly. See [docs/35-TASKS.md](docs/35-TASKS.md).
+
+### Making a build others can install
+
+```powershell
+make installer          # or: .\scripts\build-windows.ps1 -Clean -Installer
+```
+
+Builds the player and packages it as `Builds\Installer\IronMeridian-<version>-Setup.exe`
+— Start-menu and desktop shortcuts, a proper uninstaller that offers to keep
+saves, and **no Cesium ion token** unless you ask for one. Needs
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install --id JRSoftware.InnoSetup`).
+See [docs/34-INSTALLER.md](docs/34-INSTALLER.md).
+
 ## Documentation
 
-Thirty-three documents under [`docs/`](docs/). Several are **registers** — the
+Thirty-five documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -154,6 +176,8 @@ in the same change as the catalogue, never afterwards.
 |---|---|
 | [05-MAP-SAVES](docs/05-MAP-SAVES.md) | Map save JSON format and locations |
 | [06-WINDOWS-BUILD](docs/06-WINDOWS-BUILD.md) | Building the Windows player |
+| [34-INSTALLER](docs/34-INSTALLER.md) | Packaging that player as a Windows setup `.exe` |
+| [35-TASKS](docs/35-TASKS.md) | The Makefile and task menu — every routine job in one place |
 
 ## AI-assisted development
 
@@ -188,10 +212,14 @@ Assets/
     Data/missions.json      the mission book — 6 campaigns, 90 missions
     Maps/lyon_dev.json      the default Lyon scenario
     cesium-token.txt        <- YOUR CESIUM ION TOKEN GOES HERE (git-ignored)
-docs/                       33 documents; several are registers — see above
-scripts/                    generate_units.py · generate_icons.py ·
+installer/                  Inno Setup script + generated wizard artwork
+docs/                       35 documents; several are registers — see above
+Makefile                    task runner — `make` lists every job
+scripts/                    menu.ps1 (the job table) · unity-run.ps1 ·
+                            build-windows.ps1 · build-installer.ps1 ·
+                            generate_units.py · generate_icons.py ·
                             generate_stat_icons.py · generate_units_doc.py ·
-                            build-windows.ps1
+                            generate_installer_art.py
 .claude/                    Claude Code commands and skills
 CLAUDE.md                   AI assistant project brief and the golden rules
 ```

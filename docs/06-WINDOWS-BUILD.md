@@ -6,7 +6,7 @@
 - Scenes generated (**Tools → Iron Meridian → Setup Project**)
 - Cesium ion token configured (builds without it run, but the map stays empty)
 
-Note: `Assets/StreamingAssets/cesium-token.txt` is copied into the build's `StreamingAssets` folder. If you ship the build to others, be aware the token travels with it — use a token restricted to the required scopes.
+Note: `Assets/StreamingAssets/cesium-token.txt` is copied into the build's `StreamingAssets` folder. If you ship the build to others, be aware the token travels with it — use a token restricted to the required scopes. (The installer leaves it out by default; see `docs/34-INSTALLER.md` §2a.)
 
 ## Option A — Unity Editor
 
@@ -18,12 +18,42 @@ Note: `Assets/StreamingAssets/cesium-token.txt` is copied into the build's `Stre
 ## Option B — command line (PowerShell)
 
 ```powershell
-# from the repo root
+make build              # the short way — docs/35-TASKS.md
+```
+
+or the script behind it, when you want its options:
+
+```powershell
+# from the repo root — finds the newest Unity 6000.x under the Hub itself
+.\scripts\build-windows.ps1
+
+# or name the editor explicitly
 .\scripts\build-windows.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\6000.0.80f1\Editor\Unity.exe"
 ```
 
-The script runs Unity in batch mode with `-buildWindows64Player` and writes to `Builds\Windows\IronMeridian.exe`. Check `Builds\build.log` on failure.
+The script runs the scene setup, then Unity in batch mode with `-buildWindows64Player`, and writes to `Builds\Windows\IronMeridian.exe`. Check `Builds\setup.log` and `Builds\build.log` on failure — read them from the bottom up.
+
+| Switch | What it does |
+|---|---|
+| `-UnityPath` | The editor to use. Default: newest `6000.*` under `%ProgramFiles%\Unity\Hub\Editor` |
+| `-OutputDir` | Default `Builds\Windows` |
+| `-ExeName` | Default `IronMeridian.exe` |
+| `-Clean` | Empty the output folder first. Worth it after a `productName` change, which otherwise leaves two players in one folder |
+| `-Installer` | Package the result as a setup `.exe` afterwards — `docs/34-INSTALLER.md` |
+| `-IncludeToken` | Passed to the installer: ship the Cesium ion token. Off by default |
+
+Burst's `*_DoNotShip` symbol folders are deleted after a successful build.
+
+## Shipping it
+
+A built folder is not something to hand to a player. Package it:
+
+```powershell
+make installer          # or: .\scripts\build-windows.ps1 -Clean -Installer
+```
+
+That produces `Builds\Installer\IronMeridian-<version>-Setup.exe` — shortcuts, a proper uninstaller, no token. Everything about it is in **`docs/34-INSTALLER.md`**.
 
 ## CI note
 
-For GitHub Actions, use [game-ci/unity-builder](https://game.ci/) with `targetPlatform: StandaloneWindows64` and a `UNITY_LICENSE` secret; run the scene-setup method via `-executeMethod IronMeridian.EditorTools.ProjectBootstrap.SetupProject` before the build step.
+For GitHub Actions, use [game-ci/unity-builder](https://game.ci/) with `targetPlatform: StandaloneWindows64` and a `UNITY_LICENSE` secret; run the scene-setup method via `-executeMethod IronMeridian.EditorTools.ProjectBootstrap.SetupProject` before the build step, then `scripts\build-installer.ps1` after it (`docs/34-INSTALLER.md` §7).

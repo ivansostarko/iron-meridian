@@ -1,0 +1,45 @@
+IRON MERIDIAN
+Real-terrain operational wargame
+
+-------------------------------------------------------------------------------
+THE MAP IS STREAMED
+-------------------------------------------------------------------------------
+
+Terrain, imagery and buildings come from Cesium ion over the internet. The game
+needs a connection to draw the ground, and a Cesium ion access token to be
+allowed to fetch it.
+
+If the map stays empty and the horizon is bare, the token is missing. Paste one
+into this file next to the game:
+
+    <install folder>\<game>_Data\StreamingAssets\cesium-token.txt
+
+Free tokens: https://ion.cesium.com/tokens
+
+-------------------------------------------------------------------------------
+WHERE YOUR FILES GO
+-------------------------------------------------------------------------------
+
+Saves, custom maps, scenario missions and unit tuning are kept outside the
+install folder, so reinstalling or updating never touches them:
+
+    %USERPROFILE%\AppData\LocalLow\IvanSostarko\Iron Meridian
+
+The uninstaller asks before deleting that folder, and keeps it by default.
+
+-------------------------------------------------------------------------------
+FIRST FIVE MINUTES
+-------------------------------------------------------------------------------
+
+  DEVELOPMENT -> MAP EDITOR   build a scenario: drag units out of the palette,
+                              draw the front line, hit START BATTLE
+  F5 / F9                     quick save / quick load
+  Right mouse on a unit       give it an order
+
+The game is a work in progress. Saves can change shape between versions.
+
+-------------------------------------------------------------------------------
+
+Game code (c) Ivan Sostarko. Map data streamed at runtime via Cesium ion
+(Cesium World Terrain, Bing Maps imagery, OSM Buildings), subject to Cesium ion
+terms and data attribution requirements.

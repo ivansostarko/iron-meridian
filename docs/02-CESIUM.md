@@ -76,6 +76,12 @@ Do **not** commit a real token in code to a public repository.
 
 `CesiumTokenConfig.GetToken()` checks the file first, then the constant, and logs a clear warning if neither is set. The token is applied per-tileset at runtime, so no Cesium editor windows are needed.
 
+## Handing a build to someone else
+
+A player build copies `cesium-token.txt` into its own `StreamingAssets`, so **whoever gets the build gets the token** — in a text file they can open. The installer therefore strips it back out by default (`docs/34-INSTALLER.md` §2a); the game starts, and the wizard's last page tells the player where to paste their own.
+
+If you deliberately bundle one (`build-installer.ps1 -IncludeToken` — an internal build, a demo machine), issue a token scoped to nothing but asset read for the tilesets listed above, and be ready to revoke it.
+
 ## Attribution & terms
 
 Cesium ion's free tier covers development use. Shipping a game requires complying with [Cesium ion terms](https://cesium.com/legal/terms-of-service/) and showing data attribution (Cesium, Bing Maps, OpenStreetMap). Cesium for Unity renders its attribution overlay automatically — do not disable it.
