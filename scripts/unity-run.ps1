@@ -39,15 +39,38 @@ if (-not $UnityPath) {
         if ($custom) { $roots += $custom }
     }
 
-    $UnityPath = $roots |
+    $installed = @($roots |
         Where-Object { Test-Path $_ } |
         ForEach-Object { Get-ChildItem $_ -Directory } |
         Where-Object { $_.Name -like "6000.*" } |
+        Where-Object { Test-Path (Join-Path $_.FullName "Editor\Unity.exe") })
+
+    # The editor the project was last opened with. Opening a Unity project in a
+    # newer editor upgrades its format, and there is no going back — so an exact
+    # match wins over a newer one every time, and picking something else is
+    # something the user gets told about rather than discovering afterwards.
+    $wanted = $null
+    $versionFile = Join-Path $projectPath "ProjectSettings\ProjectVersion.txt"
+    if (Test-Path $versionFile) {
+        $line = Select-String -Path $versionFile -Pattern '^m_EditorVersion:\s*(.+)$' | Select-Object -First 1
+        if ($line) { $wanted = $line.Matches[0].Groups[1].Value.Trim() }
+    }
+
+    $match = $installed | Where-Object { $_.Name -eq $wanted } | Select-Object -First 1
+    if ($match) {
+        $UnityPath = Join-Path $match.FullName "Editor\Unity.exe"
+    } elseif ($installed.Count -gt 0) {
         # Version order, not string order: 6000.10 must beat 6000.5.
-        Sort-Object { try { [version]($_.Name -replace '[^0-9.].*$', '') } catch { [version]"0.0" } } -Descending |
-        ForEach-Object { Join-Path $_.FullName "Editor\Unity.exe" } |
-        Where-Object { Test-Path $_ } |
-        Select-Object -First 1
+        $newest = $installed |
+            Sort-Object { try { [version]($_.Name -replace '[^0-9.].*$', '') } catch { [version]"0.0" } } -Descending |
+            Select-Object -First 1
+        if ($wanted) {
+            Write-Host "WARNING: this project was made with Unity $wanted, which is not installed." -ForegroundColor Yellow
+            Write-Host "         Using $($newest.Name) instead — it will UPGRADE the project format, irreversibly." -ForegroundColor Yellow
+            Write-Host "         Install $wanted from Unity Hub, or pass -UnityPath to choose deliberately." -ForegroundColor Yellow
+        }
+        $UnityPath = Join-Path $newest.FullName "Editor\Unity.exe"
+    }
 }
 if (-not $UnityPath -or -not (Test-Path $UnityPath)) {
     # -PrintPath is a question, not a command: answer it with the exit code and

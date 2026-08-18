@@ -23,9 +23,10 @@ MENU = $(PWSH) -NoProfile -File ./scripts/menu.ps1
 BUILD_JOBS   := setup build installer package run
 DATA_JOBS    := units icons stat-icons units-doc installer-art data
 UNITY_JOBS   := models vfx packages
-PROJECT_JOBS := doctor logs clean distclean
+STEAM_JOBS   := steam-check steam-appid
+PROJECT_JOBS := check doctor logs clean distclean
 
-JOBS := $(BUILD_JOBS) $(DATA_JOBS) $(UNITY_JOBS) $(PROJECT_JOBS)
+JOBS := $(BUILD_JOBS) $(DATA_JOBS) $(UNITY_JOBS) $(STEAM_JOBS) $(PROJECT_JOBS)
 
 .DEFAULT_GOAL := help
 .PHONY: help menu $(JOBS)
@@ -53,13 +54,18 @@ menu:
 #   models         Unity: Install Unit Models
 #   vfx            Unity: Install VFX Prefabs
 #   packages       Unity: Import Bundled Packages
+#   steam-check    release preflight: app id, icon, version, build, licences
+#   steam-appid    write steam_appid.txt beside the player, to test Steam locally
+#   check          compile every C# file with Roslyn, without opening Unity
 #   doctor         check Unity, Python, Pillow, Inno Setup and the token
 #   logs           tail the last Unity setup and build logs
 #   clean          delete the packaged installers and the build logs
 #   distclean      delete everything under Builds\, player included (asks first)
 #
-# Options belong to the scripts, not to make — e.g. a signed installer or one
-# that bundles the ion token:
+# Options belong to the scripts, not to make — e.g. a signed installer, one that
+# bundles the ion token, or a Steam upload, which has no target on purpose
+# because every run of it is a decision:
 #   .\scripts\build-installer.ps1 -IncludeToken
+#   .\scripts\steam-upload.ps1 -Token Exclude -User <login> -Preview
 $(JOBS):
 	@$(MENU) -Run $@

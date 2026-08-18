@@ -72,6 +72,28 @@ $Jobs = @(
     @{ Group = "Unity tools"; Key = "packages"; Text = "Import bundled .unitypackage files (Built-In pipeline)"
        Do = { Invoke-Unity "IronMeridian.EditorTools.PackageImporter.ImportBundled" } }
 
+    @{ Group = "Steam"; Key = "steam-check"; Text = "Release preflight: app id, icon, version, build, licences"
+       Do = { Invoke-Script "steam-check.ps1" } }
+    @{ Group = "Steam"; Key = "steam-appid"; Text = "Write steam_appid.txt beside the player, to test Steam locally"
+       Do = {
+            $integration = Join-Path $root "Assets\Scripts\Core\SteamIntegration.cs"
+            $match = Select-String -Path $integration -Pattern 'public const uint AppId\s*=\s*(\d+)' | Select-Object -First 1
+            if (-not $match) { throw "Could not read AppId from SteamIntegration.cs" }
+            $appId = $match.Matches[0].Groups[1].Value
+            $build = Join-Path $root "Builds\Windows"
+            if (-not (Test-Path $build)) { throw "No player in Builds\Windows — run 'build' first." }
+            # No trailing newline: Steam's own docs are explicit that the file
+            # is the id and nothing else.
+            [System.IO.File]::WriteAllText((Join-Path $build "steam_appid.txt"), $appId)
+            Write-Host "Wrote steam_appid.txt ($appId) into Builds\Windows."
+            if ($appId -eq "480") {
+                Write-Host "That is Valve's Spacewar test app — fine for trying the overlay, not for release." -ForegroundColor Yellow
+            }
+            Write-Host "It is excluded from the Steam depot on purpose; see docs/36-STEAM.md."
+       } }
+
+    @{ Group = "Project"; Key = "check"; Text = "Compile every C# file with Roslyn, without opening Unity"
+       Do = { Invoke-Script "compile-check.ps1" } }
     @{ Group = "Project"; Key = "doctor"; Text = "Check the toolchain: Unity, Python, Pillow, Inno Setup, token"
        Do = { Invoke-Doctor } }
     @{ Group = "Project"; Key = "logs"; Text = "Tail the last Unity setup and build logs"

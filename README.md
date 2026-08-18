@@ -108,9 +108,21 @@ saves, and **no Cesium ion token** unless you ask for one. Needs
 [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install --id JRSoftware.InnoSetup`).
 See [docs/34-INSTALLER.md](docs/34-INSTALLER.md).
 
+### Putting it on Steam
+
+```powershell
+make steam-check        # release preflight
+```
+
+Steamworks integration, depot upload and store assets are covered in
+[docs/36-STEAM.md](docs/36-STEAM.md) — **including the two things that have to be
+settled before a release date exists**: Cesium ion's commercial terms and
+per-player streaming cost, and the licences on the third-party asset packs
+([docs/37-THIRD-PARTY.md](docs/37-THIRD-PARTY.md)).
+
 ## Documentation
 
-Thirty-five documents under [`docs/`](docs/). Several are **registers** — the
+Thirty-seven documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -178,6 +190,8 @@ in the same change as the catalogue, never afterwards.
 | [06-WINDOWS-BUILD](docs/06-WINDOWS-BUILD.md) | Building the Windows player |
 | [34-INSTALLER](docs/34-INSTALLER.md) | Packaging that player as a Windows setup `.exe` |
 | [35-TASKS](docs/35-TASKS.md) | The Makefile and task menu — every routine job in one place |
+| [36-STEAM](docs/36-STEAM.md) | Publishing on Steam — integration, depot, and the three things that can stop a release |
+| [37-THIRD-PARTY](docs/37-THIRD-PARTY.md) | **Licence register** — every third-party asset pack, and whether it may be sold |
 
 ## AI-assisted development
 
@@ -213,10 +227,13 @@ Assets/
     Maps/lyon_dev.json      the default Lyon scenario
     cesium-token.txt        <- YOUR CESIUM ION TOKEN GOES HERE (git-ignored)
 installer/                  Inno Setup script + generated wizard artwork
-docs/                       35 documents; several are registers — see above
+docs/                       37 documents; several are registers — see above
 Makefile                    task runner — `make` lists every job
+steam/                      Steam depot VDF templates
 scripts/                    menu.ps1 (the job table) · unity-run.ps1 ·
                             build-windows.ps1 · build-installer.ps1 ·
+                            steam-upload.ps1 · steam-check.ps1 ·
+                            compile-check.ps1 ·
                             generate_units.py · generate_icons.py ·
                             generate_stat_icons.py · generate_units_doc.py ·
                             generate_installer_art.py

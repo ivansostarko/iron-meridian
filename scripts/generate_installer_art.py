@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Generate the Windows installer's artwork from the game logo.
+"""Generate the application icon and the installer's artwork from the game logo.
 
-Inno Setup wants a multi-resolution .ico for the shortcuts and 24-bit BMPs for
-the wizard pages. Both are derived here from
-``Assets/Resources/Graphics/Logo/game-logo.png`` so the installer can never
-drift away from the game's own branding — regenerate instead of hand-editing.
+Everything is derived from
+``Assets/Resources/Graphics/Logo/game-logo.png`` so the icon, the wizard and the
+game can never drift apart — regenerate instead of hand-editing.
 
     python scripts/generate_installer_art.py
 
@@ -13,6 +12,11 @@ Writes into ``installer/assets/``:
     iron-meridian.ico          16/24/32/48/64/128/256 px application icon
     wizard-large*.bmp          welcome/finished page panel (3 DPI sizes)
     wizard-small*.bmp          header strip on the inner pages (3 DPI sizes)
+
+and into ``Assets/AppIcon/``:
+
+    icon-<n>.png               the same mark at Unity's standalone icon sizes,
+                               applied to the player by ProjectBootstrap
 
 Requires Pillow (``pip install pillow``) — same dependency as
 ``generate_icons.py``.
@@ -31,12 +35,17 @@ except ImportError:  # pragma: no cover - dependency guidance
 ROOT = Path(__file__).resolve().parent.parent
 LOGO = ROOT / "Assets" / "Resources" / "Graphics" / "Logo" / "game-logo.png"
 OUT = ROOT / "installer" / "assets"
+# Outside Resources on purpose: these are build-time assets Unity copies into
+# the executable's resources, not something the game loads at runtime.
+ICON_OUT = ROOT / "Assets" / "AppIcon"
 
 # UiTheme.AppBackground / UiTheme.Accent, so the installer reads as the game.
 BACKGROUND = (10, 14, 20)
 ACCENT = (46, 129, 240)
 
 ICON_SIZES = [16, 24, 32, 48, 64, 128, 256]
+# What PlayerSettings.GetIconSizes reports for a standalone player.
+UNITY_ICON_SIZES = [16, 32, 48, 64, 128, 256, 512, 1024]
 # Inno Setup 6 picks the closest size to the user's DPI (100% / 125% / 150%).
 LARGE_SIZES = [(164, 314), (192, 386), (256, 481)]
 SMALL_SIZES = [(55, 58), (64, 68), (92, 97)]
@@ -139,17 +148,38 @@ def write_wizard(logo: Image.Image, sizes, stem: str, margin: float) -> list[Pat
     return written
 
 
+def write_app_icons(logo: Image.Image) -> list[Path]:
+    """The player's own icon, one PNG per size Unity asks for.
+
+    Unity wants textures in the project rather than an .ico, and picks the
+    entry matching each size it needs. Same emblem as the installer, so the
+    shortcut, the taskbar and the Steam library all show one mark.
+    """
+    mark = emblem(logo)
+    written = []
+    for size in UNITY_ICON_SIZES:
+        path = ICON_OUT / f"icon-{size}.png"
+        square_icon(mark, size).save(path, format="PNG")
+        written.append(path)
+    return written
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
+    ICON_OUT.mkdir(parents=True, exist_ok=True)
     logo = trim(load_logo())
 
     written = [write_icon(logo)]
     written += write_wizard(logo, LARGE_SIZES, "wizard-large", margin=0.10)
     written += write_wizard(logo, SMALL_SIZES, "wizard-small", margin=0.08)
+    written += write_app_icons(logo)
 
     for path in written:
         print(f"  {path.relative_to(ROOT)}  ({path.stat().st_size // 1024} KB)")
-    print(f"Wrote {len(written)} files to {OUT.relative_to(ROOT)}")
+    print(
+        f"Wrote {len(written)} files to {OUT.relative_to(ROOT)} "
+        f"and {ICON_OUT.relative_to(ROOT)}"
+    )
 
 
 if __name__ == "__main__":

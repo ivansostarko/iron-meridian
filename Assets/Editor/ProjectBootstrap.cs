@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -28,6 +29,11 @@ namespace IronMeridian.EditorTools
         {
             PlayerSettings.companyName = "IvanSostarko";
             PlayerSettings.productName = GameConfig.GameName;
+            // One version, defined in code, so the player, the installer's file
+            // name and a Steam build description cannot disagree about which
+            // build this is.
+            PlayerSettings.bundleVersion = GameConfig.Version;
+            ApplyAppIcon();
 
             System.IO.Directory.CreateDirectory(ScenesDir);
 
@@ -94,6 +100,46 @@ namespace IronMeridian.EditorTools
                 if (t != null) return t;
             }
             return null;
+        }
+
+        const string IconDir = "Assets/AppIcon";
+
+        /// <summary>
+        /// Points the player's Windows icon at <c>Assets/AppIcon/icon-*.png</c>.
+        ///
+        /// Without this the build carries Unity's own logo — in the taskbar, in
+        /// Alt-Tab, on the desktop shortcut and in a Steam library entry. The
+        /// PNGs are generated from the game logo by
+        /// <c>scripts/generate_installer_art.py</c>; run that first if the
+        /// folder is empty. Missing sizes are skipped rather than fatal, so a
+        /// half-generated folder degrades instead of breaking setup.
+        /// </summary>
+        [MenuItem("Tools/Iron Meridian/Apply App Icon", priority = 12)]
+        public static void ApplyAppIcon()
+        {
+            var target = NamedBuildTarget.Standalone;
+            var sizes = PlayerSettings.GetIconSizes(target, IconKind.Any);
+            if (sizes == null || sizes.Length == 0) return;
+
+            var icons = new Texture2D[sizes.Length];
+            int found = 0;
+            for (int i = 0; i < sizes.Length; i++)
+            {
+                var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"{IconDir}/icon-{sizes[i]}.png");
+                icons[i] = tex;
+                if (tex != null) found++;
+            }
+
+            if (found == 0)
+            {
+                Debug.LogWarning(
+                    $"[Iron Meridian] No icons in {IconDir} — the build will use Unity's default. " +
+                    "Run: python scripts/generate_installer_art.py");
+                return;
+            }
+
+            PlayerSettings.SetIcons(target, icons, IconKind.Any);
+            Debug.Log($"[Iron Meridian] App icon applied ({found}/{sizes.Length} sizes).");
         }
 
         [MenuItem("Tools/Iron Meridian/Open Docs Folder", priority = 20)]

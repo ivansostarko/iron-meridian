@@ -12,6 +12,15 @@ Recordings/
 # Never commit your Cesium ion token
 Assets/StreamingAssets/cesium-token.txt
 
+# Steam. steam_appid.txt is a local development aid — it must not reach a
+# depot, and it must not reach the repo either once it holds a real app id.
+# The build_output folders are steamcmd's own logs and chunk cache.
+steam_appid.txt
+steam/build_output/
+steam/content/
+steam/steamcmd/
+steam/*.local.vdf
+
 # Visual Studio / Rider
 .vs/
 .idea/

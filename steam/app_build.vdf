@@ -1,0 +1,32 @@
+// Iron Meridian — Steam app build script (template)
+//
+// scripts/steam-upload.ps1 reads this, substitutes the {{...}} placeholders and
+// writes steam/app_build.local.vdf with absolute paths, which is what steamcmd
+// actually runs. Never point steamcmd at this file directly — the placeholders
+// are not valid VDF values.
+//
+// Set APPID and DEPOTID to the numbers on your Steamworks partner page and
+// commit them: neither is a secret. See docs/36-STEAM.md.
+"appbuild"
+{
+	"appid"       "{{APPID}}"
+	"desc"        "{{DESC}}"
+
+	// Absolute paths, written by the script. buildoutput is steamcmd's own
+	// scratch and log area; contentroot is the player folder being uploaded.
+	"buildoutput" "{{BUILDOUTPUT}}"
+	"contentroot" "{{CONTENTROOT}}"
+
+	// Empty means "upload, but do not make it live". Setting a branch here is
+	// how a build goes live without a second thought, so it stays empty and
+	// steam-upload.ps1 requires -Branch to fill it in.
+	"setlive"     "{{SETLIVE}}"
+
+	// 1 = build the manifest and report what would upload, without uploading.
+	"preview"     "{{PREVIEW}}"
+
+	"depots"
+	{
+		"{{DEPOTID}}" "{{DEPOTFILE}}"
+	}
+}

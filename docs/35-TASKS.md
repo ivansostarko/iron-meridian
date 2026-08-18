@@ -32,7 +32,10 @@ describe different work.
 | **Unity tools** | `models` | **Install Unit Models** |
 | | `vfx` | **Install VFX Prefabs** |
 | | `packages` | **Import Bundled Packages** |
-| **Project** | `doctor` | Check Unity, Python, Pillow, Inno Setup and the token |
+| **Steam** | `steam-check` | Release preflight — app id, icon, version, build, licences |
+| | `steam-appid` | Write `steam_appid.txt` beside the player, to test Steam locally |
+| **Project** | `check` | Compile the runtime C# with Roslyn, without opening Unity |
+| | `doctor` | Check Unity, Python, Pillow, Inno Setup and the token |
 | | `logs` | Tail the last Unity setup and build logs |
 | | `clean` | Delete the packaged installers and the build logs |
 | | `distclean` | Delete everything under `Builds\`, player included — asks first |
@@ -72,7 +75,14 @@ script itself — make is not in the way:
 .\scripts\build-installer.ps1 -IncludeToken -Version 1.1
 .\scripts\build-windows.ps1 -UnityPath "C:\...\Unity.exe" -ExeName Foo.exe
 .\scripts\unity-run.ps1 -Method IronMeridian.EditorTools.ModelInstaller.Install
+.\scripts\compile-check.ps1 -Define IRONMERIDIAN_STEAM
+.\scripts\steam-upload.ps1 -Token Exclude -User <login> -Preview
 ```
+
+`steam-upload.ps1` has no target at all, rather than one with defaults filled
+in: it uploads to a storefront, and its `-Token` choice decides whether your
+Cesium credential goes out with the build (`docs/36-STEAM.md` §2). A job that
+could do that by accident should not exist.
 
 That split is deliberate. A make target per flag combination is a second, worse
 copy of an interface the scripts already have.

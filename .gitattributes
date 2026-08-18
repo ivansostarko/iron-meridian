@@ -2,8 +2,51 @@
 *.cs text eol=lf
 *.json text eol=lf
 *.md text eol=lf
+*.meta text eol=lf
 *.unity -text
 *.asset -text
+
+# Windows tooling. PowerShell reads either ending, but these are Windows-only
+# scripts and CRLF is what an editor here will produce anyway. Note that the
+# .ps1 files are UTF-8 *with BOM* on purpose — Windows PowerShell reads a
+# BOM-less file as ANSI and mis-parses non-ASCII inside string literals.
+# See docs/35-TASKS.md §3.
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Unix-ish tooling
+Makefile text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.vdf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Never let git touch these — a normalised byte is a corrupt asset
 *.png binary
 *.jpg binary
+*.jpeg binary
+*.bmp binary
+*.ico binary
+*.tga binary
+*.psd binary
+*.tif binary
 *.ttf binary
+*.otf binary
+*.fbx binary
+*.blend binary
+*.obj binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.aif binary
+*.mp4 binary
+*.webm binary
+*.rtf binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.exe binary
+*.unitypackage binary

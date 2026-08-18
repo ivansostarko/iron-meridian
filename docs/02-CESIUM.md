@@ -86,6 +86,12 @@ If you deliberately bundle one (`build-installer.ps1 -IncludeToken` — an inter
 
 Cesium ion's free tier covers development use. Shipping a game requires complying with [Cesium ion terms](https://cesium.com/legal/terms-of-service/) and showing data attribution (Cesium, Bing Maps, OpenStreetMap). Cesium for Unity renders its attribution overlay automatically — do not disable it.
 
+### Selling the game
+
+Beyond the licence, there is a **cost** question that only appears at scale: the terrain is not in the build, so every copy sold is another client streaming tiles against your ion account, for as long as they play. A successful launch is a bigger bill than a quiet one, and nothing in the game currently caps or caches that.
+
+This is the first item in **`docs/36-STEAM.md` §1a**, and it needs settling — with Cesium, in writing — before a release date means anything.
+
 ## Useful links
 
 - Cesium for Unity quickstart: https://cesium.com/learn/unity/unity-quickstart/
