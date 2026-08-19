@@ -212,7 +212,7 @@ namespace IronMeridian.Units
                 return;
             }
 
-            var team = entry.team == Team.Enemy.ToString() ? Team.Enemy : Team.User;
+            var team = entry.team == nameof(Team.Enemy) ? Team.Enemy : Team.User;
             if (!System.Enum.TryParse(entry.echelon, out Echelon echelon)) echelon = Echelon.Battalion;
 
             Place(team, index, out double lat, out double lon);

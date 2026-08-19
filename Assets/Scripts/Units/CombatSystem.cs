@@ -232,11 +232,11 @@ namespace IronMeridian.Units
             if (shockMultiplier > 1f && defender.IsAlive)
                 defender.ApplyShock(dmg * 40f * (shockMultiplier - 1f));
 
-            if (defender.IsAlive) defender.State.status = UnitStatus.Engaging.ToString();
+            if (defender.IsAlive) defender.State.status = nameof(UnitStatus.Engaging);
 
             // Consumption
             s.ammo = Mathf.Max(0, s.ammo - Mathf.CeilToInt(a.ammoStock * 0.004f));
-            s.status = UnitStatus.Engaging.ToString();
+            s.status = nameof(UnitStatus.Engaging);
         }
     }
 }

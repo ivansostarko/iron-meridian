@@ -67,7 +67,7 @@ namespace IronMeridian.Lines
             {
                 case MarkerKind.Guard: return GameConfig.NeutralGreen;
                 case MarkerKind.Defend:
-                    return data.team == Team.Enemy.ToString() ? GameConfig.RedTeam : GameConfig.BlueTeam;
+                    return data.team == nameof(Team.Enemy) ? GameConfig.RedTeam : GameConfig.BlueTeam;
                 case MarkerKind.Attack: return new Color(1.00f, 0.68f, 0.28f);
                 case MarkerKind.Recon: return new Color(0.45f, 0.85f, 0.70f);
                 case MarkerKind.Withdraw: return new Color(0.95f, 0.72f, 0.30f);

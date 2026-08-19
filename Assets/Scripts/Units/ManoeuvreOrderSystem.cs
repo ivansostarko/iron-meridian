@@ -145,7 +145,7 @@ namespace IronMeridian.Units
             _contingencies.Remove(unit.State.instanceId);
             _idle.Remove(unit.State.instanceId);
             _areas?.ClearFor(unit);
-            unit.State.status = UnitStatus.Idle.ToString();
+            unit.State.status = nameof(UnitStatus.Idle);
 
             Flash?.Invoke($"{Designation(unit)} — all orders cancelled.");
         }
@@ -232,7 +232,7 @@ namespace IronMeridian.Units
 
                 if (unit.Mover.MoveTo(pending.lat, pending.lon))
                 {
-                    unit.State.status = UnitStatus.Moving.ToString();
+                    unit.State.status = nameof(UnitStatus.Moving);
                     Flash?.Invoke($"{Designation(unit)} is {def.name.ToLowerInvariant()}ing — " +
                                   $"down to {unit.State.strength * 100f:0}% strength.");
                 }

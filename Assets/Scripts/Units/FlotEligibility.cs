@@ -69,8 +69,8 @@ namespace IronMeridian.Units
             // Combat-effective: enough strength left, and not broken.
             if (unit.State.strength < MinStrength) return 0f;
             string status = unit.State.status;
-            if (status == UnitStatus.Routed.ToString() ||
-                status == UnitStatus.Destroyed.ToString()) return 0f;
+            if (status == nameof(UnitStatus.Routed) ||
+                status == nameof(UnitStatus.Destroyed)) return 0f;
 
             return unit.CurrentPower() * branch;
         }

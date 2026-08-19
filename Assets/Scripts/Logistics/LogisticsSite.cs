@@ -73,7 +73,7 @@ namespace IronMeridian.Logistics
         {
             var def = LogisticsCatalog.Get(Kind);
             _tint = def.tint;
-            _sideColour = Data.team == Team.Enemy.ToString() ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            _sideColour = Data.team == nameof(Team.Enemy) ? GameConfig.RedTeam : GameConfig.BlueTeam;
 
             // The ring is the side's; the symbol inside it is the function's.
             // Colouring both the same would make a rear area one wash of blue
@@ -114,7 +114,7 @@ namespace IronMeridian.Logistics
         public void Refresh()
         {
             var def = LogisticsCatalog.Get(Kind);
-            _sideColour = Data.team == Team.Enemy.ToString() ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            _sideColour = Data.team == nameof(Team.Enemy) ? GameConfig.RedTeam : GameConfig.BlueTeam;
             if (_ringMat != null) _ringMat.color = _sideColour;
             if (_caption != null)
             {

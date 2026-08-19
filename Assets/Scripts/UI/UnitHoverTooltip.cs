@@ -342,10 +342,10 @@ namespace IronMeridian.UI
 
             _status.text = s.status?.ToUpperInvariant() ?? "";
             Color statusColour =
-                  s.status == UnitStatus.Routed.ToString() ? UiTheme.Danger
-                : s.status == UnitStatus.Suppressed.ToString() ? UiTheme.Warning
-                : s.status == UnitStatus.Engaging.ToString() ? UiTheme.Warning
-                : s.status == UnitStatus.Moving.ToString() ? UiTheme.Accent
+                  s.status == nameof(UnitStatus.Routed) ? UiTheme.Danger
+                : s.status == nameof(UnitStatus.Suppressed) ? UiTheme.Warning
+                : s.status == nameof(UnitStatus.Engaging) ? UiTheme.Warning
+                : s.status == nameof(UnitStatus.Moving) ? UiTheme.Accent
                 : UiTheme.TextDim;
             _status.color = statusColour;
             _statusGlyph.color = statusColour;

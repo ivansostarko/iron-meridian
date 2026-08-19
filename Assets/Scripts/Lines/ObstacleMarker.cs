@@ -71,7 +71,7 @@ namespace IronMeridian.Lines
             // The type's own tint, darkened toward the owning side's colour: an
             // obstacle belt is read first as "mines" and second as "whose", and
             // the type is the more urgent of the two.
-            Color side = Data.team == Team.Enemy.ToString() ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            Color side = Data.team == nameof(Team.Enemy) ? GameConfig.RedTeam : GameConfig.BlueTeam;
             _colour = Color.Lerp(def.tint, side, 0.35f);
 
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -155,7 +155,7 @@ namespace IronMeridian.Lines
         public void Refresh()
         {
             var def = ObstacleCatalog.Get(Kind);
-            Color side = Data.team == Team.Enemy.ToString() ? GameConfig.RedTeam : GameConfig.BlueTeam;
+            Color side = Data.team == nameof(Team.Enemy) ? GameConfig.RedTeam : GameConfig.BlueTeam;
             _colour = Color.Lerp(def.tint, side, 0.35f);
 
             if (_material != null) _material.color = _colour;

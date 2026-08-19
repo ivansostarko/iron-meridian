@@ -472,7 +472,7 @@ namespace IronMeridian.UI
         void BuildOrdersTab(UnitState s, UnitDefinition d)
         {
             Section("ORDERS");
-            Row("Current Order", s.status == UnitStatus.Moving.ToString() ? "Move" : "Defend");
+            Row("Current Order", s.status == nameof(UnitStatus.Moving) ? "Move" : "Defend");
             Row("Objective", _current.Mover != null && _current.Mover.IsMoving ? "Move to point" : "Hold position");
             Row("Endurance", s.organisation > 60f ? "High" : s.organisation > 30f ? "Medium" : "Low");
             Row("Rules of Engagement", "ROE 1");
@@ -507,9 +507,9 @@ namespace IronMeridian.UI
         }
 
         static Color StatusColour(string status) =>
-            status == UnitStatus.Destroyed.ToString() ? UiTheme.Hostile
-            : status == UnitStatus.Routed.ToString() ? UiTheme.Warning
-            : status == UnitStatus.Engaging.ToString() ? UiTheme.Warning
+            status == nameof(UnitStatus.Destroyed) ? UiTheme.Hostile
+            : status == nameof(UnitStatus.Routed) ? UiTheme.Warning
+            : status == nameof(UnitStatus.Engaging) ? UiTheme.Warning
             : UiTheme.Success;
 
         static Color StrengthColour(float strength01) =>

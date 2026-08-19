@@ -971,6 +971,13 @@ namespace IronMeridian.Core
                 // campaign browser again to retry the mission they just left.
                 if (_mission != null) _pauseMenu.ExitScene = GameConfig.SceneSinglePlayer;
                 _pauseMenu.ResumeTimeScale = () => _clock.DesiredTimeScale;
+
+                // Steam expects a single-player game to stop while its overlay
+                // is up. The decision lives here rather than in
+                // SteamIntegration because only this class knows what "paused"
+                // means: the clock's desired scale, and whether the player's
+                // own pause menu already outranks us.
+                SteamIntegration.OverlayChanged += OnSteamOverlayChanged;
                 _rig.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                           ConfirmDialog.IsOpen ||
                                           LossesDialog.IsOpen ||
@@ -1112,7 +1119,7 @@ namespace IronMeridian.Core
                 strength = 1f,
                 organisation = def.organisation,
                 morale = def.morale,
-                status = UnitStatus.Idle.ToString(),
+                status = nameof(UnitStatus.Idle),
                 ammo = def.ammoStock,
                 fuel = def.fuelStock,
                 foodDays = def.foodDays
@@ -1922,7 +1929,7 @@ namespace IronMeridian.Core
             if (obstacle != null)
             {
                 var obsDef = ObstacleCatalog.Get(obstacle.Kind);
-                bool hostile = obstacle.Data.team == Team.Enemy.ToString();
+                bool hostile = obstacle.Data.team == nameof(Team.Enemy);
 
                 ContextMenuUI.Open(_canvas, screenPos,
                     $"{obsDef.name}  ·  {(hostile ? "ENEMY" : "FRIENDLY")}",
@@ -1943,7 +1950,7 @@ namespace IronMeridian.Core
             if (site != null)
             {
                 var def = LogisticsCatalog.Get(site.Kind);
-                bool enemy = site.Data.team == Team.Enemy.ToString();
+                bool enemy = site.Data.team == nameof(Team.Enemy);
 
                 ContextMenuUI.Open(_canvas, screenPos,
                     $"{def.name}  ·  {(enemy ? "ENEMY" : "FRIENDLY")}",
@@ -2445,7 +2452,38 @@ namespace IronMeridian.Core
         /// before the next one's <c>Start</c> runs, so the menu the player
         /// lands on has it again.
         /// </summary>
-        void OnDestroy() => IronMeridian.Audio.AudioManager.HoverSuppressed = false;
+        /// <summary>Set only while the Steam overlay is the thing holding time at zero.</summary>
+        bool _overlayPaused;
+
+        void OnSteamOverlayChanged(bool active)
+        {
+            if (active)
+            {
+                // Already stopped for another reason: leave it alone, and do not
+                // arm the resume — the player's pause is theirs to end.
+                if (_overlayPaused || (_pauseMenu != null && _pauseMenu.IsOpen)) return;
+                _overlayPaused = true;
+                Time.timeScale = 0f;
+                return;
+            }
+
+            if (!_overlayPaused) return;
+            _overlayPaused = false;
+
+            // The pause menu can have been opened *through* the overlay, in
+            // which case closing the overlay must not start the battle again.
+            if (_pauseMenu != null && _pauseMenu.IsOpen) return;
+            Time.timeScale = _clock != null ? _clock.DesiredTimeScale : 1f;
+        }
+
+        void OnDestroy()
+        {
+            IronMeridian.Audio.AudioManager.HoverSuppressed = false;
+            // OverlayChanged is static and this controller is per-scene, so a
+            // missed unsubscribe would leave a dead delegate firing into a
+            // destroyed object on every future overlay toggle.
+            SteamIntegration.OverlayChanged -= OnSteamOverlayChanged;
+        }
 
         void Update()
         {

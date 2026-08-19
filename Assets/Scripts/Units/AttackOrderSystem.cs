@@ -473,8 +473,8 @@ namespace IronMeridian.Units
             // Routed is the worse state and belongs to the damage model; pinning
             // must not quietly promote a broken formation back up to suppressed.
             if (def.pins && order.target.IsAlive &&
-                order.target.State.status != UnitStatus.Routed.ToString())
-                order.target.State.status = UnitStatus.Suppressed.ToString();
+                order.target.State.status != nameof(UnitStatus.Routed))
+                order.target.State.status = nameof(UnitStatus.Suppressed);
 
             // A hit big enough to read as a detonation gets one. Throttled per
             // order, so a long engagement marks its heavy blows instead of

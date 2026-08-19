@@ -143,6 +143,11 @@ Assets/Scripts/
                          the four fire menus into StrikeDockUI's pages — what
                          moved is where they are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission
+                         One class, EIGHT files: a `partial` split by section
+                         group, purely for size — .Units .Force .Terrain .Fires
+                         .Mission .Environment .Deploy. Fields and lifecycle stay
+                         in UnitPaletteUI.cs, which is also the name Unity needs
+                         the component to be in.
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
                           card in the palette's AVAILABLE list (read-only)

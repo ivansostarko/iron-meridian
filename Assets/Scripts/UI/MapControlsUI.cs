@@ -43,6 +43,13 @@ namespace IronMeridian.UI
         RectTransform _compass;
         RectTransform _compassDial;
         Text _compassHeading, _zoomReadout;
+
+        // Both readouts run every frame, and assigning Text.text allocates a
+        // string and dirties the canvas even when the glyphs are identical.
+        // Cache the value each one is showing and only rebuild when it moves.
+        int _shownHeading = int.MinValue;
+        int _shownZoom = int.MinValue;
+        bool _shownZoomInKm;
         (Image fill, Text label) _mode2D, _mode3D;
 
         public bool ControlsVisible { get; private set; } = true;
@@ -297,13 +304,30 @@ namespace IronMeridian.UI
                 // (yaw 90) and north swings to the left, which in uGUI's
                 // counter-clockwise-positive Z is +90.
                 _compassDial.localRotation = Quaternion.Euler(0f, 0f, _rig.Yaw);
-                _compassHeading.text = $"{Mathf.RoundToInt(_rig.Yaw) % 360:000}°";
+
+                // Yaw is already normalised to [0,360); rounding 359.7 gives
+                // 360, which the modulo folds back to 0.
+                int heading = Mathf.RoundToInt(_rig.Yaw) % 360;
+                if (heading != _shownHeading)
+                {
+                    _shownHeading = heading;
+                    _compassHeading.text = $"{heading:000}°";
+                }
             }
 
             if (ControlsVisible && _zoomReadout != null)
             {
                 float m = _rig.DistanceMeters;
-                _zoomReadout.text = m >= 1000f ? $"{m / 1000f:0.#} km" : $"{m:0} m";
+                bool km = m >= 1000f;
+                // Bucket at the resolution the format strings actually print:
+                // a tenth of a kilometre, or a whole metre.
+                int bucket = km ? Mathf.RoundToInt(m / 100f) : Mathf.RoundToInt(m);
+                if (bucket != _shownZoom || km != _shownZoomInKm)
+                {
+                    _shownZoom = bucket;
+                    _shownZoomInKm = km;
+                    _zoomReadout.text = km ? $"{m / 1000f:0.#} km" : $"{m:0} m";
+                }
             }
         }
     }

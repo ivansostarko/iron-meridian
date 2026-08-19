@@ -18,7 +18,7 @@ namespace IronMeridian.Units
         public UnitState State { get; private set; }
         public UnitDefinition Def { get; private set; }
         public UnitMover Mover { get; private set; }
-        public bool IsAlive => State.strength > 0.01f && State.status != UnitStatus.Destroyed.ToString();
+        public bool IsAlive => State.strength > 0.01f && State.status != nameof(UnitStatus.Destroyed);
 
         CesiumGeoreference _geo;
         CesiumGlobeAnchor _anchor;
@@ -395,7 +395,7 @@ namespace IronMeridian.Units
             State.latitude = lat;
             State.longitude = lon;
             SnapToTerrain();
-            State.status = UnitStatus.Idle.ToString();
+            State.status = nameof(UnitStatus.Idle);
             UnitRegistry.NotifyMoved();
         }
 
@@ -594,7 +594,7 @@ namespace IronMeridian.Units
             }
 
             if (State.strength <= 0.01f) Die();
-            else if (State.strength < 0.3f) State.status = UnitStatus.Routed.ToString();
+            else if (State.strength < 0.3f) State.status = nameof(UnitStatus.Routed);
 
             RefreshBurning();
         }
@@ -614,8 +614,8 @@ namespace IronMeridian.Units
 
             // Routed is the worse state and is owned by ApplyDamage; suppression
             // must not quietly promote a routed formation back up to pinned.
-            if (State.organisation < 25f && State.status != UnitStatus.Routed.ToString())
-                State.status = UnitStatus.Suppressed.ToString();
+            if (State.organisation < 25f && State.status != nameof(UnitStatus.Routed))
+                State.status = nameof(UnitStatus.Suppressed);
         }
 
         /// <summary>
@@ -653,7 +653,7 @@ namespace IronMeridian.Units
 
         void Die()
         {
-            State.status = UnitStatus.Destroyed.ToString();
+            State.status = nameof(UnitStatus.Destroyed);
 
             // The counter is off the board — the operational half of the
             // casualty list. Its people were booked as the strength came off.

@@ -242,7 +242,7 @@ namespace IronMeridian.Logistics
                 foreach (var d in data)
                 {
                     if (d == null) continue;
-                    var team = d.team == Team.Enemy.ToString() ? Team.Enemy : Team.User;
+                    var team = d.team == nameof(Team.Enemy) ? Team.Enemy : Team.User;
                     if (!_stocks.TryGetValue(team, out var side))
                     {
                         side = new Dictionary<ResourceKind, double>();

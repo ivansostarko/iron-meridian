@@ -291,8 +291,8 @@ namespace IronMeridian.Lines
         }
 
         Color SideColor(Color fallback) =>
-            Data.team == Team.Enemy.ToString() ? GameConfig.RedTeam
-            : Data.team == Team.User.ToString() ? GameConfig.BlueTeam
+            Data.team == nameof(Team.Enemy) ? GameConfig.RedTeam
+            : Data.team == nameof(Team.User) ? GameConfig.BlueTeam
             : fallback;
 
         /// <summary>

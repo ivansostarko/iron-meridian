@@ -226,9 +226,9 @@ namespace IronMeridian.Data
     {
         public string id = "";
         /// <summary>MapObjectKind name.</summary>
-        public string kind = MapObjectKind.Bridge.ToString();
+        public string kind = nameof(MapObjectKind.Bridge);
         /// <summary>Owning side, a <see cref="Team"/> name.</summary>
-        public string team = Team.User.ToString();
+        public string team = nameof(Team.User);
         /// <summary>Caption drawn on the ground; empty takes the catalogue's name.</summary>
         public string label = "";
 
@@ -236,7 +236,7 @@ namespace IronMeridian.Data
 
         public MapObjectKind KindEnum =>
             Enum.TryParse(kind, out MapObjectKind k) ? k : MapObjectKind.Bridge;
-        public Team TeamEnum => team == Team.Enemy.ToString() ? Team.Enemy : Team.User;
+        public Team TeamEnum => team == nameof(Team.Enemy) ? Team.Enemy : Team.User;
 
         public MapObjectData Clone() => new MapObjectData
         {

@@ -79,9 +79,9 @@ namespace IronMeridian.Data
         /// <summary>Team id this player commands. Empty means unassigned.</summary>
         public string teamId;
         /// <summary><see cref="PlayerKind"/> as a string, the way the rest of the save schema stores enums.</summary>
-        public string kind = PlayerKind.Human.ToString();
+        public string kind = nameof(PlayerKind.Human);
         /// <summary><see cref="Difficulty"/> as a string. Read only for a computer player.</summary>
-        public string difficulty = Difficulty.Regular.ToString();
+        public string difficulty = nameof(Difficulty.Regular);
 
         public PlayerKind KindEnum =>
             Enum.TryParse(kind, out PlayerKind k) ? k : PlayerKind.Human;
@@ -109,7 +109,7 @@ namespace IronMeridian.Data
         /// the combat model to the icon set is built on that two-way split, so
         /// a team is a *label over* one of them rather than a third side.
         /// </summary>
-        public string side = Team.User.ToString();
+        public string side = nameof(Team.User);
 
         public Team SideEnum => Enum.TryParse(side, out Team t) ? t : Team.User;
     }
@@ -227,7 +227,7 @@ namespace IronMeridian.Data
                     : name.Trim(),
                 kind = kind.ToString(),
                 teamId = teamId ?? "",
-                difficulty = Difficulty.Regular.ToString()
+                difficulty = nameof(Difficulty.Regular)
             };
             _players.Add(player);
             Changed?.Invoke();
@@ -321,13 +321,13 @@ namespace IronMeridian.Data
             if (FindTeam(BlueTeamId) == null)
                 _teams.Insert(0, new TeamState
                 {
-                    id = BlueTeamId, name = "Blue Force", side = Team.User.ToString()
+                    id = BlueTeamId, name = "Blue Force", side = nameof(Team.User)
                 });
 
             if (FindTeam(RedTeamId) == null)
                 _teams.Add(new TeamState
                 {
-                    id = RedTeamId, name = "Red Force", side = Team.Enemy.ToString()
+                    id = RedTeamId, name = "Red Force", side = nameof(Team.Enemy)
                 });
 
             if (_players.Count == 0)
@@ -335,13 +335,13 @@ namespace IronMeridian.Data
                 _players.Add(new PlayerState
                 {
                     id = NewId("player"), name = "User",
-                    kind = PlayerKind.Human.ToString(), teamId = BlueTeamId
+                    kind = nameof(PlayerKind.Human), teamId = BlueTeamId
                 });
                 _players.Add(new PlayerState
                 {
                     id = NewId("player"), name = "Computer",
-                    kind = PlayerKind.Computer.ToString(), teamId = RedTeamId,
-                    difficulty = Difficulty.Regular.ToString()
+                    kind = nameof(PlayerKind.Computer), teamId = RedTeamId,
+                    difficulty = nameof(Difficulty.Regular)
                 });
             }
         }

@@ -185,7 +185,7 @@ namespace IronMeridian.Units
             _targetHeight = s.heightMeters;
             _travelledTotalM = 0.0;
             _nextDustAtM = DustIntervalM;      // no puff on the start line itself
-            s.status = UnitStatus.Moving.ToString();
+            s.status = nameof(UnitStatus.Moving);
 
             BeginLeg();
             // A formation swings onto its heading before rolling, and the
@@ -294,8 +294,8 @@ namespace IronMeridian.Units
             _faceOnArrival = null;
             if (_marker != null) { Destroy(_marker); _marker = null; }
             if (_trail != null) { _trail.Finish(); _trail = null; }
-            if (_actor.State.status == UnitStatus.Moving.ToString())
-                _actor.State.status = UnitStatus.Idle.ToString();
+            if (_actor.State.status == nameof(UnitStatus.Moving))
+                _actor.State.status = nameof(UnitStatus.Idle);
         }
 
         void Update()
@@ -314,7 +314,7 @@ namespace IronMeridian.Units
             // The order is kept, not cancelled: break contact and it resumes.
             if (CombatSystem.InContact(_actor))
             {
-                _actor.State.status = UnitStatus.Engaging.ToString();
+                _actor.State.status = nameof(UnitStatus.Engaging);
                 return;
             }
 
@@ -437,7 +437,7 @@ namespace IronMeridian.Units
         {
             _moving = false;
             _route.Clear();
-            s.status = UnitStatus.Idle.ToString();
+            s.status = nameof(UnitStatus.Idle);
             if (_faceOnArrival.HasValue) _actor.SetHeading(_faceOnArrival.Value);
             _faceOnArrival = null;
             if (_trail != null) { _trail.Finish(); _trail = null; }

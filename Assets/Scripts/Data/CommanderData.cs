@@ -147,7 +147,7 @@ namespace IronMeridian.Data
         /// <summary>Stable id, referenced by <see cref="UnitState.commanderId"/> and by subordinates.</summary>
         public string id = "";
         /// <summary>"User" | "Enemy". A commander never crosses sides.</summary>
-        public string team = Team.User.ToString();
+        public string team = nameof(Team.User);
         /// <summary>Surname as the panel shows it.</summary>
         public string name = "";
         /// <summary>A <see cref="RankDef.name"/> on this side's ladder.</summary>
@@ -177,7 +177,7 @@ namespace IronMeridian.Data
         /// </summary>
         public int portrait = -1;
 
-        public Team TeamEnum => team == Team.Enemy.ToString() ? Team.Enemy : Team.User;
+        public Team TeamEnum => team == nameof(Team.Enemy) ? Team.Enemy : Team.User;
 
         public CommanderState Clone() => new CommanderState
         {
