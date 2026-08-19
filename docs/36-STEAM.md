@@ -259,7 +259,7 @@ A trailer is effectively required. `docs/32-VIDEO.md` covers the video assets
 the game already carries.
 
 **The game can capture its own footage**: map editor → left rail → **CAPTURE**
-(`docs/39-CAPTURE.md`) writes PNG stills and 30 fps frame sequences into your
+(`docs/39-CAPTURE.md`) writes PNG stills and 30 fps H.264 video into your
 Pictures folder, from a real build rather than the editor. For editor-side work
 with more control over resolution and output format, use Unity Recorder
 (`com.unity.recorder`, already installed — `docs/38-PACKAGES.md` §2a).

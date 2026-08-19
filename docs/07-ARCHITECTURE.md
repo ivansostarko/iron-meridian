@@ -18,9 +18,10 @@ Assets/Scripts/
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
     ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
-    CaptureSystem.cs     screenshots and frame-sequence recording into the
-                          player's Pictures folder; DontDestroyOnLoad so a take
-                          survives navigation (docs/39-CAPTURE.md)
+    CaptureSystem.cs     screenshots and H.264 video into the player's
+                          Pictures folder, encoded by ffmpeg as a child
+                          process; DontDestroyOnLoad so a take survives
+                          navigation (docs/39-CAPTURE.md)
     SteamIntegration.cs  the only contact point with Steam, behind the
                           IRONMERIDIAN_STEAM define (docs/36-STEAM.md)
     SceneLoader.cs       async scene load behind the loading overlay
@@ -85,6 +86,11 @@ Assets/Scripts/
     UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
     MapControlsUI.cs     on-map cluster (bottom-left): zoom, face north, the
                           2D / 3D projection pair, frame-all + compass (bottom-right)
+                          + the FPS readout (top-left). All of it rides the
+                          ON-MAP CONTROLS toggle in MAP CONFIG, and steps aside
+                          with SetLeftInset when the section panel slides out.
+                          FPS counts against realtimeSinceStartup, not
+                          deltaTime, which CaptureSystem fakes while recording
     UiTheme.cs           map-editor design tokens (colours, sizes)
                          LeftPanelWidth = the always-present rail; other on-map
                          chrome measures from it, never from the section panel
@@ -154,8 +160,8 @@ Assets/Scripts/
                          in UnitPaletteUI.cs, which is also the name Unity needs
                          the component to be in.
     UnitPaletteUI.Capture.cs
-                         the CAPTURE section — screenshots and frame-
-                         sequence recording (docs/39-CAPTURE.md)
+                         the CAPTURE section — screenshots and video
+                         recording (docs/39-CAPTURE.md)
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
                           card in the palette's AVAILABLE list (read-only)

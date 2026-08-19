@@ -34,12 +34,15 @@ namespace IronMeridian.UI
         const float BottomInset = 74f;
         /// <summary>Margin from the right edge of the screen when nothing is in the way.</summary>
         const float RightInset = 24f;
+        /// <summary>Clears the top command bar, so the readout sits just under it.</summary>
+        const float TopInset = UiTheme.TopBarHeight + 16f;
         const float CompassSize = 104f;
 
         MapManager _map;
         CameraRig _rig;
 
         RectTransform _cluster;
+        RectTransform _fps;
         RectTransform _compass;
         RectTransform _compassDial;
         Text _compassHeading, _zoomReadout;
@@ -50,6 +53,18 @@ namespace IronMeridian.UI
         int _shownHeading = int.MinValue;
         int _shownZoom = int.MinValue;
         bool _shownZoomInKm;
+
+        Text _fpsLabel;
+        int _shownFps = int.MinValue;
+        int _fpsFrames;
+        float _fpsSince;
+
+        /// <summary>
+        /// How often the reading is recomputed. Per-frame would be a number too
+        /// jittery to read; a quarter-second still reacts fast enough to see a
+        /// stutter, and costs one string a quarter-second instead of sixty.
+        /// </summary>
+        const float FpsInterval = 0.25f;
         (Image fill, Text label) _mode2D, _mode3D;
 
         public bool ControlsVisible { get; private set; } = true;
@@ -61,6 +76,7 @@ namespace IronMeridian.UI
             _rig = rig;
 
             BuildCluster(canvas);
+            BuildFps(canvas);
             BuildCompass(canvas);
 
             // The projection is also set from MAP CONFIG and by loading a map,
@@ -90,7 +106,11 @@ namespace IronMeridian.UI
         public void SetLeftInset(float chromeRight)
         {
             if (_cluster == null) return;
-            _cluster.anchoredPosition = new Vector2(Mathf.Max(LeftInset, chromeRight + 16f), BottomInset);
+            float x = Mathf.Max(LeftInset, chromeRight + 16f);
+            _cluster.anchoredPosition = new Vector2(x, BottomInset);
+            // The readout sits in the same column as the cluster, so it steps
+            // aside with it rather than being buried by the section panel.
+            if (_fps != null) _fps.anchoredPosition = new Vector2(x, -TopInset);
         }
 
         /// <summary>
@@ -104,6 +124,60 @@ namespace IronMeridian.UI
         {
             if (_compass == null) return;
             _compass.anchoredPosition = new Vector2(-(RightInset + Mathf.Max(0f, chromeWidth)), BottomInset);
+        }
+
+        // --------------------------------------------------------------- fps
+
+        /// <summary>
+        /// The frame-rate readout, top-left of the map — under the command bar
+        /// and clear of the rail, in the same column as the zoom cluster below.
+        /// </summary>
+        void BuildFps(Canvas canvas)
+        {
+            _fps = UIFactory.CreateBorderedPanel(canvas.transform, "FpsReadout",
+                UiTheme.Chrome, UiTheme.Border);
+            UIFactory.Place(_fps, new Vector2(0f, 1f),
+                new Vector2(LeftInset, -TopInset), new Vector2(62, 24));
+
+            _fpsLabel = UIFactory.CreateText(_fps, "", UiTheme.FontLabel, UiTheme.TextDim);
+            UIFactory.Stretch(_fpsLabel.rectTransform);
+
+            UiTooltip.Attach(_fps.gameObject, "Frames per second");
+            _fpsSince = Time.realtimeSinceStartup;
+        }
+
+        /// <summary>
+        /// Counts frames against the **wall clock**, not <c>deltaTime</c>.
+        ///
+        /// Both <c>deltaTime</c> and <c>unscaledDeltaTime</c> are fabricated
+        /// while <see cref="Time.captureFramerate"/> is set, which is exactly
+        /// what <see cref="Core.CaptureSystem"/> does while recording — so
+        /// either would report a serene 30 fps no matter how hard the machine
+        /// was actually working. <c>realtimeSinceStartup</c> is the only source
+        /// that still tells the truth during a take.
+        /// </summary>
+        void UpdateFps()
+        {
+            if (_fpsLabel == null) return;
+
+            _fpsFrames++;
+            float now = Time.realtimeSinceStartup;
+            float elapsed = now - _fpsSince;
+            if (elapsed < FpsInterval) return;
+
+            int fps = Mathf.RoundToInt(_fpsFrames / elapsed);
+            _fpsFrames = 0;
+            _fpsSince = now;
+
+            if (fps == _shownFps) return;
+            _shownFps = fps;
+
+            _fpsLabel.text = $"{fps} FPS";
+            // Colour is the reading at a glance: the point of a counter you
+            // never look directly at is that it catches your eye when it drops.
+            _fpsLabel.color = fps >= 50 ? UiTheme.TextDim
+                            : fps >= 25 ? UiTheme.Warning
+                                        : UiTheme.Danger;
         }
 
         // ----------------------------------------------------------- cluster
@@ -285,6 +359,7 @@ namespace IronMeridian.UI
         {
             ControlsVisible = visible;
             if (_cluster != null) _cluster.gameObject.SetActive(visible);
+            if (_fps != null) _fps.gameObject.SetActive(visible);
         }
 
         public void SetCompassVisible(bool visible)
@@ -295,6 +370,10 @@ namespace IronMeridian.UI
 
         void Update()
         {
+            // Before the rig check: the readout is about the machine, not the
+            // camera, and it should keep counting while a map is still loading.
+            if (ControlsVisible) UpdateFps();
+
             if (_rig == null) return;
 
             if (CompassVisible && _compassDial != null)

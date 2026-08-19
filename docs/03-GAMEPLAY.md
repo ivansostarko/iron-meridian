@@ -79,7 +79,9 @@ The editor's left chrome is in two pieces:
 | **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** |
 | **Battle** | REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** |
 
-**CAPTURE is in both**, and is the only row that is. A still of a scenario being laid out and a recording of the battle that follows are the same job, so taking the controls away the moment the fight starts would remove them exactly when there is something worth recording. Screenshots and frame-sequence recordings land in the player's Pictures folder — `docs/39-CAPTURE.md`.
+A small **FPS readout** sits at the top-left of the map, under the command bar and clear of the rail. It measures against the wall clock rather than `deltaTime`, so it still tells the truth while a recording is in progress (`docs/39-CAPTURE.md` §3 fakes `deltaTime` deliberately). It follows the **ON-MAP CONTROLS** toggle in MAP CONFIG along with the zoom cluster — so turning that off for a clean screenshot takes the counter with it.
+
+**CAPTURE is in both**, and is the only row that is. A still of a scenario being laid out and a recording of the battle that follows are the same job, so taking the controls away the moment the fight starts would remove them exactly when there is something worth recording. Screenshots and H.264 video land in the player's Pictures folder — `docs/39-CAPTURE.md`.
 
 Hidden rows are **re-flowed, not merely switched off** — the rows sit at absolute offsets inside the scrolling list, so a hidden one would otherwise leave a hole and the rail would read as a list with pieces missing rather than as a shorter list. `UnitPaletteUI.ApplyModeVisibility` does both, off `ScenarioSections` / `BattleSections`. If the open section is not in the new mode's list, the panel **closes** rather than switching to some other section: closing hands that strip of screen back to the map, which is what starting a battle is for.
 

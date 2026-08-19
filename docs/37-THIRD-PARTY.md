@@ -59,6 +59,20 @@ Bundled inside `MMAR`, and worth their own rows if you keep them:
 |---|---|
 | `NaughtyAttributes` | Inspector attributes, by Denis Rizov — upstream is MIT |
 
+## Not bundled — but one decision away
+
+**ffmpeg** encodes the video the CAPTURE section records (`docs/39-CAPTURE.md`).
+Today it is **not distributed with the game**: the build looks for an ffmpeg the
+player installed, and disables recording when there is none. That deliberately
+keeps it off this register.
+
+Putting `ffmpeg.exe` into `StreamingAssets` — which `CaptureSystem` will happily
+use, and which would make recording work out of the box — changes that. It
+becomes distribution, and ffmpeg's licence (LGPL 2.1+, or **GPL** when built
+with libx264, which the encoder command uses) comes with it. If that is ever
+done, it needs a row here, the licence text shipped, and the written offer for
+source the licence requires.
+
 ## Things to look at first
 
 - The two packs whose folder names say **`_demo`** and **`_Free`**. Free

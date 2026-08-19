@@ -6,7 +6,7 @@ namespace IronMeridian.UI
 {
     /// <summary>
     /// <see cref="UnitPaletteUI"/> — the CAPTURE section: a still of the map, or
-    /// a recording of it.
+    /// a video of it.
     ///
     /// One part of a class split across files purely for size: the editor
     /// palette is the largest screen in the game, and a single file made every
@@ -73,9 +73,9 @@ namespace IronMeridian.UI
                 new Vector2(Pad, -190), new Vector2(InnerWidth, 20));
 
             var recordHint = UIFactory.CreateText(content,
-                $"Writes a numbered JPG sequence at {CaptureSystem.RecordFps} fps — the input a video "
-                + "editor wants. The game runs in slow motion while recording so that every frame is "
-                + "captured; the sequence itself plays back at full speed.",
+                $"An H.264 .mp4 at {CaptureSystem.RecordFps} fps, encoded by ffmpeg as it goes. The "
+                + "game runs in slow motion while recording so that no frame is missed; the video "
+                + "itself plays back at full speed.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(recordHint.rectTransform, new Vector2(0f, 1f),
                 new Vector2(Pad, -214), new Vector2(InnerWidth, 66));
@@ -117,14 +117,28 @@ namespace IronMeridian.UI
             var img = _captureRecordButton.GetComponent<Image>();
             if (img != null) img.color = recording ? UiTheme.Danger : UiTheme.Surface;
 
+            // No encoder, no recording — and say so where the button is,
+            // rather than letting it look broken when pressed.
+            bool canRecord = CaptureSystem.CanRecord;
+            _captureRecordButton.interactable = canRecord || recording;
+            if (_captureRecordDot != null)
+                _captureRecordDot.color = canRecord ? UiTheme.Danger : UiTheme.TextFaint;
+
             if (_captureStatus != null)
             {
-                _captureStatus.text = recording
-                    ? $"● {CaptureSystem.RecordedSeconds:0}s — {CaptureSystem.FrameCount} frames"
+                _captureStatus.text =
+                    !string.IsNullOrEmpty(CaptureSystem.LastError) ? CaptureSystem.LastError
+                    : recording
+                        ? $"● {CaptureSystem.RecordedSeconds:0}s — {CaptureSystem.FrameCount} frames"
+                    : !canRecord
+                        ? "ffmpeg not found — install it to record. See docs/39-CAPTURE.md."
                     : CaptureSystem.FrameCount > 0
-                        ? $"Last take: {CaptureSystem.FrameCount} frames "
-                          + $"({CaptureSystem.RecordedSeconds:0.#}s)"
+                        ? $"Last take: {CaptureSystem.RecordedSeconds:0.#}s "
+                          + $"({CaptureSystem.FrameCount} frames)"
                         : "";
+
+                _captureStatus.color = string.IsNullOrEmpty(CaptureSystem.LastError) && canRecord
+                    ? UiTheme.TextDim : UiTheme.Warning;
             }
 
             if (_capturePath != null)

@@ -29,7 +29,7 @@ Unity 6 (6000.0 LTS) real-terrain operational wargame using **Cesium for Unity 1
 | Add a Unity package | Have a use for it first, check what it drags in (`Packages/packages-lock.json`, `depth` > 0) and whether it runs anything at startup → row in **`docs/38-PACKAGES.md`** in the same change. `make steam-check` flags packages nothing references |
 | Add a unit type | `.claude/commands/add-unit.md` — units.json entry + icon glyph + regenerate |
 | Regenerate icons | `make icons` — or `python scripts/generate_icons.py` (needs Pillow) |
-| Take a screenshot / record footage | Map editor → left rail → **CAPTURE**. Files land in `Pictures/Iron Meridian`. Recording writes a 30 fps JPG sequence, not an .mp4 — Unity has no runtime encoder. `Core/CaptureSystem.cs`, **`docs/39-CAPTURE.md`** |
+| Take a screenshot / record footage | Map editor → left rail → **CAPTURE**. Files land in `Pictures/Iron Meridian`. Recording writes an H.264 `.mp4` via **ffmpeg as a child process** — Unity has no runtime encoder, so the RECORD button is disabled until ffmpeg is on PATH (`winget install --id Gyan.FFmpeg`). Bundling ffmpeg carries its licence into the release — `docs/39-CAPTURE.md` §2b. `Core/CaptureSystem.cs` |
 | Add a scenario map | Copy `Assets/StreamingAssets/Maps/lyon_dev.json`, edit; see `docs/05-MAP-SAVES.md` |
 | Windows build | `make build` — or `scripts/build-windows.ps1`, `docs/06-WINDOWS-BUILD.md` |
 | Anything Steam | `make steam-check` (preflight) · integration is `Assets/Scripts/Core/SteamIntegration.cs`, behind the `IRONMERIDIAN_STEAM` define so the project builds without the SDK · depot templates in `steam/` · upload is `scripts/steam-upload.ps1`, which **requires an explicit `-Token Include`/`-Exclude`**. **`docs/36-STEAM.md`** |
