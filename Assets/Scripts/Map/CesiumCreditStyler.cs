@@ -19,15 +19,21 @@ namespace IronMeridian.Map
     /// shipping in breach of the licence it streams its terrain under. What is
     /// adjustable is how loudly it shouts: the credit stays on screen, findable,
     /// and behind the interface rather than in front of it. It is currently
-    /// drawn at about **one pixel** and near-transparent, which is as quiet as a
-    /// thing can be while still being on the screen — worth knowing if the
-    /// project's ion licence is ever reviewed.
+    /// pinned to the **bottom-right corner** of the map and drawn at about **one
+    /// pixel**, near-transparent — which is as quiet as a thing can be while
+    /// still being on the screen. Whether it is quiet enough to still count as
+    /// attribution is a licence question, not a code one: **if the project's ion
+    /// terms are ever reviewed, this is the class to look at**, and
+    /// <see cref="Scale"/> alone undoes it.
     ///
-    /// **It retries.** The credit system is created lazily — the first time a
-    /// tileset has something to attribute — so it does not exist when the map is
-    /// built. Rather than guessing at a delay, this keeps looking for a few
-    /// seconds and re-applies whenever the credit canvas is rebuilt (the system
-    /// rebuilds its children as credits come and go).
+    /// **It retries, and it keeps retrying.** The credit system is created
+    /// lazily — the first time a tileset has something to attribute — so it
+    /// does not exist when the map is built, and it rebuilds its children as
+    /// credits come and go (a new tileset, a style change, the "Data
+    /// attribution" popup opening). A one-shot pass would therefore be undone by
+    /// the next rebuild, so this re-applies for as long as the map is up. The
+    /// search gives up after <see cref="SearchSeconds"/> only if it never found
+    /// the thing at all.
     ///
     /// See docs/02-CESIUM.md.
     /// </summary>
@@ -57,13 +63,30 @@ namespace IronMeridian.Map
         /// <summary>Behind every canvas the game creates, all of which sort at 0 or above.</summary>
         const int SortingOrder = -500;
 
-        /// <summary>Seconds spent looking for the credit system before giving up.</summary>
+        /// <summary>
+        /// Margin from the bottom-right corner, in canvas units before
+        /// <see cref="Scale"/>. At a pixel across this is barely a nudge; it is
+        /// here so the mark is not clipped by the very edge of the window.
+        /// </summary>
+        const float CornerMargin = 4f;
+
+        /// <summary>
+        /// Seconds spent looking for the credit system before giving up. Only
+        /// the *search* is bounded — once found, the styling is re-applied for
+        /// as long as the map is up, because the credit system rebuilds itself.
+        /// </summary>
         const float SearchSeconds = 20f;
         /// <summary>Seconds between attempts, and between re-applications once found.</summary>
         const float IntervalSeconds = 1f;
 
         float _elapsed;
         float _timer;
+
+        /// <summary>
+        /// The credit system once found, so the per-second re-apply is not a
+        /// <c>GameObject.Find</c> over the whole scene for the rest of the game.
+        /// </summary>
+        GameObject _host;
 
         /// <summary>Adds the styler to a host object, once.</summary>
         public static void Attach(GameObject host)
@@ -74,8 +97,14 @@ namespace IronMeridian.Map
 
         void Update()
         {
-            _elapsed += Time.unscaledDeltaTime;
-            if (_elapsed > SearchSeconds) { enabled = false; return; }
+            // The clock only runs while the thing has never been found. Giving
+            // up once it *has* been found would hand the corner back to a
+            // full-size watermark the next time a tileset rebuilt its credits.
+            if (_host == null)
+            {
+                _elapsed += Time.unscaledDeltaTime;
+                if (_elapsed > SearchSeconds) { enabled = false; return; }
+            }
 
             _timer -= Time.unscaledDeltaTime;
             if (_timer > 0f) return;
@@ -86,7 +115,8 @@ namespace IronMeridian.Map
 
         void Apply()
         {
-            var host = GameObject.Find(CreditSystemName);
+            if (_host == null) _host = GameObject.Find(CreditSystemName);
+            var host = _host;
             if (host == null) return;
 
             // Every canvas under it: the package has used one for the on-screen
@@ -106,11 +136,24 @@ namespace IronMeridian.Map
                 if (scaler != null && scaler.enabled) scaler.enabled = false;
                 canvas.scaleFactor = 1f;
 
-                // Every direct child, because the package has put the logo and
-                // the line in siblings before now. Shrinking them about their
-                // own pivots leaves each where its corner anchor put it.
+                // Every direct child, because the package has put the logo, the
+                // attribution line and the "upgrade" prompt in siblings before
+                // now — and each is re-anchored rather than merely shrunk.
+                //
+                // Anchoring is what actually decides where these end up: the
+                // package pins them to whichever corner its own prefab chose,
+                // and scaling about a top-left pivot leaves a one-pixel mark
+                // sitting in the top-left. Pinning every one of them to the
+                // bottom-right corner with a matching pivot puts the whole block
+                // in the corner furthest from anything the player reads — and
+                // the map's own bottom-right is the screen's, because the
+                // editor chrome only ever insets the left edge.
                 foreach (RectTransform child in canvas.transform)
+                {
+                    child.anchorMin = child.anchorMax = child.pivot = new Vector2(1f, 0f);
+                    child.anchoredPosition = new Vector2(-CornerMargin, CornerMargin);
                     child.localScale = new Vector3(Scale, Scale, 1f);
+                }
 
                 var group = canvas.GetComponent<CanvasGroup>();
                 if (group == null) group = canvas.gameObject.AddComponent<CanvasGroup>();

@@ -475,10 +475,17 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// Shows or hides the battle-only chrome on the rail. Right now that is
-        /// the GROUPS row: a group is something you command rather than
-        /// something you author, and a row that did nothing for the whole of a
-        /// scenario's layout would be a row in the way.
+        /// Swaps the rail between its two lists — see ApplyModeVisibility,
+        /// ScenarioSections and BattleSections — and opens the section the new
+        /// mode starts on.
+        ///
+        /// **Both modes open on GENERAL.** A change of mode is a change of what
+        /// the player is doing, and landing them on whatever section the last
+        /// job happened to leave open is landing them somewhere chosen by
+        /// history rather than by the question in front of them. GENERAL is the
+        /// answer in both directions because it is the one section that is about
+        /// the map itself rather than about a job on it — which is also why it
+        /// is now on both rails.
         /// </summary>
         public void SetBattleMode(bool running)
         {
@@ -488,9 +495,12 @@ namespace IronMeridian.UI
                 _modeHeading.color = running ? UiTheme.Success : UiTheme.TextDim;
             }
 
-            // The two modes carry two different rails — see ApplyModeVisibility,
-            // ScenarioSections and BattleSections.
             ApplyModeVisibility(running);
+
+            // After the visibility pass, which would otherwise close a panel it
+            // had just been told to open. Not while the chrome is hidden: a
+            // mission has no rail to open a section on.
+            if (!_chromeHidden) ShowSection(Section.General);
 
             if (running) RefreshGroups();
         }

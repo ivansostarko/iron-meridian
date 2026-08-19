@@ -160,15 +160,22 @@ Assets/Scripts/
                          ammo/fuel/rations per friendly formation). Also builds
                          the four fire menus into StrikeDockUI's pages — what
                          moved is where they are drawn, not who draws them.
-                         SetChromeVisible(false) takes the whole rail off for a mission
-                         One class, EIGHT files: a `partial` split by section
+                         SetChromeVisible(false) takes the whole rail off for a mission.
+                         GENERAL is on BOTH rails and is what either mode opens
+                         on — SetBattleMode calls ShowSection(General), which is
+                         the non-toggling twin of the nav row's OpenSection
+                         One class, NINE files: a `partial` split by section
                          group, purely for size — .Units .Force .Terrain .Fires
-                         .Mission .Environment .Deploy. Fields and lifecycle stay
-                         in UnitPaletteUI.cs, which is also the name Unity needs
-                         the component to be in.
+                         .Mission .Environment .Deploy .Capture .Cinema. Fields
+                         and lifecycle stay in UnitPaletteUI.cs, which is also
+                         the name Unity needs the component to be in.
     UnitPaletteUI.Capture.cs
                          the CAPTURE section — screenshots and video
                          recording (docs/39-CAPTURE.md)
+    UnitPaletteUI.Cinema.cs
+                         the CINEMA MODE section — the waypoint list, the leg
+                         timing and PLAY/STOP over Map/CinemaSystem. Battle only
+                         (docs/03-GAMEPLAY.md — Cinema mode)
     UnitInfoPanel.cs     right panel: full unit data on click. The footer's
                           prev/next arrows are captioned "Next Unit"; REMOVE
                           UNIT goes through ConfirmDialog
@@ -180,15 +187,26 @@ Assets/Scripts/
                           UnitPaletteUI.BuildArtillerySection — docs/17-ARTILLERY.md)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
-    CameraRig.cs         3D orbit & 2D top-down strategy camera. Owns the map's
+    CameraRig.cs         3D orbit & 2D top-down strategy camera. A fly-to can
+                          also carry heading and tilt, and FlightEnded(bool)
+                          reports arrival vs interruption - which is what lets
+                          CinemaSystem chain legs and stop when the player takes
+                          the camera back. Owns the map's
                           viewport: SetViewportLeftInset(canvas, canvasPx) hands
                           the left strip of the window to the editor's rail, so
                           the map is rendered into what is left rather than
                           behind it (Camera.rect + a cullingMask-0 backdrop
                           camera that clears the strip). The inset arrives in
                           canvas pixels and is re-derived on any window resize
-    CesiumCreditStyler.cs  shrinks Cesium's credit overlay and sorts it behind
-                          the HUD. NOT removed - ion's terms require it
+    CesiumCreditStyler.cs  pins Cesium's credit overlay to the map's bottom-right
+                          corner, shrinks it to ~1 px and sorts it behind the
+                          HUD. Re-applies once a second, because the credit
+                          system rebuilds itself. NOT removed - ion's terms
+                          require it (docs/02-CESIUM.md)
+    CinemaSystem.cs      the battle's camera path: recorded shots (lat/lon +
+                          standoff + heading + tilt) played back as a queue of
+                          CameraRig fly-tos. Battle only, runtime only, not
+                          saved (docs/03-GAMEPLAY.md - Cinema mode)
     GeoUtils.cs          lat/lon <-> Unity, distance/bearing, terrain sampling
                           (only real ground counts — see Core/NonTerrain.cs)
     RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)

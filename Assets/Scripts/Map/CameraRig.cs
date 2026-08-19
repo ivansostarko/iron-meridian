@@ -263,8 +263,32 @@ namespace IronMeridian.Map
         float _flyFromDistance, _flyToDistance;
         float _flyElapsed, _flyDuration;
 
+        /// <summary>
+        /// Whether this flight also turns the camera. A fly-to-a-formation does
+        /// not — changing the heading under the player while merely showing
+        /// them something would disorient rather than inform — but a cinema
+        /// leg does, because the shot it is heading for is a whole camera pose
+        /// and not just a place.
+        /// </summary>
+        bool _flyTurns;
+        float _flyFromYaw, _flyToYaw, _flyFromPitch, _flyToPitch;
+
         /// <summary>True while the camera is travelling to a point on its own.</summary>
         public bool Flying => _flying;
+
+        /// <summary>
+        /// Raised when a flight stops, with <c>true</c> if it arrived and
+        /// <c>false</c> if something interrupted it — a pan, a zoom, or another
+        /// flight taking over.
+        ///
+        /// The distinction is the whole contract for anything chaining flights:
+        /// a cinema tour steps to its next shot on an arrival and gives up on an
+        /// interruption, which is what makes touching the camera stop the tour
+        /// rather than skip a leg of it. Handlers must not start a flight
+        /// synchronously — see <see cref="CinemaSystem"/>, which sets a flag and
+        /// acts in its own Update.
+        /// </summary>
+        public System.Action<bool> FlightEnded;
 
         /// <summary>
         /// Travels to a point rather than jumping to it.
@@ -284,23 +308,44 @@ namespace IronMeridian.Map
         /// <param name="focus">Ground point to end up looking at, Unity world space.</param>
         /// <param name="distance">Standoff to finish at; null keeps the current one.</param>
         /// <param name="seconds">Travel time. Zero or less jumps.</param>
-        public void FlyTo(Vector3 focus, float? distance = null, float seconds = 0.75f)
+        /// <param name="yaw">Heading to arrive on; null keeps the current one.</param>
+        /// <param name="pitch">Tilt to arrive on; null keeps the current one. Ignored in 2D.</param>
+        public void FlyTo(Vector3 focus, float? distance = null, float seconds = 0.75f,
+            float? yaw = null, float? pitch = null)
         {
             float target = Mathf.Clamp(distance ?? _distance, MinDistance, _maxDistance);
+            // 2D is locked north-up by definition, so a heading asked for there
+            // is dropped rather than fought over with SetMode.
+            bool turns = (yaw.HasValue || pitch.HasValue) && _mode == ViewMode.Mode3D;
+            float targetYaw = yaw ?? _yaw;
+            float targetPitch = Mathf.Clamp(pitch ?? _pitch3D, 20f, 85f);
 
             if (seconds <= 0f)
             {
                 _focus = focus;
                 _distance = target;
+                if (turns) { _yaw = targetYaw; _pitch3D = targetPitch; }
                 CancelFlight();
                 Apply();
                 return;
             }
 
+            // Announced before the fields are overwritten, so a listener sees
+            // "the flight you were watching was cut short" rather than a state
+            // half-way into the next one.
+            CancelFlight();
+
             _flyFrom = _focus;
             _flyTo = focus;
             _flyFromDistance = _distance;
             _flyToDistance = target;
+            _flyTurns = turns;
+            _flyFromYaw = _yaw;
+            // Shortest way round: 350 degrees to 10 should be a 20-degree turn,
+            // not a 340-degree one back through south.
+            _flyToYaw = _flyFromYaw + Mathf.DeltaAngle(_flyFromYaw, targetYaw);
+            _flyFromPitch = _pitch3D;
+            _flyToPitch = targetPitch;
             _flyElapsed = 0f;
             _flyDuration = seconds;
             _flying = true;
@@ -323,10 +368,30 @@ namespace IronMeridian.Map
             // being multiplicative rather than additive.
             _distance = Mathf.Exp(Mathf.Lerp(Mathf.Log(_flyFromDistance), Mathf.Log(_flyToDistance), eased));
 
-            if (u >= 1f) _flying = false;
+            if (_flyTurns)
+            {
+                _yaw = Mathf.Lerp(_flyFromYaw, _flyToYaw, eased);
+                _pitch3D = Mathf.Lerp(_flyFromPitch, _flyToPitch, eased);
+            }
+
+            if (u >= 1f)
+            {
+                _flying = false;
+                FlightEnded?.Invoke(true);
+            }
         }
 
-        void CancelFlight() => _flying = false;
+        /// <summary>
+        /// Stops a flight short. Reports the interruption, so anything chaining
+        /// flights can tell "it got there" from "the player took the camera
+        /// back" — <see cref="FlightEnded"/>.
+        /// </summary>
+        void CancelFlight()
+        {
+            if (!_flying) return;
+            _flying = false;
+            FlightEnded?.Invoke(false);
+        }
 
         /// <summary>
         /// The ground point the camera is looking at, in Unity world space.
@@ -356,6 +421,14 @@ namespace IronMeridian.Map
 
         /// <summary>Compass heading the view is facing, degrees clockwise from north.</summary>
         public float Yaw => ((_yaw % 360f) + 360f) % 360f;
+
+        /// <summary>
+        /// The 3D tilt, degrees from horizontal. The *stored* tilt, not the one
+        /// in use: 2D pins the camera at 89.9° without touching this, so a shot
+        /// recorded in 2D and replayed in 3D comes back at the tilt the player
+        /// last chose rather than flat on its back.
+        /// </summary>
+        public float Pitch => _pitch3D;
 
         /// <summary>Camera distance as 0 (closest) .. 1 (furthest), for a zoom readout.</summary>
         public float Zoom01 =>

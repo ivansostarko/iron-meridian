@@ -109,11 +109,24 @@ a logo and a credit line - lazily, the first time a tileset has something to
 attribute. Left alone it lands on top of the game's HUD, because it is created
 after our canvas and sorts above it.
 
-`Map/CesiumCreditStyler.cs` scales the logo and its line down to **0.4%** — about
-a pixel square — drops them to 5% opacity, stops them taking clicks, and sorts
-the canvas at -500 so every canvas the game draws is in front of it. It retries
-for twenty seconds, because the credit system does not exist when the map is
-built.
+`Map/CesiumCreditStyler.cs` pins the whole block — the ion logo, the credit line
+and the "upgrade" prompt — to the **bottom-right corner** of the map, scales it
+down to **0.4%** (about a pixel square), drops it to 5% opacity, stops it taking
+clicks, and sorts the canvas at -500 so every canvas the game draws is in front
+of it. The corner is the screen's bottom-right, which is also the map's: the
+editor chrome only ever insets the left edge.
+
+Position is an **anchor** change, not just a scale one. The package pins each
+piece to whichever corner its own prefab chose, and shrinking about a top-left
+pivot leaves a one-pixel mark in the top-left; every direct child of the credit
+canvas is re-anchored to (1, 0) with a matching pivot.
+
+**It keeps re-applying.** The credit system does not exist when the map is built,
+and it rebuilds its children as credits come and go — a new tileset, a style
+change, the data-attribution popup opening — so a one-shot pass is undone by the
+next rebuild. The twenty-second budget bounds the *search* only; once the system
+is found it is restyled once a second for as long as the map is up, from a cached
+reference rather than a repeated `GameObject.Find`.
 
 The scale is applied as a `localScale` on the credit's own children, **not** as
 the canvas's `scaleFactor`. A scale factor that small asks uGUI's dynamic font
@@ -123,5 +136,10 @@ scaling the transform draws the same mesh smaller and asks nothing of the font.
 **It is deliberately not removed.** Cesium ion's terms of service require the
 attribution to be present, and a build that deleted it would be shipping in
 breach of the licence its terrain streams under. What is adjustable is how loudly
-it shouts — and at a pixel it is as quiet as a thing can be while still being on
-the screen, which is worth knowing if the project's ion licence is ever reviewed.
+it shouts — and at a pixel in the far corner it is as quiet as a thing can be
+while still being on the screen.
+
+Whether that is still *attribution* is a licence question and not a code one.
+**If the project's ion terms are ever reviewed, `CesiumCreditStyler` is the class
+to look at**: raising `Scale` alone undoes the whole of it, and the position and
+opacity are one constant each beside it.

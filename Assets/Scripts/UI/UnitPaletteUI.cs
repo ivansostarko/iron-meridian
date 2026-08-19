@@ -89,7 +89,9 @@ namespace IronMeridian.UI
             /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
             Groups,
             /// <summary>Stills and recording — see <see cref="BuildCaptureSection"/>.</summary>
-            Capture
+            Capture,
+            /// <summary>Battle-mode only — the camera path, see <see cref="BuildCinemaSection"/>.</summary>
+            Cinema
         }
         enum ListMode { Available, Deployed }
 
@@ -368,6 +370,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Supplies] = MakeSectionContent(body, "Supplies");
             _sectionContent[Section.Groups] = MakeSectionContent(body, "Groups");
             _sectionContent[Section.Capture] = MakeSectionContent(body, "Capture");
+            _sectionContent[Section.Cinema] = MakeSectionContent(body, "Cinema");
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
@@ -388,6 +391,7 @@ namespace IronMeridian.UI
             BuildSuppliesSection(_sectionContent[Section.Supplies]);
             BuildGroupsSection(_sectionContent[Section.Groups]);
             BuildCaptureSection(_sectionContent[Section.Capture]);
+            BuildCinemaSection(_sectionContent[Section.Cinema]);
 
             // The capture panel shows a running frame count, so it is driven by
             // the system rather than polled — and unsubscribed in OnDestroy,
@@ -408,7 +412,12 @@ namespace IronMeridian.UI
             }
 
             BuildToolStrip(panel);
-            OpenSection(Section.Units);
+            // GENERAL, not UNITS: the first question about a scenario is what
+            // rules it is being laid out under — what the map is showing, what
+            // the clock says — and the palette is one row down when the answer
+            // is "now put something on it". See SetBattleMode, which opens the
+            // same section on every change of mode.
+            ShowSection(Section.General);
             // Skip the opening slide: the panel is simply already out when the
             // editor appears.
             _slide = 1f;
@@ -500,11 +509,27 @@ namespace IronMeridian.UI
             return body;
         }
 
-        /// <summary>Opens a section, or closes the panel if that section is already showing.</summary>
+        /// <summary>
+        /// Opens a section, or closes the panel if that section is already
+        /// showing. This is what a **nav row click** does: pressing the row you
+        /// are already on is how the panel is put away.
+        /// </summary>
         void OpenSection(Section section)
         {
             if (_panelOpen && _section == section) { ClosePanel(); return; }
+            ShowSection(section);
+        }
 
+        /// <summary>
+        /// Opens a section outright, with no toggle.
+        ///
+        /// Separate from <see cref="OpenSection"/> because everything that is
+        /// not a nav row click means "be showing this" rather than "flip this":
+        /// the editor deciding what a mode opens on would otherwise close the
+        /// panel whenever the section it wanted was the one already up.
+        /// </summary>
+        void ShowSection(Section section)
+        {
             _section = section;
             _panelOpen = true;
             _sectionPanel.gameObject.SetActive(true);
@@ -526,6 +551,7 @@ namespace IronMeridian.UI
             if (section == Section.Stats) RefreshStats();
             if (section == Section.Supplies) RefreshSupplies();
             if (section == Section.Capture) RefreshCapture();
+            if (section == Section.Cinema) RefreshCinema();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -730,6 +756,9 @@ namespace IronMeridian.UI
             AddNavRow(nav, Section.Supplies, "SUPPLIES", UiIcons.Crates);
             AddNavRow(nav, Section.Groups, "GROUPS", UiIcons.Group);
             AddNavRow(nav, Section.Capture, "CAPTURE", UiIcons.Camera);
+            // Battle only: it authors nothing, it is a way of watching a fight
+            // that is already running.
+            AddNavRow(nav, Section.Cinema, "CINEMA MODE", UiIcons.Play);
 
             ApplyModeVisibility(false);
         }
@@ -758,8 +787,14 @@ namespace IronMeridian.UI
         /// </summary>
         static readonly Section[] BattleSections =
         {
+            // GENERAL is in both lists. It carries the switches that decide what
+            // the map is showing — line of sight, weapon ranges, fog — and those
+            // are questions a commander asks harder during the fight than while
+            // laying it out, so hiding the row the moment the battle started was
+            // taking it away exactly when it was wanted.
+            Section.General,
             Section.Reinforcements, Section.Sectors, Section.Groups,
-            Section.Stats, Section.Supplies, Section.Capture
+            Section.Stats, Section.Supplies, Section.Capture, Section.Cinema
         };
 
         static bool Allowed(Section section, bool battle) =>

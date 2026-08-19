@@ -98,6 +98,7 @@ namespace IronMeridian.Core
                 pick.title == null ? UiTheme.Accent : pick.colour);
         }
         MapControlsUI _mapControls;
+        Map.CinemaSystem _cinema;
         GameClock _clock;
         GameHUD _hud;
         UnitPaletteUI _palette;
@@ -749,8 +750,23 @@ namespace IronMeridian.Core
                 if (_minimap != null) _minimap.SetLeftInset(_palette.LeftChromeEdge);
                 _rig.SetViewportLeftInset(canvas, _palette.LeftChromeEdge);
 
-                // The rail's battle-only chrome — the GROUPS row.
-                _combat.RunningChanged += running => _palette.SetBattleMode(running);
+                // The camera path. Built here rather than passed into Build:
+                // it needs the rig and the map, both of which the palette
+                // already has, and the panel only ever asks it for things.
+                _cinema = gameObject.AddComponent<Map.CinemaSystem>();
+                _cinema.Init(_map, _rig);
+                _palette.SetCinema(_cinema);
+
+                // The rail's battle-only chrome — the GROUPS and CINEMA MODE rows.
+                _combat.RunningChanged += running =>
+                {
+                    _palette.SetBattleMode(running);
+                    // A tour is a way of watching a battle; there is nothing to
+                    // watch once it is over, and a camera still flying itself
+                    // around the editor would be a camera the player had to
+                    // wrestle back.
+                    if (!running && _cinema != null) _cinema.Stop();
+                };
                 _palette.SetBattleMode(_combat.Running);
             });
 

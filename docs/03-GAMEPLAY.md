@@ -92,8 +92,21 @@ goes back to overlapping it.
 
 | Mode | Rows |
 |---|---|
-| **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** |
-| **Battle** | REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** |
+| **Scenario** | **GENERAL** · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** |
+| **Battle** | **GENERAL** · REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** · CINEMA MODE |
+
+**GENERAL and CAPTURE are in both lists.** GENERAL carries the switches that
+decide what the map is showing — line of sight, weapon ranges, fog of war — and
+those are questions a commander asks harder during the fight than while laying it
+out, so taking the row away the moment the battle started was removing it exactly
+when it was wanted.
+
+**Both modes open on GENERAL.** A change of mode is a change of what you are
+doing, and landing on whatever section the last job happened to leave open is
+landing somewhere chosen by history rather than by the question in front of you.
+GENERAL is the answer in both directions because it is the one section that is
+about the map itself rather than about a job on it. The editor also opens on it
+from cold.
 
 A small **FPS readout** sits at the **bottom-left of the map, directly above the camera-altitude readout**, as the second-to-last row of the on-map control cluster — in both the map editor and battle. It measures against the wall clock rather than `deltaTime`, so it still tells the truth while a recording is in progress (`docs/39-CAPTURE.md` §3 fakes `deltaTime` deliberately). It follows the **ON-MAP CONTROLS** toggle in MAP CONFIG along with the zoom cluster — so turning that off for a clean screenshot takes the counter with it.
 
@@ -356,6 +369,48 @@ Right-click **a friendly formation** or **a logistic site** and a small menu ope
 | `Esc`, another right-click, or a click outside | Closes it. The dismissing click is swallowed, so it cannot also land on the terrain behind the menu |
 
 Sites are picked in **screen space** rather than with a collider: a site's marker is drawn at a constant *apparent* size — the same number of pixels across at 500 m and at 50 km — so a collider would have to be resized every frame to keep matching it, and a pick that disagreed with what is on screen is worse than no pick at all.
+
+### Cinema mode
+
+**Left rail → CINEMA MODE**, battle mode only. A camera path over the fight: a
+list of shots recorded from wherever the camera happens to be, and a PLAY that
+flies from one to the next.
+
+It is the one row on the rail that **authors nothing**. Everything else there
+changes the scenario; this changes only what you are looking at, which is why it
+is not on the scenario rail — there is nothing to watch yet.
+
+| Control | What it does |
+|---|---|
+| **ADD WAYPOINT** | Records the camera exactly as it is now and appends it to the path |
+| **◎** on a row | Flies to that shot on its own, so you can check it |
+| **✕** on a row | Removes that waypoint (and stops playback — the path has changed under it) |
+| **SECONDS PER LEG** ◄ ► | How long one leg takes, 2–30 s. Six by default |
+| **PLAY / STOP** | Runs the path from the top, or ends it. Needs at least two waypoints |
+| **CLEAR** | Drops the whole path |
+
+**A waypoint is recorded, not typed.** Frame the shot you want with the ordinary
+camera controls — pan, zoom, Q/E, middle-mouse orbit — and press ADD WAYPOINT.
+What is stored is the whole pose: position, altitude, heading and tilt. There is
+no editing of a shot's figures, because numbers in boxes are a worse way of
+saying "this shot" for a thing whose entire subject is what it looks like.
+
+**Playback is a queue of ordinary fly-tos.** The flight is `CameraRig`'s, which
+is what gives a leg the same easing, the same unscaled clock (so it runs with the
+battle paused), and — the part that matters — the rig's standing rule that
+**touching the camera cancels the flight**. Pan, zoom or rotate mid-tour and the
+tour stops there rather than skipping a leg; you do not have to find STOP first.
+The first leg starts from wherever the camera already is, so PLAY never opens
+with a jump.
+
+Heading and tilt are only flown in **3D**. 2D is locked north-up by definition,
+so a shot recorded there replays as a move rather than a move-and-turn; the tilt
+a shot carries is the stored 3D tilt, so a path recorded in 2D and played in 3D
+comes back at the tilt you last chose rather than flat on its back.
+
+A path runs once through and stops — it does not loop. It is **not saved**: a
+tour is a way of watching a scenario, not part of one, and it goes when the
+battle ends.
 
 ### Groups
 
