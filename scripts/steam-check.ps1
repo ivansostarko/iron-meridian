@@ -1,4 +1,4 @@
-# Iron Meridian — Steam release preflight
+﻿# Iron Meridian — Steam release preflight
 #
 # Checks the mechanical half of "is this ready to put on Steam". It cannot tell
 # you whether the game is good, whether your asset licences permit a commercial
@@ -137,6 +137,87 @@ if (-not (Test-Path $SourceDir)) {
         Result warn "Cesium token" "present in the build — steam-upload.ps1 requires an explicit -Token choice"
     } else {
         Result warn "Cesium token" "absent — the shipped game draws no terrain unless players supply one"
+    }
+}
+
+# -------------------------------------------------------------------- packages
+Section "Packages"
+
+# A package that ships runtime code but that nothing references is dead weight
+# in the build — and in the DOTS case it is not even inert, it starts a world.
+# Keyed on a namespace the game would have to `using` if it really used it.
+$sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts"), (Join-Path $root "Assets\Editor") `
+    -Filter *.cs -Recurse -File -ErrorAction SilentlyContinue)
+$code = ($sources | ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
+
+$manifest = Get-Content (Join-Path $root "Packages\manifest.json") -Raw
+$watch = @(
+    @{ Package = "com.unity.physics";       Marker = "Unity\.Physics";  Note = "DOTS physics — the game uses PhysX. Pulls in Entities, which starts a World at load" }
+    @{ Package = "com.unity.entities";      Marker = "Unity\.Entities"; Note = "ECS runtime — starts a Default World before the first scene, used or not" }
+    @{ Package = "com.unity.logging";       Marker = "Unity\.Logging";  Note = "structured logger — the project uses Debug.Log; inert while unused" }
+    @{ Package = "com.unity.timeline";      Marker = "PlayableDirector|UnityEngine\.Timeline|UnityEngine\.Playables"; Note = "no authored sequences — films play through VideoCatalog" }
+    @{ Package = "com.unity.ml-agents";     Marker = "Unity\.MLAgents"; Note = "training pipeline, not a switch — the opponent is authored Difficulty levels" }
+    @{ Package = "com.unity.remote-config"; Marker = "RemoteConfigService|Unity\.Services\.RemoteConfig"; Note = "overlaps tuning.json, which already does runtime tuning offline" }
+    @{ Package = "com.unity.multiplayer.widgets"; Marker = "Unity\.Multiplayer\.Widgets"; Note = "UGS lobby UI — Netcode is not installed and MultiplayerUI is a placeholder" }
+    @{ Package = "com.unity.multiplayer.tools";   Marker = "Unity\.Multiplayer\.Tools";   Note = "network profiler — there is no networking to profile" }
+    @{ Package = "com.unity.services.push-notifications"; Marker = "PushNotifications"; Note = "Android/iOS only — cannot function in a Windows build" }
+    @{ Package = "com.unity.localization";  Marker = "UnityEngine\.Localization"; Note = "~1460 UI strings are code literals; brings Addressables alongside Resources" }
+    @{ Package = "com.unity.purchasing";    Marker = "UnityEngine\.Purchasing"; Note = "no Steam backend — Steam DLC is SteamIntegration.OwnsDlc() — see docs/36-STEAM.md 3c" }
+    @{ Package = "com.unity.services.economy"; Marker = "Unity\.Services\.Economy"; Note = "live-service currency/inventory — this is a single-purchase game" }
+    @{ Package = "com.unity.2d.animation";  Marker = "UnityEngine\.U2D\.Animation"; Note = "sprite skeletal animation — the game is 3D with legacy Animation" }
+    @{ Package = "com.unity.mobile.android-logcat";     Marker = $null; Note = "Android device logs — Windows target" }
+    @{ Package = "com.unity.device-simulator.devices";  Marker = $null; Note = "phone/tablet screen profiles — Windows target" }
+    @{ Package = "com.unity.formats.fbx";               Marker = $null; Note = "exports FBX; this pipeline only imports" }
+    @{ Package = "com.unity.asset-manager-for-unity";   Marker = $null; Note = "Unity Cloud asset storage — assets here live in git" }
+    @{ Package = "com.unity.connect.share"; Marker = $null;             Note = "WebGL Publisher — editor-only; this game ships to Windows" }
+    @{ Package = "com.unity.collab-proxy";  Marker = $null;             Note = "Unity Version Control — editor-only; this project is on git" }
+    @{ Package = "com.unity.multiplayer.center";   Marker = $null;      Note = "editor window that recommends multiplayer packages" }
+    @{ Package = "com.unity.multiplayer.playmode"; Marker = $null;      Note = "virtual players for testing networking the game does not have" }
+)
+
+$flagged = 0
+foreach ($w in $watch) {
+    if ($manifest -notmatch [regex]::Escape($w.Package)) { continue }
+    if ($w.Marker -and $code -match $w.Marker) {
+        Result pass $w.Package "in use"
+    } elseif ($w.Marker) {
+        $flagged++
+        Result warn $w.Package "installed, referenced nowhere — $($w.Note). docs/38-PACKAGES.md"
+    } else {
+        Result warn $w.Package "editor-only — $($w.Note). docs/38-PACKAGES.md"
+    }
+}
+if ($flagged -gt 0 -and $manifest -match "com\.unity\.entities|com\.unity\.physics") {
+    if ($defines -match "UNITY_DISABLE_AUTOMATIC_SYSTEM_BOOTSTRAP") {
+        Result pass "ECS bootstrap" "disabled by define — the unused world does not start"
+    } else {
+        Result warn "ECS bootstrap" "add UNITY_DISABLE_AUTOMATIC_SYSTEM_BOOTSTRAP, or remove the package (docs/38-PACKAGES.md section 3)"
+    }
+}
+if ($flagged -eq 0) { Result pass "no dead weight" "nothing installed-but-unreferenced" }
+
+# Unity Gaming Services register themselves at BeforeSceneLoad but transmit
+# nothing until something calls InitializeAsync. That one call is the line
+# between "an SDK is in the build" and "the game collects player data and the
+# store page needs to say so" — so it is worth watching for, not assuming.
+# Assets/Resources is the ships-in-the-build folder (golden rules 8-10), so a
+# package dropping a settings asset there puts it in the player.
+$strays = @(Get-ChildItem (Join-Path $root "Assets\Resources") -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in '.asset', '.json' } |
+    Where-Object { $_.Name -match 'Notification|Services|Analytics|BillingMode|Purchasing|Economy|RemoteConfig' })
+if ($strays.Count -gt 0) {
+    Result warn "stray settings" "$($strays.Name -join ', ') in Assets\Resources — package settings that ship in the player"
+} else {
+    Result pass "Resources clean" "no package settings assets in Assets\Resources"
+}
+
+$lockFile = Join-Path $root "Packages\packages-lock.json"
+$lock = if (Test-Path $lockFile) { Get-Content $lockFile -Raw } else { "" }
+if ($lock -match "com\.unity\.services\.analytics") {
+    if ($code -match "UnityServices\.InitializeAsync|AnalyticsService") {
+        Result fail "analytics" "ACTIVE — the game initialises Unity Gaming Services. A Steam page selling this needs a privacy disclosure (docs/38-PACKAGES.md section 3)"
+    } else {
+        Result warn "analytics" "Unity Analytics SDK is in the build but dormant (nothing calls InitializeAsync). Arrived via push-notifications — docs/38-PACKAGES.md section 3"
     }
 }
 

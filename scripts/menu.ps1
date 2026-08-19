@@ -92,6 +92,8 @@ $Jobs = @(
             Write-Host "It is excluded from the Steam depot on purpose; see docs/36-STEAM.md."
        } }
 
+    @{ Group = "Project"; Key = "packages-audit"; Text = "Report which Unity packages nothing uses (‑Apply strips them)"
+       Do = { Invoke-Script "packages-reset.ps1" } }
     @{ Group = "Project"; Key = "check"; Text = "Compile every C# file with Roslyn, without opening Unity"
        Do = { Invoke-Script "compile-check.ps1" } }
     @{ Group = "Project"; Key = "doctor"; Text = "Check the toolchain: Unity, Python, Pillow, Inno Setup, token"

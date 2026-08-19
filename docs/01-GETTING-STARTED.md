@@ -25,7 +25,7 @@ cd iron-meridian
 ## 3. Open in Unity
 
 1. Unity Hub → **Add** → select the `iron-meridian` folder.
-2. Open it with Unity 6000.0. The first import takes a few minutes — the **Cesium for Unity** package (1.24) is pulled automatically from the Cesium scoped registry defined in `Packages/manifest.json`.
+2. Open it with Unity 6000.0. The first import takes a few minutes — the **Cesium for Unity** package (1.25) is pulled automatically from the Cesium scoped registry defined in `Packages/manifest.json`.
 3. If Unity asks about entering Safe Mode because of compile errors on very first open, choose **Ignore** — errors disappear once the Cesium package finishes resolving.
 
 ## 4. Add your Cesium ion token  ⚠️ required

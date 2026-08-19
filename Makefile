@@ -24,7 +24,7 @@ BUILD_JOBS   := setup build installer package run
 DATA_JOBS    := units icons stat-icons units-doc installer-art data
 UNITY_JOBS   := models vfx packages
 STEAM_JOBS   := steam-check steam-appid
-PROJECT_JOBS := check doctor logs clean distclean
+PROJECT_JOBS := check packages-audit doctor logs clean distclean
 
 JOBS := $(BUILD_JOBS) $(DATA_JOBS) $(UNITY_JOBS) $(STEAM_JOBS) $(PROJECT_JOBS)
 
@@ -57,6 +57,7 @@ menu:
 #   steam-check    release preflight: app id, icon, version, build, licences
 #   steam-appid    write steam_appid.txt beside the player, to test Steam locally
 #   check          compile every C# file with Roslyn, without opening Unity
+#   packages-audit report which Unity packages nothing uses (-Apply strips them)
 #   doctor         check Unity, Python, Pillow, Inno Setup and the token
 #   logs           tail the last Unity setup and build logs
 #   clean          delete the packaged installers and the build logs

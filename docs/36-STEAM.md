@@ -147,6 +147,39 @@ is the string you pass to `Achieve`. There is no catalogue in code yet because
 there are no achievements yet — when there are, they belong in one, the way
 every other list in this project does.
 
+## 3c. DLC, and why there is no payment code
+
+The main menu has a **DLC** screen (`Extras → DLC`, currently a placeholder), so
+this is worth settling before someone reaches for a payments SDK.
+
+**Steam DLC is not an in-app purchase, and Unity IAP cannot sell it.** Unity IAP
+targets Google Play, the App Store and similar; it has no Steam backend. On
+Steam:
+
+1. Each piece of DLC is **its own app id**, created on the partner site under
+   the base game.
+2. The player buys it on the store, like the base game. Your build never sees a
+   payment, a receipt or an SDK.
+3. The game asks one question at runtime:
+
+```csharp
+if (SteamIntegration.OwnsDlc(1234570))   // the DLC's app id
+    // unlock the campaign
+else
+    SteamIntegration.OpenStorePage(1234570);   // opens in the overlay
+```
+
+Both are in `SteamIntegration` and both are safe outside Steam —
+`OwnsDlc` returns false, `OpenStorePage` does nothing. Whatever the DLC screen
+becomes, it needs a path that degrades when the game is not running under
+Steam, not a dead button.
+
+Content itself has a choice: ship it in the base depot and gate it behind
+`OwnsDlc` (simple, but the bytes are on every disk), or give the DLC its own
+depot so only owners download it. For a campaign — JSON in `StreamingAssets`,
+measured in kilobytes — gating is the sane option. For anything with models or
+video, use a depot.
+
 ## 4. Uploading a build
 
 `steam/` holds two VDF templates with `{{PLACEHOLDER}}` values.
@@ -223,6 +256,13 @@ the small sizes — same reason it is the app icon.
 
 A trailer is effectively required. `docs/32-VIDEO.md` covers the video assets
 the game already carries.
+
+**Capture both with Unity Recorder** (`com.unity.recorder`, already installed —
+`docs/38-PACKAGES.md` §2a). It records the Game view at a fixed resolution and
+frame rate rather than whatever the editor manages that second, which is the
+difference between footage and a screen grab: lock it to 1920×1080 at 60 fps,
+fly the camera over Lyon, and the output is trailer material and screenshots
+from the same session.
 
 ## 7. The partner-side process
 

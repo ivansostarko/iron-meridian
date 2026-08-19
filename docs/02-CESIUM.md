@@ -42,7 +42,7 @@ The package itself is declared in `Packages/manifest.json` via Cesium's scoped r
 "scopedRegistries": [
   { "name": "Cesium", "url": "https://unity.pkg.cesium.com", "scopes": ["com.cesium.unity"] }
 ],
-"dependencies": { "com.cesium.unity": "1.24.0" }
+"dependencies": { "com.cesium.unity": "1.25.0" }
 ```
 
 ## Getting a token

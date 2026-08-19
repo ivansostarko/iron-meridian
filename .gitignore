@@ -45,3 +45,6 @@ sysinfo.txt
 *.aab
 *.unitypackage
 *.app
+
+# Unity Asset Manager drops this at the repo root
+uam/

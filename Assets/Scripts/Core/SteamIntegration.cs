@@ -83,6 +83,42 @@ namespace IronMeridian.Core
 #endif
         }
 
+        // ---------------------------------------------------------------- DLC
+
+        /// <summary>
+        /// Whether the player owns a piece of downloadable content.
+        ///
+        /// **Steam DLC is not an in-app purchase.** Each piece is its own app id
+        /// on the partner site, bought through the store like the base game;
+        /// the game never handles money, a payment SDK or a receipt. All it
+        /// ever does is ask this question and unlock accordingly.
+        ///
+        /// Returns false when Steam is not running, which is the right answer:
+        /// a build launched outside Steam cannot prove ownership of anything.
+        /// </summary>
+        public static bool OwnsDlc(uint dlcAppId)
+        {
+#if IRONMERIDIAN_STEAM
+            if (!Running) return false;
+            return SteamApps.BIsDlcInstalled(new AppId_t(dlcAppId));
+#else
+            return false;
+#endif
+        }
+
+        /// <summary>
+        /// Opens a DLC's store page in the Steam overlay, so the player can buy
+        /// it without leaving the game. Does nothing outside Steam — always
+        /// pair it with a UI path that degrades, rather than a dead button.
+        /// </summary>
+        public static void OpenStorePage(uint appId)
+        {
+#if IRONMERIDIAN_STEAM
+            if (!Running) return;
+            SteamFriends.ActivateGameOverlayToStore(new AppId_t(appId), EOverlayToStoreFlag.k_EOverlayToStoreFlag_None);
+#endif
+        }
+
         // ------------------------------------------------------------ startup
 
         /// <summary>
