@@ -240,6 +240,7 @@ namespace IronMeridian.UI
             UnitRegistry.Changed -= OnUnitsChanged;
             StrikeBudget.Changed -= RefreshStrikeBudget;
             LossLedger.Changed -= RefreshStats;
+            CaptureSystem.Changed -= RefreshCapture;
             // The commanders and players panels subscribe to registries of their own.
             _commanders?.Dispose();
             _players?.Dispose();

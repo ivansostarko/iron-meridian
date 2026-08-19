@@ -76,8 +76,10 @@ The editor's left chrome is in two pieces:
 
 | Mode | Rows |
 |---|---|
-| **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS |
-| **Battle** | REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES |
+| **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** |
+| **Battle** | REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** |
+
+**CAPTURE is in both**, and is the only row that is. A still of a scenario being laid out and a recording of the battle that follows are the same job, so taking the controls away the moment the fight starts would remove them exactly when there is something worth recording. Screenshots and frame-sequence recordings land in the player's Pictures folder — `docs/39-CAPTURE.md`.
 
 Hidden rows are **re-flowed, not merely switched off** — the rows sit at absolute offsets inside the scrolling list, so a hidden one would otherwise leave a hole and the rail would read as a list with pieces missing rather than as a shorter list. `UnitPaletteUI.ApplyModeVisibility` does both, off `ScenarioSections` / `BattleSections`. If the open section is not in the new mode's list, the panel **closes** rather than switching to some other section: closing hands that strip of screen back to the map, which is what starting a battle is for.
 

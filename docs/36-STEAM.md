@@ -134,13 +134,14 @@ depot: in a shipped build it would override what Steam says the app is.
 ### 3b. What is wired, and what is not
 
 Wired: relaunch-through-Steam, init, the callback pump, clean shutdown, the
-persona name, and `Achieve(apiName)`.
+persona name, `Achieve(apiName)`, `OwnsDlc`/`OpenStorePage` (§3c), and the
+**overlay pause**.
 
-**Not** wired: `SteamIntegration.OverlayChanged` fires but nothing listens. Steam
-expects a single-player game to stop when the overlay opens — hook it to
-whatever pauses a battle before you ship. That is a deliberate loose end rather
-than an oversight; it needs to know about your pause semantics, and this class
-should not.
+The overlay pause lives in `GameController`, not here: it holds time at zero
+while the overlay is up and restores `_clock.DesiredTimeScale` after, and it
+stands down if the player's own pause menu is already open or was opened through
+the overlay. `SteamIntegration` stays ignorant of what "paused" means, which is
+the point of the facade.
 
 Achievements are created on the partner site first; the API name you type there
 is the string you pass to `Achieve`. There is no catalogue in code yet because
@@ -257,7 +258,13 @@ the small sizes — same reason it is the app icon.
 A trailer is effectively required. `docs/32-VIDEO.md` covers the video assets
 the game already carries.
 
-**Capture both with Unity Recorder** (`com.unity.recorder`, already installed —
+**The game can capture its own footage**: map editor → left rail → **CAPTURE**
+(`docs/39-CAPTURE.md`) writes PNG stills and 30 fps frame sequences into your
+Pictures folder, from a real build rather than the editor. For editor-side work
+with more control over resolution and output format, use Unity Recorder
+(`com.unity.recorder`, already installed — `docs/38-PACKAGES.md` §2a).
+
+**Capture with Unity Recorder** (`com.unity.recorder`, already installed —
 `docs/38-PACKAGES.md` §2a). It records the Game view at a fixed resolution and
 frame rate rather than whatever the editor manages that second, which is the
 difference between footage and a screen grab: lock it to 1920×1080 at 60 fps,

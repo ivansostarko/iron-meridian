@@ -18,6 +18,11 @@ Assets/Scripts/
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
     ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
+    CaptureSystem.cs     screenshots and frame-sequence recording into the
+                          player's Pictures folder; DontDestroyOnLoad so a take
+                          survives navigation (docs/39-CAPTURE.md)
+    SteamIntegration.cs  the only contact point with Steam, behind the
+                          IRONMERIDIAN_STEAM define (docs/36-STEAM.md)
     SceneLoader.cs       async scene load behind the loading overlay
                           (docs/12-LOADERS.md §3.1)
     NonTerrain.cs        marks a collider as NOT ground, so terrain sampling
@@ -148,6 +153,9 @@ Assets/Scripts/
                          .Mission .Environment .Deploy. Fields and lifecycle stay
                          in UnitPaletteUI.cs, which is also the name Unity needs
                          the component to be in.
+    UnitPaletteUI.Capture.cs
+                         the CAPTURE section — screenshots and frame-
+                         sequence recording (docs/39-CAPTURE.md)
     UnitInfoPanel.cs     right panel: full unit data on click
     UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
                           card in the palette's AVAILABLE list (read-only)

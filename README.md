@@ -122,7 +122,7 @@ per-player streaming cost, and the licences on the third-party asset packs
 
 ## Documentation
 
-Thirty-eight documents under [`docs/`](docs/). Several are **registers** — the
+Thirty-nine documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -193,6 +193,7 @@ in the same change as the catalogue, never afterwards.
 | [36-STEAM](docs/36-STEAM.md) | Publishing on Steam — integration, depot, and the three things that can stop a release |
 | [37-THIRD-PARTY](docs/37-THIRD-PARTY.md) | **Licence register** — every third-party asset pack, and whether it may be sold |
 | [38-PACKAGES](docs/38-PACKAGES.md) | **Package register** — every Unity package, why it is there, and what it costs |
+| [39-CAPTURE](docs/39-CAPTURE.md) | Screenshots and screen recording, straight from the map editor |
 
 ## AI-assisted development
 
@@ -228,7 +229,7 @@ Assets/
     Maps/lyon_dev.json      the default Lyon scenario
     cesium-token.txt        <- YOUR CESIUM ION TOKEN GOES HERE (git-ignored)
 installer/                  Inno Setup script + generated wizard artwork
-docs/                       38 documents; several are registers — see above
+docs/                       39 documents; several are registers — see above
 Makefile                    task runner — `make` lists every job
 steam/                      Steam depot VDF templates
 scripts/                    menu.ps1 (the job table) · unity-run.ps1 ·

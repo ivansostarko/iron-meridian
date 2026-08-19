@@ -87,7 +87,9 @@ namespace IronMeridian.UI
             /// <summary>Reserved — see <see cref="BuildSuppliesSection"/>.</summary>
             Supplies,
             /// <summary>Battle-mode only — the nav row is hidden in the editor.</summary>
-            Groups
+            Groups,
+            /// <summary>Stills and recording — see <see cref="BuildCaptureSection"/>.</summary>
+            Capture
         }
         enum ListMode { Available, Deployed }
 
@@ -365,6 +367,7 @@ namespace IronMeridian.UI
             _sectionContent[Section.Objects] = MakeSectionContent(body, "Objects");
             _sectionContent[Section.Supplies] = MakeSectionContent(body, "Supplies");
             _sectionContent[Section.Groups] = MakeSectionContent(body, "Groups");
+            _sectionContent[Section.Capture] = MakeSectionContent(body, "Capture");
 
             BuildGeneralSection(_sectionContent[Section.General]);
             BuildUnitsSection(_sectionContent[Section.Units]);
@@ -384,6 +387,12 @@ namespace IronMeridian.UI
             BuildObjectsSection(_sectionContent[Section.Objects]);
             BuildSuppliesSection(_sectionContent[Section.Supplies]);
             BuildGroupsSection(_sectionContent[Section.Groups]);
+            BuildCaptureSection(_sectionContent[Section.Capture]);
+
+            // The capture panel shows a running frame count, so it is driven by
+            // the system rather than polled — and unsubscribed in OnDestroy,
+            // because CaptureSystem outlives this per-scene component.
+            CaptureSystem.Changed += RefreshCapture;
 
             // The four fire menus live in the strike dock's pages rather than in
             // this rail. They are still built here because their controls are
@@ -516,6 +525,7 @@ namespace IronMeridian.UI
             if (section == Section.Objects) RefreshMapObjects();
             if (section == Section.Stats) RefreshStats();
             if (section == Section.Supplies) RefreshSupplies();
+            if (section == Section.Capture) RefreshCapture();
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
@@ -714,6 +724,7 @@ namespace IronMeridian.UI
             AddNavRow(nav, Section.Objects, "OBJECTS", UiIcons.Equipment);
             AddNavRow(nav, Section.Supplies, "SUPPLIES", UiIcons.Crates);
             AddNavRow(nav, Section.Groups, "GROUPS", UiIcons.Group);
+            AddNavRow(nav, Section.Capture, "CAPTURE", UiIcons.Camera);
 
             ApplyModeVisibility(false);
         }
@@ -731,7 +742,8 @@ namespace IronMeridian.UI
             // dragged from.
             Section.General, Section.Units, Section.Players, Section.Commanders,
             Section.Logistics, Section.Sustainment, Section.Obstacles, Section.Effects,
-            Section.Missions, Section.Environment, Section.Map, Section.Zones, Section.Objects
+            Section.Missions, Section.Environment, Section.Map, Section.Zones, Section.Objects,
+            Section.Capture
         };
 
         /// <summary>
@@ -742,7 +754,7 @@ namespace IronMeridian.UI
         static readonly Section[] BattleSections =
         {
             Section.Reinforcements, Section.Sectors, Section.Groups,
-            Section.Stats, Section.Supplies
+            Section.Stats, Section.Supplies, Section.Capture
         };
 
         static bool Allowed(Section section, bool battle) =>

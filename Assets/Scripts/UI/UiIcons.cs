@@ -425,6 +425,16 @@ namespace IronMeridian.UI
         /// </summary>
         public static Sprite Disc => Get(nameof(Disc), (u, v) => DiscAt(u, v, 0.5f, 0.5f, 0.48f));
 
+        /// <summary>Stills and recording (CAPTURE section, screenshot button).</summary>
+        public static Sprite Camera => Get(nameof(Camera), (u, v) =>
+        {
+            // Body, the viewfinder hump on its shoulder, and the lens.
+            float body = RectOutline(u, v, 0.10f, 0.20f, 0.90f, 0.74f, 0.075f);
+            float hump = RectOutline(u, v, 0.30f, 0.74f, 0.56f, 0.86f, 0.075f);
+            float lens = RingAt(u, v, 0.5f, 0.46f, 0.17f, 0.075f);
+            return Mathf.Max(body, Mathf.Max(hump, lens));
+        });
+
         // ------------------------------------------------------- main menu
         //
         // Four glyphs the main menu's entries needed and the HUD had no answer
