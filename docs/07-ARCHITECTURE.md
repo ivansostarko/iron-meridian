@@ -35,6 +35,10 @@ Assets/Scripts/
                           UnitStatus, ViewMode, AttackTask, ReconTask
     UnitDefinition.cs    unit type stats + Category/Branch/HoldsGround + UnitDatabase
                           (units.json loader) — docs/04-UNITS.md
+    UnitNameCatalog.cs   formation names ("3rd Lancers") from unit-names.json,
+                          matched to a type by id then branch, unique across the
+                          map. Called once per unit from UnitActor.Spawn
+                          — docs/04-UNITS.md
     MapSaveData.cs       save schema: UnitState, GeoPoint, MapLineData, MapMarkerData
     MissionData.cs       Campaign, CampaignInfo, MissionDefinition, MissionBook
                           — the single-player campaign (docs/22-MISSIONS.md)
@@ -85,7 +89,8 @@ Assets/Scripts/
                           difficulty (docs/25-PLAYERS.md)
     UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
     MapControlsUI.cs     on-map cluster (bottom-left): zoom, face north, the
-                          2D / 3D projection pair, frame-all + compass (bottom-right)
+                          one-button 2D/3D projection toggle, frame-all
+                          + compass (bottom-right)
                           + the FPS readout, which sits as the second-to-last
                           row of the cluster, directly above the camera-altitude
                           readout. All of it rides the
@@ -175,14 +180,23 @@ Assets/Scripts/
                           UnitPaletteUI.BuildArtillerySection — docs/17-ARTILLERY.md)
   Map/
     MapManager.cs        CesiumGeoreference + terrain/imagery/buildings tilesets
-    CameraRig.cs         3D orbit & 2D top-down strategy camera
+    CameraRig.cs         3D orbit & 2D top-down strategy camera. Owns the map's
+                          viewport: SetViewportLeftInset(canvas, canvasPx) hands
+                          the left strip of the window to the editor's rail, so
+                          the map is rendered into what is left rather than
+                          behind it (Camera.rect + a cullingMask-0 backdrop
+                          camera that clears the strip). The inset arrives in
+                          canvas pixels and is re-derived on any window resize
     CesiumCreditStyler.cs  shrinks Cesium's credit overlay and sorts it behind
                           the HUD. NOT removed - ion's terms require it
     GeoUtils.cs          lat/lon <-> Unity, distance/bearing, terrain sampling
                           (only real ground counts — see Core/NonTerrain.cs)
     RoutePlanner.cs      road-like route over the terrain (corridor DP, no road data)
   Units/
-    UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death
+    UnitActor.cs         icon billboard, ring, heading arrow, strength bar, damage/death.
+                          Spawn() is the one choke point every unit reaches, so
+                          it is where an unnamed formation is given its name
+                          (Data/UnitNameCatalog)
     CommanderRegistry.cs the live roster, chain-of-command walk, assignment,
                           seeding and the combat bonus (docs/23-COMMANDERS.md)
     UnitLabel.cs         unit caption above the icon: shadowed two-pass TextMesh

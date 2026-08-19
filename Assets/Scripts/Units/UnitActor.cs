@@ -162,12 +162,35 @@ namespace IronMeridian.Units
             var def = UnitDatabase.Get(state.defId);
             if (def == null) { Debug.LogError($"Unknown unit def '{state.defId}'"); return null; }
 
+            // Every route onto the map goes through here — the palette, a paste, a
+            // reinforcement, a save being applied — so this is the one place a
+            // formation can be named without any of them having to remember to.
+            // Only when it has no name yet: a save carries the name it was given
+            // the first time, and the player may have typed one.
+            if (string.IsNullOrEmpty(state.customName))
+                state.customName = UnitNameCatalog.Generate(def, state.instanceId, NameInUse);
+
             var go = new GameObject($"Unit_{state.team}_{state.defId}_{state.instanceId}");
             go.transform.SetParent(geo.transform, false);
             var actor = go.AddComponent<UnitActor>();
             actor.Build(geo, state, def);
             UnitRegistry.Register(actor);
             return actor;
+        }
+
+        /// <summary>
+        /// True if a formation on the map is already called this. Walks the
+        /// registry rather than a cached set: the registry is the truth about
+        /// what is on the map through loads, resets and undo, and it is only
+        /// read when a unit is actually being named.
+        /// </summary>
+        static bool NameInUse(string name)
+        {
+            foreach (var u in UnitRegistry.All)
+                if (u != null && u.State != null &&
+                    string.Equals(u.State.customName, name, System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
         }
 
         void Build(CesiumGeoreference geo, UnitState state, UnitDefinition def)

@@ -739,12 +739,15 @@ namespace IronMeridian.Core
 
                 // The minimap shares the left edge with the rail now, so it
                 // rides the section panel's slide exactly as the zoom cluster
-                // does.
+                // does — and so does the map picture itself, which is rendered
+                // into the window the chrome leaves rather than underneath it.
                 _palette.LeftInsetChanged = edge =>
                 {
                     if (_minimap != null) _minimap.SetLeftInset(edge);
+                    _rig.SetViewportLeftInset(canvas, edge);
                 };
                 if (_minimap != null) _minimap.SetLeftInset(_palette.LeftChromeEdge);
+                _rig.SetViewportLeftInset(canvas, _palette.LeftChromeEdge);
 
                 // The rail's battle-only chrome — the GROUPS row.
                 _combat.RunningChanged += running => _palette.SetBattleMode(running);
@@ -1209,6 +1212,10 @@ namespace IronMeridian.Core
                 state.instanceId = System.Guid.NewGuid().ToString("N").Substring(0, 10);
                 state.groupId = "";          // a copy is not a member of the original's group
                 state.groupName = "";
+                // Nor does it inherit the original's name: two formations called
+                // the same thing is the one thing UnitNameCatalog exists to
+                // prevent. Cleared here so Spawn issues it a fresh one.
+                state.customName = "";
                 state.latitude = targetLat + (src.latitude - _clipboardCentreLat);
                 state.longitude = targetLon + (src.longitude - _clipboardCentreLon);
 
@@ -1530,8 +1537,11 @@ namespace IronMeridian.Core
 
             // The minimap stays — it is the operational picture, which is
             // gameplay rather than authoring. With the rail gone it slides back
-            // to the screen's own left margin.
+            // to the screen's own left margin, and the map takes the whole
+            // window back. SetChromeVisible raises the inset event too, so this
+            // is belt and braces for a mission entered before the palette built.
             if (_minimap != null) _minimap.SetLeftInset(0f);
+            if (_rig != null) _rig.SetViewportLeftInset(_canvas, 0f);
         }
 
         /// <summary>

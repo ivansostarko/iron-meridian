@@ -372,9 +372,17 @@ namespace IronMeridian.UI
                 if (n == 0) { m.Root.gameObject.SetActive(false); continue; }
 
                 Vector2 screen = sum / n;
-                bool onScreen = screen.x > -OffscreenMarginPx && screen.y > -OffscreenMarginPx &&
-                                screen.x < Screen.width + OffscreenMarginPx &&
-                                screen.y < Screen.height + OffscreenMarginPx;
+                // Bounded by the camera's own pixel rect, not by the window.
+                // The map is inset behind the editor's rail (CameraRig
+                // .SetViewportLeftInset), so a column just off the left of the
+                // picture projects into the strip the rail occupies — and a
+                // marker parked on top of the nav is a marker pointing at ground
+                // the player cannot see.
+                var view = _cam.pixelRect;
+                bool onScreen = screen.x > view.xMin - OffscreenMarginPx &&
+                                screen.y > view.yMin - OffscreenMarginPx &&
+                                screen.x < view.xMax + OffscreenMarginPx &&
+                                screen.y < view.yMax + OffscreenMarginPx;
                 m.Root.gameObject.SetActive(onScreen);
                 if (!onScreen) continue;
 

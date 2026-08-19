@@ -58,7 +58,7 @@ The map opens over **Lyon, France** on real Cesium 3D terrain with the default s
 | Mouse wheel / `R` `F` | Zoom |
 | `Q` / `E` | Rotate (3D mode) |
 | Middle-mouse drag | Orbit / tilt (3D mode) |
-| **VIEW: 3D / 2D** button | Toggle between free 3D view and top-down 2D map view. 2D hides 3D buildings and locks north-up. |
+| **VIEW: 3D / 2D** button | Toggle between free 3D view and top-down 2D map view. 2D hides 3D buildings and locks north-up. The same flip is on the bottom-left cluster's projection button. |
 
 ### Teams & affiliations
 
@@ -71,6 +71,22 @@ The editor's left chrome is in two pieces:
 
 - The **rail** is always there: the emblem, the section nav, and the tool strip along the bottom. (There is no "ORDER OF BATTLE" caption — the labelled nav rows already say what the rail is, and the heading cost a row of vertical space the sections needed more.)
 - The **section panel** slides out from behind the rail carrying that section's controls.
+
+**The chrome is beside the map, not on top of it.** The rail and its panel used
+to sit over a full-screen camera, so a third of the terrain was permanently
+underneath opaque UI — the player was panning a map whose left third they could
+not see, and framing a screenshot meant guessing where the visible part ended.
+The map camera is inset instead (`CameraRig.SetViewportLeftInset`): the picture
+starts where the chrome ends and resizes with it, frame by frame, as the section
+panel slides. Everything follows from the camera rather than being corrected
+afterwards — the cursor still lands where you point it (`ScreenPointToRay`
+measures against the viewport, not the window), the minimap's view box narrows
+with the aspect, and frame-all sees the width the map actually has. Hide the
+chrome, or enter a mission, and the map takes the whole window back.
+
+The inset is capped at **half the window**: on a small screen a rail and an open
+panel would otherwise squeeze the map to a strip, and past that point the chrome
+goes back to overlapping it.
 
 **The rail carries two different lists.** Which rows are on it depends on the mode, because laying a scenario out and fighting one are two different jobs and the rail was showing the whole of both at once:
 
@@ -205,7 +221,7 @@ by anything that raises an event.
 
 **Hand-placed effects are permanent.** A fire, smoke column or explosion put down from the EFFECTS section burns until it is cleared — never evicted by the concurrent-effect budget, never given a lifetime, in battle mode or out of it. Two things used to end one and both looked like a bug: the budget is 48 effects and an incoming explosion outranks a standing fire, so the marker a player put down vanished exactly when the fighting got interesting; and a placed explosion left a wreck on a timer that went out by itself. Effects the *game* creates still burn out and are still evictable — otherwise a long battle ends up carpeted in permanent fires.
 
-The tool strip along the bottom is down to three: the **cursor**, **generate sectors** and the **2D/3D toggle**. The pencil and the square drew control measures by hand.
+The tool strip along the bottom is down to three: the **cursor**, **generate sectors** and the **2D/3D toggle** — the same flip the on-map cluster carries. The pencil and the square drew control measures by hand.
 
 ### The strike dock
 
@@ -692,8 +708,8 @@ and known leaks: [16-FOG-OF-WAR.md](16-FOG-OF-WAR.md).
 
 ### On-map controls
 
-- **Bottom-left cluster** — zoom, face north, a **2D / 3D** pair, frame the order of battle, and an altitude readout. Every button has a hover caption naming it and its keyboard equivalent.
-- **The projection is a pair, not a toggle.** Two buttons, and whichever one the map is currently in is lit. A toggle carrying a layers glyph said neither which projection you were in nor which one pressing it would give you — it was only readable after you had pressed it and looked at the terrain. Pressing the lit one is harmlessly idempotent rather than a silent flip back, and the pair follows the map, so setting the projection from **MAP CONFIG** or loading a scenario relights it.
+- **Bottom-left cluster** — zoom, face north, the **projection toggle**, frame the order of battle, then the FPS and altitude readouts. Every button has a hover caption naming it and its keyboard equivalent.
+- **The projection is one button.** It carries the projection the map is in right now — `2D` or `3D` — and pressing it flips to the other. It replaced the side-by-side pair, whose case was that a toggle says neither where you are nor where pressing it takes you; that is only true of a toggle carrying an abstract glyph. This one spells the current projection out in the caption and names the other in its hover caption, so both halves are answered without a second button. It follows the map, so setting the projection from **MAP CONFIG** or loading a scenario rewrites it.
 - **Bottom-right compass** — the rose turns so its N tick sits where north actually is; the fixed index at the top of the bezel reads against it, and that bearing is printed underneath. Click it to face north. It steps aside when the unit info panel opens.
 - Both are opt-in from **MAP → LAYERS**.
 

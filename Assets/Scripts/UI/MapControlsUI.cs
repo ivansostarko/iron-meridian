@@ -63,7 +63,9 @@ namespace IronMeridian.UI
         /// stutter, and costs one string a quarter-second instead of sixty.
         /// </summary>
         const float FpsInterval = 0.25f;
-        (Image fill, Text label) _mode2D, _mode3D;
+        Image _viewFill;
+        Text _viewLabel;
+        GameObject _viewButton;
 
         public bool ControlsVisible { get; private set; } = true;
         public bool CompassVisible { get; private set; }
@@ -197,7 +199,7 @@ namespace IronMeridian.UI
             ClusterButton(UiIcons.Plus, "Zoom in", "Wheel up, or R", () => _rig.ZoomIn(), ref y);
             ClusterButton(UiIcons.Minus, "Zoom out", "Wheel down, or F", () => _rig.ZoomOut(), ref y);
             ClusterButton(UiIcons.CompassNeedle, "Face north", "Clears any Q/E rotation", () => _rig.ResetNorth(), ref y);
-            BuildProjectionPair(ref y);
+            BuildProjectionToggle(ref y);
             ClusterButton(UiIcons.Person, "Frame the order of battle", "Centres on every deployed unit",
                 FrameAllUnits, ref y);
 
@@ -214,62 +216,70 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// The projection pair: **2D** and **3D**, side by side in one band.
+        /// The projection toggle: **one** button in the cluster's own column,
+        /// carrying the projection the map is in right now. Pressing it flips to
+        /// the other one — 2D to 3D, 3D back to 2D.
         ///
-        /// Two buttons rather than the single toggle that used to be here. A
-        /// toggle carrying a layers glyph says neither which projection the map
-        /// is in nor which one pressing it will give you — it is only readable
-        /// after you have pressed it and looked at the terrain. A pair states
-        /// both: the lit one is where you are, the dark one is where you can go,
-        /// and pressing the lit one is harmlessly idempotent rather than a
-        /// silent flip back.
+        /// It replaces the side-by-side pair that was here. The pair's case was
+        /// that a toggle says neither where you are nor where pressing it takes
+        /// you; that is only true of a toggle carrying an abstract glyph. This
+        /// one spells the current projection out in the caption and names the
+        /// other one in its hover caption, so both halves of the question are
+        /// answered by one button — and the cluster stops being the only row
+        /// that broke its own single-file column to fit a second control beside
+        /// the first.
         /// </summary>
-        void BuildProjectionPair(ref float y)
+        void BuildProjectionToggle(ref float y)
         {
-            _mode2D = ProjectionButton("2D", 0f, ViewMode.Mode2D, y,
-                "Flat, north-up — the map as a map");
-            _mode3D = ProjectionButton("3D", ButtonSize + Gap, ViewMode.Mode3D, y,
-                "Tilted, free heading — the map as ground");
+            var frame = UIFactory.CreateBorderedPanel(_cluster, "ViewMode", UiTheme.Chrome, UiTheme.Border);
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(0, -y),
+                new Vector2(ButtonSize, ButtonSize));
+
+            var btn = UIFactory.CreateButton(frame, "2D", ToggleProjection,
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)btn.transform);
+
+            _viewFill = frame.Find("Fill").GetComponent<Image>();
+            _viewLabel = btn.GetComponentInChildren<Text>(true);
+            _viewButton = btn.gameObject;
 
             PaintProjection();
             y += ButtonSize + Gap;
         }
 
-        (Image fill, Text label) ProjectionButton(string caption, float x, ViewMode mode, float y, string hint)
-        {
-            var frame = UIFactory.CreateBorderedPanel(_cluster, "View_" + caption, UiTheme.Chrome, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(x, -y), new Vector2(ButtonSize, ButtonSize));
-
-            var btn = UIFactory.CreateButton(frame, caption, () => SetProjection(mode),
-                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
-            UIFactory.Stretch((RectTransform)btn.transform);
-            UiTooltip.Attach(btn.gameObject, $"{caption} view   ·   {hint}");
-
-            return (frame.Find("Fill").GetComponent<Image>(), btn.GetComponentInChildren<Text>(true));
-        }
-
         /// <summary>
-        /// Puts the map into one projection rather than flipping it. Asking for
-        /// the projection you are already in has to be a no-op, or the pair
-        /// would behave like the toggle it replaced.
+        /// Flips the map to the projection it is not in. The one press is the
+        /// whole control, so it has no idempotent case to guard: whichever way
+        /// round the map is, this is the way out of it.
         /// </summary>
-        void SetProjection(ViewMode mode)
+        void ToggleProjection()
         {
-            if (_map.ViewMode != mode) _map.SetViewMode(mode);
-            _rig.SetMode(mode);
+            if (_map == null) return;
+            var next = _map.ViewMode == ViewMode.Mode2D ? ViewMode.Mode3D : ViewMode.Mode2D;
+            _map.SetViewMode(next);
+            _rig.SetMode(next);
             PaintProjection();
         }
 
-        /// <summary>Lights whichever projection the map is actually in.</summary>
+        /// <summary>
+        /// Writes the projection the map is actually in onto the button, and
+        /// names the other one in the hover caption. Driven by the map's own
+        /// <c>ViewModeChanged</c> as well as by the button, so loading a map or
+        /// MAP CONFIG changing the projection is reported here too.
+        /// </summary>
         void PaintProjection()
         {
-            if (_mode2D.fill == null || _map == null) return;
+            if (_viewLabel == null || _map == null) return;
             bool flat = _map.ViewMode == ViewMode.Mode2D;
 
-            _mode2D.fill.color = flat ? UiTheme.AccentWash : UiTheme.Chrome;
-            _mode2D.label.color = flat ? UiTheme.Accent : UiTheme.TextDim;
-            _mode3D.fill.color = flat ? UiTheme.Chrome : UiTheme.AccentWash;
-            _mode3D.label.color = flat ? UiTheme.TextDim : UiTheme.Accent;
+            _viewLabel.text = flat ? "2D" : "3D";
+            _viewLabel.color = UiTheme.Accent;
+            _viewFill.color = UiTheme.AccentWash;
+
+            if (_viewButton != null)
+                UiTooltip.Attach(_viewButton, flat
+                    ? "2D view   ·   Flat, north-up. Press for 3D — tilted, free heading"
+                    : "3D view   ·   Tilted, free heading. Press for 2D — flat, north-up");
         }
 
         /// <summary>

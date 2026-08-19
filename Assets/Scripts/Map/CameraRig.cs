@@ -64,6 +64,7 @@ namespace IronMeridian.Map
             Cam.farClipPlane = 1_000_000f;
             Cam.nearClipPlane = 5f;
             go.AddComponent<AudioListener>();
+            _viewportW = Screen.width; _viewportH = Screen.height;
             Apply();
         }
 
@@ -77,6 +78,16 @@ namespace IronMeridian.Map
         void Update()
         {
             if (Cam == null) return;
+
+            // The inset is held in canvas pixels, and the canvas rescales with
+            // the window — so a resize changes what it is worth without anyone
+            // calling in. Checked before the input guard: the map must not be
+            // left rendering into last resolution's rect just because a modal
+            // happens to be up while the player drags the window edge.
+            if (Screen.width != _viewportW || Screen.height != _viewportH ||
+                (_viewportCanvas != null && !Mathf.Approximately(_viewportCanvas.scaleFactor, _viewportScale)))
+                ApplyViewport();
+
             if (InputBlocked != null && InputBlocked()) return;
             float dt = Time.unscaledDeltaTime;
             float panSpeed = _distance * 0.9f * dt;
@@ -138,6 +149,112 @@ namespace IronMeridian.Map
         }
 
         public void JumpTo(Vector3 focus) { CancelFlight(); _focus = focus; Apply(); }
+
+        // ---------------------------------------------------------- viewport
+
+        /// <summary>
+        /// The most of the window the editor chrome is allowed to take. A rail
+        /// and its section panel come to about a third of a 1080p screen and
+        /// rather more of a small one; past this the map stops being a map, so
+        /// the chrome overlaps it again rather than squeezing it to a strip.
+        /// </summary>
+        const float MaxViewportInset = 0.5f;
+
+        /// <summary>What the untouched strip beside the map is painted with.</summary>
+        static readonly Color BackdropColour = new Color(0.043f, 0.055f, 0.075f, 1f);
+
+        Canvas _viewportCanvas;
+        float _viewportInsetCanvasPx;
+        Camera _backdrop;
+        int _viewportW, _viewportH;
+        float _viewportScale = -1f;
+
+        /// <summary>
+        /// Hands the left-hand strip of the window to the editor chrome: the map
+        /// is rendered into what is left rather than behind it.
+        ///
+        /// The rail and its section panel used to sit *over* a full-screen
+        /// camera, so a third of the terrain was permanently underneath opaque
+        /// UI — the player was panning a map whose left third they could not
+        /// see, and framing a screenshot meant guessing where the visible part
+        /// ended. Insetting the camera instead makes the map exactly the ground
+        /// that is actually on show: it recentres, the zoom-to-fit sees the real
+        /// width, and <c>ScreenPointToRay</c> keeps agreeing with the cursor
+        /// because Unity measures rays against the viewport rect, not the window.
+        ///
+        /// Measured in <b>canvas</b> pixels, because that is the unit the rail is
+        /// laid out in; the canvas scales with the window, so the conversion has
+        /// to be redone whenever the window changes and cannot be done once by
+        /// the caller. See <c>UnitPaletteUI.LeftChromeEdge</c>.
+        /// </summary>
+        /// <param name="canvas">The canvas the chrome is laid out on. Null falls back to 1:1.</param>
+        /// <param name="canvasPixels">The chrome's right-hand edge. Zero gives the window back.</param>
+        public void SetViewportLeftInset(Canvas canvas, float canvasPixels)
+        {
+            _viewportCanvas = canvas;
+            _viewportInsetCanvasPx = Mathf.Max(0f, canvasPixels);
+            ApplyViewport();
+        }
+
+        void ApplyViewport()
+        {
+            if (Cam == null) return;
+
+            int w = Screen.width, h = Screen.height;
+            if (w <= 0 || h <= 0) return;
+
+            float scale = _viewportCanvas != null ? _viewportCanvas.scaleFactor : 1f;
+            if (scale <= 0f) scale = 1f;
+
+            _viewportW = w; _viewportH = h; _viewportScale = scale;
+
+            float px = Mathf.Clamp(_viewportInsetCanvasPx * scale, 0f, w * MaxViewportInset);
+            float x = px / w;
+
+            Cam.rect = new Rect(x, 0f, 1f - x, 1f);
+            SetBackdropActive(px > 0.5f);
+        }
+
+        /// <summary>
+        /// A camera that paints the strip the map no longer covers.
+        ///
+        /// Unity clears only inside a camera's own rect, so without this the
+        /// strip keeps whatever the last full-screen frame left there — a smear
+        /// that is invisible while the opaque rail is over it and very visible
+        /// the instant the section panel slides away from underneath. It draws
+        /// nothing (<c>cullingMask</c> 0) and sits one step behind the map
+        /// camera, so it costs a clear and no culling; it is untagged, so
+        /// <c>Camera.main</c> and Cesium's tile selection never see it.
+        /// </summary>
+        void SetBackdropActive(bool needed)
+        {
+            if (!needed)
+            {
+                if (_backdrop != null) _backdrop.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_backdrop == null)
+            {
+                var go = new GameObject("MapBackdropCamera");
+                _backdrop = go.AddComponent<Camera>();
+                _backdrop.clearFlags = CameraClearFlags.SolidColor;
+                _backdrop.backgroundColor = BackdropColour;
+                _backdrop.cullingMask = 0;
+                _backdrop.depth = Cam.depth - 1;
+                _backdrop.nearClipPlane = 0.1f;
+                _backdrop.farClipPlane = 1f;
+                _backdrop.useOcclusionCulling = false;
+                _backdrop.allowHDR = false;
+                _backdrop.allowMSAA = false;
+            }
+            _backdrop.gameObject.SetActive(true);
+        }
+
+        void OnDestroy()
+        {
+            if (_backdrop != null) Destroy(_backdrop.gameObject);
+        }
 
         // ------------------------------------------------------------- fly-to
 

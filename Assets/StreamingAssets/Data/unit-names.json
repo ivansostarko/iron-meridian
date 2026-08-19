@@ -1,0 +1,273 @@
+{
+  "_comment": [
+    "Formation names for units on the map. Hand-edited — nothing generates this file.",
+    "",
+    "A map label is two lines: the echelon indicator (II, X, ...) drawn by",
+    "EchelonInfo.Indicator, and underneath it the name composed from this file. So a",
+    "title here is the name of a formation WITHOUT its echelon — Lancers, not 3rd",
+    "Armoured Battalion. The pattern field says how the pieces are put together.",
+    "",
+    "Matching, in this order:",
+    "  1. the first group whose unitIds list contains the type id from units.json,",
+    "  2. the first group whose branches list contains its branch,",
+    "  3. fallbackTitles.",
+    "So id groups are the specific case and branch groups are the net underneath",
+    "them; a group may carry both lists. Order inside each pass is file order.",
+    "",
+    "Every name handed out is unique across the units on the map: the generator",
+    "walks ordinal x title from a per-unit starting point and takes the first",
+    "combination nobody is using. ordinals x titles is the size of a group pool,",
+    "so a group with few titles runs out of numbers sooner — 30 x 8 = 240 here.",
+    "",
+    "See docs/04-UNITS.md."
+  ],
+
+  "pattern": "{ordinal} {title}",
+
+  "ordinals": [
+    "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
+    "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
+    "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th"
+  ],
+
+  "groups": [
+    {
+      "key": "headquarters",
+      "unitIds": ["headquarters", "tactical_cp", "air_defence_c2"],
+      "branches": [],
+      "titles": [
+        "Command Group", "Headquarters", "Staff Group", "Command Post",
+        "Operations Group", "Control Group", "Main Headquarters", "Tactical Headquarters"
+      ]
+    },
+    {
+      "key": "signals",
+      "unitIds": ["signals"],
+      "branches": [],
+      "titles": [
+        "Signal Squadron", "Signals Company", "Communications Troop",
+        "Relay Detachment", "Trunk Node", "Signal Regiment"
+      ]
+    },
+    {
+      "key": "engineers",
+      "unitIds": [
+        "engineer", "assault_engineer", "bridging", "route_clearance", "counter_ied",
+        "mine_clearance", "mine_laying", "construction_engineer", "geospatial_engineer", "eod"
+      ],
+      "branches": [],
+      "titles": [
+        "Field Squadron", "Sappers", "Pioneers", "Field Company", "Bridging Troop",
+        "Assault Pioneers", "Works Company", "Field Park", "Engineer Group"
+      ]
+    },
+    {
+      "key": "electronic-warfare",
+      "unitIds": ["electronic_warfare", "ew_unit", "sigint", "cyber_defence", "cyber_operations"],
+      "branches": [],
+      "titles": [
+        "Electronic Warfare Company", "Jamming Troop", "Spectrum Company",
+        "Interception Troop", "Signals Intelligence Company", "Cyber Cell"
+      ]
+    },
+    {
+      "key": "radar",
+      "unitIds": ["ad_radar", "air_surveillance_radar"],
+      "branches": [],
+      "titles": [
+        "Radar Troop", "Surveillance Troop", "Early Warning Troop",
+        "Radar Battery", "Watch Troop"
+      ]
+    },
+    {
+      "key": "rotary-wing",
+      "unitIds": [
+        "attack_helicopter", "recon_helicopter", "transport_helicopter",
+        "utility_helicopter", "medevac_helicopter"
+      ],
+      "branches": [],
+      "titles": [
+        "Rotary Squadron", "Helicopter Squadron", "Helicopter Flight",
+        "Air Cavalry", "Rotary Flight", "Helicopter Group"
+      ]
+    },
+    {
+      "key": "information-support",
+      "unitIds": ["psyops", "cimic", "public_affairs", "meteorological", "space_support"],
+      "branches": [],
+      "titles": [
+        "Information Company", "Liaison Detachment", "Support Section",
+        "Field Section", "Specialist Company"
+      ]
+    },
+    {
+      "key": "intelligence",
+      "unitIds": [
+        "intelligence", "humint", "counter_intelligence", "geoint",
+        "battlefield_surveillance", "surveillance_radar"
+      ],
+      "branches": [],
+      "titles": [
+        "Intelligence Company", "Analysis Cell", "Survey Troop", "Field Section",
+        "Watch Company", "Collection Detachment"
+      ]
+    },
+    {
+      "key": "military-police",
+      "unitIds": ["military_police"],
+      "branches": [],
+      "titles": [
+        "Provost Company", "Military Police Company", "Provost Marshal Detachment",
+        "Traffic Company", "Garrison Company"
+      ]
+    },
+    {
+      "key": "cbrn",
+      "unitIds": ["cbrn", "smoke_obscuration", "camouflage_deception"],
+      "branches": [],
+      "titles": [
+        "CBRN Company", "Decontamination Troop", "Smoke Company",
+        "Concealment Troop", "Chemical Defence Company"
+      ]
+    },
+    {
+      "key": "medical",
+      "unitIds": [
+        "medical", "medevac", "field_hospital", "personnel_support",
+        "field_services", "water_supply"
+      ],
+      "branches": [],
+      "titles": [
+        "Field Ambulance", "Medical Company", "Casualty Station", "Field Hospital",
+        "Aid Post", "Sanitary Company", "Welfare Company"
+      ]
+    },
+    {
+      "key": "reconnaissance",
+      "unitIds": ["recon", "armoured_recon"],
+      "branches": [],
+      "titles": [
+        "Scouts", "Reconnaissance Troop", "Light Horse", "Screen Troop",
+        "Vanguard Troop", "Patrol Squadron", "Yeomanry"
+      ]
+    },
+    {
+      "key": "anti-tank",
+      "unitIds": ["anti_tank"],
+      "branches": [],
+      "titles": [
+        "Anti-Tank Company", "Tank Destroyer Troop", "Anti-Tank Battery",
+        "Tank Hunters", "Guards Anti-Tank Company"
+      ]
+    },
+    {
+      "key": "special-forces",
+      "unitIds": ["special_forces"],
+      "branches": [],
+      "titles": [
+        "Special Service Squadron", "Commando", "Ranger Company",
+        "Pathfinders", "Raiding Squadron", "Long Range Patrol"
+      ]
+    },
+    {
+      "key": "fire-support",
+      "unitIds": ["forward_observer", "joint_fires", "jtac", "target_acquisition", "counter_battery_radar"],
+      "branches": [],
+      "titles": [
+        "Observation Party", "Fire Support Team", "Target Acquisition Battery",
+        "Locating Battery", "Air Support Party", "Survey Battery"
+      ]
+    },
+    {
+      "key": "unmanned",
+      "unitIds": [
+        "recon_uas", "armed_uas", "loitering_munition", "fpv_attack_uas",
+        "deep_strike_uas", "interceptor_uas", "ew_uas", "relay_uas",
+        "cargo_uas", "decoy_uas", "uas_operator"
+      ],
+      "branches": [],
+      "titles": [
+        "UAS Flight", "Drone Troop", "Remote Flight", "Unmanned Troop",
+        "Strike Flight", "Sensor Flight", "Launch Section"
+      ]
+    },
+
+    {
+      "key": "infantry",
+      "unitIds": [],
+      "branches": ["Infantry"],
+      "titles": [
+        "Rifles", "Fusiliers", "Grenadiers", "Foot Guards", "Highlanders",
+        "Musketeers", "Chasseurs", "Jaegers", "Borderers", "Volunteers", "Light Foot"
+      ]
+    },
+    {
+      "key": "armour",
+      "unitIds": [],
+      "branches": ["Armour"],
+      "titles": [
+        "Lancers", "Hussars", "Dragoons", "Cuirassiers", "Cavalry",
+        "Dragoon Guards", "Carabiniers", "Uhlans", "Armoured Horse"
+      ]
+    },
+    {
+      "key": "mechanised",
+      "unitIds": [],
+      "branches": ["Mechanised"],
+      "titles": [
+        "Mechanised Rifles", "Panzergrenadiers", "Armoured Infantry",
+        "Motor Rifles", "Carrier Company", "Mounted Rifles", "Grenadier Guards"
+      ]
+    },
+    {
+      "key": "artillery",
+      "unitIds": [],
+      "branches": ["Artillery"],
+      "titles": [
+        "Field Battery", "Gun Battery", "Rocket Battery", "Heavy Battery",
+        "Siege Battery", "Mortar Battery", "Horse Artillery", "Medium Battery"
+      ]
+    },
+    {
+      "key": "air-defence",
+      "unitIds": [],
+      "branches": ["AntiAircraft"],
+      "titles": [
+        "Air Defence Battery", "Anti-Aircraft Battery", "Missile Battery",
+        "Light Air Defence Troop", "Heavy Air Defence Battery", "Air Defence Troop"
+      ]
+    },
+    {
+      "key": "air",
+      "unitIds": [],
+      "branches": ["Air"],
+      "titles": [
+        "Squadron", "Flight", "Wing", "Air Wing",
+        "Air Group", "Air Detachment", "Air Component"
+      ]
+    },
+    {
+      "key": "navy",
+      "unitIds": [],
+      "branches": ["Navy"],
+      "titles": [
+        "Flotilla", "Escort Group", "Patrol Flotilla", "Naval Squadron",
+        "Task Group", "Surface Group"
+      ]
+    },
+    {
+      "key": "logistics",
+      "unitIds": [],
+      "branches": ["Logistics"],
+      "titles": [
+        "Supply Company", "Transport Company", "Field Park", "Ordnance Company",
+        "Workshop Company", "Composite Platoon", "Support Squadron", "Depot Company"
+      ]
+    }
+  ],
+
+  "fallbackTitles": [
+    "Detachment", "Support Group", "Field Section",
+    "Independent Company", "Composite Detachment"
+  ]
+}

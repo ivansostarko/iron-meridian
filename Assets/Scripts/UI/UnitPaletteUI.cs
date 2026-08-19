@@ -564,6 +564,11 @@ namespace IronMeridian.UI
 
             LeftChromeEdge = visible ? RailWidth + PanelWidth : 0f;
             if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
+            // Raised here as well as from the slide: taking the rail away is a
+            // change to where the chrome ends, and everything measuring from it
+            // — the minimap, the map camera's own viewport — has to hear about
+            // the largest such change there is.
+            LeftInsetChanged?.Invoke(LeftChromeEdge);
         }
 
         /// <summary>
