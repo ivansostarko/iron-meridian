@@ -27,9 +27,26 @@ namespace IronMeridian.UI
     public class UnitTypePanel : MonoBehaviour
     {
         const float PanelWidth = UiTheme.RightPanelWidth;
-        const float Pad = 30f;
+
+        /// <summary>
+        /// The gutter every piece of the panel is measured from — the icon, the
+        /// section headings, both columns of every row, the hairlines and the
+        /// footer hint. 45 px either side rather than the 30 it started with:
+        /// the panel is docked against the screen edge on one side and against
+        /// the map on the other, and at 30 the values read as text pinned to
+        /// the edge rather than as a page. Every value is best-fitted
+        /// (<see cref="UIFactory.Fit"/>), so the width this costs is paid in
+        /// type size rather than in truncation.
+        /// </summary>
+        const float Pad = 45f;
+
         /// <summary>Content width — the panel less the same margin either side.</summary>
         const float Inner = PanelWidth - Pad * 2f;
+
+        /// <summary>Icon width plus the gap to the title beside it.</summary>
+        const float TitleIndent = 64f;
+        /// <summary>Clear air the close button needs at the top right.</summary>
+        const float CloseClearance = 46f;
 
         RectTransform _panel, _rows;
         Image _icon;
@@ -62,12 +79,14 @@ namespace IronMeridian.UI
 
             _title = UIFactory.CreateText(_panel, "", UiTheme.FontTitle, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(_title.rectTransform, Pad + 64f, 18f, PanelWidth - Pad - 100f, 26f);
+            UIFactory.PlaceTopLeft(_title.rectTransform, Pad + TitleIndent, 18f,
+                PanelWidth - (Pad + TitleIndent) - CloseClearance, 26f);
             UIFactory.Fit(_title, 12);
 
             _subtitle = UIFactory.CreateText(_panel, "", UiTheme.FontSmall, UiTheme.Accent,
                 TextAnchor.MiddleLeft);
-            UIFactory.PlaceTopLeft(_subtitle.rectTransform, Pad + 64f, 46f, PanelWidth - Pad - 100f, 18f);
+            UIFactory.PlaceTopLeft(_subtitle.rectTransform, Pad + TitleIndent, 46f,
+                PanelWidth - (Pad + TitleIndent) - CloseClearance, 18f);
             UIFactory.Fit(_subtitle, 9);
 
             var rule = UIFactory.CreateDivider(_panel, UiTheme.Border);

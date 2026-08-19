@@ -72,8 +72,21 @@ namespace IronMeridian.UI
         /// </summary>
         const float ContentPadLeft = 30f;
 
+        /// <summary>
+        /// A further 15 px of left gutter on the content block, on top of
+        /// <see cref="ContentPadLeft"/>.
+        ///
+        /// Kept as its own figure rather than folded into the one above: that
+        /// one is the padding the 330 px panel was widened to deserve, this one
+        /// is a deliberate nudge away from the panel's edge, and separating them
+        /// means either can be retuned without re-deriving the other. Only the
+        /// label column pays for it — the value column is anchored right, so the
+        /// numbers do not move.
+        /// </summary>
+        const float ContentNudgeLeft = 15f;
+
         /// <summary>Inset from the panel's left edge to the content — the table's own gutter, shifted.</summary>
-        const float TableLeftInset = TableInset - ContentShift + ContentPadLeft;
+        const float TableLeftInset = TableInset - ContentShift + ContentPadLeft + ContentNudgeLeft;
         /// <summary>Inset from the panel's right edge. The 25 px the left gave up ends up here.</summary>
         const float TableRightInset = TableInset + ContentShift;
 
@@ -108,8 +121,12 @@ namespace IronMeridian.UI
         Tab _builtTab;
         bool _rebuilding;
 
+        /// <summary>The canvas the panel lives on — where <see cref="ConfirmDialog"/> is put up.</summary>
+        Canvas _canvas;
+
         public void Build(Canvas canvas)
         {
+            _canvas = canvas;
             _panel = UIFactory.CreatePanel(canvas.transform, "UnitInfoPanel", UiTheme.Panel);
             _panel.anchorMin = new Vector2(1, 0); _panel.anchorMax = new Vector2(1, 1);
             _panel.pivot = new Vector2(1, 0.5f);
@@ -293,7 +310,16 @@ namespace IronMeridian.UI
             UIFactory.Place((RectTransform)rotRight.transform, new Vector2(1f, 0f),
                 new Vector2(-UiTheme.PanelPadding, 96), new Vector2(40, 28));
 
-            // Prev/next step through the selected unit's own side.
+            // Prev/next step through the selected unit's own side. The row
+            // above it names what its arrows do ("Heading 0°"); a bare pair of
+            // chevrons underneath was the odd one out, readable only by pressing
+            // it. The caption sits between them, in the gap they already left.
+            var cycleLabel = UIFactory.CreateText(_panel, "Next Unit", UiTheme.FontSmall,
+                UiTheme.TextDim, TextAnchor.MiddleCenter);
+            UIFactory.Place(cycleLabel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 56),
+                new Vector2(PanelWidth - 120, 32));
+            UIFactory.Fit(cycleLabel, 9);
+
             var prev = UIFactory.CreateBorderedPanel(_panel, "PrevUnit", UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(prev, new Vector2(0f, 0f), new Vector2(UiTheme.PanelPadding, 56), new Vector2(46, 32));
             var prevBtn = UIFactory.CreateButton(prev, "◄", () => CycleRequested?.Invoke(-1),
@@ -306,20 +332,16 @@ namespace IronMeridian.UI
                 new Color(0, 0, 0, 0), UiTheme.TextDim, 14);
             UIFactory.Stretch((RectTransform)nextBtn.transform);
 
-            var remove = UIFactory.CreateButton(_panel, "", RequestRemove, UiTheme.Danger, UiTheme.Text, 1);
+            // No glyph: a red, full-width, single-purpose button is already
+            // unmistakable, and the bin icon only shifted the caption off the
+            // button's centre line to make room for a second way of saying the
+            // same thing. The words now sit where the button is.
+            var remove = UIFactory.CreateButton(_panel, "REMOVE UNIT", RequestRemove,
+                UiTheme.Danger, UiTheme.Text, UiTheme.FontHeading);
             var rrt = (RectTransform)remove.transform;
             UIFactory.Place(rrt, new Vector2(0.5f, 0f), new Vector2(0, 12), new Vector2(PanelWidth - 24, 38));
             var caption = remove.GetComponentInChildren<Text>(true);
-            if (caption != null) caption.gameObject.SetActive(false);
-
-            var bin = UIFactory.CreateImage(rrt, UiIcons.Trash, "TrashGlyph");
-            bin.color = UiTheme.Text;
-            bin.raycastTarget = false;
-            UIFactory.Place((RectTransform)bin.transform, new Vector2(0.5f, 0.5f), new Vector2(-58, 0), new Vector2(15, 15));
-
-            var removeLabel = UIFactory.CreateText(rrt, "REMOVE UNIT", UiTheme.FontHeading,
-                UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.Place(removeLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(-40, 0), new Vector2(160, 22));
+            if (caption != null) caption.fontStyle = FontStyle.Bold;
         }
 
         // ----------------------------------------------------------- lifecycle
@@ -357,10 +379,35 @@ namespace IronMeridian.UI
             _headingLabel.text = $"Heading {_current.State.headingDeg:0}°";
         }
 
+        /// <summary>
+        /// Asks before taking a formation off the map.
+        ///
+        /// Ctrl+Z does put it back, but the button is full-width, red and sits
+        /// directly under the arrows that step from one unit to the next — the
+        /// mis-click it invites is one the player would have to notice before
+        /// they could undo it. The modal names the unit, so the answer to "am I
+        /// deleting the right one" is on screen rather than behind the dialog.
+        /// </summary>
         void RequestRemove()
         {
             if (_current == null) return;
-            RemoveRequested?.Invoke(_current);
+
+            var unit = _current;
+            string name = string.IsNullOrEmpty(unit.State.customName)
+                ? unit.Def.name : unit.State.customName;
+
+            ConfirmDialog.Open(_canvas, "REMOVE UNIT",
+                $"Take {name} off the map? The formation and its orders go with it. " +
+                "Ctrl+Z puts it back.",
+                "REMOVE UNIT",
+                () =>
+                {
+                    // The selection can change while the modal is up, so act on
+                    // the formation the player was looking at when they pressed
+                    // the button, not on whatever is current when they confirm.
+                    if (unit == null || !unit.IsAlive) return;
+                    RemoveRequested?.Invoke(unit);
+                });
         }
 
         // --------------------------------------------------------- table body

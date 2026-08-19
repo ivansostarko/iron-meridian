@@ -34,8 +34,6 @@ namespace IronMeridian.UI
         const float BottomInset = 74f;
         /// <summary>Margin from the right edge of the screen when nothing is in the way.</summary>
         const float RightInset = 24f;
-        /// <summary>Clears the top command bar, so the readout sits just under it.</summary>
-        const float TopInset = UiTheme.TopBarHeight + 16f;
         const float CompassSize = 104f;
 
         MapManager _map;
@@ -76,7 +74,6 @@ namespace IronMeridian.UI
             _rig = rig;
 
             BuildCluster(canvas);
-            BuildFps(canvas);
             BuildCompass(canvas);
 
             // The projection is also set from MAP CONFIG and by loading a map,
@@ -108,9 +105,7 @@ namespace IronMeridian.UI
             if (_cluster == null) return;
             float x = Mathf.Max(LeftInset, chromeRight + 16f);
             _cluster.anchoredPosition = new Vector2(x, BottomInset);
-            // The readout sits in the same column as the cluster, so it steps
-            // aside with it rather than being buried by the section panel.
-            if (_fps != null) _fps.anchoredPosition = new Vector2(x, -TopInset);
+            // The FPS readout is a row of the cluster, so it travels with it.
         }
 
         /// <summary>
@@ -129,21 +124,31 @@ namespace IronMeridian.UI
         // --------------------------------------------------------------- fps
 
         /// <summary>
-        /// The frame-rate readout, top-left of the map — under the command bar
-        /// and clear of the rail, in the same column as the zoom cluster below.
+        /// The frame-rate readout, sitting directly **above the altitude
+        /// readout** at the foot of the zoom cluster.
+        ///
+        /// It used to live on its own at the top-left, which put the one number
+        /// that is never about the map in the corner the map's own chrome
+        /// claims first. Both readouts answer "how is this going right now", so
+        /// they belong in the same stack: it is built as the cluster's
+        /// second-to-last row, which also means <see cref="SetLeftInset"/>
+        /// carries it aside with everything else instead of moving it
+        /// separately.
         /// </summary>
-        void BuildFps(Canvas canvas)
+        void BuildFps(ref float y)
         {
-            _fps = UIFactory.CreateBorderedPanel(canvas.transform, "FpsReadout",
+            _fps = UIFactory.CreateBorderedPanel(_cluster, "FpsReadout",
                 UiTheme.Chrome, UiTheme.Border);
-            UIFactory.Place(_fps, new Vector2(0f, 1f),
-                new Vector2(LeftInset, -TopInset), new Vector2(62, 24));
+            UIFactory.Place(_fps, new Vector2(0f, 1f), new Vector2(0, -y),
+                new Vector2(ButtonSize + 44f, 24));
 
             _fpsLabel = UIFactory.CreateText(_fps, "", UiTheme.FontLabel, UiTheme.TextDim);
             UIFactory.Stretch(_fpsLabel.rectTransform);
 
             UiTooltip.Attach(_fps.gameObject, "Frames per second");
             _fpsSince = Time.realtimeSinceStartup;
+
+            y += 24f + Gap;
         }
 
         /// <summary>
@@ -186,7 +191,7 @@ namespace IronMeridian.UI
         {
             _cluster = UIFactory.CreateGroup(canvas.transform, "MapControls");
             UIFactory.Place(_cluster, new Vector2(0f, 0f),
-                new Vector2(LeftInset, BottomInset), new Vector2(ButtonSize, 220));
+                new Vector2(LeftInset, BottomInset), new Vector2(ButtonSize, 250));
 
             float y = 0f;
             ClusterButton(UiIcons.Plus, "Zoom in", "Wheel up, or R", () => _rig.ZoomIn(), ref y);
@@ -195,6 +200,10 @@ namespace IronMeridian.UI
             BuildProjectionPair(ref y);
             ClusterButton(UiIcons.Person, "Frame the order of battle", "Centres on every deployed unit",
                 FrameAllUnits, ref y);
+
+            // Frame rate, then altitude: the two readouts close the stack, the
+            // machine's health above the camera's.
+            BuildFps(ref y);
 
             // Altitude readout, so the zoom buttons have a scale reference.
             var readoutFrame = UIFactory.CreateBorderedPanel(_cluster, "ZoomReadout", UiTheme.Chrome, UiTheme.Border);

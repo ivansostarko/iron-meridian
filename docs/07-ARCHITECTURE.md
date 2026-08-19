@@ -86,7 +86,9 @@ Assets/Scripts/
     UnitClusterLayer.cs  counted cluster markers for crowded units at range (battle only)
     MapControlsUI.cs     on-map cluster (bottom-left): zoom, face north, the
                           2D / 3D projection pair, frame-all + compass (bottom-right)
-                          + the FPS readout (top-left). All of it rides the
+                          + the FPS readout, which sits as the second-to-last
+                          row of the cluster, directly above the camera-altitude
+                          readout. All of it rides the
                           ON-MAP CONTROLS toggle in MAP CONFIG, and steps aside
                           with SetLeftInset when the section panel slides out.
                           FPS counts against realtimeSinceStartup, not
@@ -162,7 +164,9 @@ Assets/Scripts/
     UnitPaletteUI.Capture.cs
                          the CAPTURE section — screenshots and video
                          recording (docs/39-CAPTURE.md)
-    UnitInfoPanel.cs     right panel: full unit data on click
+    UnitInfoPanel.cs     right panel: full unit data on click. The footer's
+                          prev/next arrows are captioned "Next Unit"; REMOVE
+                          UNIT goes through ConfirmDialog
     UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
                           card in the palette's AVAILABLE list (read-only)
     UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence /

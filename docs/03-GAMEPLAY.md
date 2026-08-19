@@ -79,7 +79,7 @@ The editor's left chrome is in two pieces:
 | **Scenario** | GENERAL · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** |
 | **Battle** | REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** |
 
-A small **FPS readout** sits at the top-left of the map, under the command bar and clear of the rail. It measures against the wall clock rather than `deltaTime`, so it still tells the truth while a recording is in progress (`docs/39-CAPTURE.md` §3 fakes `deltaTime` deliberately). It follows the **ON-MAP CONTROLS** toggle in MAP CONFIG along with the zoom cluster — so turning that off for a clean screenshot takes the counter with it.
+A small **FPS readout** sits at the **bottom-left of the map, directly above the camera-altitude readout**, as the second-to-last row of the on-map control cluster — in both the map editor and battle. It measures against the wall clock rather than `deltaTime`, so it still tells the truth while a recording is in progress (`docs/39-CAPTURE.md` §3 fakes `deltaTime` deliberately). It follows the **ON-MAP CONTROLS** toggle in MAP CONFIG along with the zoom cluster — so turning that off for a clean screenshot takes the counter with it.
 
 **CAPTURE is in both**, and is the only row that is. A still of a scenario being laid out and a recording of the battle that follows are the same job, so taking the controls away the moment the fight starts would remove them exactly when there is something worth recording. Screenshots and H.264 video land in the player's Pictures folder — `docs/39-CAPTURE.md`.
 
