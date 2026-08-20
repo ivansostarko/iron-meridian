@@ -308,6 +308,21 @@ namespace IronMeridian.Data
         public int arrivalMinutes = 30;
 
         /// <summary>
+        /// How many formations of this type arrive together.
+        ///
+        /// One row rather than N identical rows in the schedule: a designer
+        /// laying on a counter-attack is thinking "three battalions at H+40",
+        /// not writing the same line three times, and a list that made them do
+        /// the latter would also make removing one of the three a hunt. The
+        /// arrival scatters them over the deployment zone as it would any other
+        /// group.
+        ///
+        /// Defaults to 1 so a file written before this field existed loads as
+        /// the single formation it was.
+        /// </summary>
+        public int count = 1;
+
+        /// <summary>
         /// Runtime only: whether this arrival has come on in the battle now
         /// being fought. Never saved — a scenario file is a starting state.
         /// </summary>

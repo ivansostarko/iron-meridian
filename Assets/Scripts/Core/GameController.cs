@@ -330,6 +330,10 @@ namespace IronMeridian.Core
                                             _naval.IsArmed ||
                                             _logistics.IsArmed ||
                                             _obstacles.IsArmed ||
+                                            // A type armed from a card's right-click menu: the
+                                            // next click on the ground puts it there, and must
+                                            // not also select whatever it landed on.
+                                            (_palette != null && _palette.PlacementArmed) ||
                                             _frontline.Drawing ||
                                             _areaTool.Drawing;
             _selection.BattleRunning = () => _combat.Running;
@@ -712,6 +716,8 @@ namespace IronMeridian.Core
                 // REINFORCEMENTS — the schedule and where it arrives.
                 _reinforcements.Init(_clock, _combat);
                 _reinforcements.Flash = _hud.Flash;
+                // Both pages that show the schedule: the rail's REINFORCEMENTS
+                // row and the UNITS page's ARRIVING tab.
                 _reinforcements.Changed += _palette.RefreshReinforcements;
                 _reinforcements.Spawn = (def, team, echelon, lat, lon) =>
                     OnPaletteDrop(def, team,
@@ -758,6 +764,18 @@ namespace IronMeridian.Core
                 _palette.SetCinema(_cinema);
 
                 // The rail's battle-only chrome — the GROUPS and CINEMA MODE rows.
+                // Changing mode resets the screen: the rail closes its own
+                // section panel and says so, and everything docked on the right
+                // goes with it. Whatever was open belonged to the job that has
+                // just ended.
+                _palette.ModeChanged = () =>
+                {
+                    CloseDockedPanels();
+                    _selection.Select(null);
+                    // An armed placement ring belongs to the job that has ended.
+                    _palette.CancelPlacement();
+                };
+
                 _combat.RunningChanged += running =>
                 {
                     _palette.SetBattleMode(running);
@@ -819,6 +837,10 @@ namespace IronMeridian.Core
                 _infoPanel = gameObject.AddComponent<UnitInfoPanel>();
                 _infoPanel.Build(canvas);
                 _infoPanel.RemoveRequested = RemoveUnitFromMap;
+                // The lists that show a name repaint off UnitRegistry.Changed,
+                // which Rename raises; this is only the confirmation, which a
+                // field that commits on blur otherwise gives no sign of.
+                _infoPanel.RenamedUnit = u => _hud.Flash($"Renamed to {u.State.customName}.");
                 _infoPanel.CycleRequested = CycleSelection;
             });
 
@@ -2343,8 +2365,7 @@ namespace IronMeridian.Core
             _airStrike.Cancel();
             _uavStrike.Cancel();
             _selection.Select(null);
-            if (_frontlinePanel != null) _frontlinePanel.Hide();
-            if (_strikeDock != null) _strikeDock.Hide();
+            CloseDockedPanels();
 
             // Editor settings, and the panel lamps that report them.
             _fog.SetEnabled(false);
@@ -2414,6 +2435,37 @@ namespace IronMeridian.Core
             EditHistory.Clear();
             ApplySave(_save);
             _hud.Flash($"Loaded '{_save.mapName}'.");
+        }
+
+        /// <summary>
+        /// Puts every panel docked on the right away, and stands down anything
+        /// armed behind one.
+        ///
+        /// Shared by RESET and by the scenario/battle switch, because both are
+        /// the same statement: the job you were doing is over. A fire menu left
+        /// armed behind a panel that has gone is the case that actually bites —
+        /// the next click on the map becomes a strike nobody asked for — so the
+        /// launchers are cancelled here rather than only hidden.
+        /// </summary>
+        void CloseDockedPanels()
+        {
+            if (_palette != null) _palette.CancelPlacement();
+            if (_infoPanel != null) _infoPanel.Hide();
+            if (_typePanel != null) _typePanel.Hide();
+            if (_groupPanel != null) _groupPanel.SetSelection(null);
+            if (_frontlinePanel != null) _frontlinePanel.Hide();
+            if (_strikeDock != null) _strikeDock.Hide();
+
+            _effects.Cancel();
+            _artillery.Cancel();
+            _airStrike.Cancel();
+            _airSupply.Cancel();
+            _uavStrike.Cancel();
+            _missiles.Cancel();
+            _naval.Cancel();
+            _logistics.Cancel();
+            _obstacles.Cancel();
+            if (_mapObjects != null) _mapObjects.Cancel();
         }
 
         void ApplySave(MapSaveData data)
@@ -2519,6 +2571,11 @@ namespace IronMeridian.Core
             // on whether the minimap is up. Both guards make the poll free when
             // nothing has changed.
             RefreshRightDockTop();
+
+            // Nothing below here while a text field has the keyboard: Ctrl+Z,
+            // TAB and the function keys are all things a player types into the
+            // rename box or the search box without meaning any of them.
+            if (UIFactory.TextFieldFocused) return;
 
             if (Input.GetKeyDown(KeyCode.F5)) SaveMap();
             if (Input.GetKeyDown(KeyCode.F9)) LoadMap();

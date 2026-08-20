@@ -89,6 +89,10 @@ namespace IronMeridian.Map
                 ApplyViewport();
 
             if (InputBlocked != null && InputBlocked()) return;
+            // WASD is also most of what someone types. A camera that panned
+            // south every time a formation was renamed would make the field
+            // unusable — see UIFactory.TextFieldFocused.
+            if (UI.UIFactory.TextFieldFocused) return;
             float dt = Time.unscaledDeltaTime;
             float panSpeed = _distance * 0.9f * dt;
 

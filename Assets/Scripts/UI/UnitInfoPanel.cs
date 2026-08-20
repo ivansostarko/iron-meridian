@@ -105,7 +105,9 @@ namespace IronMeridian.UI
 
         RectTransform _panel;
         Image _icon;
-        Text _title, _affiliation, _headingLabel;
+        Text _affiliation, _headingLabel;
+        InputField _nameField;
+        RectTransform _nameRule;
         RectTransform _tableContent;
         UnitActor _current;
         Tab _tab = Tab.Info;
@@ -172,12 +174,67 @@ namespace IronMeridian.UI
             irt.offsetMin = new Vector2(6, 6);
             irt.offsetMax = new Vector2(-6, -6);
 
-            // Unit names run from "EOD" to "Surface-to-air missile", so the
-            // title has to shrink rather than overrun the close button.
-            _title = UIFactory.CreateText(_panel, "", UiTheme.FontTitle, UiTheme.Text,
-                TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(_title.rectTransform, 76f, 18f, PanelWidth - 96f, 26f);
-            UIFactory.Fit(_title, 12);
+            // The title is a text **field**, not a label: a formation's name is
+            // the one thing about it the player writes rather than reads, and
+            // the place they look for it is the heading of the panel that
+            // describes it. Every unit is issued a name at spawn
+            // (Data.UnitNameCatalog), so this is a rename rather than a naming.
+            //
+            // It is styled as the heading it replaces — no box, no fill — with a
+            // rule underneath that lights on focus. A control that looked like a
+            // form field would say the panel had grown a settings row; the point
+            // is that the heading itself is what you click.
+            var nameFrame = UIFactory.CreatePanel(_panel, "NameField", new Color(0, 0, 0, 0));
+            // Stops short of the close button rather than running under it: the
+            // field is 30 px tall on the same line the ✕ sits on.
+            UIFactory.PlaceTopLeft(nameFrame, 76f, 14f, PanelWidth - 122f, 30f);
+            nameFrame.gameObject.AddComponent<RectMask2D>();
+
+            _nameField = UIFactory.CreateInputField(nameFrame, "Name this formation", UiTheme.FontTitle);
+            UIFactory.Stretch((RectTransform)_nameField.transform);
+            _nameField.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            _nameField.characterLimit = 40;
+
+            var nameText = _nameField.textComponent;
+            nameText.color = UiTheme.Text;
+            nameText.fontStyle = FontStyle.Bold;
+            nameText.alignment = TextAnchor.MiddleLeft;
+            // Single line, clipped by the frame: a name past the field width
+            // scrolls under the caret the way a text field should, rather than
+            // wrapping onto a second line the 30 px box cannot show.
+            nameText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            var tr = nameText.rectTransform;
+            tr.offsetMin = new Vector2(0, 2);
+            tr.offsetMax = new Vector2(-22, -2);
+            if (_nameField.placeholder != null)
+            {
+                var ph = (RectTransform)_nameField.placeholder.transform;
+                ph.offsetMin = new Vector2(0, 2);
+                ph.offsetMax = new Vector2(-22, -2);
+            }
+
+            _nameRule = UIFactory.CreateDivider(nameFrame, UiTheme.Border);
+            _nameRule.anchorMin = new Vector2(0, 0); _nameRule.anchorMax = new Vector2(1, 0);
+            _nameRule.pivot = new Vector2(0.5f, 0);
+            // Both offsets, or the height CreateDivider set in sizeDelta fights
+            // the stretch anchors: bottom edge on the frame, one pixel tall,
+            // stopping where the pencil starts.
+            _nameRule.offsetMin = new Vector2(0, 0);
+            _nameRule.offsetMax = new Vector2(-22, 1);
+            _nameRule.GetComponent<Image>().raycastTarget = false;
+
+            // A pencil at the right end, because a heading that happens to be
+            // editable is otherwise indistinguishable from one that is not.
+            var pencil = UIFactory.CreateImage(nameFrame, UiIcons.Pencil, "EditGlyph");
+            pencil.color = UiTheme.TextFaint;
+            pencil.raycastTarget = false;
+            UIFactory.Place(pencil.rectTransform, new Vector2(1f, 0.5f),
+                new Vector2(-2, 0), new Vector2(13, 13));
+
+            _nameField.onEndEdit.AddListener(CommitRename);
+            UiTooltip.Attach(nameFrame.gameObject,
+                "Rename this formation. Enter commits; clearing it keeps the old name.",
+                UiTooltip.Side.Left);
 
             _affiliation = UIFactory.CreateText(_panel, "", UiTheme.FontSmall, UiTheme.Accent, TextAnchor.MiddleLeft);
             UIFactory.PlaceTopLeft(_affiliation.rectTransform, 76f, 46f, PanelWidth - 96f, 18f);
@@ -355,6 +412,10 @@ namespace IronMeridian.UI
             _panel.SetAsLastSibling();           // above GroupPanel, which shares this rect
             string folder = unit.State.TeamEnum == Team.User ? "Friendly" : "Enemy";
             _icon.sprite = UIFactory.LoadIconSprite(folder, unit.Def.id);
+            // Dropped before the rebuild: a field still holding the last
+            // formation's name would commit it onto this one the moment it lost
+            // focus.
+            if (_nameField != null) _nameField.DeactivateInputField();
             Refresh();
         }
 
@@ -371,6 +432,32 @@ namespace IronMeridian.UI
             if (_current != null && !_current.IsAlive) { Hide(); return; }
             if (_current != null && Time.frameCount % 30 == 0) Refresh();
         }
+
+        /// <summary>
+        /// Writes the typed name onto the formation, caption on the map
+        /// included — see <see cref="Units.UnitActor.Rename"/>.
+        ///
+        /// A blank field puts the old name back rather than clearing it. Every
+        /// formation is issued one at spawn, so "no name" is not a state the
+        /// rest of the game has an answer for, and an empty heading over a
+        /// panel of figures says nothing about which formation they belong to.
+        /// </summary>
+        void CommitRename(string typed)
+        {
+            if (_current == null || !_current.IsAlive) return;
+
+            if (!_current.Rename(typed))
+            {
+                var s = _current.State;
+                _nameField.text = string.IsNullOrEmpty(s.customName) ? _current.Def.name : s.customName;
+                return;
+            }
+
+            RenamedUnit?.Invoke(_current);
+        }
+
+        /// <summary>Raised after a successful rename, so the lists that show the name repaint.</summary>
+        public System.Action<UnitActor> RenamedUnit;
 
         void Rotate(float delta)
         {
@@ -438,7 +525,14 @@ namespace IronMeridian.UI
             var s = _current.State;
             var d = _current.Def;
 
-            _title.text = string.IsNullOrEmpty(s.customName) ? d.name : s.customName;
+            // Never while it is being typed into. Refresh runs twice a second on
+            // a timer, and rewriting the field under the cursor would delete
+            // every rename halfway through.
+            if (_nameField != null && !_nameField.isFocused)
+                _nameField.text = string.IsNullOrEmpty(s.customName) ? d.name : s.customName;
+            if (_nameRule != null)
+                _nameRule.GetComponent<Image>().color =
+                    _nameField != null && _nameField.isFocused ? UiTheme.Accent : UiTheme.Border;
             bool friendly = s.TeamEnum == Team.User;
             _affiliation.text = friendly ? "Friendly Unit" : "Hostile Unit";
             _affiliation.color = friendly ? UiTheme.Accent : UiTheme.Hostile;

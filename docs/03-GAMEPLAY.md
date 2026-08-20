@@ -92,21 +92,44 @@ goes back to overlapping it.
 
 | Mode | Rows |
 |---|---|
-| **Scenario** | **GENERAL** · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** |
-| **Battle** | **GENERAL** · REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** · CINEMA MODE |
+| **Scenario** | **GENERAL** · UNITS · PLAYERS · COMMANDERS · LOGISTICS · SUSTAINMENT · MINES AND OBSTACLES · EFFECTS · MISSIONS · ENVIRONMENT · MAP CONFIG · ZONES · OBJECTS · **CAPTURE** · **CINEMA MODE** |
+| **Battle** | **GENERAL** · REINFORCEMENTS · SECTORS · GROUPS · STATS · SUPPLIES · **CAPTURE** · **CINEMA MODE** |
 
-**GENERAL and CAPTURE are in both lists.** GENERAL carries the switches that
-decide what the map is showing — line of sight, weapon ranges, fog of war — and
-those are questions a commander asks harder during the fight than while laying it
-out, so taking the row away the moment the battle started was removing it exactly
-when it was wanted.
+**Three rows are in both lists.** GENERAL carries the switches that decide what
+the map is showing — line of sight, weapon ranges, fog of war — and those are
+questions a commander asks harder during the fight than while laying it out.
+CAPTURE and CINEMA MODE are both about *watching* rather than authoring, and the
+shots a camera path flies are worth framing before the shooting starts.
 
-**Both modes open on GENERAL.** A change of mode is a change of what you are
-doing, and landing on whatever section the last job happened to leave open is
-landing somewhere chosen by history rather than by the question in front of you.
-GENERAL is the answer in both directions because it is the one section that is
-about the map itself rather than about a job on it. The editor also opens on it
-from cold.
+**Nothing is open when the editor appears.** The first thing anyone wants on a
+map screen is the map, and a panel that opens itself spends a third of the window
+on a section nobody asked for. The rail is still there, still labelled, one click
+from any of it.
+
+**A change of mode resets the screen.** Switching between scenario and battle
+closes the section panel and every panel docked on the right — the unit
+inspector, the type card, the group panel, the front-line options, the fire dock
+— and stands down anything armed behind one. Whatever was open belonged to the
+job that has just ended, and a fire menu left armed behind a panel that has gone
+turns the next click on the map into a strike nobody asked for. It is the same
+tidy-up RESET does, and it leaves the editor looking the way it does on load.
+Arriving in a mode is not a change of mode, so nothing is reset on the way in.
+
+### The section panel header
+
+The panel that slides out is headed by a two-line masthead: the section's name,
+and under it the heading of whatever the page opens with — GENERAL / INTELLIGENCE,
+CAPTURE / STILL, CINEMA MODE / CAMERA PATH.
+
+That second line used to be the first thing drawn on the page itself, directly
+under a header carrying the first line: two headings stacked, the second doing
+the first one's job. Moving it up puts the whole of "where am I" in one block and
+gives the page back the 22 px the label occupied — which is exactly what the
+header grew by, so nothing on any page moved.
+
+Pages that never had a heading of their own (UNITS, PLAYERS, COMMANDERS,
+REINFORCEMENTS, ZONES) get one in the header anyway, and are not shifted. The
+whole table lives in `UnitPaletteUI.RegisterPageHeadings`.
 
 A small **FPS readout** sits at the **bottom-left of the map, directly above the camera-altitude readout**, as the second-to-last row of the on-map control cluster — in both the map editor and battle. It measures against the wall clock rather than `deltaTime`, so it still tells the truth while a recording is in progress (`docs/39-CAPTURE.md` §3 fakes `deltaTime` deliberately). It follows the **ON-MAP CONTROLS** toggle in MAP CONFIG along with the zoom cluster — so turning that off for a clean screenshot takes the counter with it.
 
@@ -244,6 +267,10 @@ Six icons under the top bar's right-hand end: five ways of putting explosives on
 
 **RESET is scenario-mode only.** It reloads the scenario and puts every setting back — the right thing to have while laying a battle out, and a catastrophe one click from PAUSE BATTLE while fighting one. The battle control beside it already swaps between START and PAUSE with the mode; the destructive button should not be the constant.
 
+**PAUSE takes RESET's corner in battle.** Stopping the operational clock used to be a 26 px key wedged between the two speed arrows inside the clock panel; it is the one clock control anyone reaches for mid-battle, so it is now a full button in the **far right corner of the bar**. It shares that corner with RESET rather than crowding it, because the two never coexist. It reads PAUSE / RESUME and goes amber while the clock is stopped — a paused battle that looks like a running one is how a minute goes by wondering why nothing is happening.
+
+It is **not** the battle button. START BATTLE / PAUSE BATTLE, two slots to its left, switches between laying a scenario out and fighting it; this stops the clock inside a fight already running. The hover caption says so, because with two controls that close together the word "pause" cannot carry the distinction alone. In a mission the clock takes the corner, and PAUSE moves to sit immediately left of it — relocated rather than dropped, since Esc there opens a menu rather than stopping the clock.
+
 **The cluster is battle-mode only.** It appears when the battle starts and goes when it stops, together with the minimap below it. Calling for fire is something you do *during* a fight: in scenario mode no clock is running, nothing moves between the call and the impact, and a strike laid on a laydown that is still being drawn is a hole in a map rather than an event. Stopping the battle takes any open fire menu down with the icons, which also stands its launcher down.
 
 **Within a battle the icons never hide.** Everything else that docks on the right — the unit inspector, the group panel, the front-line options — begins *below* the icon strip rather than under the top bar, so a fire menu can be reached with a formation selected. The panel itself still shares the right edge with them, because two panels cannot occupy one strip of screen: opening a fire menu drops the selection, and selecting a formation closes the fire menu. Closing a menu also stands its launcher down — leaving one armed behind a panel that is off screen would turn the next click on the map into a strike nobody asked for.
@@ -308,9 +335,33 @@ What survives is every control measure the game *derives* for itself, because th
 
 Lines saved in an existing map still load and draw; nothing was removed from the line model itself.
 
+### The card right-click menu
+
+Right-click a type in the AVAILABLE list and it offers the two things you can do
+with it that are not "tell me about it":
+
+| Entry | What it does |
+|---|---|
+| **ADD TO MAP** | Arms the placement ring — the next click on the ground puts that formation there. Right-click or `Esc` cancels |
+| **ADD TO REINFORCEMENT** | Puts the type on this side's arrival schedule at H+30 and shows the ARRIVING tab |
+
+**ADD TO MAP is the second route onto the map**, not a replacement for the drag.
+A drag is the direct gesture and stays the primary one; it is also the wrong one
+when the ground you want is halfway across a map you have to pan to reach, and
+it is not a gesture a menu entry can make at all. Armed, the same footprint ring
+the drag previews with follows the cursor, and the click that places the
+formation cannot also select what it landed on.
+
 ### Deploying units (drag & drop)
 
 Open **UNITS** in the left rail — the panel lists all 117 unit types with their icons as an **accordion**, one section per arm of service (Infantry, Armour, Mechanised, Artillery, Anti-Aircraft, Air, Navy, Logistics, Other). Click a heading to open it; click it again to close it.
+
+The page is, top to bottom: the **FRIENDLY / ENEMY** side selector, the search
+box, the **AVAILABLE / DEPLOYED** tab strip, then the list.
+
+- **The side selector is the shared one**, the same control LOGISTICS, SUSTAINMENT and MINES AND OBSTACLES carry, painted with them by `PaintSideTabs`. This page used to build a pair of its own out of bare buttons — no border, a different height, its own two lines of paint code — which is how one control becomes two that drift apart.
+- **AVAILABLE / DEPLOYED / ARRIVING is a segmented control**, three equal thirds across the full width with an accent underline on the open one, on a rule that runs under all three. Each carries **its own count**: a single badge in the corner was a number with nothing saying what it was of. The three are the three questions in order — what is there, what have I put down, what is still to come. **ARRIVING** is this side's reinforcement schedule; see [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) §2b.
+- **Arm headings** carry an accent bar down the open one and print the arm 30 px clear of the chevron. The arm is what is being read on that row — the chevron only says which way it will go — and a name butted against a glyph reads as a caption on the glyph rather than as the heading it is.
 
 **Everything starts closed.** 117 cards under nine headings is a list you scroll rather than one you read, and the arm is what you are actually choosing between first — *"I want an armoured battalion"* comes before *"which one"*. Collapsed, the whole order of battle fits on one screen and picking a category is one click. Each heading carries the number of types inside it, which is the answer to the question a closed section raises.
 
@@ -372,13 +423,15 @@ Sites are picked in **screen space** rather than with a collider: a site's marke
 
 ### Cinema mode
 
-**Left rail → CINEMA MODE**, battle mode only. A camera path over the fight: a
-list of shots recorded from wherever the camera happens to be, and a PLAY that
-flies from one to the next.
+**Left rail → CINEMA MODE**, in both modes. A camera path over the ground: a list
+of shots recorded from wherever the camera happens to be, and a PLAY that flies
+from one to the next.
 
 It is the one row on the rail that **authors nothing**. Everything else there
-changes the scenario; this changes only what you are looking at, which is why it
-is not on the scenario rail — there is nothing to watch yet.
+changes the scenario; this changes only what you are looking at — which is why it
+survives the change of mode rather than belonging to one. Framing the shots is
+scenario work, flying them over the battle is battle work, and they are the same
+list.
 
 | Control | What it does |
 |---|---|
@@ -411,6 +464,27 @@ comes back at the tilt you last chose rather than flat on its back.
 A path runs once through and stops — it does not loop. It is **not saved**: a
 tour is a way of watching a scenario, not part of one, and it goes when the
 battle ends.
+
+### Renaming a formation
+
+Every unit is issued a name of its own when it is deployed (**Formation names**,
+[04-UNITS.md](04-UNITS.md)). To change one, select the formation and type over
+the **heading of the unit inspector** — it is a text field, not a label, with a
+pencil at its right end and a rule that lights while you are in it.
+
+Enter commits, and so does clicking away. The name is written to the formation
+and its **caption on the map is rewritten with it**, so the counter and the panel
+never disagree. Clearing the field puts the old name back rather than emptying
+it: "no name" is not a state the rest of the game has an answer for, and a bare
+type name on a counter beside five others of the same type is what the generated
+names exist to avoid.
+
+Works in **both modes**, and the name is saved with the scenario.
+
+While any text field has the keyboard — this one, or the UNITS search box — the
+editor's shortcuts stand down. W is a pan and a letter, `Ctrl+Z` is an undo and a
+correction, and a camera that flew south every time somebody typed "s" would make
+the field unusable.
 
 ### Groups
 
@@ -729,6 +803,14 @@ Selecting a unit draws a ring at its view range with the distance **in metres**
 on the ring — in scenario mode as well as battle. **Left rail → GENERAL → LINE OF
 SIGHT** toggles it; on by default. The weapon-range ring is separate, in its own
 colour, and toggled by **MAX WEAPON RANGE** beside it.
+
+Each of the GENERAL switches carries its own explanation as a **hover caption**
+rather than a paragraph on the page. A switch that needs a paragraph does not
+need that paragraph taking the vertical space the switches themselves wanted,
+read once and scrolled past forever; on hover it is there for someone who has not
+met the control and invisible to someone who has. Captions wrap past 340 px, so a
+few sentences read as a block rather than as one line off the edge of the
+screen.
 
 **Both rings are flat.** A range is a distance measured across the map, so it is
 drawn on the ground: a feathered band lying on the terrain, bright along the true

@@ -284,6 +284,33 @@ namespace IronMeridian.Units
         string ShortName() =>
             string.IsNullOrEmpty(State.customName) ? Def.name : State.customName;
 
+        /// <summary>
+        /// Renames the formation and rewrites its caption on the map.
+        ///
+        /// The name is state, so it saves and it is what every other panel reads
+        /// (<see cref="UnitState.customName"/>); the caption is a mesh built
+        /// once when the unit spawned, so it has to be told. Doing both here is
+        /// what stops the two disagreeing — a rename that showed in the
+        /// inspector and not on the counter would be worse than none.
+        ///
+        /// Blank is refused rather than cleared: every formation is issued a
+        /// name at spawn (Data.UnitNameCatalog), and an empty one would put the
+        /// bare type name back on a counter next to five others of the same
+        /// type.
+        /// </summary>
+        public bool Rename(string name)
+        {
+            name = (name ?? "").Trim();
+            if (name.Length == 0) return false;
+            if (name == State.customName) return true;
+
+            State.customName = name;
+            if (_label != null)
+                _label.Text = $"{EchelonInfo.Indicator(State.EchelonEnum)}\n{ShortName()}";
+            UnitRegistry.NotifyChanged();
+            return true;
+        }
+
         public void SnapToTerrain()
         {
             _grounded = GeoUtils.TrySampleTerrainHeight(_geo, State.latitude, State.longitude, out double h);

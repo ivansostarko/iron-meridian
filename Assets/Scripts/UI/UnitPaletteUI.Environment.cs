@@ -208,8 +208,6 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildDateTimeSection(RectTransform content)
         {
-            SectionLabel(content, "SCENARIO START", -8);
-
             var frame = UIFactory.CreateBorderedPanel(content, "StartButton", UiTheme.Surface, UiTheme.BorderStrong);
             UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, -30), new Vector2(InnerWidth, 52));
 
@@ -292,8 +290,6 @@ namespace IronMeridian.UI
 
         void BuildMapSection(RectTransform content)
         {
-            SectionLabel(content, "TILE STYLE", -8);
-
             _styleDropdown = UIFactory.CreateDropdown(content, StyleNames(),
                 System.Array.IndexOf(Styles, _map.Style), OnStyleSelected);
             StyleDropdown(_styleDropdown, -30);
@@ -350,9 +346,18 @@ namespace IronMeridian.UI
             RefreshMapSection();
         }
 
-        /// <summary>A lamp + label row that reads as an on/off switch.</summary>
+        /// <summary>
+        /// A lamp + label row that reads as an on/off switch.
+        ///
+        /// <paramref name="hint"/> becomes the row's hover caption. That is
+        /// where the long explanations belong: a switch that needs a paragraph
+        /// to explain it does not need that paragraph on the page, taking the
+        /// vertical space the switches themselves wanted and being read once and
+        /// never again. On hover it is there for the player who has not met the
+        /// control before and invisible to the one who has.
+        /// </summary>
         RectTransform ToggleRow(RectTransform content, string label, float y,
-            UnityEngine.Events.UnityAction action, out Text stateLabel)
+            UnityEngine.Events.UnityAction action, out Text stateLabel, string hint = null)
         {
             var frame = UIFactory.CreateBorderedPanel(content, "Toggle_" + label, UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 38));
@@ -376,6 +381,10 @@ namespace IronMeridian.UI
 
             stateLabel = UIFactory.CreateText(frame, "", UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.MiddleRight);
             UIFactory.Place(stateLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-12, 0), new Vector2(62, 16));
+
+            // On the button rather than the frame: the button is stretched over
+            // the whole row and is what the pointer actually lands on.
+            UiTooltip.Attach(btn.gameObject, hint);
 
             return lamp;
         }

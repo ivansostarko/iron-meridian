@@ -206,6 +206,101 @@ namespace IronMeridian.UI
             _dragging = null;
         }
 
+        // ------------------------------------------------- click to place
+
+        /// <summary>
+        /// The type waiting to be put on the map by a click, or null.
+        ///
+        /// The second way onto the map, beside the drag. A drag is the direct
+        /// gesture and stays the primary one, but it is also a gesture you
+        /// cannot make from a right-click menu, and it is the wrong one when the
+        /// place you want is halfway across a map you still have to pan to get
+        /// to. Armed, the ring follows the cursor and the next click on the
+        /// ground drops the formation there.
+        /// </summary>
+        UnitDefinition _placing;
+
+        /// <summary>True while a click on the map would place a formation.</summary>
+        public bool PlacementArmed => _placing != null;
+
+        /// <summary>
+        /// Arms the click-to-place ring for one type.
+        ///
+        /// The side is not taken here: it is the palette's own <c>_team</c>,
+        /// read at the moment of the drop, which is the same rule the drag
+        /// follows. A type armed for one side and dropped after the tab was
+        /// switched should land on the side the tab now says.
+        /// </summary>
+        public void ArmPlacement(UnitDefinition def)
+        {
+            _placing = def;
+            if (_placementMarker != null) _placementMarker.SetVisible(false);
+            if (def != null)
+                DropRejected?.Invoke($"{def.name} — click the map to place it, right-click or Esc to cancel.");
+        }
+
+        public void CancelPlacement()
+        {
+            if (_placing == null) return;
+            _placing = null;
+            if (_placementMarker != null) _placementMarker.SetVisible(false);
+        }
+
+        /// <summary>
+        /// Drives the armed ring and takes the click that drops the formation.
+        ///
+        /// Called from the palette's own Update. It reads the mouse directly
+        /// rather than through an EventTrigger because the thing being pointed
+        /// at is the terrain, which is not part of the canvas — the same reason
+        /// every other armed tool in the editor works this way.
+        /// </summary>
+        void TickPlacement()
+        {
+            if (_placing == null) return;
+
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            {
+                DropRejected?.Invoke("Placement cancelled.");
+                CancelPlacement();
+                return;
+            }
+
+            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+            Vector3 world = default;
+            bool valid = !overUI && _map.RaycastGround(_worldCam, Input.mousePosition, out world);
+
+            double lat = 0, lon = 0;
+            if (valid)
+            {
+                GeoUtils.UnityToGeo(_map.Georeference, world, out lat, out lon, out _);
+                // Same two questions the drag asks: the ray hit something, and
+                // the ground under it can actually be measured. They come apart
+                // at a tile seam, and a formation placed there is left at the
+                // fallback height inside a ridge.
+                valid = GeoUtils.TrySampleTerrainHeight(_map.Georeference, lat, lon, out _);
+            }
+
+            if (_placementMarker != null)
+            {
+                if (valid) _placementMarker.MoveTo(lat, lon);
+                _placementMarker.SetVisible(valid);
+            }
+
+            if (!Input.GetMouseButtonDown(0)) return;
+
+            if (!valid)
+            {
+                DropRejected?.Invoke(overUI
+                    ? "Click the map, not the interface."
+                    : "No solid ground there yet — the terrain is still streaming in.");
+                return;
+            }
+
+            var def = _placing;
+            CancelPlacement();
+            DropRequested?.Invoke(def, _team, _affiliation, _echelon, lat, lon);
+        }
+
         /// <summary>
         /// The drop preview: the same 3D volume a strike target area uses,
         /// scaled down to a formation's footprint.

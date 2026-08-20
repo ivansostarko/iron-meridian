@@ -110,16 +110,19 @@ attribute. Left alone it lands on top of the game's HUD, because it is created
 after our canvas and sorts above it.
 
 `Map/CesiumCreditStyler.cs` pins the whole block — the ion logo, the credit line
-and the "upgrade" prompt — to the **bottom-right corner** of the map, scales it
-down to **0.4%** (about a pixel square), drops it to 5% opacity, stops it taking
-clicks, and sorts the canvas at -500 so every canvas the game draws is in front
-of it. The corner is the screen's bottom-right, which is also the map's: the
-editor chrome only ever insets the left edge.
+and the "upgrade" prompt — to the **bottom-left corner**, scales it down to
+**0.4%** (about a pixel square), drops it to 5% opacity, stops it taking clicks,
+and sorts the canvas at -500 so every canvas the game draws is in front of it.
+
+The bottom-left is the corner the editor's **rail** stands in: 232 px of opaque
+nav, drawn on the game canvas, which sorts in front of this one. The credit is
+therefore behind the side menu — as far out of the way as a thing can be got
+without deleting it.
 
 Position is an **anchor** change, not just a scale one. The package pins each
 piece to whichever corner its own prefab chose, and shrinking about a top-left
 pivot leaves a one-pixel mark in the top-left; every direct child of the credit
-canvas is re-anchored to (1, 0) with a matching pivot.
+canvas is re-anchored to (0, 0) with a matching pivot.
 
 **It keeps re-applying.** The credit system does not exist when the map is built,
 and it rebuilds its children as credits come and go — a new tileset, a style
@@ -136,8 +139,8 @@ scaling the transform draws the same mesh smaller and asks nothing of the font.
 **It is deliberately not removed.** Cesium ion's terms of service require the
 attribution to be present, and a build that deleted it would be shipping in
 breach of the licence its terrain streams under. What is adjustable is how loudly
-it shouts — and at a pixel in the far corner it is as quiet as a thing can be
-while still being on the screen.
+it shouts — and at a pixel behind the rail it is as quiet as a thing can be while
+still being on the screen at all.
 
 Whether that is still *attribution* is a licence question and not a code one.
 **If the project's ion terms are ever reviewed, `CesiumCreditStyler` is the class

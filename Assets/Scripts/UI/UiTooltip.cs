@@ -26,6 +26,17 @@ namespace IronMeridian.UI
         /// <summary>Gap between the control and its caption.</summary>
         const float Gap = 8f;
         const float PadX = 9f, PadY = 5f;
+
+        /// <summary>
+        /// Widest a caption is drawn before it wraps, canvas units.
+        ///
+        /// Captions started as four-word labels for icon buttons and were laid
+        /// out on one line, which is right for those. They are now also where
+        /// the longer explanations live — the GENERAL panel's toggles carry a
+        /// paragraph each — and a paragraph on one line is both unreadable and
+        /// wider than the screen. Past this width the caption wraps instead.
+        /// </summary>
+        const float MaxWidth = 340f;
         /// <summary>Seconds the pointer must rest before the caption appears.</summary>
         const float DelaySeconds = 0.25f;
 
@@ -89,8 +100,29 @@ namespace IronMeridian.UI
             // Size to the text, then place relative to the control. Both rects
             // are converted into canvas space so the maths is independent of
             // where in the hierarchy the control happens to live.
+            //
+            // Measured unwrapped first, because that is the width a short
+            // caption wants and a one-line label is the right answer for one.
+            // Only when that runs past MaxWidth is the text wrapped — and the
+            // height then has to be asked for *at the wrapped width*, since
+            // preferredHeight is meaningless without one.
+            _labelText.horizontalOverflow = HorizontalWrapMode.Overflow;
             float w = _labelText.preferredWidth + PadX * 2f;
-            float h = _labelText.preferredHeight + PadY * 2f;
+            float h;
+
+            if (w <= MaxWidth)
+            {
+                h = _labelText.preferredHeight + PadY * 2f;
+            }
+            else
+            {
+                _labelText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                w = MaxWidth;
+                var settings = _labelText.GetGenerationSettings(new Vector2(w - PadX * 2f, 0f));
+                h = _labelText.cachedTextGeneratorForLayout.GetPreferredHeight(_text, settings)
+                    / _labelText.pixelsPerUnit + PadY * 2f;
+            }
+
             _label.sizeDelta = new Vector2(w, h);
 
             Vector2 centre = CanvasPoint(_target);

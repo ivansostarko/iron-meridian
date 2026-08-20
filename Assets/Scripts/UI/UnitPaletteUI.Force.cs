@@ -81,8 +81,6 @@ namespace IronMeridian.UI
         {
             var content = SidedPage(ScrollableSection(section, SustainmentPageHeight + SideBlock));
 
-            SectionLabel(content, "FORCE ON THE MAP", -8);
-
             // The head count is the one figure on this page that is not a stock
             // at all, so it gets its own card rather than a row in the table.
             var head = UIFactory.CreateBorderedPanel(content, "Manpower", UiTheme.Surface, UiTheme.BorderStrong);
@@ -285,252 +283,193 @@ namespace IronMeridian.UI
         ReinforcementSystem _reinforcements;
         RectTransform _reinforceList;
         Text _reinforceCount, _reinforceSide;
-        InputField _reinforceSearch;
-        string _reinforceQuery = "";
-        readonly HashSet<UnitBranch> _reinforceOpenBranches = new HashSet<UnitBranch>();
 
         /// <summary>
-        /// Left inset of an accordion header's contents in this list — INFANTRY,
-        /// ARMOUR and the rest. The rows keep the list's full width so the count
-        /// badge still sits against the scrollbar; it is the chevron and the
-        /// heading that move in, which is what makes the arm's name read as a
-        /// heading over its cards rather than as another card.
-        /// </summary>
-        const float ReinforceHeaderIndent = 25f;
-
-        /// <summary>
-        /// **REINFORCEMENTS** — the same panel as UNITS, for formations brought
-        /// on after the map was laid out.
+        /// **REINFORCEMENTS** — the arrivals this scenario laid on, for the side
+        /// the tabs are set to.
         ///
-        /// Deliberately the same UI, control for control: the blue/red tabs, the
-        /// search box, and the same branch accordion over the same 117 unit
-        /// types. A commander calling a battalion forward is doing exactly what
-        /// a designer does when they deploy one, and making them learn a second
-        /// way to pick a unit would be inventing a difference that is not there.
+        /// **It shows the schedule, not a catalogue.** This page used to be the
+        /// whole 117-type list with a DEPLOY on every card, which made a battle
+        /// a shop: anything either side owned could be conjured into the
+        /// deployment zone at any moment, and the schedule the designer had
+        /// written was a separate thing nobody could see. Showing only what the
+        /// scenario laid on is what makes a reinforcement a plan rather than a
+        /// resource.
         ///
-        /// **Click and it is there.** This panel used to schedule: a stepper set
-        /// an arrival time, a SCHEDULED tab held the queue, and the formation
-        /// appeared at H+n. That is an authoring tool, and this is the rail's
-        /// *battle* mode — a commander asking for a reserve wants it committed,
-        /// not diarised. So a card places the formation immediately, in its
-        /// side's deployment zone (docs/22-MISSIONS.md §1c), scattered off
-        /// whatever arrived before it.
+        /// **NOW is a decision inside that plan.** A commander who can see a
+        /// reserve due at H+40 and wants it at H+12 is making a choice the
+        /// scenario left them; spending an arrival early is not the same as
+        /// inventing one, and the row goes to ARRIVED either way.
         ///
-        /// The schedule itself has not gone: <see cref="ReinforcementSystem"/>
-        /// still carries one loaded from the map file and still brings it on
-        /// during a battle. What went is the panel for typing one in.
-        ///
-        /// See docs/30-REINFORCEMENTS.md.
+        /// Arrivals are written in **scenario mode** — UNITS, right-click a type,
+        /// ADD TO REINFORCEMENT — and saved with the map. See
+        /// docs/30-REINFORCEMENTS.md.
         /// </summary>
         void BuildReinforcementSection(RectTransform content)
         {
-            // Team tabs, exactly as UNITS has them.
-            float half = (InnerWidth - 6f) / 2f;
-            var blue = UIFactory.CreateBorderedPanel(content, "ReinBlue", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(blue, new Vector2(0f, 1f), new Vector2(Pad, -8), new Vector2(half, 30));
-            var blueBtn = UIFactory.CreateButton(blue, "FRIENDLY", () => SetTeam(Team.User),
-                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
-            UIFactory.Stretch((RectTransform)blueBtn.transform);
-            _reinforceBlueFill = blue.Find("Fill").GetComponent<Image>();
+            SideSelector(content, -8f);
 
-            var red = UIFactory.CreateBorderedPanel(content, "ReinRed", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(red, new Vector2(0f, 1f), new Vector2(Pad + half + 6f, -8), new Vector2(half, 30));
-            var redBtn = UIFactory.CreateButton(red, "ENEMY", () => SetTeam(Team.Enemy),
-                new Color(0, 0, 0, 0), UiTheme.Text, UiTheme.FontLabel);
-            UIFactory.Stretch((RectTransform)redBtn.transform);
-            _reinforceRedFill = red.Find("Fill").GetComponent<Image>();
-
-            _reinforceSearch = UIFactory.CreateInputField(content, "Search unit types…", UiTheme.FontSmall);
-            UIFactory.Place((RectTransform)_reinforceSearch.transform, new Vector2(0f, 1f),
-                new Vector2(Pad, -46), new Vector2(InnerWidth, 30));
-            _reinforceSearch.onValueChanged.AddListener(text =>
-            {
-                _reinforceQuery = text ?? "";
-                PopulateReinforcements();
-            });
-
-            var caption = UIFactory.CreateText(content, "BRING ON NOW", UiTheme.FontLabel,
+            var caption = UIFactory.CreateText(content, "", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(caption.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad, -86), new Vector2(InnerWidth - 100f, 18));
+                new Vector2(Pad, -44), new Vector2(InnerWidth - 60f, 18));
+            _reinforceSide = caption;
 
             _reinforceCount = UIFactory.CreateText(content, "0", UiTheme.FontLabel,
                 UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
             UIFactory.Place(_reinforceCount.rectTransform, new Vector2(1f, 1f),
-                new Vector2(-Pad, -86), new Vector2(40, 18));
-
-            _reinforceSide = UIFactory.CreateText(content, "", UiTheme.FontLabel,
-                UiTheme.TextDim, TextAnchor.MiddleRight, FontStyle.Bold);
-            UIFactory.Place(_reinforceSide.rectTransform, new Vector2(1f, 1f),
-                new Vector2(-Pad - 44f, -86), new Vector2(110, 18));
+                new Vector2(-Pad, -44), new Vector2(52, 18));
 
             var scroll = UIFactory.CreateScrollView(content, out _reinforceList, withScrollbar: true);
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
-            srt.offsetMin = new Vector2(Pad, 46);
-            srt.offsetMax = new Vector2(-Pad, -110);
+            srt.offsetMin = new Vector2(Pad, 52);
+            srt.offsetMax = new Vector2(-Pad, -68);
             scroll.GetComponent<Image>().color = new Color(0, 0, 0, 0);
             var layout = _reinforceList.GetComponent<VerticalLayoutGroup>();
             if (layout != null) { layout.spacing = 4; layout.padding = new RectOffset(2, 2, 2, 2); }
 
             var hint = UIFactory.CreateText(content,
-                "A card places that formation at once, in this side's deployment zone — set one under " +
-                "ZONES, or it falls in behind the force it is joining.",
+                "Arrivals are laid on in scenario mode — UNITS, right-click a type, ADD TO "
+                + "REINFORCEMENT. They land in this side’s deployment zone; set one under ZONES, or "
+                + "they fall in behind the force they are joining.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 0f), new Vector2(Pad, 6),
-                new Vector2(InnerWidth, 36));
+                new Vector2(InnerWidth, 44));
 
             PopulateReinforcements();
         }
 
-        Image _reinforceBlueFill, _reinforceRedFill;
-
         /// <summary>
-        /// Rebuilds the list. Public because the force can change without the
-        /// panel touching it — a scheduled arrival coming on during a battle
-        /// changes what is deployed while this page is open.
+        /// Rebuilds the list. Public because the schedule can change without the
+        /// panel touching it — an arrival coming on during a battle takes its
+        /// own row out of the pending list.
         /// </summary>
-        public void RefreshReinforcements() => PopulateReinforcements();
+        public void RefreshReinforcements()
+        {
+            PopulateReinforcements();
+            // The UNITS page shows the same schedule under ARRIVING, and its tab
+            // carries the count whichever list is open.
+            if (_listMode == ListMode.Reinforcement) Populate();
+            else RefreshListTabCounts();
+        }
 
         void PopulateReinforcements()
         {
             if (_reinforceList == null) return;
 
+            bool enemy = _team == Team.Enemy;
+            int rows = _reinforcements != null ? _reinforcements.CountFor(_team) : 0;
+            int formations = _reinforcements != null ? _reinforcements.FormationsFor(_team) : 0;
+
             if (_reinforceSide != null)
             {
-                bool enemy = _team == Team.Enemy;
-                _reinforceSide.text = enemy ? "ENEMY" : "FRIENDLY";
+                _reinforceSide.text = enemy ? "ENEMY ARRIVALS" : "FRIENDLY ARRIVALS";
                 _reinforceSide.color = enemy ? GameConfig.RedTeam : GameConfig.BlueTeam;
             }
-            if (_reinforceBlueFill != null)
-                _reinforceBlueFill.color = _team == Team.User ? UiTheme.Friendly : UiTheme.Surface;
-            if (_reinforceRedFill != null)
-                _reinforceRedFill.color = _team == Team.Enemy ? UiTheme.Hostile : UiTheme.Surface;
+            if (_reinforceCount != null)
+                _reinforceCount.text = rows == 0 ? "—" : $"{formations}";
 
             ClearChildren(_reinforceList);
 
-            int count = PopulateReinforceAvailable();
-            if (_reinforceCount != null) _reinforceCount.text = count.ToString();
-        }
-
-        /// <summary>The catalogue, as the same branch accordion UNITS uses.</summary>
-        int PopulateReinforceAvailable()
-        {
-            string folder = _team == Team.User ? "Friendly" : "Enemy";
-            bool searching = !string.IsNullOrEmpty(_reinforceQuery);
-            int count = 0;
-
-            foreach (var branch in UnitBranchInfo.All)
-            {
-                _branchMatches.Clear();
-                foreach (var def in UnitDatabase.All)
-                {
-                    if (def.Branch != branch) continue;
-                    if (!ReinforceMatches(def)) continue;
-                    _branchMatches.Add(def);
-                }
-                if (_branchMatches.Count == 0) continue;
-
-                count += _branchMatches.Count;
-
-                bool open = searching || _reinforceOpenBranches.Contains(branch);
-                ReinforceBranchHeader(branch, _branchMatches.Count, open);
-                if (!open) continue;
-
-                foreach (var def in _branchMatches) ReinforceCard(def, folder);
-            }
-
-            if (count == 0)
+            if (_reinforcements == null || rows == 0)
             {
                 var empty = UIFactory.CreateText(_reinforceList,
-                    "No unit type matches that search.", UiTheme.FontLabel,
+                    "No arrivals are scheduled for this side.", UiTheme.FontLabel,
                     UiTheme.TextFaint, TextAnchor.UpperLeft);
-                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 32);
+                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 40);
+                return;
             }
-            return count;
+
+            string folder = _team == Team.User ? "Friendly" : "Enemy";
+            double elapsed = _reinforcements.ElapsedMinutes;
+            foreach (var entry in _reinforcements.For(_team))
+                ReinforcementRow(entry, folder, elapsed);
         }
 
-        bool ReinforceMatches(UnitDefinition def)
-        {
-            if (string.IsNullOrEmpty(_reinforceQuery)) return true;
-            string q = _reinforceQuery.ToLowerInvariant();
-            return (def.name != null && def.name.ToLowerInvariant().Contains(q)) ||
-                   (def.id != null && def.id.ToLowerInvariant().Contains(q));
-        }
-
-        void ReinforceBranchHeader(UnitBranch branch, int count, bool open)
-        {
-            var row = UIFactory.CreateBorderedPanel(_reinforceList, "ReinBranch_" + branch,
-                open ? UiTheme.AccentWash : UiTheme.Surface, UiTheme.Border);
-            row.sizeDelta = new Vector2(0, 30);
-
-            var btn = row.gameObject.AddComponent<Button>();
-            btn.targetGraphic = row.GetComponent<Image>();
-            btn.onClick.AddListener(() =>
-            {
-                if (!_reinforceOpenBranches.Remove(branch)) _reinforceOpenBranches.Add(branch);
-                PopulateReinforcements();
-            });
-
-            var chevron = UIFactory.CreateText(row, open ? "▾" : "▸", UiTheme.FontSmall,
-                open ? UiTheme.Accent : UiTheme.TextDim, TextAnchor.MiddleCenter);
-            chevron.raycastTarget = false;
-            UIFactory.Place(chevron.rectTransform, new Vector2(0f, 0.5f),
-                new Vector2(ReinforceHeaderIndent + 14f, 0f), new Vector2(16f, 16f));
-
-            var text = UIFactory.CreateSectionHeader(row,
-                UnitBranchInfo.DisplayName(branch).ToUpperInvariant(),
-                open ? UiTheme.Accent : UiTheme.Text);
-            text.raycastTarget = false;
-            text.alignment = TextAnchor.MiddleLeft;
-            UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f),
-                new Vector2(ReinforceHeaderIndent + 30f, 0f),
-                new Vector2(InnerWidth - 90f - ReinforceHeaderIndent, 16f));
-            UIFactory.Fit(text, 8);
-
-            var badge = UIFactory.CreateText(row, count.ToString(), UiTheme.FontLabel,
-                UiTheme.TextFaint, TextAnchor.MiddleRight, FontStyle.Bold);
-            badge.raycastTarget = false;
-            UIFactory.Place(badge.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10f, 0f), new Vector2(40f, 16f));
-        }
+        /// <summary>Height of one scheduled-arrival row in the battle panel.</summary>
+        const float ReinforceRowHeight = 54f;
+        /// <summary>Width such a row actually gets, once the scrollbar and list padding are off.</summary>
+        const float ReinforceRowWidth = InnerWidth - UIFactory.ScrollbarWidth - 4f;
 
         /// <summary>
-        /// One type, as a card. Clicking it puts that formation on the map
-        /// immediately, in this side's deployment zone — a click rather than a
-        /// drag, because there is no ground to drag it to: where it lands is the
-        /// zone's business, not the cursor's.
+        /// One scheduled arrival, as the commander sees it: what is coming, when
+        /// it is due, and — while it is still pending — a way to have it now.
+        ///
+        /// **The list is the scenario’s, not a catalogue.** This panel used to
+        /// be the whole 117-type catalogue with a DEPLOY on every card, which
+        /// made a battle a shop: anything either side owned could be conjured
+        /// into the deployment zone at any moment, and the schedule the designer
+        /// wrote was a separate thing nobody could see. Showing only what the
+        /// scenario laid on is what makes a reinforcement a plan rather than a
+        /// resource — and NOW is a decision *within* that plan, spending an
+        /// arrival early rather than inventing one.
+        ///
+        /// A row that has already come on stays, greyed, with the minute it
+        /// arrived. It is the record of what the fight has been given so far,
+        /// which is exactly what a commander counting their reserves is asking.
         /// </summary>
-        void ReinforceCard(UnitDefinition def, string folder)
+        void ReinforcementRow(ReinforcementEntry entry, string folder, double elapsedMinutes)
         {
-            var card = UIFactory.CreateBorderedPanel(_reinforceList, "Rein_" + def.id,
-                UiTheme.Surface, UiTheme.Border);
-            card.sizeDelta = new Vector2(0, 44);
+            var def = UnitDatabase.Get(entry.defId);
+            string name = def != null ? def.name : entry.defId;
+            bool arrived = entry.arrived;
 
-            var btn = card.gameObject.AddComponent<Button>();
-            btn.targetGraphic = card.GetComponent<Image>();
-            btn.onClick.AddListener(() =>
-            {
-                if (_reinforcements == null) return;
-                _reinforcements.DeployNow(def, _team, DefaultEchelon);
-            });
+            var card = UIFactory.CreateBorderedPanel(_reinforceList, "Arrival_" + entry.defId,
+                arrived ? UiTheme.Panel : UiTheme.Surface,
+                arrived ? UiTheme.Border : UiTheme.BorderStrong);
+            card.sizeDelta = new Vector2(0, ReinforceRowHeight);
 
-            var sprite = UIFactory.LoadIconSprite(folder, def.id);
-            if (sprite != null)
+            if (def != null)
             {
-                var icon = UIFactory.CreateImage(card, sprite, "Icon");
-                icon.raycastTarget = false;
-                UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
-                    new Vector2(10, 0), new Vector2(34, 34));
+                var sprite = UIFactory.LoadIconSprite(folder, def.id);
+                if (sprite != null)
+                {
+                    var icon = UIFactory.CreateImage(card, sprite, "Icon");
+                    icon.raycastTarget = false;
+                    icon.color = arrived ? new Color(1f, 1f, 1f, 0.4f) : Color.white;
+                    UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
+                        new Vector2(8, 0), new Vector2(30, 30));
+                }
             }
 
-            UIFactory.CreateStackedLabels(card, def.name,
-                $"{UnitBranchInfo.DisplayName(def.Branch)}   ·   {DefaultEchelon}",
-                50f, InnerWidth - 110f, topInset: 5f);
+            int many = Mathf.Max(1, entry.count);
+            UIFactory.CreateStackedLabels(card,
+                many > 1 ? $"{many} × {name}" : name,
+                $"{entry.echelon}   ·   H+{entry.arrivalMinutes}",
+                // Stops clear of the state word, which shares the top line.
+                44f, ReinforceRowWidth - 136f, topInset: 8f);
 
-            var at = UIFactory.CreateText(card, "DEPLOY",
-                UiTheme.FontLabel, UiTheme.Accent, TextAnchor.MiddleRight, FontStyle.Bold);
-            at.raycastTarget = false;
-            UIFactory.Place(at.rectTransform, new Vector2(1f, 0.5f), new Vector2(-10, 0), new Vector2(52, 16));
+            // The state, in the corner the eye goes to last: what this row is
+            // waiting for, or that it is no longer waiting.
+            // ElapsedMinutes is 0 outside a battle, so "pending" and "due in
+            // its full time" are the same reading there — which is the honest
+            // one: before H-hour every arrival is still to come.
+            double due = entry.arrivalMinutes - elapsedMinutes;
+            string state = arrived ? "ARRIVED"
+                         : elapsedMinutes <= 0.0 ? $"H+{entry.arrivalMinutes}"
+                         : due <= 0 ? "DUE"
+                         : $"IN {Mathf.CeilToInt((float)due)} MIN";
+
+            var status = UIFactory.CreateText(card, state, UiTheme.FontLabel,
+                arrived ? UiTheme.TextFaint : due <= 5 ? UiTheme.Warning : UiTheme.TextDim,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            status.raycastTarget = false;
+            UIFactory.Place(status.rectTransform, new Vector2(1f, 1f),
+                new Vector2(-8, -8), new Vector2(74, 14));
+
+            if (arrived) return;
+
+            var now = UIFactory.CreateButton(card, "NOW", () =>
+            {
+                if (_reinforcements.BringForward(entry))
+                    DropRejected?.Invoke($"{name} called forward.");
+            }, UiTheme.AccentWash, UiTheme.Accent, UiTheme.FontLabel);
+            UIFactory.Place((RectTransform)now.transform, new Vector2(1f, 0f),
+                new Vector2(-8, 8), new Vector2(64, 22));
+            UiTooltip.Attach(now.gameObject,
+                "Bring this arrival on at once instead of waiting for its minute.",
+                UiTooltip.Side.Left);
         }
 
         // ------------------------------------------------------ groups section
@@ -581,8 +520,6 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildGroupsSection(RectTransform content)
         {
-            SectionLabel(content, "FRONT LINE", -8);
-
             var flotFrame = UIFactory.CreateBorderedPanel(content, "FlotHolder", UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(flotFrame, new Vector2(0f, 1f), new Vector2(Pad, -28), new Vector2(InnerWidth, 40));
 
@@ -649,8 +586,6 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildStatsSection(RectTransform content)
         {
-            SectionLabel(content, "BATTLE LOSSES", -8);
-
             _statsHeadline = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.UpperLeft);
             UIFactory.Place(_statsHeadline.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -28),

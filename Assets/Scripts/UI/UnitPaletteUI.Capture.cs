@@ -31,8 +31,6 @@ namespace IronMeridian.UI
 
         void BuildCaptureSection(RectTransform content)
         {
-            SectionLabel(content, "STILL", -8);
-
             // --- screenshot
             var shot = UIFactory.CreateButton(content, "SCREENSHOT",
                 () => { CaptureSystem.TakeScreenshot(); RefreshCapture(); },

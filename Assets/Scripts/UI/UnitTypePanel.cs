@@ -43,6 +43,25 @@ namespace IronMeridian.UI
         /// <summary>Content width — the panel less the same margin either side.</summary>
         const float Inner = PanelWidth - Pad * 2f;
 
+        /// <summary>
+        /// Extra left gutter on the **table** — the section headings, the label
+        /// column of every row, the hairline under it and the type description.
+        /// On top of <see cref="Pad"/>, so the block of figures is indented from
+        /// the margin rather than merely sharing it, and reads as a page of data
+        /// rather than as text starting at the edge of the panel.
+        ///
+        /// Only the label column pays for it. The value column is anchored right
+        /// and keeps its own margin, so the numbers do not move; the gutter comes
+        /// out of the space between the two columns, and the split between them
+        /// moves right to compensate. Every cell is best-fitted
+        /// (<see cref="UIFactory.Fit"/>), so what it does cost is paid in type
+        /// size rather than in truncation.
+        /// </summary>
+        const float ContentIndent = 45f;
+
+        /// <summary>Where the table content starts, measured from the left edge of the panel.</summary>
+        const float TableLeft = Pad + ContentIndent;
+
         /// <summary>Icon width plus the gap to the title beside it.</summary>
         const float TitleIndent = 64f;
         /// <summary>Clear air the close button needs at the top right.</summary>
@@ -188,9 +207,17 @@ namespace IronMeridian.UI
             holder.sizeDelta = new Vector2(0, 30);
 
             var h = UIFactory.CreateSectionHeader(holder, label);
-            UIFactory.Place(h.rectTransform, new Vector2(0f, 0f), new Vector2(Pad, 4),
-                new Vector2(Inner, 18));
+            UIFactory.Place(h.rectTransform, new Vector2(0f, 0f), new Vector2(TableLeft, 4),
+                new Vector2(PanelWidth - TableLeft - Pad, 18));
         }
+
+        /// <summary>
+        /// Where the label column ends and the value column begins, as a
+        /// fraction of the row. Moved right from 0.55 when the table gained its
+        /// indent: the label column pays for the gutter, so without this it
+        /// would have given up 45 px and kept its old share of what was left.
+        /// </summary>
+        const float LabelShare = 0.62f;
 
         void Row(string label, string value)
         {
@@ -200,20 +227,20 @@ namespace IronMeridian.UI
             var rule = UIFactory.CreateDivider(row, new Color(1f, 1f, 1f, 0.045f));
             rule.anchorMin = new Vector2(0, 0); rule.anchorMax = new Vector2(1, 0);
             rule.pivot = new Vector2(0.5f, 0);
-            rule.offsetMin = new Vector2(Pad, 0);
+            rule.offsetMin = new Vector2(TableLeft, 0);
             rule.offsetMax = new Vector2(-Pad, 1);
 
             var lbl = UIFactory.CreateText(row, label, UiTheme.FontLabel, UiTheme.TextDim,
                 TextAnchor.MiddleLeft);
             var lr = lbl.rectTransform;
-            lr.anchorMin = new Vector2(0f, 0f); lr.anchorMax = new Vector2(0.55f, 1f);
-            lr.offsetMin = new Vector2(Pad, 0); lr.offsetMax = new Vector2(-6, 0);
+            lr.anchorMin = new Vector2(0f, 0f); lr.anchorMax = new Vector2(LabelShare, 1f);
+            lr.offsetMin = new Vector2(TableLeft, 0); lr.offsetMax = new Vector2(-6, 0);
             UIFactory.Fit(lbl, 8);
 
             var val = UIFactory.CreateText(row, value, UiTheme.FontLabel, UiTheme.Text,
                 TextAnchor.MiddleRight, FontStyle.Bold);
             var vr = val.rectTransform;
-            vr.anchorMin = new Vector2(0.55f, 0f); vr.anchorMax = new Vector2(1f, 1f);
+            vr.anchorMin = new Vector2(LabelShare, 0f); vr.anchorMax = new Vector2(1f, 1f);
             vr.offsetMin = new Vector2(6, 0); vr.offsetMax = new Vector2(-Pad, 0);
             UIFactory.Fit(val, 8);
         }
@@ -225,8 +252,8 @@ namespace IronMeridian.UI
 
             var t = UIFactory.CreateText(holder, text, UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.UpperLeft);
-            UIFactory.Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -6),
-                new Vector2(Inner, 52));
+            UIFactory.Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(TableLeft, -6),
+                new Vector2(PanelWidth - TableLeft - Pad, 52));
         }
 
         public bool Visible => _panel != null && _panel.gameObject.activeSelf;

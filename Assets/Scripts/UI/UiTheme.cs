@@ -46,6 +46,8 @@ namespace IronMeridian.UI
         public static readonly Color Success = new Color(0.106f, 0.631f, 0.361f, 1f);
         /// <summary>Battle running: the same button becomes a stop control.</summary>
         public static readonly Color Warning = new Color(0.706f, 0.412f, 0.129f, 1f);
+        /// <summary>Warning at fill strength — a lit state on a chrome control, as AccentWash is.</summary>
+        public static readonly Color WarningWash = new Color(0.706f, 0.412f, 0.129f, 0.16f);
         /// <summary>REMOVE UNIT and other destructive actions.</summary>
         public static readonly Color Danger = new Color(0.612f, 0.161f, 0.176f, 1f);
 

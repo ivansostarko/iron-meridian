@@ -93,7 +93,17 @@ namespace IronMeridian.UI
             /// <summary>Battle-mode only — the camera path, see <see cref="BuildCinemaSection"/>.</summary>
             Cinema
         }
-        enum ListMode { Available, Deployed }
+        /// <summary>
+        /// The three lists the UNITS page can show: the catalogue, what is on
+        /// the map, and what is due to arrive.
+        ///
+        /// REINFORCEMENT is here rather than on the rail's own REINFORCEMENTS
+        /// row because this is where the schedule is *written* — from the
+        /// catalogue beside it, by right-clicking a card. The rail's row is
+        /// where it is read during a battle, which is a different question asked
+        /// at a different time.
+        /// </summary>
+        enum ListMode { Available, Deployed, Reinforcement }
 
         /// <summary>
         /// Ready-made H-hours. Time of day is the operationally interesting
@@ -187,7 +197,20 @@ namespace IronMeridian.UI
         /// <summary>Caption row plus the icon row beneath it — the two must not share a band.</summary>
         const float ToolStripHeight = 74f;
         /// <summary>Section panel header: the open section's name and its close button.</summary>
-        const float SectionHeaderHeight = 44f;
+        /// <summary>
+        /// The section panel's header band. Two lines now rather than one: the
+        /// section's name, and under it the heading the page used to draw as its
+        /// own first label — see <see cref="PageHeading"/>.
+        /// </summary>
+        const float SectionHeaderHeight = 66f;
+
+        /// <summary>
+        /// What a page-top label used to cost: the 18 px label plus its 4 px of
+        /// air. A page that gave one up has exactly this much given back to it,
+        /// which is also exactly what the header grew by — so nothing on any
+        /// page moved when the heading went upstairs.
+        /// </summary>
+        const float PageHeadingReclaim = 22f;
         /// <summary>Seconds the panel takes to slide fully open or shut.</summary>
         const float SlideSeconds = 0.16f;
 
@@ -224,10 +247,9 @@ namespace IronMeridian.UI
         readonly List<UnitDefinition> _branchMatches = new List<UnitDefinition>();
 
         RectTransform _listContent;
-        Button _blueTab, _redTab;
-        Image _blueFill, _redFill;
-        Text _listCount;
-        Button _availableTabBtn, _deployedTabBtn;
+        /// <summary>Per-tab counts and the underline marking the open one — see ListModeButton.</summary>
+        Text _availableCount, _deployedCount, _reinforceTabCount;
+        RectTransform _availableUnderline, _deployedUnderline, _reinforceUnderline;
         Image _dragGhost;
         Canvas _canvas;
         UnitDefinition _dragging;
@@ -244,12 +266,15 @@ namespace IronMeridian.UI
             new List<(Section, string, Image, Image, Text, RectTransform)>();
         readonly Dictionary<Section, RectTransform> _sectionContent = new Dictionary<Section, RectTransform>();
 
+        /// <summary>The second line of the panel header, per section — see <see cref="PageHeading"/>.</summary>
+        readonly Dictionary<Section, string> _sectionHeadings = new Dictionary<Section, string>();
+
         /// <summary>The always-present rail. Held so mission mode can take the whole editor chrome off.</summary>
         RectTransform _rail;
 
         // Section panel.
         RectTransform _sectionPanel;
-        Text _sectionTitle;
+        Text _sectionTitle, _sectionSubtitle;
         bool _panelOpen;
         /// <summary>0 = tucked behind the rail, 1 = fully out.</summary>
         float _slide;
@@ -393,6 +418,9 @@ namespace IronMeridian.UI
             BuildCaptureSection(_sectionContent[Section.Capture]);
             BuildCinemaSection(_sectionContent[Section.Cinema]);
 
+            // After the builders, because it moves the pages they just laid out.
+            RegisterPageHeadings();
+
             // The capture panel shows a running frame count, so it is driven by
             // the system rather than polled — and unsubscribed in OnDestroy,
             // because CaptureSystem outlives this per-scene component.
@@ -412,16 +440,18 @@ namespace IronMeridian.UI
             }
 
             BuildToolStrip(panel);
-            // GENERAL, not UNITS: the first question about a scenario is what
-            // rules it is being laid out under — what the map is showing, what
-            // the clock says — and the palette is one row down when the answer
-            // is "now put something on it". See SetBattleMode, which opens the
-            // same section on every change of mode.
-            ShowSection(Section.General);
-            // Skip the opening slide: the panel is simply already out when the
-            // editor appears.
-            _slide = 1f;
+
+            // **Nothing is open when the editor appears.** The first thing a
+            // player wants to see on a map screen is the map, and a panel that
+            // opens itself is a third of the window spent on a section nobody
+            // asked for. The rail is still there, still labelled, one click from
+            // any of it. A *change of mode* is different — that is the editor
+            // being told the job has changed, and SetBattleMode opens GENERAL on
+            // it — but arriving is not a change of mode.
+            _panelOpen = false;
+            _slide = 0f;
             ApplySlide();
+            PaintNav();
 
             // Drag ghost (top-most)
             var ghostGo = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
@@ -456,6 +486,63 @@ namespace IronMeridian.UI
             RefreshStrikeBudget();
         }
 
+        /// <summary>
+        /// Registers the second line of a section's header, and — where the page
+        /// really did give a label up — hands the page back the space it used to
+        /// occupy.
+        ///
+        /// **Why the space has to come back.** Every page lays its controls out
+        /// at absolute offsets from its own top, so simply deleting the first
+        /// label would leave a 22 px hole above the first control on twenty
+        /// pages. Extending the page rect upward by exactly what the label cost
+        /// moves the whole page up by that much — and the header grew by exactly
+        /// the same amount, so on screen nothing moved at all. It is one number
+        /// in one place instead of forty hand-adjusted offsets.
+        ///
+        /// A page with <paramref name="reclaim"/> false never had a heading of
+        /// its own; it gets one in the header without giving anything up, and so
+        /// must not be shifted.
+        /// </summary>
+        void PageHeading(Section section, string heading, bool reclaim)
+        {
+            _sectionHeadings[section] = heading;
+            if (!reclaim || !_sectionContent.TryGetValue(section, out var page)) return;
+            page.offsetMax = new Vector2(page.offsetMax.x, PageHeadingReclaim);
+        }
+
+        /// <summary>
+        /// The heading every page shows on the header's second line.
+        ///
+        /// One table rather than a call inside each builder: this is the panel's
+        /// table of contents, and reading it in one place is how you can tell at
+        /// a glance that every section has a caption and which of them paid for
+        /// theirs. The <c>true</c> rows are the pages that used to open with that
+        /// exact label; the <c>false</c> rows never had one.
+        /// </summary>
+        void RegisterPageHeadings()
+        {
+            PageHeading(Section.General, "INTELLIGENCE", reclaim: true);
+            PageHeading(Section.Units, "ORDER OF BATTLE", reclaim: false);
+            PageHeading(Section.Players, "TEAMS AND PLAYERS", reclaim: false);
+            PageHeading(Section.Commanders, "CHAIN OF COMMAND", reclaim: false);
+            PageHeading(Section.Logistics, "DEPLOY ON MAP", reclaim: true);
+            PageHeading(Section.Sustainment, "FORCE ON THE MAP", reclaim: true);
+            PageHeading(Section.Effects, "PLACE ON MAP", reclaim: true);
+            PageHeading(Section.Missions, "CAMPAIGN", reclaim: true);
+            PageHeading(Section.Environment, "SCENARIO START", reclaim: true);
+            PageHeading(Section.Map, "TILE STYLE", reclaim: true);
+            PageHeading(Section.Reinforcements, "ARRIVALS AFTER H-HOUR", reclaim: false);
+            PageHeading(Section.Obstacles, "LAY ON MAP", reclaim: true);
+            PageHeading(Section.Sectors, "TACTICAL GRAPHICS", reclaim: true);
+            PageHeading(Section.Stats, "BATTLE LOSSES", reclaim: true);
+            PageHeading(Section.Zones, "MISSION ZONES", reclaim: false);
+            PageHeading(Section.Objects, "DRAW ON MAP", reclaim: true);
+            PageHeading(Section.Supplies, "FRIENDLY SUPPLY STATE", reclaim: true);
+            PageHeading(Section.Groups, "FRONT LINE", reclaim: true);
+            PageHeading(Section.Capture, "STILL", reclaim: true);
+            PageHeading(Section.Cinema, "CAMERA PATH", reclaim: true);
+        }
+
         static RectTransform MakeSectionContent(RectTransform body, string name)
         {
             var rt = UIFactory.CreateGroup(body, "Section_" + name);
@@ -486,11 +573,33 @@ namespace IronMeridian.UI
             edge.sizeDelta = new Vector2(1, 0);
             edge.GetComponent<Image>().raycastTarget = false;
 
+            // A masthead rather than a caption. The header used to be a single
+            // 44 px line carrying the section's name, and every page then opened
+            // with a heading of its own directly underneath it — two headings
+            // stacked, the second doing the first one's job. The page's heading
+            // now lives here as the second line, which puts the whole of "where
+            // am I" in one block and gives the page its first 22 px back.
+            var tick = UIFactory.CreatePanel(_sectionPanel, "HeaderTick", UiTheme.Accent);
+            UIFactory.Place(tick, new Vector2(0f, 1f), new Vector2(Pad, -14f), new Vector2(3, 34));
+            tick.GetComponent<Image>().raycastTarget = false;
+
+            const float HeaderTextLeft = Pad + 12f;
+            float headerTextWidth = PanelWidth - HeaderTextLeft - 44f;
+
             _sectionTitle = UIFactory.CreateText(_sectionPanel, "", UiTheme.FontHeading, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(_sectionTitle.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad, -13), new Vector2(PanelWidth - Pad - 44f, 22));
+                new Vector2(HeaderTextLeft, -12f), new Vector2(headerTextWidth, 22));
             UIFactory.Fit(_sectionTitle);
+
+            // Drawn exactly as the label it replaces was — same spaced small
+            // caps, same accent — so a page reads as having kept its heading
+            // rather than lost it.
+            _sectionSubtitle = UIFactory.CreateSectionHeader(_sectionPanel, "");
+            UIFactory.Place(_sectionSubtitle.rectTransform, new Vector2(0f, 1f),
+                new Vector2(HeaderTextLeft, -36f), new Vector2(headerTextWidth, 16));
+            _sectionSubtitle.raycastTarget = false;
+            UIFactory.Fit(_sectionSubtitle, 8);
 
             var close = UIFactory.CreateIconButton(_sectionPanel, UiIcons.Close, ClosePanel,
                 new Color(0, 0, 0, 0), UiTheme.TextDim, 8f);
@@ -555,6 +664,10 @@ namespace IronMeridian.UI
 
             foreach (var row in _navRows)
                 if (row.section == section && _sectionTitle != null) _sectionTitle.text = row.title;
+
+            if (_sectionSubtitle != null)
+                _sectionSubtitle.text = _sectionHeadings.TryGetValue(section, out var heading)
+                    ? UiTheme.Spaced(heading) : "";
 
             PaintNav();
         }
@@ -625,6 +738,10 @@ namespace IronMeridian.UI
         void Update()
         {
             if (_chromeHidden) return;
+
+            // Before the early-outs below: an armed ring has to follow the
+            // cursor whether or not a panel happens to be sliding.
+            TickPlacement();
 
             // Ammunition and fuel are spent by combat rather than by anything
             // that raises an event, so the supply table is the one page here that
@@ -756,8 +873,6 @@ namespace IronMeridian.UI
             AddNavRow(nav, Section.Supplies, "SUPPLIES", UiIcons.Crates);
             AddNavRow(nav, Section.Groups, "GROUPS", UiIcons.Group);
             AddNavRow(nav, Section.Capture, "CAPTURE", UiIcons.Camera);
-            // Battle only: it authors nothing, it is a way of watching a fight
-            // that is already running.
             AddNavRow(nav, Section.Cinema, "CINEMA MODE", UiIcons.Play);
 
             ApplyModeVisibility(false);
@@ -777,7 +892,7 @@ namespace IronMeridian.UI
             Section.General, Section.Units, Section.Players, Section.Commanders,
             Section.Logistics, Section.Sustainment, Section.Obstacles, Section.Effects,
             Section.Missions, Section.Environment, Section.Map, Section.Zones, Section.Objects,
-            Section.Capture
+            Section.Capture, Section.Cinema
         };
 
         /// <summary>
@@ -794,7 +909,12 @@ namespace IronMeridian.UI
             // taking it away exactly when it was wanted.
             Section.General,
             Section.Reinforcements, Section.Sectors, Section.Groups,
-            Section.Stats, Section.Supplies, Section.Capture, Section.Cinema
+            Section.Stats, Section.Supplies, Section.Capture,
+            // CINEMA MODE is in both lists, like GENERAL and CAPTURE. A camera
+            // path is worth laying out before the shooting starts — that is
+            // exactly when there is time to frame the shots — and it is the same
+            // job either side of the START BATTLE button.
+            Section.Cinema
         };
 
         static bool Allowed(Section section, bool battle) =>
@@ -937,7 +1057,6 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildSectorsSection(RectTransform content)
         {
-            SectionLabel(content, "TACTICAL GRAPHICS", -8);
 
             GeneralButton(content, "GENERATE SECTORS", -32, () => GenerateSectorsRequested?.Invoke());
             GeneralButton(content, "CLEAR GRAPHICS", -72, () => ClearSectorsRequested?.Invoke());
@@ -959,15 +1078,14 @@ namespace IronMeridian.UI
 
         void BuildGeneralSection(RectTransform content)
         {
-            // --- intelligence ---
-            SectionLabel(content, "INTELLIGENCE", -8);
-
             _losLamp = ToggleRow(content, "LINE OF SIGHT", -30, () =>
             {
                 _lineOfSight = !_lineOfSight;
                 LineOfSightChanged?.Invoke(_lineOfSight);
                 RefreshGeneralSection();
-            }, out _losLabel);
+            }, out _losLabel,
+                "Draws how far the selected formation can see, in red, with the distance in metres "
+                + "on the ring. Shown in the scenario editor and in battle.");
 
             // Directly under LINE OF SIGHT because the two are read together:
             // what a formation can see and what it can reach are the pair of
@@ -978,29 +1096,33 @@ namespace IronMeridian.UI
                 _weaponRange = !_weaponRange;
                 WeaponRangeChanged?.Invoke(_weaponRange);
                 RefreshGeneralSection();
-            }, out _weaponLabel);
+            }, out _weaponLabel,
+                "Draws how far the selected formation can shoot, in blue. Turn it off on its own: "
+                + "a mortar battery's two circles are nothing alike, and overlaying them is only "
+                + "useful when you want both.");
 
             _fogLamp = ToggleRow(content, "FOG OF WAR", -118, () =>
             {
                 _fog = !_fog;
                 FogOfWarChanged?.Invoke(_fog);
                 RefreshGeneralSection();
-            }, out _fogLabel);
+            }, out _fogLabel,
+                "Draws enemy formations only where something of yours can see them. Lose sight of "
+                + "one and the map keeps the contact: last known position, when it was seen, and a "
+                + "ring that grows to cover where it could have got to since. Battle mode only — "
+                + "the editor shows both sides so you can lay them out. Use the RECON orders to see "
+                + "past your own units' eyes.");
 
-            var intelHint = UIFactory.CreateText(content,
-                "LINE OF SIGHT draws how far the selected formation can see, in red, with the distance in " +
-                "metres on the ring.\n\n" +
-                "MAX WEAPON RANGE draws how far it can shoot, in blue. Both are shown in the scenario " +
-                "editor and in battle, and either can be turned off on its own — a mortar battery's two " +
-                "circles are nothing alike, and overlaying them is only useful when you want both.\n\n" +
-                "FOG OF WAR draws enemy formations only where something of yours can see them. Lose sight " +
-                "of one and the map keeps the contact: last known position, the time it was seen, and a " +
-                "ring that grows to cover where it could have got to since. Battle mode only — the editor " +
-                "shows both sides so you can lay them out. Use the RECON orders to see past your own " +
-                "units' eyes.",
+            // The paragraph that used to sit here is now a hover caption on each
+            // of the three rows above. Two hundred and forty pixels of prose,
+            // read once and then scrolled past forever, was the page telling the
+            // player what the switches do at the moment they were looking for
+            // the switches themselves.
+            var readMore = UIFactory.CreateText(content,
+                "Hover a switch for what it draws.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(intelHint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -166),
-                new Vector2(InnerWidth, 240));
+            UIFactory.Place(readMore.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -170),
+                new Vector2(InnerWidth, 20));
 
             RefreshGeneralSection();
         }

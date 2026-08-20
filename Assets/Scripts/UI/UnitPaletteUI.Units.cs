@@ -30,9 +30,13 @@ namespace IronMeridian.UI
         void BuildUnitsSection(RectTransform content)
         {
             // --- side selector ---
-            float half = (InnerWidth - 6f) / 2f;
-            _blueTab = SideButton(content, "FRIENDLY", Pad, half, () => SetTeam(Team.User), out _blueFill);
-            _redTab = SideButton(content, "ENEMY", Pad + half + 6f, half, () => SetTeam(Team.Enemy), out _redFill);
+            // The shared one, the same control LOGISTICS, SUSTAINMENT and MINES
+            // AND OBSTACLES carry. This page used to build a pair of its own
+            // from bare buttons: no border, a different height, and painted by
+            // its own two lines in SetTeam rather than by PaintSideTabs with
+            // everything else. Two implementations of one control is how they
+            // drift, and this was the one that had.
+            SideSelector(content, -8f);
 
             // Neither an affiliation picker nor an echelon dropdown any more.
             //
@@ -66,15 +70,34 @@ namespace IronMeridian.UI
             input.onValueChanged.AddListener(v => { _search = v == null ? "" : v.Trim(); Populate(); });
 
             // --- list header: mode tabs + live count ---
-            _availableTabBtn = ListModeButton(content, "AVAILABLE", Pad, () => SetListMode(ListMode.Available));
-            _deployedTabBtn = ListModeButton(content, "DEPLOYED", Pad + 86f, () => SetListMode(ListMode.Deployed));
+            // A segmented control across the full width, not two 82 px buttons
+            // floating at the left of a 306 px panel with a count badge stranded
+            // at the other end. The two are one choice, they are the same width
+            // because neither is the lesser, and the count sits inside the tab
+            // it counts — a badge in the corner was a number with nothing saying
+            // what it was of.
+            float tabWidth = (InnerWidth - 8f) / 3f;
+            ListModeButton(content, "AVAILABLE", Pad, tabWidth,
+                () => SetListMode(ListMode.Available), out _availableUnderline, out _availableCount);
+            ListModeButton(content, "DEPLOYED", Pad + tabWidth + 4f, tabWidth,
+                () => SetListMode(ListMode.Deployed), out _deployedUnderline, out _deployedCount);
+            // The schedule, written from the catalogue next door — see
+            // OpenCardMenu. Third because it is the last of the three questions
+            // in order: what is there, what have I put down, what is still to
+            // come.
+            ListModeButton(content, "ARRIVING", Pad + (tabWidth + 4f) * 2f, tabWidth,
+                () => SetListMode(ListMode.Reinforcement), out _reinforceUnderline, out _reinforceTabCount);
 
-            var badge = UIFactory.CreatePanel(content, "CountBadge", UiTheme.AccentWash);
-            UIFactory.Place(badge, new Vector2(0f, 1f), new Vector2(PanelWidth - Pad - 34, ListTop + 2f), new Vector2(34, 18));
-            badge.GetComponent<Image>().raycastTarget = false;
-            _listCount = UIFactory.CreateText(badge, "0", UiTheme.FontLabel, UiTheme.Accent,
-                TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Stretch(_listCount.rectTransform);
+            // The strip the two tabs sit on. Each carries its own accent
+            // underline when open; this dim rule runs the full width under both,
+            // so the closed half reads as the other end of one control rather
+            // than as a caption floating beside a lit one.
+            var tabRule = UIFactory.CreateDivider(content, UiTheme.Border);
+            tabRule.anchorMin = new Vector2(0, 1); tabRule.anchorMax = new Vector2(0, 1);
+            tabRule.pivot = new Vector2(0, 1);
+            tabRule.anchoredPosition = new Vector2(Pad, ListTop - 26f);
+            tabRule.sizeDelta = new Vector2(InnerWidth, 1);
+            tabRule.GetComponent<Image>().raycastTarget = false;
 
             // --- the list itself ---
             // With a scrollbar: the AVAILABLE cards carry drag-to-deploy
@@ -95,15 +118,6 @@ namespace IronMeridian.UI
             SetListMode(ListMode.Available);
         }
 
-        Button SideButton(RectTransform content, string label, float x, float w,
-            UnityEngine.Events.UnityAction action, out Image fill)
-        {
-            var b = UIFactory.CreateButton(content, label, action, UiTheme.Surface, UiTheme.Text, UiTheme.FontSmall);
-            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f), new Vector2(x, -8), new Vector2(w, 32));
-            fill = b.GetComponent<Image>();
-            return b;
-        }
-
         void StyleDropdown(Dropdown dd, float y)
         {
             var rt = (RectTransform)dd.transform;
@@ -116,28 +130,74 @@ namespace IronMeridian.UI
             }
         }
 
-        Button ListModeButton(RectTransform content, string label, float x, UnityEngine.Events.UnityAction action)
+        /// <summary>
+        /// One half of the AVAILABLE / DEPLOYED segment: a caption, the count of
+        /// what is in it, and an underline that marks the open one.
+        ///
+        /// The count is per tab rather than shared. "37" beside a pair of tabs
+        /// answers neither "how many types are there" nor "how many have I put
+        /// down" without first checking which tab is lit; one number in each
+        /// answers both at once, which is most of what the pair is asked.
+        /// </summary>
+        void ListModeButton(RectTransform content, string label, float x, float w,
+            UnityEngine.Events.UnityAction action, out RectTransform underline, out Text count)
         {
-            var b = UIFactory.CreateButton(content, label, action, new Color(0, 0, 0, 0),
-                UiTheme.TextDim, UiTheme.FontLabel);
-            UIFactory.Place((RectTransform)b.transform, new Vector2(0f, 1f), new Vector2(x, ListTop), new Vector2(82, 22));
-            return b;
+            var frame = UIFactory.CreatePanel(content, "ListTab_" + label, new Color(0, 0, 0, 0));
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(x, ListTop), new Vector2(w, 26));
+
+            var b = UIFactory.CreateButton(frame, "", action, new Color(0, 0, 0, 0), UiTheme.TextDim, 1);
+            UIFactory.Stretch((RectTransform)b.transform);
+            // The factory centres a caption in every button; this one draws its
+            // own, left-aligned, with the count on the other end.
+            var made = b.GetComponentInChildren<Text>(true);
+            if (made != null) made.gameObject.SetActive(false);
+
+            var caption = UIFactory.CreateText(frame, label, UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            caption.raycastTarget = false;
+            UIFactory.Place(caption.rectTransform, new Vector2(0f, 0.5f), new Vector2(8f, 0f),
+                new Vector2(w - 40f, 16f));
+            UIFactory.Fit(caption, 8);
+
+            count = UIFactory.CreateText(frame, "0", UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleRight, FontStyle.Bold);
+            count.raycastTarget = false;
+            UIFactory.Place(count.rectTransform, new Vector2(1f, 0.5f), new Vector2(-8f, 0f),
+                new Vector2(30f, 16f));
+
+            underline = UIFactory.CreatePanel(frame, "Underline", UiTheme.Accent);
+            underline.anchorMin = new Vector2(0, 0); underline.anchorMax = new Vector2(1, 0);
+            underline.pivot = new Vector2(0.5f, 0);
+            underline.sizeDelta = new Vector2(0, 2);
+            underline.anchoredPosition = Vector2.zero;
+            underline.GetComponent<Image>().raycastTarget = false;
+
+            _listTabCaptions[label] = caption;
         }
+
+        readonly Dictionary<string, Text> _listTabCaptions = new Dictionary<string, Text>();
 
         void SetListMode(ListMode mode)
         {
             _listMode = mode;
-            TintListTab(_availableTabBtn, mode == ListMode.Available);
-            TintListTab(_deployedTabBtn, mode == ListMode.Deployed);
+            PaintListTabs();
             Populate();
         }
 
-        static void TintListTab(Button b, bool active)
+        /// <summary>Lights whichever third of the segment is open.</summary>
+        void PaintListTabs()
         {
-            if (b == null) return;
-            var t = b.GetComponentInChildren<Text>(true);
-            if (t != null) t.color = active ? UiTheme.Accent : UiTheme.TextFaint;
-            b.GetComponent<Image>().color = active ? UiTheme.AccentWash : new Color(0, 0, 0, 0);
+            Paint("AVAILABLE", _availableUnderline, _availableCount, _listMode == ListMode.Available);
+            Paint("DEPLOYED", _deployedUnderline, _deployedCount, _listMode == ListMode.Deployed);
+            Paint("ARRIVING", _reinforceUnderline, _reinforceTabCount, _listMode == ListMode.Reinforcement);
+
+            void Paint(string label, RectTransform underline, Text count, bool on)
+            {
+                if (underline != null) underline.gameObject.SetActive(on);
+                if (count != null) count.color = on ? UiTheme.Accent : UiTheme.TextFaint;
+                if (_listTabCaptions.TryGetValue(label, out var caption) && caption != null)
+                    caption.color = on ? UiTheme.Accent : UiTheme.TextFaint;
+            }
         }
 
         /// <summary>
@@ -226,8 +286,6 @@ namespace IronMeridian.UI
         {
             _team = team;
             _affiliation = team == Team.User ? Affiliation.Friendly : Affiliation.Hostile;
-            _blueFill.color = team == Team.User ? UiTheme.Friendly : UiTheme.Surface;
-            _redFill.color = team == Team.Enemy ? UiTheme.Hostile : UiTheme.Surface;
             // The rear area follows the team tab rather than carrying a second
             // side control of its own — see BuildLogisticsSection.
             if (_logistics != null) _logistics.Team = team;
@@ -275,8 +333,41 @@ namespace IronMeridian.UI
                 Destroy(c.gameObject);
             }
 
-            int count = _listMode == ListMode.Available ? PopulateAvailable() : PopulateDeployed();
-            if (_listCount != null) _listCount.text = count.ToString();
+            switch (_listMode)
+            {
+                case ListMode.Deployed: PopulateDeployed(); break;
+                case ListMode.Reinforcement: PopulateArriving(); break;
+                default: PopulateAvailable(); break;
+            }
+
+            // Every tab carries its own figure, whichever is open. They are all
+            // cheap — a count of a loaded catalogue, a walk of the registry, a
+            // walk of a schedule a dozen rows long — and a number that only
+            // updated while you were looking at it would be a number nobody
+            // could trust from the tab beside it.
+            RefreshListTabCounts();
+        }
+
+        void RefreshListTabCounts()
+        {
+            if (_availableCount != null)
+            {
+                int types = 0;
+                foreach (var def in UnitDatabase.All)
+                    if (Matches(def.name, def.id, def.ammoType)) types++;
+                _availableCount.text = types.ToString();
+            }
+
+            if (_deployedCount != null)
+            {
+                int deployed = 0;
+                foreach (var u in UnitRegistry.All) if (u != null && u.IsAlive) deployed++;
+                _deployedCount.text = deployed.ToString();
+            }
+
+            if (_reinforceTabCount != null)
+                _reinforceTabCount.text = _reinforcements != null
+                    ? _reinforcements.FormationsFor(_team).ToString() : "0";
         }
 
         /// <summary>
@@ -342,15 +433,35 @@ namespace IronMeridian.UI
         /// closed section raises: is there anything in there worth opening, and
         /// how much of the list am I about to unfold?
         /// </summary>
+        /// <summary>
+        /// Where an arm of service is printed on its header row, from the left
+        /// of the row.
+        ///
+        /// 30 px clear of the chevron rather than butting up against it. The arm
+        /// is the thing being read on this row — the chevron only says which way
+        /// it will go — and a name starting immediately after a glyph reads as a
+        /// caption on the glyph instead of as the heading it is.
+        /// </summary>
+        const float BranchTextLeft = 60f;
+
         void BranchHeader(UnitBranch branch, int count, bool open)
         {
             var row = UIFactory.CreateBorderedPanel(_listContent, "Branch_" + branch,
                 open ? UiTheme.AccentWash : UiTheme.Surface, UiTheme.Border);
-            row.sizeDelta = new Vector2(0, 30);
+            row.sizeDelta = new Vector2(0, 34);
 
             var btn = row.gameObject.AddComponent<Button>();
             btn.targetGraphic = row.GetComponent<Image>();
             btn.onClick.AddListener(() => ToggleBranch(branch));
+
+            // An accent bar down the open one, so the arm the list is unfolded
+            // under is readable without going back to the chevron.
+            var stripe = UIFactory.CreatePanel(row, "Stripe",
+                open ? UiTheme.Accent : new Color(0, 0, 0, 0));
+            stripe.anchorMin = new Vector2(0, 0); stripe.anchorMax = new Vector2(0, 1);
+            stripe.pivot = new Vector2(0, 0.5f);
+            stripe.sizeDelta = new Vector2(3, -8);
+            stripe.GetComponent<Image>().raycastTarget = false;
 
             var chevron = UIFactory.CreateText(row, open ? "▾" : "▸", UiTheme.FontSmall,
                 open ? UiTheme.Accent : UiTheme.TextDim, TextAnchor.MiddleCenter);
@@ -364,7 +475,7 @@ namespace IronMeridian.UI
             text.raycastTarget = false;
             text.alignment = TextAnchor.MiddleLeft;
             UIFactory.Place(text.rectTransform, new Vector2(0f, 0.5f),
-                new Vector2(30f, 0f), new Vector2(InnerWidth - 90f, 16f));
+                new Vector2(BranchTextLeft, 0f), new Vector2(InnerWidth - BranchTextLeft - 60f, 16f));
             UIFactory.Fit(text, 8);
 
             var badge = UIFactory.CreateText(row, count.ToString(), UiTheme.FontLabel,
@@ -372,6 +483,156 @@ namespace IronMeridian.UI
             badge.raycastTarget = false;
             UIFactory.Place(badge.rectTransform, new Vector2(1f, 0.5f),
                 new Vector2(-10f, 0f), new Vector2(40f, 16f));
+        }
+
+        /// <summary>
+        /// The ARRIVING list: this side's schedule, one row per type, earliest
+        /// first.
+        ///
+        /// **A row is an order, not a record.** Everything on it can be changed
+        /// from the row — how many arrive, when, and whether the row is there at
+        /// all — because a schedule that could only be added to would make the
+        /// first mistake permanent. What it deliberately cannot do is place the
+        /// formation: that is what the map is for, and a reinforcement that
+        /// could be conjured onto the ground from the authoring page would be
+        /// the DEPLOY button in the wrong mode.
+        ///
+        /// Written from the catalogue next door — right-click a card, ADD TO
+        /// REINFORCEMENT. See docs/30-REINFORCEMENTS.md.
+        /// </summary>
+        int PopulateArriving()
+        {
+            if (_reinforcements == null)
+            {
+                EmptyRow("No schedule.");
+                return 0;
+            }
+
+            var rows = _reinforcements.For(_team);
+            if (rows.Count == 0)
+            {
+                EmptyRow("Nothing is due to arrive for this side. Right-click a type under "
+                         + "AVAILABLE and choose ADD TO REINFORCEMENT.");
+                return 0;
+            }
+
+            string folder = _team == Team.User ? "Friendly" : "Enemy";
+            int formations = 0;
+            foreach (var row in rows)
+            {
+                ArrivingRow(row, folder);
+                formations += Mathf.Max(1, row.count);
+            }
+            return formations;
+        }
+
+        /// <summary>
+        /// One scheduled arrival. Two lines: what it is, then when and how many.
+        ///
+        /// The steppers are on the row rather than behind a selection because
+        /// there are only ever a handful of rows and every one of them is being
+        /// tuned against the others — "this one earlier, that one bigger" is the
+        /// whole of laying a schedule out, and a panel that made each change a
+        /// select-then-edit would put a click between every pair of them.
+        /// </summary>
+        void ArrivingRow(ReinforcementEntry entry, string folder)
+        {
+            var def = UnitDatabase.Get(entry.defId);
+            string name = def != null ? def.name : entry.defId;
+
+            var card = UIFactory.CreateBorderedPanel(_listContent, "Arriving_" + entry.defId,
+                UiTheme.Surface, UiTheme.Border);
+            card.sizeDelta = new Vector2(0, ArrivingRowHeight);
+
+            if (def != null)
+            {
+                var sprite = UIFactory.LoadIconSprite(folder, def.id);
+                if (sprite != null)
+                {
+                    var icon = UIFactory.CreateImage(card, sprite, "Icon");
+                    icon.raycastTarget = false;
+                    UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 1f),
+                        new Vector2(8, -6), new Vector2(28, 28));
+                }
+            }
+
+            var title = UIFactory.CreateText(card, name, UiTheme.FontSmall, UiTheme.Text,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            title.raycastTarget = false;
+            UIFactory.Place(title.rectTransform, new Vector2(0f, 1f),
+                new Vector2(42, -8), new Vector2(ArrivingRowWidth - 78f, 18f));
+            UIFactory.Fit(title, 8);
+
+            var sub = UIFactory.CreateText(card, entry.echelon, UiTheme.FontLabel,
+                UiTheme.TextFaint, TextAnchor.MiddleLeft);
+            sub.raycastTarget = false;
+            UIFactory.Place(sub.rectTransform, new Vector2(0f, 1f),
+                new Vector2(42, -24), new Vector2(ArrivingRowWidth - 78f, 14f));
+
+            var drop = UIFactory.CreateButton(card, "✕", () =>
+            {
+                _reinforcements.Remove(entry);
+                DropRejected?.Invoke($"{name} taken off the schedule.");
+            }, UiTheme.SurfaceHover, UiTheme.TextDim, 12);
+            UIFactory.Place((RectTransform)drop.transform, new Vector2(1f, 1f),
+                new Vector2(-6, -6), new Vector2(22, 22));
+            UiTooltip.Attach(drop.gameObject, "Remove from the schedule", UiTooltip.Side.Left);
+
+            // --- the second line: when, and how many.
+            Stepper(card, 8f, "ARRIVES", $"H+{entry.arrivalMinutes}",
+                () => _reinforcements.Reschedule(entry, -ArrivalStepMinutes),
+                () => _reinforcements.Reschedule(entry, ArrivalStepMinutes),
+                "Earlier", "Later");
+
+            Stepper(card, ArrivingRowWidth * 0.5f + 4f, "HOW MANY", entry.count.ToString(),
+                () => _reinforcements.StepCount(entry, -1),
+                () => _reinforcements.StepCount(entry, 1),
+                "One fewer", "One more");
+        }
+
+        /// <summary>Height of one ARRIVING row: two lines plus its steppers.</summary>
+        const float ArrivingRowHeight = 68f;
+        /// <summary>Width an ARRIVING row actually gets, once the scrollbar and list padding are off.</summary>
+        const float ArrivingRowWidth = InnerWidth - UIFactory.ScrollbarWidth - Pad * 2f;
+        /// <summary>What the ARRIVES ± moves by. Five minutes is a bound in a battle, not a rounding.</summary>
+        const int ArrivalStepMinutes = 5;
+
+        /// <summary>
+        /// A captioned ◄ value ► on the bottom line of an ARRIVING row.
+        ///
+        /// The caption is above the value rather than beside it: two of these
+        /// sit side by side on a 280 px row, and a horizontal caption would take
+        /// the space the arrows need to stay big enough to hit.
+        /// </summary>
+        void Stepper(RectTransform card, float x, string caption, string value,
+            UnityEngine.Events.UnityAction less, UnityEngine.Events.UnityAction more,
+            string lessHint, string moreHint)
+        {
+            float width = ArrivingRowWidth * 0.5f - 12f;
+
+            var label = UIFactory.CreateText(card, caption, UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft);
+            label.raycastTarget = false;
+            UIFactory.Place(label.rectTransform, new Vector2(0f, 0f), new Vector2(x, 26f),
+                new Vector2(width, 12f));
+            UIFactory.Fit(label, 7);
+
+            var back = UIFactory.CreateButton(card, "◄", less, UiTheme.SurfaceHover, UiTheme.TextDim, 10);
+            UIFactory.Place((RectTransform)back.transform, new Vector2(0f, 0f),
+                new Vector2(x, 6f), new Vector2(20, 18));
+            UiTooltip.Attach(back.gameObject, lessHint);
+
+            var readout = UIFactory.CreateText(card, value, UiTheme.FontSmall, UiTheme.Accent,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            readout.raycastTarget = false;
+            UIFactory.Place(readout.rectTransform, new Vector2(0f, 0f),
+                new Vector2(x + 22f, 6f), new Vector2(width - 46f, 18f));
+            UIFactory.Fit(readout, 8);
+
+            var fwd = UIFactory.CreateButton(card, "►", more, UiTheme.SurfaceHover, UiTheme.TextDim, 10);
+            UIFactory.Place((RectTransform)fwd.transform, new Vector2(0f, 0f),
+                new Vector2(x + width - 20f, 6f), new Vector2(20, 18));
+            UiTooltip.Attach(fwd.gameObject, moreHint);
         }
 
         /// <summary>
@@ -509,9 +770,70 @@ namespace IronMeridian.UI
             // A click asks what the type is; a drag deploys one. Both live on
             // the same card because they are the same question at two speeds,
             // and uGUI raises PointerClick only when no drag happened.
-            AddEvent(trigger, EventTriggerType.PointerClick,
-                e => InspectTypeRequested?.Invoke(def, _team));
+            AddEvent(trigger, EventTriggerType.PointerClick, e =>
+            {
+                var pointer = (PointerEventData)e;
+                if (pointer.button == PointerEventData.InputButton.Right)
+                {
+                    OpenCardMenu(def, pointer.position);
+                    return;
+                }
+                InspectTypeRequested?.Invoke(def, _team);
+            });
         }
+
+        /// <summary>
+        /// The right-click menu on a catalogue card: the two things you can do
+        /// with a type that are not "tell me about it".
+        ///
+        /// Both already existed as gestures — drag to the map, and a schedule
+        /// loaded from the file — and neither was reachable from the card. A
+        /// drag is the wrong gesture for ground you have to pan to first, and
+        /// there was no way at all to put a type on the arrival schedule. The
+        /// menu is where a second and third verb can go without either of them
+        /// needing a control of its own on a panel that has no room for one.
+        /// </summary>
+        void OpenCardMenu(UnitDefinition def, Vector2 screenPos)
+        {
+            var items = new List<ContextMenuUI.Item>
+            {
+                new ContextMenuUI.Item("ADD TO MAP", () => ArmPlacement(def)),
+                new ContextMenuUI.Item("ADD TO REINFORCEMENT", () => AddToReinforcement(def))
+            };
+            ContextMenuUI.Open(_canvas, screenPos,
+                $"{def.name}  ·  {(_team == Team.Enemy ? "ENEMY" : "FRIENDLY")}", items);
+        }
+
+        /// <summary>
+        /// Puts a type on the arrival schedule for the side the palette is
+        /// working for, and shows the tab it landed in.
+        ///
+        /// Switching to the tab is the answer to "did that do anything": the
+        /// schedule is a list on a page the player is not looking at, and an
+        /// action whose only feedback is a line in the flash bar reads as having
+        /// been ignored.
+        /// </summary>
+        void AddToReinforcement(UnitDefinition def)
+        {
+            if (_reinforcements == null || def == null) return;
+
+            var entry = _reinforcements.Add(def, _team, DefaultEchelon, DefaultArrivalMinutes);
+            if (entry == null) return;
+
+            SetListMode(ListMode.Reinforcement);
+            DropRejected?.Invoke(entry.count > 1
+                ? $"{def.name} — now {entry.count} arriving at H+{entry.arrivalMinutes}."
+                : $"{def.name} joins the schedule at H+{entry.arrivalMinutes}.");
+        }
+
+        /// <summary>
+        /// When a type first put on the schedule is set to arrive. Half an hour
+        /// in: far enough that it is plainly a reinforcement rather than part of
+        /// the opening laydown, near enough that a designer testing the scenario
+        /// does not have to wait out an hour to see it work. The row's own ± is
+        /// the answer for anything else.
+        /// </summary>
+        const int DefaultArrivalMinutes = 30;
 
         /// <summary>
         /// The attack / defence / speed row on an AVAILABLE card: a glyph and a

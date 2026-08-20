@@ -8,12 +8,12 @@ namespace IronMeridian.Map
     /// wherever the camera happens to be, and a PLAY that flies from one to the
     /// next.
     ///
-    /// **Battle mode only, and deliberately so.** This is not an authoring tool
-    /// — it lays nothing on the map and changes nothing about the scenario. It
-    /// is a way of *watching* a fight that is already happening: a sweep along
-    /// the front, a fall onto the objective, a pull-back over the depth. The map
-    /// editor has its own reasons to move the camera and none of them want a
-    /// second thing driving it.
+    /// **In both modes.** It is not an authoring tool — it lays nothing on the
+    /// map and changes nothing about the scenario — but the shots it records are
+    /// worth laying out before the shooting starts, which is exactly when there
+    /// is time to frame them. The path a designer builds over a scenario is the
+    /// same path that flies over the battle it becomes: a sweep along the front,
+    /// a fall onto the objective, a pull-back over the depth.
     ///
     /// **Shots are poses, not places.** A waypoint records where the camera was
     /// looking, how far off it stood, and which way round and how far over it

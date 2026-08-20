@@ -23,6 +23,9 @@ namespace IronMeridian.UI
         GameClock _clock;
 
         Button _battleBtn, _pauseBtn;
+        RectTransform _pauseFrame;
+        Image _pauseFill;
+        Text _pauseLabel;
         Image _battleFill, _battleGlyph;
         Text _battleLabel;
         Text _status, _modeLabel;
@@ -130,6 +133,14 @@ namespace IronMeridian.UI
             // 334 px short of it with nothing to its right.
             if (_clockPanel != null)
                 _clockPanel.anchoredPosition = new Vector2(on ? -18f : -334f, 0f);
+
+            // Pause moves with it, staying immediately to its left. A mission
+            // wants the control as much as the editor does — more, since Esc
+            // there opens a menu rather than stopping the clock — so it is
+            // relocated rather than dropped, and the corner it normally holds is
+            // the one the clock has just moved into.
+            if (_pauseFrame != null)
+                _pauseFrame.anchoredPosition = new Vector2(on ? -318f : -18f, 0f);
 
             // The bar stays: it is what the clock is mounted on, and a clock
             // floating on the terrain with nothing behind it is unreadable over
@@ -243,6 +254,46 @@ namespace IronMeridian.UI
             _battleLabel = UIFactory.CreateText(brt, "START BATTLE", UiTheme.FontHeading, UiTheme.Text,
                 TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(_battleLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(46, 0), new Vector2(150, 24));
+
+            BuildPauseControl(bar);
+        }
+
+        /// <summary>
+        /// Pause/resume the operational clock, in the **far right corner of the
+        /// bar** — battle mode only.
+        ///
+        /// It shares that corner with RESET rather than crowding it, because the
+        /// two never coexist: RESET is a scenario-mode control and leaves the bar
+        /// the moment a battle starts (<see cref="ApplyResetVisibility"/>). One
+        /// slot, and whichever mode you are in puts its own principal right-hand
+        /// control in it.
+        ///
+        /// **It is not the battle button.** START BATTLE / PAUSE BATTLE, two
+        /// slots to its left, switches between laying a scenario out and
+        /// fighting it. This stops the clock inside a fight that is already
+        /// running — a distinction the hover caption spells out, because with
+        /// two controls that close together the word "pause" cannot carry it
+        /// alone.
+        /// </summary>
+        void BuildPauseControl(RectTransform bar)
+        {
+            _pauseFrame = UIFactory.CreateBorderedPanel(bar, "PauseButton", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(_pauseFrame, new Vector2(1f, 0.5f), new Vector2(-18, 0), new Vector2(96, 40));
+            _pauseFrame.pivot = new Vector2(1f, 0.5f);
+            _pauseFill = _pauseFrame.Find("Fill").GetComponent<Image>();
+
+            _pauseBtn = UIFactory.CreateButton(_pauseFrame, "PAUSE", _clock.TogglePause,
+                new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
+            UIFactory.Stretch((RectTransform)_pauseBtn.transform);
+            _pauseLabel = _pauseBtn.GetComponentInChildren<Text>(true);
+            UIFactory.Fit(_pauseLabel, 9);
+
+            UiTooltip.Attach(_pauseBtn.gameObject,
+                "Stop or restart the clock — the battle freezes where it stands. Not the same as "
+                + "PAUSE BATTLE, which hands the map back to the scenario editor.",
+                UiTooltip.Side.Below);
+
+            _pauseFrame.gameObject.SetActive(false);
         }
 
         /// <summary>
@@ -257,7 +308,11 @@ namespace IronMeridian.UI
         void BuildClock(RectTransform bar)
         {
             _clockPanel = UIFactory.CreateBorderedPanel(bar, "GameClock", UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-334, 0), new Vector2(320, 40));
+            // 292 rather than 320: the pause key that used to sit in here moved
+            // to the far right of the bar, and the panel shrinks by its width
+            // rather than keeping a hole where it was. Its right edge does not
+            // move, so the gap to the battle control is unchanged.
+            UIFactory.Place(_clockPanel, new Vector2(1f, 0.5f), new Vector2(-334, 0), new Vector2(292, 40));
             _clockPanel.pivot = new Vector2(1f, 0.5f);
 
             _clockTime = UIFactory.CreateText(_clockPanel, "--:--", 19, UiTheme.Text,
@@ -281,9 +336,12 @@ namespace IronMeridian.UI
             UIFactory.Place(_clockSpeed.rectTransform, new Vector2(0f, 0.5f), new Vector2(178, 0), new Vector2(56, 20));
             UIFactory.Fit(_clockSpeed, 9);
 
+            // Speed only. Pause left this cluster for the bar's right-hand
+            // corner — see BuildPauseControl — because it is the one clock
+            // control a player reaches for mid-battle, and a 26 px key wedged
+            // between two speed arrows is not where that belongs.
             ClockBtn(-8, "»", _clock.Faster, "Speed up");
-            _pauseBtn = ClockBtn(-36, "❚❚", _clock.TogglePause, "Pause / resume");
-            ClockBtn(-64, "«", _clock.Slower, "Slow down");
+            ClockBtn(-36, "«", _clock.Slower, "Slow down");
 
             _clock.SpeedChanged += RefreshClockSpeed;
             _clockPanel.gameObject.SetActive(false);
@@ -299,10 +357,21 @@ namespace IronMeridian.UI
 
         void RefreshClockSpeed()
         {
-            if (_clockSpeed == null || _clock == null || _pauseBtn == null) return;
+            if (_clockSpeed == null || _clock == null) return;
             _clockSpeed.text = _clock.SpeedText;
             _clockSpeed.color = _clock.Paused ? UiTheme.Warning : UiTheme.Accent;
-            _pauseBtn.GetComponentInChildren<Text>(true).text = _clock.Paused ? "▶" : "❚❚";
+
+            // The corner button says what pressing it will do, and goes amber
+            // while the clock is stopped — a paused battle that looks like a
+            // running one is how a player loses a minute wondering why nothing
+            // is happening.
+            if (_pauseLabel != null)
+            {
+                _pauseLabel.text = _clock.Paused ? "RESUME" : "PAUSE";
+                _pauseLabel.color = _clock.Paused ? UiTheme.Warning : UiTheme.TextDim;
+            }
+            if (_pauseFill != null)
+                _pauseFill.color = _clock.Paused ? UiTheme.WarningWash : UiTheme.Surface;
         }
 
         void Update()
@@ -333,6 +402,9 @@ namespace IronMeridian.UI
                 _modeChipFill.color = running ? new Color(0.106f, 0.631f, 0.361f, 0.16f) : UiTheme.Surface;
 
             if (_clockPanel != null) _clockPanel.gameObject.SetActive(running);
+            // Same rule as the clock it drives: there is nothing to stop until a
+            // battle is running. It takes the corner as RESET leaves it.
+            if (_pauseFrame != null) _pauseFrame.gameObject.SetActive(running);
             ApplyResetVisibility();
             if (running) RefreshClockSpeed();
         }

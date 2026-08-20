@@ -118,8 +118,6 @@ namespace IronMeridian.UI
             // the content stops running off the bottom of a 1080 window.
             var content = ScrollableSection(section, MissionsPageHeight);
 
-            SectionLabel(content, "CAMPAIGN", -8);
-
             _campaignDropdown = UIFactory.CreateDropdown(content, CampaignNames(), 0, OnCampaignPicked);
             StyleDropdown(_campaignDropdown, -28);
 

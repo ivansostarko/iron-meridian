@@ -100,18 +100,64 @@ namespace IronMeridian.Units
 
         // ---------------------------------------------------------- schedule
 
-        public void Add(UnitDefinition def, Team team, Echelon echelon, int arrivalMinutes)
+        /// <summary>
+        /// Puts a type on the schedule, or adds one to the count of a row that
+        /// is already there.
+        ///
+        /// Merging rather than appending is what keeps the list readable: asking
+        /// for four battalions is four presses of the same card, and four
+        /// identical rows would be a list nobody can scan and a removal nobody
+        /// can aim. Identical means every field a designer chose — the type, the
+        /// side, the size and the minute — so two rows that differ in any of
+        /// them stay two rows.
+        /// </summary>
+        public ReinforcementEntry Add(UnitDefinition def, Team team, Echelon echelon, int arrivalMinutes)
         {
-            if (def == null) return;
+            if (def == null) return null;
 
-            _schedule.Add(new ReinforcementEntry
+            int minutes = Mathf.Max(0, arrivalMinutes);
+            string teamName = team.ToString();
+            string echelonName = echelon.ToString();
+
+            foreach (var existing in _schedule)
+            {
+                if (existing.defId != def.id || existing.team != teamName ||
+                    existing.echelon != echelonName || existing.arrivalMinutes != minutes) continue;
+                existing.count = Mathf.Clamp(existing.count + 1, MinCount, MaxCount);
+                Changed?.Invoke();
+                return existing;
+            }
+
+            var entry = new ReinforcementEntry
             {
                 defId = def.id,
-                team = team.ToString(),
-                echelon = echelon.ToString(),
-                arrivalMinutes = Mathf.Max(0, arrivalMinutes)
-            });
+                team = teamName,
+                echelon = echelonName,
+                arrivalMinutes = minutes,
+                count = 1
+            };
+            _schedule.Add(entry);
             SortSchedule();
+            Changed?.Invoke();
+            return entry;
+        }
+
+        /// <summary>Fewest and most formations one row may bring on.</summary>
+        public const int MinCount = 1;
+        public const int MaxCount = 24;
+
+        /// <summary>
+        /// Steps a row's quantity. One is the floor rather than zero: a row
+        /// bringing nothing on is a row that should have been removed, and
+        /// offering it as a state would leave the schedule full of arrivals that
+        /// silently do nothing.
+        /// </summary>
+        public void StepCount(ReinforcementEntry entry, int delta)
+        {
+            if (entry == null) return;
+            int next = Mathf.Clamp(entry.count + delta, MinCount, MaxCount);
+            if (next == entry.count) return;
+            entry.count = next;
             Changed?.Invoke();
         }
 
@@ -146,6 +192,30 @@ namespace IronMeridian.Units
         /// <summary>How many formations <see cref="DeployNow"/> has placed, for the scatter.</summary>
         int _deployedNow;
 
+        /// <summary>
+        /// Brings one **scheduled** row on now rather than waiting for its
+        /// minute, and marks it as having arrived so it does not come again.
+        ///
+        /// The battle panel's only verb. A commander who can see a reserve is
+        /// due at H+40 and wants it at H+12 is making a decision the scenario
+        /// left them, and the alternative — waiting, or a second catalogue to
+        /// pick the same formation out of again — is worse than either.
+        ///
+        /// Refused once it has arrived: the row on screen is then a record of
+        /// something that happened, and pressing it again would quietly double
+        /// the force the designer laid on.
+        /// </summary>
+        public bool BringForward(ReinforcementEntry entry)
+        {
+            if (entry == null || entry.arrived) return false;
+            int index = _schedule.IndexOf(entry);
+            if (index < 0) return false;
+
+            entry.arrived = true;
+            Deliver(entry, index);
+            return true;
+        }
+
         public void Remove(ReinforcementEntry entry)
         {
             if (entry == null) return;
@@ -172,11 +242,30 @@ namespace IronMeridian.Units
         void SortSchedule() =>
             _schedule.Sort((a, b) => a.arrivalMinutes.CompareTo(b.arrivalMinutes));
 
+        /// <summary>Rows on one side's schedule.</summary>
         public int CountFor(Team team)
         {
             int n = 0;
             foreach (var e in _schedule) if (e.team == team.ToString()) n++;
             return n;
+        }
+
+        /// <summary>Formations on one side's schedule — rows times their counts.</summary>
+        public int FormationsFor(Team team)
+        {
+            int n = 0;
+            string name = team.ToString();
+            foreach (var e in _schedule) if (e.team == name) n += Mathf.Max(1, e.count);
+            return n;
+        }
+
+        /// <summary>One side's rows, earliest first. The order both panels list them in.</summary>
+        public List<ReinforcementEntry> For(Team team)
+        {
+            var rows = new List<ReinforcementEntry>();
+            string name = team.ToString();
+            foreach (var e in _schedule) if (e.team == name) rows.Add(e);
+            return rows;
         }
 
         /// <summary>Scenario minutes since the battle started, or 0 outside one.</summary>
@@ -215,11 +304,20 @@ namespace IronMeridian.Units
             var team = entry.team == nameof(Team.Enemy) ? Team.Enemy : Team.User;
             if (!System.Enum.TryParse(entry.echelon, out Echelon echelon)) echelon = Echelon.Battalion;
 
-            Place(team, index, out double lat, out double lon);
-            Spawn(def, team, echelon, lat, lon);
+            // The whole row at once, each formation on its own scatter index, so
+            // three battalions arrive as a laydown rather than as three counters
+            // stacked on one point. Offset by the row's position in the schedule
+            // so two rows due in the same minute do not land on each other.
+            int n = Mathf.Clamp(entry.count, MinCount, MaxCount);
+            for (int i = 0; i < n; i++)
+            {
+                Place(team, index * MaxCount + i, out double lat, out double lon);
+                Spawn(def, team, echelon, lat, lon);
+            }
             Changed?.Invoke();
 
-            Flash?.Invoke($"Reinforcement — {def.name} ({echelon}) arrives at " +
+            string many = n > 1 ? $"{n} × " : "";
+            Flash?.Invoke($"Reinforcement — {many}{def.name} ({echelon}) arrives at " +
                           $"H+{entry.arrivalMinutes} for {(team == Team.User ? "friendly" : "enemy")} forces.");
         }
 
@@ -302,7 +400,8 @@ namespace IronMeridian.Units
                     defId = e.defId,
                     team = e.team,
                     echelon = e.echelon,
-                    arrivalMinutes = e.arrivalMinutes
+                    arrivalMinutes = e.arrivalMinutes,
+                    count = e.count
                     // `arrived` is deliberately not written: a saved scenario is
                     // a starting state, and a reserve that had already come on
                     // when the file was written must still come on when it is
@@ -319,6 +418,9 @@ namespace IronMeridian.Units
                 {
                     if (e == null || string.IsNullOrEmpty(e.defId)) continue;
                     e.arrived = false;
+                    // A file written before the field existed parses as 0, which
+                    // would be a row that brought nothing on.
+                    e.count = Mathf.Clamp(e.count <= 0 ? 1 : e.count, MinCount, MaxCount);
                     _schedule.Add(e);
                 }
             SortSchedule();

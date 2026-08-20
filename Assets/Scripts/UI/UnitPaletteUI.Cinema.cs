@@ -11,10 +11,10 @@ namespace IronMeridian.UI
     /// One part of a class split across files purely for size; the fields and
     /// lifecycle live in UnitPaletteUI.cs.
     ///
-    /// **Battle mode only.** Every other row on this rail authors something. This
-    /// one authors nothing — it is a way of watching a fight that is already
-    /// running, which is a thing you want during the battle and not while laying
-    /// one out.
+    /// **On both rails.** Every other row here authors something; this one
+    /// authors nothing. That is why it survives the change of mode rather than
+    /// belonging to one — framing the shots is scenario work and flying them is
+    /// battle work, and they are the same list.
     ///
     /// **A waypoint is recorded, not typed.** There is no editing of a shot's
     /// figures: the player frames the view they want with the ordinary camera
@@ -45,8 +45,6 @@ namespace IronMeridian.UI
 
         void BuildCinemaSection(RectTransform content)
         {
-            SectionLabel(content, "CAMERA PATH", -8);
-
             var add = UIFactory.CreateButton(content, "ADD WAYPOINT", AddCinemaWaypoint,
                 UiTheme.Surface, UiTheme.Text, UiTheme.FontBody);
             UIFactory.Place((RectTransform)add.transform, new Vector2(0f, 1f),

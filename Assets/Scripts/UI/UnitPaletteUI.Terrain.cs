@@ -63,8 +63,6 @@ namespace IronMeridian.UI
         {
             var content = SidedPage(ScrollableSection(section, ObjectsPageHeight + SideBlock));
 
-            SectionLabel(content, "DRAW ON MAP", -8);
-
             float y = -30f;
             foreach (var def in MapObjectCatalog.All)
             {
@@ -232,8 +230,6 @@ namespace IronMeridian.UI
         /// </summary>
         void BuildSuppliesSection(RectTransform content)
         {
-            SectionLabel(content, "FRIENDLY SUPPLY STATE", -8);
-
             _suppliesHeadline = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.UpperLeft);
             UIFactory.Place(_suppliesHeadline.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -28),
@@ -475,17 +471,35 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
+        /// Which mode the rail is in, or null before the first call — which is
+        /// how "the scene arrived in this mode" is told from "the player just
+        /// switched to it".
+        /// </summary>
+        bool? _battleMode;
+
+        /// <summary>
+        /// Raised once on a real change of mode, after the rail has put its own
+        /// panel away.
+        ///
+        /// The rail only owns the section panel; the right-hand dock, the unit
+        /// inspector, the type card and the fire menus belong to the controller.
+        /// Rather than reach across for them, it says "the mode changed" and the
+        /// controller resets what it owns — see GameController, which hangs the
+        /// same tidy-up off this that RESET uses.
+        /// </summary>
+        public System.Action ModeChanged;
+
+        /// <summary>
         /// Swaps the rail between its two lists — see ApplyModeVisibility,
         /// ScenarioSections and BattleSections — and opens the section the new
         /// mode starts on.
         ///
-        /// **Both modes open on GENERAL.** A change of mode is a change of what
-        /// the player is doing, and landing them on whatever section the last
-        /// job happened to leave open is landing them somewhere chosen by
-        /// history rather than by the question in front of them. GENERAL is the
-        /// answer in both directions because it is the one section that is about
-        /// the map itself rather than about a job on it — which is also why it
-        /// is now on both rails.
+        /// **A change of mode closes the panel.** Whatever was open belonged to
+        /// the job that has just ended: a section left up across the switch is a
+        /// page about laying a scenario out sitting over a battle, or the other
+        /// way round. Closing hands the screen back to the map, which is the one
+        /// thing both jobs are about, and the rail is one click from any of it.
+        /// It matches what the editor does on load, where nothing is open either.
         /// </summary>
         public void SetBattleMode(bool running)
         {
@@ -497,10 +511,19 @@ namespace IronMeridian.UI
 
             ApplyModeVisibility(running);
 
-            // After the visibility pass, which would otherwise close a panel it
-            // had just been told to open. Not while the chrome is hidden: a
-            // mission has no rail to open a section on.
-            if (!_chromeHidden) ShowSection(Section.General);
+            // Only on a real change of mode. This is also called once during
+            // Build to put the rail into whatever mode the scene arrived in, and
+            // there is nothing to reset on the way in.
+            //
+            // ApplyModeVisibility above already closes a section the new mode
+            // does not have; this closes the ones it does, which is every other
+            // case.
+            if (_battleMode.HasValue && _battleMode.Value != running)
+            {
+                ClosePanel();
+                ModeChanged?.Invoke();
+            }
+            _battleMode = running;
 
             if (running) RefreshGroups();
         }
@@ -543,8 +566,6 @@ namespace IronMeridian.UI
         void BuildObstacleSection(RectTransform section)
         {
             var content = SidedPage(ScrollableSection(section, ObstaclePageHeight + SideBlock));
-
-            SectionLabel(content, "LAY ON MAP", -8);
 
             float y = -34f;
             bool started = false;
@@ -721,8 +742,6 @@ namespace IronMeridian.UI
         {
             content = SidedPage(content);
 
-            SectionLabel(content, "DEPLOY ON MAP", -8);
-
             float y = -28f;
             foreach (var def in LogisticsCatalog.All)
             {
@@ -878,8 +897,6 @@ namespace IronMeridian.UI
 
         void BuildEffectsSection(RectTransform content)
         {
-            SectionLabel(content, "PLACE ON MAP", -8);
-
             EffectButton(content, VfxId.FireMedium, "FIRE", "Burning ground — loops until removed",
                 UiIcons.Flame, new Color(1.00f, 0.55f, 0.15f), -30);
             EffectButton(content, VfxId.Explosion, "EXPLOSION", "Detonation, then a burning wreck",

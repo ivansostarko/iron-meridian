@@ -68,6 +68,9 @@ Assets/Scripts/
     ProceduralAudio.cs   synthesised effect sounds (no asset dependency)
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
+                          TextFieldFocused is the one answer to "is the
+                          player typing" - CameraRig and GameController
+                          both stand their shortcuts down on it
     BackgroundCatalog.cs screen artwork register — see docs/11-GAME-MENU.md
     ScreenBackdrop.cs    a screen's background when the screen changes it: a page
                           image with a hover preview over it, applied once per
@@ -102,7 +105,9 @@ Assets/Scripts/
                          LeftPanelWidth = the always-present rail; other on-map
                          chrome measures from it, never from the section panel
     UiIcons.cs           HUD icon set, drawn procedurally
-    UiTooltip.cs         hover captions for icon-only controls
+    UiTooltip.cs         hover captions for icon-only controls, and for any
+                          control whose explanation is too long to sit on the
+                          page (the GENERAL toggles). Wraps past 340 px
     UnitHoverTooltip.cs  map-unit hover card: side, strength, status, ranges.
                           Anchored to the ICON's projected screen position, not
                           to the cursor — a card hung off the pointer covers the
@@ -151,8 +156,11 @@ Assets/Scripts/
                           with whether its prefab is installed (docs/09-3D-MODELS.md)
     EastFranceUI.cs      "Under development" placeholder — no longer linked from
                           the Development hub; its scene is still in Build Settings
-    GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle.
-                         SetMissionMode strips it to the clock (docs/22-MISSIONS.md §3)
+    GameHUD.cs           top bar: identity, mode chip, clock, RESET, battle,
+                         and the clock PAUSE in the far right corner - the slot
+                         RESET vacates when a battle starts, since the two never
+                         coexist. SetMissionMode strips the bar to the clock and
+                         slides PAUSE left of it (docs/22-MISSIONS.md §3)
     UnitPaletteUI.cs     left rail (scrolling section nav + three tools) + the
                          sliding section panel. Battle mode's pages include
                          STATS (BuildStatsSection — LossLedger, the same figures
@@ -161,9 +169,19 @@ Assets/Scripts/
                          the four fire menus into StrikeDockUI's pages — what
                          moved is where they are drawn, not who draws them.
                          SetChromeVisible(false) takes the whole rail off for a mission.
-                         GENERAL is on BOTH rails and is what either mode opens
-                         on — SetBattleMode calls ShowSection(General), which is
-                         the non-toggling twin of the nav row's OpenSection
+                         GENERAL, CAPTURE and CINEMA MODE are on BOTH rails.
+                         NOTHING is open when the editor loads; a *change* of
+                         mode opens GENERAL (SetBattleMode -> ShowSection, the
+                         non-toggling twin of the nav row's OpenSection), and the
+                         first call — the scene arriving in a mode — does not
+                         count as a change.
+                         The panel header is two lines: the section name, and
+                         the heading the page used to draw as its own first
+                         label. RegisterPageHeadings is the table of all twenty,
+                         and hands 22 px back to the pages that gave one up.
+                         A change of mode closes the panel and raises
+                         ModeChanged, which the controller answers by closing
+                         everything docked on the right
                          One class, NINE files: a `partial` split by section
                          group, purely for size — .Units .Force .Terrain .Fires
                          .Mission .Environment .Deploy .Capture .Cinema. Fields
@@ -172,13 +190,21 @@ Assets/Scripts/
     UnitPaletteUI.Capture.cs
                          the CAPTURE section — screenshots and video
                          recording (docs/39-CAPTURE.md)
+    UnitPaletteUI.Units.cs
+                         UNITS: side selector, search, the AVAILABLE/DEPLOYED/
+                          ARRIVING segment and the branch accordion. A card's
+                          right-click menu arms the placement ring or puts the
+                          type on the reinforcement schedule
+                          (docs/30-REINFORCEMENTS.md §2)
     UnitPaletteUI.Cinema.cs
                          the CINEMA MODE section — the waypoint list, the leg
-                         timing and PLAY/STOP over Map/CinemaSystem. Battle only
+                         timing and PLAY/STOP over Map/CinemaSystem. Both modes
                          (docs/03-GAMEPLAY.md — Cinema mode)
-    UnitInfoPanel.cs     right panel: full unit data on click. The footer's
-                          prev/next arrows are captioned "Next Unit"; REMOVE
-                          UNIT goes through ConfirmDialog
+    UnitInfoPanel.cs     right panel: full unit data on click. Its heading is an
+                          InputField, so the formation is renamed there
+                          (UnitActor.Rename rewrites the map caption too). The
+                          footer's prev/next arrows are captioned "Next Unit";
+                          REMOVE UNIT goes through ConfirmDialog
     UnitTypePanel.cs     right panel: what a *type* is, opened by clicking a
                           card in the palette's AVAILABLE list (read-only)
     UnitActionBarUI.cs   battle order bar: Move / Attack / Recon / Defence /
@@ -198,14 +224,14 @@ Assets/Scripts/
                           behind it (Camera.rect + a cullingMask-0 backdrop
                           camera that clears the strip). The inset arrives in
                           canvas pixels and is re-derived on any window resize
-    CesiumCreditStyler.cs  pins Cesium's credit overlay to the map's bottom-right
-                          corner, shrinks it to ~1 px and sorts it behind the
-                          HUD. Re-applies once a second, because the credit
+    CesiumCreditStyler.cs  pins Cesium's credit overlay to the bottom-left corner
+                          - behind the editor rail - shrinks it to ~1 px and
+                          sorts it behind the HUD. Re-applies once a second, because the credit
                           system rebuilds itself. NOT removed - ion's terms
                           require it (docs/02-CESIUM.md)
-    CinemaSystem.cs      the battle's camera path: recorded shots (lat/lon +
+    CinemaSystem.cs      the map's camera path: recorded shots (lat/lon +
                           standoff + heading + tilt) played back as a queue of
-                          CameraRig fly-tos. Battle only, runtime only, not
+                          CameraRig fly-tos. Both modes, runtime only, not
                           saved (docs/03-GAMEPLAY.md - Cinema mode)
     GeoUtils.cs          lat/lon <-> Unity, distance/bearing, terrain sampling
                           (only real ground counts — see Core/NonTerrain.cs)

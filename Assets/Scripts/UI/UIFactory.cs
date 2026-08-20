@@ -326,6 +326,28 @@ namespace IronMeridian.UI
             return bar;
         }
 
+        /// <summary>
+        /// True while the player is typing into a text field.
+        ///
+        /// Every keyboard shortcut in the editor has to ask: W pans the camera,
+        /// C faces a unit, Ctrl+Z undoes an edit, and all three are letters
+        /// somebody renaming a formation will type. The check is here rather
+        /// than in each of them because there is one answer and a dozen askers,
+        /// and it goes through the EventSystem rather than a flag any one field
+        /// has to remember to set.
+        /// </summary>
+        public static bool TextFieldFocused
+        {
+            get
+            {
+                var selected = EventSystem.current != null
+                    ? EventSystem.current.currentSelectedGameObject : null;
+                if (selected == null) return false;
+                var field = selected.GetComponent<InputField>();
+                return field != null && field.isFocused;
+            }
+        }
+
         public static InputField CreateInputField(Transform parent, string placeholder, int fontSize = 20)
         {
             var rt = CreatePanel(parent, "InputField", GameConfig.UiPanelLight);

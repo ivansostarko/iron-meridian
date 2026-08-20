@@ -20,6 +20,13 @@ namespace IronMeridian.Units
                 if (a != null && a.State.TeamEnum == team && a.IsAlive) yield return a;
         }
 
-        public static void NotifyMoved() => Changed?.Invoke();
+        public static void NotifyMoved() => NotifyChanged();
+
+        /// <summary>
+        /// Something about a unit that the lists show has changed — it moved, or
+        /// it was renamed. Same event as adding and removing one, because every
+        /// listener rebuilds from the registry either way.
+        /// </summary>
+        public static void NotifyChanged() => Changed?.Invoke();
     }
 }

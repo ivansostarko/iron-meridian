@@ -19,12 +19,12 @@ namespace IronMeridian.Map
     /// shipping in breach of the licence it streams its terrain under. What is
     /// adjustable is how loudly it shouts: the credit stays on screen, findable,
     /// and behind the interface rather than in front of it. It is currently
-    /// pinned to the **bottom-right corner** of the map and drawn at about **one
-    /// pixel**, near-transparent — which is as quiet as a thing can be while
-    /// still being on the screen. Whether it is quiet enough to still count as
-    /// attribution is a licence question, not a code one: **if the project's ion
-    /// terms are ever reviewed, this is the class to look at**, and
-    /// <see cref="Scale"/> alone undoes it.
+    /// pinned to the **bottom-left corner**, drawn at about **one pixel** and
+    /// near-transparent — and that corner is the one the editor rail stands in,
+    /// so the opaque nav is over it. Whether a mark that is behind the interface
+    /// still counts as attribution is a licence question, not a code one: **if
+    /// the ion terms for this project are ever reviewed, this is the class to
+    /// look at**, and <see cref="Scale"/> alone undoes it.
     ///
     /// **It retries, and it keeps retrying.** The credit system is created
     /// lazily — the first time a tileset has something to attribute — so it
@@ -64,7 +64,7 @@ namespace IronMeridian.Map
         const int SortingOrder = -500;
 
         /// <summary>
-        /// Margin from the bottom-right corner, in canvas units before
+        /// Margin from the bottom-left corner, in canvas units before
         /// <see cref="Scale"/>. At a pixel across this is barely a nudge; it is
         /// here so the mark is not clipped by the very edge of the window.
         /// </summary>
@@ -144,14 +144,16 @@ namespace IronMeridian.Map
                 // package pins them to whichever corner its own prefab chose,
                 // and scaling about a top-left pivot leaves a one-pixel mark
                 // sitting in the top-left. Pinning every one of them to the
-                // bottom-right corner with a matching pivot puts the whole block
-                // in the corner furthest from anything the player reads — and
-                // the map's own bottom-right is the screen's, because the
-                // editor chrome only ever insets the left edge.
+                // bottom-**left** corner with a matching pivot parks the block
+                // under the editor rail: the nav is 232 px of opaque panel
+                // standing in that corner, drawn on the game canvas, and this
+                // canvas sorts at SortingOrder behind every one of those — so
+                // the rail is simply in front of it. Behind the furniture is as
+                // far out of the way as a thing can be got without deleting it.
                 foreach (RectTransform child in canvas.transform)
                 {
-                    child.anchorMin = child.anchorMax = child.pivot = new Vector2(1f, 0f);
-                    child.anchoredPosition = new Vector2(-CornerMargin, CornerMargin);
+                    child.anchorMin = child.anchorMax = child.pivot = new Vector2(0f, 0f);
+                    child.anchoredPosition = new Vector2(CornerMargin, CornerMargin);
                     child.localScale = new Vector3(Scale, Scale, 1f);
                 }
 
