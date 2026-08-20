@@ -1,5 +1,7 @@
 # Building for Windows
 
+For a phone or a tablet, see [40-ANDROID.md](40-ANDROID.md) instead.
+
 ## Prerequisites
 
 - Unity 6000.0 LTS with **Windows Build Support** module installed

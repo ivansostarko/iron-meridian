@@ -82,9 +82,16 @@ namespace IronMeridian.Core
         {
             get
             {
+                // Android has no MyPictures for an app to write into without
+                // asking for storage permission, so it goes straight to the
+                // app's own folder — which is where the system file picker and
+                // adb both look for it.
                 string pictures = "";
-                try { pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures); }
-                catch { /* the fallback below covers it */ }
+                if (Application.platform != RuntimePlatform.Android)
+                {
+                    try { pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures); }
+                    catch { /* the fallback below covers it */ }
+                }
 
                 if (string.IsNullOrEmpty(pictures) || !Directory.Exists(pictures))
                     pictures = Application.persistentDataPath;
@@ -125,6 +132,10 @@ namespace IronMeridian.Core
                 if (_ffmpegSearched) return _ffmpegPath;
                 _ffmpegSearched = true;
 
+                // Nothing to find, and the search itself would touch APIs the
+                // mobile runtime does not carry.
+                if (!CanUseExternalEncoder) return _ffmpegPath = null;
+
                 string exe = Application.platform == RuntimePlatform.WindowsPlayer
                           || Application.platform == RuntimePlatform.WindowsEditor
                     ? "ffmpeg.exe" : "ffmpeg";
@@ -158,8 +169,22 @@ namespace IronMeridian.Core
             }
         }
 
+        /// <summary>
+        /// True where the game may launch a child process at all.
+        ///
+        /// Android may not: an app cannot spawn an arbitrary executable, there
+        /// is no PATH to find one on, and <c>System.Diagnostics.Process</c> is
+        /// not part of the runtime that ships in the APK. Recording is therefore
+        /// off there, and the button says so instead of failing when pressed —
+        /// which is also why this is checked before the search rather than
+        /// letting the search come back empty.
+        /// </summary>
+        public static bool CanUseExternalEncoder =>
+            Application.platform != RuntimePlatform.Android &&
+            Application.platform != RuntimePlatform.IPhonePlayer;
+
         /// <summary>Whether a take can be started at all.</summary>
-        public static bool CanRecord => FfmpegPath != null;
+        public static bool CanRecord => CanUseExternalEncoder && FfmpegPath != null;
 
         // ------------------------------------------------------------ stills
 

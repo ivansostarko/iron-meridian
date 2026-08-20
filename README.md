@@ -6,7 +6,7 @@ Deploy Blue (User) and Red (Enemy) forces on real 3D terrain streamed from Cesiu
 
 **Website: [iron-meridian.sostarko.me](https://iron-meridian.sostarko.me)** · Repository: `github.com/ivansostark/iron-meridian`
 
-![Status](https://img.shields.io/badge/Status-In%20development-orange) ![Unity](https://img.shields.io/badge/Unity-6000.0%20LTS-black) ![Cesium](https://img.shields.io/badge/Cesium%20for%20Unity-1.25-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit-informational)
+![Status](https://img.shields.io/badge/Status-In%20development-orange) ![Unity](https://img.shields.io/badge/Unity-6000.0%20LTS-black) ![Cesium](https://img.shields.io/badge/Cesium%20for%20Unity-1.25-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit%20%C2%B7%20Android-informational)
 
 ![Iron Meridian — the front line over real terrain](https://iron-meridian-storage.sostarko.me/screenshoots/gallery-1.png)
 
@@ -76,7 +76,7 @@ so nothing renders without one. See [Quick start](#quick-start-windows) below.
 
 ## Quick start (Windows)
 
-1. Install **Unity Hub** and **Unity 6000.0 LTS** (Windows Build Support IL2CPP + Mono).
+1. Install **Unity Hub** and **Unity 6000.0 LTS** (Windows Build Support IL2CPP + Mono; add Android Build Support to build for a phone).
 2. Clone: `git clone https://github.com/ivansostark/iron-meridian.git`
 3. Open the folder in Unity Hub. First open resolves the **Cesium for Unity** package automatically.
 4. **Add your Cesium ion token** — see [docs/02-CESIUM.md](docs/02-CESIUM.md). Short version: paste it into `Assets/StreamingAssets/cesium-token.txt`.
@@ -108,6 +108,20 @@ saves, and **no Cesium ion token** unless you ask for one. Needs
 [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install --id JRSoftware.InnoSetup`).
 See [docs/34-INSTALLER.md](docs/34-INSTALLER.md).
 
+### Building for Android
+
+```powershell
+make android            # an installable APK into Builds\Android
+make android-aab        # an App Bundle for Google Play
+make android-install    # a development APK, straight onto the attached device
+```
+
+Needs **Android Build Support** in the Unity Hub (`make doctor` says whether it
+is there). The port is prepared and compiles; **it has not been run on a
+device**. What it had to change — StreamingAssets is an archive inside the APK,
+and a touch screen has no right mouse button — and what is still missing is in
+[docs/40-ANDROID.md](docs/40-ANDROID.md).
+
 ### Putting it on Steam
 
 ```powershell
@@ -122,7 +136,7 @@ per-player streaming cost, and the licences on the third-party asset packs
 
 ## Documentation
 
-Thirty-nine documents under [`docs/`](docs/). Several are **registers** — the
+Forty documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -194,6 +208,7 @@ in the same change as the catalogue, never afterwards.
 | [37-THIRD-PARTY](docs/37-THIRD-PARTY.md) | **Licence register** — every third-party asset pack, and whether it may be sold |
 | [38-PACKAGES](docs/38-PACKAGES.md) | **Package register** — every Unity package, why it is there, and what it costs |
 | [39-CAPTURE](docs/39-CAPTURE.md) | Screenshots and screen recording, straight from the map editor |
+| [40-ANDROID](docs/40-ANDROID.md) | The Android port: StreamingAssets inside the APK, touch gestures, the APK build |
 
 ## AI-assisted development
 

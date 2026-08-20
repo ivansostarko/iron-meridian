@@ -37,6 +37,12 @@ $Jobs = @(
        Do = { Invoke-Script "build-windows.ps1" @("-Clean", "-Installer") } }
     @{ Group = "Build and ship"; Key = "package"; Text = "Package the player already in Builds\Windows"
        Do = { Invoke-Script "build-installer.ps1" } }
+    @{ Group = "Build and ship"; Key = "android"; Text = "Build the Android APK into Builds\Android"
+       Do = { Invoke-Script "build-android.ps1" } }
+    @{ Group = "Build and ship"; Key = "android-aab"; Text = "Build the Android App Bundle (.aab) for Play"
+       Do = { Invoke-Script "build-android.ps1" @("-Aab") } }
+    @{ Group = "Build and ship"; Key = "android-install"; Text = "Build the APK and adb-install it on the attached device"
+       Do = { Invoke-Script "build-android.ps1" @("-Development", "-Install") } }
     @{ Group = "Build and ship"; Key = "run"; Text = "Launch the built player"
        Do = {
             $exe = Get-ChildItem (Join-Path $root "Builds\Windows") -Filter *.exe -ErrorAction SilentlyContinue |
@@ -168,6 +174,17 @@ function Invoke-Doctor {
         Where-Object { $_ -notmatch '^\\' } |
         Where-Object { Test-Path $_ } | Select-Object -First 1
     Report "Inno Setup" ($null -ne $iscc) $iscc "winget install --id JRSoftware.InnoSetup  (installer only)"
+
+    # Android Build Support is an optional editor module. Without it the APK
+    # build fails several minutes in, so it is worth naming here.
+    $androidOk = $false
+    if ($unity -and (Test-Path $unity)) {
+        $androidOk = Test-Path (Join-Path (Split-Path $unity) "Data\PlaybackEngines\AndroidPlayer")
+    }
+    Report "Android SDK" $androidOk "Android Build Support installed" "Unity Hub -> Installs -> Add modules -> Android Build Support (+ OpenJDK, SDK & NDK) - docs/40-ANDROID.md"
+
+    $adb = (Get-Command adb -ErrorAction SilentlyContinue)
+    Report "adb" ($null -ne $adb) $adb.Source "only needed to install onto a device - comes with Android SDK Platform Tools"
 
     Write-Host ""
     Write-Host "Project" -ForegroundColor Cyan

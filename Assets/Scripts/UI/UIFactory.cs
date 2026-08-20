@@ -16,6 +16,23 @@ namespace IronMeridian.UI
         public static Font DefaultFont =>
             _font ??= Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
+        /// <summary>
+        /// The resolution every panel in this game is laid out against.
+        ///
+        /// **A phone gets a smaller one, which makes everything bigger.** The
+        /// layout is authored in these units, so halving the reference doubles
+        /// the physical size of every control; 1280×720 on a handheld puts the
+        /// rail's rows and the map cluster's buttons at roughly a finger's width
+        /// on a 6-inch screen, where at the desktop's 1920×1080 they land at
+        /// about 6 mm and are missed as often as hit.
+        ///
+        /// It is a scale change, not a layout change: nothing moves relative to
+        /// anything else, and less of the map is visible around the chrome —
+        /// which is the trade a small screen makes anyway. See docs/40-ANDROID.md.
+        /// </summary>
+        public static Vector2 ReferenceResolution =>
+            Core.TouchInput.IsTouchPlatform ? new Vector2(1280, 720) : new Vector2(1920, 1080);
+
         public static Canvas CreateCanvas(string name = "Canvas")
         {
             var go = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -23,7 +40,7 @@ namespace IronMeridian.UI
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.referenceResolution = ReferenceResolution;
             scaler.matchWidthOrHeight = 0.5f;
 
             if (Object.FindFirstObjectByType<EventSystem>() == null)

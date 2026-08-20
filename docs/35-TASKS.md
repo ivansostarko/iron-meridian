@@ -22,6 +22,9 @@ describe different work.
 | | `build` | Build the Windows player into `Builds\Windows` |
 | | `installer` | Build the player **and** package it as a setup `.exe` |
 | | `package` | Package the player already in `Builds\Windows` |
+| | `android` | Build the Android APK into `Builds\Android` |
+| | `android-aab` | Build the Android App Bundle (`.aab`) for Play |
+| | `android-install` | Build a development APK and `adb install -r` it on the attached device |
 | | `run` | Launch the built player |
 | **Data and artwork** | `units` | Regenerate `units.json` |
 | | `icons` | Regenerate the APP-6 unit icons |
@@ -35,7 +38,7 @@ describe different work.
 | **Steam** | `steam-check` | Release preflight — app id, icon, version, build, licences |
 | | `steam-appid` | Write `steam_appid.txt` beside the player, to test Steam locally |
 | **Project** | `check` | Compile the runtime C# with Roslyn, without opening Unity |
-| | `doctor` | Check Unity, Python, Pillow, Inno Setup and the token |
+| | `doctor` | Check Unity, Python, Pillow, Inno Setup, Android Build Support, adb and the token |
 | | `logs` | Tail the last Unity setup and build logs |
 | | `clean` | Delete the packaged installers and the build logs |
 | | `distclean` | Delete everything under `Builds\`, player included — asks first |
@@ -158,4 +161,10 @@ same change.**
 ## See also
 
 `docs/06-WINDOWS-BUILD.md` (the player) · `docs/34-INSTALLER.md` (the setup
-`.exe`) · `docs/01-GETTING-STARTED.md` (first run)
+`.exe`) · `docs/40-ANDROID.md` (the APK, and what the port had to change) ·
+`docs/01-GETTING-STARTED.md` (first run)
+
+The three `android` jobs all run `scripts/build-android.ps1`, which — like the
+Windows build — runs `setup` first. That is not politeness: setup writes
+`StreamingAssets/Maps/index.json`, and Android cannot list the scenarios without
+it.

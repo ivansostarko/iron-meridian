@@ -20,7 +20,7 @@ MENU = $(PWSH) -NoProfile -File ./scripts/menu.ps1
 
 # Windows PowerShell 5.1 instead of PowerShell 7:  make PWSH=powershell <target>
 
-BUILD_JOBS   := setup build installer package run
+BUILD_JOBS   := setup build installer package run android android-aab android-install
 DATA_JOBS    := units icons stat-icons units-doc installer-art data
 UNITY_JOBS   := models vfx packages
 STEAM_JOBS   := steam-check steam-appid
@@ -45,6 +45,9 @@ menu:
 #   installer      build the player and package it as a setup .exe
 #   package        package the player already in Builds\Windows
 #   run            launch the built player
+#   android        build the Android APK into Builds\Android
+#   android-aab    build the Android App Bundle (.aab) for Play
+#   android-install  build a development APK and adb-install it on the device
 #   units          regenerate units.json
 #   icons          regenerate the APP-6 unit icons
 #   stat-icons     regenerate the unit info panel's stat glyphs
@@ -68,5 +71,6 @@ menu:
 # because every run of it is a decision:
 #   .\scripts\build-installer.ps1 -IncludeToken
 #   .\scripts\steam-upload.ps1 -Token Exclude -User <login> -Preview
+#   .\scripts\build-android.ps1 -Aab -Keystore ... -KeyAlias ...   (docs/40-ANDROID.md)
 $(JOBS):
 	@$(MENU) -Run $@

@@ -46,5 +46,13 @@ sysinfo.txt
 *.unitypackage
 *.app
 
+# Android signing. A keystore is the same class of secret as the ion token
+# (CLAUDE.md golden rule 1) and losing it means the app can never be updated on
+# Play again - keep it backed up somewhere that is not this repository.
+# docs/40-ANDROID.md section 4c.
+*.keystore
+*.jks
+keys/
+
 # Unity Asset Manager drops this at the repo root
 uam/

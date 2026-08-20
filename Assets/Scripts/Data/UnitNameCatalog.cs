@@ -186,15 +186,17 @@ namespace IronMeridian.Data
         /// </summary>
         static UnitNameFile ReadFile()
         {
-            string path = Path.Combine(Application.streamingAssetsPath, "Data", FileName);
             try
             {
-                if (!File.Exists(path))
+                // Through StreamingAssetsFile: on Android this is an APK entry
+                // rather than a file — docs/40-ANDROID.md.
+                string json = Core.StreamingAssetsFile.ReadAllText("Data/" + FileName);
+                if (string.IsNullOrEmpty(json))
                 {
-                    Debug.LogWarning($"[UnitNameCatalog] {path} not found — units keep their type names.");
+                    Debug.LogWarning($"[UnitNameCatalog] {FileName} not found — units keep their type names.");
                     return null;
                 }
-                var parsed = JsonUtility.FromJson<UnitNameFile>(File.ReadAllText(path));
+                var parsed = JsonUtility.FromJson<UnitNameFile>(json);
                 if (parsed == null || parsed.groups == null)
                 {
                     Debug.LogWarning($"[UnitNameCatalog] {FileName} has no groups — units keep their type names.");

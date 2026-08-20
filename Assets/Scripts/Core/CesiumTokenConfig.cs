@@ -30,15 +30,18 @@ namespace IronMeridian.Core
         {
             if (!string.IsNullOrEmpty(_cached)) return _cached;
 
-            // Option 1: StreamingAssets/cesium-token.txt
+            // Option 1: StreamingAssets/cesium-token.txt — through
+            // StreamingAssetsFile, because on Android that is an entry inside
+            // the APK rather than a file on disk and System.IO cannot see it.
+            // A build whose token silently failed to load is a build that shows
+            // an empty globe. See docs/40-ANDROID.md.
             try
             {
-                string path = Path.Combine(Application.streamingAssetsPath, "cesium-token.txt");
-                if (File.Exists(path))
+                string txt = StreamingAssetsFile.ReadAllText("cesium-token.txt");
+                if (!string.IsNullOrEmpty(txt))
                 {
-                    string txt = File.ReadAllText(path).Trim();
-                    if (!string.IsNullOrEmpty(txt) && txt != Placeholder)
-                        return _cached = txt;
+                    txt = txt.Trim();
+                    if (txt.Length > 0 && txt != Placeholder) return _cached = txt;
                 }
             }
             catch { /* fall through to constant */ }

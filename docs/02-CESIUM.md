@@ -82,6 +82,12 @@ A player build copies `cesium-token.txt` into its own `StreamingAssets`, so **wh
 
 If you deliberately bundle one (`build-installer.ps1 -IncludeToken` — an internal build, a demo machine), issue a token scoped to nothing but asset read for the tilesets listed above, and be ready to revoke it.
 
+⚠️ **The Android build has no strip.** `scripts/build-android.ps1` has no
+`-IncludeToken` switch because it has no way *not* to include it: the file is
+packed into the APK, in plain text, and an APK is easier to pass around than an
+installer. Anyone you hand one to has your token. See `docs/40-ANDROID.md` §6 and
+§8.
+
 ## Attribution & terms
 
 Cesium ion's free tier covers development use. Shipping a game requires complying with [Cesium ion terms](https://cesium.com/legal/terms-of-service/) and showing data attribution (Cesium, Bing Maps, OpenStreetMap). Cesium for Unity renders its attribution overlay automatically — do not disable it.

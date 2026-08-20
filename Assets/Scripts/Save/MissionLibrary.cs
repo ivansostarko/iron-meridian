@@ -64,8 +64,13 @@ namespace IronMeridian.Save
         public static void Clear() => Selected = null;
 
         static string UserPath => Path.Combine(Application.persistentDataPath, FileName);
-        static string ShippedPath =>
-            Path.Combine(Application.streamingAssetsPath, "Data", FileName);
+
+        /// <summary>
+        /// The shipped list, **relative** to StreamingAssets: on Android that is
+        /// an APK entry rather than a path, and only StreamingAssetsFile can
+        /// open it. See docs/40-ANDROID.md.
+        /// </summary>
+        const string ShippedRelative = "Data/" + FileName;
 
         /// <summary>True once the player's own list exists — i.e. the editor has saved.</summary>
         public static bool HasUserBook => File.Exists(UserPath);
@@ -92,12 +97,13 @@ namespace IronMeridian.Save
 
         static MissionBook Read()
         {
-            var shipped = ReadFile(ShippedPath);
+            var shipped = ReadShipped();
             var user = File.Exists(UserPath) ? ReadFile(UserPath) : null;
 
             if (shipped == null && user == null)
             {
-                Debug.LogWarning($"[Missions] No mission list found (looked in {ShippedPath}). " +
+                Debug.LogWarning($"[Missions] No mission list found (looked in " +
+                    $"{Core.StreamingAssetsFile.PathFor(ShippedRelative)}). " +
                     "Starting empty — the editor's MISSIONS panel can create one.");
                 return new MissionBook();
             }
@@ -193,11 +199,32 @@ namespace IronMeridian.Save
         {
             if (!File.Exists(path)) return null;
 
-            MissionBook book = null;
-            try { book = JsonUtility.FromJson<MissionBook>(File.ReadAllText(path)); }
+            try { return Parse(File.ReadAllText(path), path); }
             catch (System.Exception e)
             {
                 Debug.LogError($"[Missions] Could not read {path}: {e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The shipped list. Separate from <see cref="ReadFile"/> because it
+        /// comes out of StreamingAssets, which on Android is an archive rather
+        /// than a directory — docs/40-ANDROID.md.
+        /// </summary>
+        static MissionBook ReadShipped()
+        {
+            string json = Core.StreamingAssetsFile.ReadAllText(ShippedRelative);
+            return string.IsNullOrEmpty(json) ? null : Parse(json, ShippedRelative);
+        }
+
+        static MissionBook Parse(string json, string source)
+        {
+            MissionBook book = null;
+            try { book = JsonUtility.FromJson<MissionBook>(json); }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[Missions] Could not read {source}: {e.Message}");
                 return null;
             }
 
@@ -225,7 +252,7 @@ namespace IronMeridian.Save
         static HashSet<string> ShippedIds()
         {
             var ids = new HashSet<string>();
-            var shipped = ReadFile(ShippedPath);
+            var shipped = ReadShipped();
             if (shipped != null)
                 foreach (var m in shipped.missions) ids.Add(m.id);
             return ids;

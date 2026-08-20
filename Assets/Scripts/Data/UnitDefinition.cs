@@ -131,8 +131,25 @@ namespace IronMeridian.Data
         static void EnsureLoaded()
         {
             if (_all != null) return;
-            string path = Path.Combine(Application.streamingAssetsPath, "Data", "units.json");
-            var file = JsonUtility.FromJson<UnitDatabaseFile>(File.ReadAllText(path));
+            // Through StreamingAssetsFile: on Android this lives inside the
+            // APK and System.IO cannot open it — docs/40-ANDROID.md.
+            string json = Core.StreamingAssetsFile.ReadAllText("Data/units.json");
+            var file = string.IsNullOrEmpty(json)
+                ? null : JsonUtility.FromJson<UnitDatabaseFile>(json);
+
+            if (file == null || file.units == null || file.units.Count == 0)
+            {
+                // Nothing else in the game works without this, so it is the one
+                // read here that is fatal enough to say so loudly. An empty list
+                // still gets built, so callers get "no such unit type" rather
+                // than a null reference on every lookup.
+                Debug.LogError("[UnitDatabase] units.json could not be read. " +
+                               "No unit types are available.");
+                _all = new List<UnitDefinition>();
+                _byId = new Dictionary<string, UnitDefinition>();
+                return;
+            }
+
             _all = file.units;
             _byId = new Dictionary<string, UnitDefinition>();
             foreach (var u in _all) _byId[u.id] = u;

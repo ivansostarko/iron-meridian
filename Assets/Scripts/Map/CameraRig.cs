@@ -105,6 +105,8 @@ namespace IronMeridian.Map
             if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) { _focus += right * panSpeed; panning = true; }
             if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) { _focus -= right * panSpeed; panning = true; }
 
+            if (TickTouch(fwd, right)) panning = true;
+
             // A flight in progress yields to the player the moment they touch
             // the camera. An animation that has to be waited out is a camera
             // that has stopped answering.
@@ -115,7 +117,10 @@ namespace IronMeridian.Map
 
             if (!overUI)
             {
-                float scroll = Input.GetAxis("Mouse ScrollWheel");
+                // The pinch is expressed in wheel units, so both drive the same
+                // maths and a device with both gets one behaviour rather than
+                // two — see Core.TouchInput.
+                float scroll = Input.GetAxis("Mouse ScrollWheel") + Core.TouchInput.PinchDelta;
                 if (Mathf.Abs(scroll) > 0.0001f)
                 {
                     _distance = Mathf.Clamp(_distance * (1f - scroll * 1.6f), MinDistance, _maxDistance);
@@ -137,6 +142,55 @@ namespace IronMeridian.Map
             }
             Apply();
         }
+
+        /// <summary>
+        /// Drags, pinches and twists, in the same units the keys and the mouse
+        /// produce. Returns true if the gesture moved the focus, so the caller
+        /// treats it as a pan and cancels any flight in progress.
+        ///
+        /// **A drag moves the ground under the finger**, which is the opposite
+        /// sign to a key: pressing D means "look right", dragging left means
+        /// "pull the map left". Getting that backwards is the single most
+        /// obvious way a touch port feels wrong.
+        ///
+        /// The pinch is read by <c>Update</c> beside the wheel; only the pan and
+        /// the twist are here, because those are the two the keyboard also does.
+        /// </summary>
+        bool TickTouch(Vector3 fwd, Vector3 right)
+        {
+            Core.TouchInput.Poll();
+
+            // Twist to orbit, and drag two fingers up and down to tilt — the
+            // middle-mouse gesture, split across the two axes a twist leaves
+            // free. 2D is north-up and flat by definition, so neither applies.
+            if (_mode == ViewMode.Mode3D)
+            {
+                float twist = Core.TouchInput.TwistDegrees;
+                if (Mathf.Abs(twist) > 0.01f) _yaw += twist;
+
+                float tilt = Core.TouchInput.TwoFingerDrag.y;
+                if (Mathf.Abs(tilt) > 0.01f)
+                    _pitch3D = Mathf.Clamp(_pitch3D - tilt * 0.25f, 20f, 85f);
+            }
+
+            Vector2 drag = Core.TouchInput.PanDelta;
+            if (drag.sqrMagnitude < 0.01f) return false;
+
+            // Scaled by the standoff so a centimetre of finger covers the same
+            // fraction of the view at every altitude — the same argument the
+            // zoom makes for being multiplicative.
+            float metresPerPixel = _distance * TouchPanRate;
+            _focus -= right * (drag.x * metresPerPixel);
+            _focus -= fwd * (drag.y * metresPerPixel);
+            return true;
+        }
+
+        /// <summary>
+        /// How much ground one pixel of finger travel covers, as a fraction of
+        /// the camera's standoff. Tuned so a drag across a phone moves about a
+        /// screen's width of map.
+        /// </summary>
+        const float TouchPanRate = 0.0016f;
 
         void Apply()
         {

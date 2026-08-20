@@ -15,13 +15,22 @@ Assets/Scripts/
     DisplaySettings.cs   the player's video settings and the one place they are
                           applied (quality, AA, shadows, textures, frame cap)
     CesiumTokenConfig.cs Cesium ion token resolution (file > constant)
+    StreamingAssetsFile.cs  reads a shipped data file on ANY platform. On Android
+                          StreamingAssets is a URL into the APK and System.IO
+                          cannot open it, so every read of units.json,
+                          unit-names.json, missions.json, a shipped map or the
+                          ion token goes through here (docs/40-ANDROID.md §1a)
+    TouchInput.cs        the gestures a mouse has no equivalent for: long press
+                          = right click, pinch = wheel, twist = orbit, drag =
+                          pan. Zero on a desktop (docs/40-ANDROID.md §2)
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
     ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
     CaptureSystem.cs     screenshots and H.264 video into the player's
                           Pictures folder, encoded by ffmpeg as a child
                           process; DontDestroyOnLoad so a take survives
-                          navigation (docs/39-CAPTURE.md)
+                          navigation (docs/39-CAPTURE.md). Recording is off on
+                          Android - no child processes (docs/40-ANDROID.md §3)
     SteamIntegration.cs  the only contact point with Steam, behind the
                           IRONMERIDIAN_STEAM define (docs/36-STEAM.md)
     SceneLoader.cs       async scene load behind the loading overlay
@@ -68,6 +77,9 @@ Assets/Scripts/
     ProceduralAudio.cs   synthesised effect sounds (no asset dependency)
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
+                          ReferenceResolution is 1280x720 on a handheld and
+                          1920x1080 elsewhere, which scales every control up on
+                          a phone (docs/40-ANDROID.md §2a)
                           TextFieldFocused is the one answer to "is the
                           player typing" - CameraRig and GameController
                           both stand their shortcuts down on it
@@ -365,7 +377,12 @@ Assets/Scripts/
                           the catalogue rows (docs/03-GAMEPLAY.md)
     TargetAreaMarker.cs  3D target-area volume (procedural mesh, vertex colours)
   Editor/
-    ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project
+    ProjectBootstrap.cs  Tools > Iron Meridian > Setup Project. Also writes
+                          StreamingAssets/Maps/index.json, which is how Android
+                          lists the shipped scenarios (docs/40-ANDROID.md §1b)
+    AndroidBuild.cs      Tools > Iron Meridian > Android >. Player settings and
+                          the batch APK/AAB build behind scripts/build-android.ps1
+                          (docs/40-ANDROID.md §4)
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs
     ModelInstaller.cs    Tools > Iron Meridian > Install Unit Models
     PackageImporter.cs   Tools > Iron Meridian > Import Bundled Packages

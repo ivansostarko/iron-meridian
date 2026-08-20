@@ -31,6 +31,10 @@ looking. A machine with no Pictures folder falls back to the save folder
 (`docs/05-MAP-SAVES.md`); losing the take entirely would be worse than putting
 it somewhere less obvious.
 
+**On Android** stills go to the app's own folder rather than the gallery, because
+writing to the gallery needs a storage permission this game does not ask for, and
+**recording is switched off entirely** — see §2.
+
 ## 2. ffmpeg does the encoding
 
 **Unity has no runtime video encoder.** `UnityEditor.Media.MediaEncoder` and
@@ -38,6 +42,13 @@ Unity Recorder are both editor-only and cannot run in a build, so the choice is
 a native plugin or an external encoder. This uses **ffmpeg as a child process**:
 no plugin in the project, no licence attached to the game binary, and it writes
 a real `.mp4`.
+
+The cost of that choice is that **it does not work on a platform with no child
+processes**. An Android app cannot spawn an arbitrary executable, there is no
+PATH to search, and `System.Diagnostics.Process` is not in the runtime that ships
+in the APK. `CaptureSystem.CanUseExternalEncoder` is false there, so `CanRecord`
+is false, so the RECORD button is disabled and says why — rather than the search
+coming back empty and the failure looking like a missing install.
 
 Frames go over the pipe as **JPEG (quality 95), not raw RGBA**. Raw 1080p is
 about 8 MB a frame — 250 MB/s at 30 fps — for a difference nobody can see once
@@ -171,6 +182,7 @@ Frame rate is `CaptureSystem.RecordFps`; the capture clock, the encoder's
 
 ## See also
 
+`docs/40-ANDROID.md` §3 (why recording is off on a phone) ·
 `docs/36-STEAM.md` §6 (store screenshots and the trailer) ·
 `docs/38-PACKAGES.md` §2a (Unity Recorder, the editor-side alternative with
 more output formats) · `docs/37-THIRD-PARTY.md` (where a bundled ffmpeg would be

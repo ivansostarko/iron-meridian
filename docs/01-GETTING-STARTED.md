@@ -6,6 +6,7 @@
 |---|---|---|
 | Unity Hub | latest | https://unity.com/download |
 | Unity Editor | **6000.0 LTS (Unity 6)** | In Hub → Installs → Install Editor. Add module **Windows Build Support (IL2CPP)**. |
+| Android Build Support (optional) | — | Only to build for a phone or tablet. Hub → Installs → the 6000.0 editor → Add modules → **Android Build Support**, plus its **OpenJDK** and **Android SDK & NDK Tools**. See `docs/40-ANDROID.md`. |
 | Git | latest | https://git-scm.com/download/win |
 | Python 3 (optional) | 3.10+ | Only needed to regenerate icons/units/installer art (`scripts/*.py`, uses Pillow). |
 | Inno Setup 6 (optional) | 6.x | Only needed to package the installer — `winget install --id JRSoftware.InnoSetup`. See `docs/34-INSTALLER.md`. |
@@ -49,10 +50,17 @@ Press **Play**:
 - **SETTINGS** — Video (resolution, window mode) and Audio (master volume) tabs.
 - **QUIT** — confirmation modal.
 
+## 7. Build
+
+`make build` produces the Windows player; `make android` produces an APK. See
+`docs/06-WINDOWS-BUILD.md` and `docs/40-ANDROID.md`.
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
+| Android: empty globe, no units, no missions | A shipped data file could not be read. StreamingAssets is inside the APK there — anything reading it must go through `Core/StreamingAssetsFile`, not `File.ReadAllText`. `docs/40-ANDROID.md` §1a. |
+| Android: a scenario is in the build but not in the list | `StreamingAssets/Maps/index.json` is stale. Run `make setup`. `docs/40-ANDROID.md` §1b. |
 | Black/empty globe | Token missing or invalid — see step 4; check Console for `[Cesium]` warnings. |
 | `CesiumForUnity` namespace errors | Package didn't resolve: check internet access, then `Window → Package Manager` → refresh. |
 | Units drop onto nothing / fall through | Terrain tiles not loaded yet at that spot — zoom in and wait a second, then drop again. |

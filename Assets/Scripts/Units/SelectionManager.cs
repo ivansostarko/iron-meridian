@@ -278,9 +278,40 @@ namespace IronMeridian.Units
             _map = map; _cam = cam; _canvas = canvas;
         }
 
+        /// <summary>
+        /// The right mouse button, or the touch gesture that stands in for it.
+        ///
+        /// A touch screen has no second button, and right-click is not a
+        /// flourish in this game — it is the move order, the context menu and
+        /// the cancel on every armed tool. A long press carries all three, and
+        /// routing it through one property here rather than through thirty
+        /// call sites keeps the desktop behaviour byte-for-byte what it was.
+        /// See Core.TouchInput.
+        /// </summary>
+        static bool SecondaryDown
+        {
+            get
+            {
+                Core.TouchInput.Poll();
+                return Input.GetMouseButtonDown(1) || Core.TouchInput.SecondaryDown;
+            }
+        }
+
+        /// <summary>Where the secondary press happened — the cursor, or the finger that was held.</summary>
+        static Vector2 SecondaryPosition =>
+            Core.TouchInput.SecondaryDown ? Core.TouchInput.SecondaryPosition
+                                          : (Vector2)Input.mousePosition;
+
         void Update()
         {
             if (_cam == null) return;
+
+            // Once, at the top, so every read below sees this frame's gestures.
+            // The long-press check in the click-release block runs before the
+            // order block that would otherwise have polled, and a stale reading
+            // there is a tap that selects when the player meant to hold.
+            Core.TouchInput.Poll();
+
             bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
             bool toolBlocked = InputBlocked != null && InputBlocked();
             bool blocked = overUI || toolBlocked;
@@ -299,7 +330,7 @@ namespace IronMeridian.Units
                     return;
                 }
                 if (Input.GetKeyDown(KeyCode.Escape)) { ResolveGroundPick(_groundPickCancelMessage); return; }
-                if (Input.GetMouseButtonDown(1)) { ResolveGroundPick(_groundPickCancelMessage); return; }
+                if (SecondaryDown) { ResolveGroundPick(_groundPickCancelMessage); return; }
                 if (!blocked && Input.GetMouseButtonDown(0)) HandleGroundPick();
                 return;
             }
@@ -313,7 +344,7 @@ namespace IronMeridian.Units
                 // with in the scenario editor, and the order bar has gone.
                 if (BattleRunning != null && !BattleRunning()) { ResolveAttackOrder(null); return; }
                 if (Input.GetKeyDown(KeyCode.Escape)) { ResolveAttackOrder("Attack order cancelled."); return; }
-                if (Input.GetMouseButtonDown(1)) { ResolveAttackOrder("Attack order cancelled."); return; }
+                if (SecondaryDown) { ResolveAttackOrder("Attack order cancelled."); return; }
                 if (!blocked && Input.GetMouseButtonDown(0)) HandleAttackTarget(_attackArmed.Value);
                 UpdateHover(blocked);
                 return;
@@ -326,7 +357,7 @@ namespace IronMeridian.Units
             {
                 if (BattleRunning != null && !BattleRunning()) { ResolveReconOrder(null); return; }
                 if (Input.GetKeyDown(KeyCode.Escape)) { ResolveReconOrder("Recon task cancelled."); return; }
-                if (Input.GetMouseButtonDown(1)) { ResolveReconOrder("Recon task cancelled."); return; }
+                if (SecondaryDown) { ResolveReconOrder("Recon task cancelled."); return; }
                 if (!blocked && Input.GetMouseButtonDown(0)) HandleReconPoint(_reconArmed.Value);
                 return;
             }
@@ -362,7 +393,13 @@ namespace IronMeridian.Units
                 _pendingClickUnit = UnitUnderMouse();
             }
 
+            // **A drag is a box on a mouse and a pan on a touch screen.** One
+            // finger cannot do both, and panning is the one you cannot do any
+            // other way — there is no equivalent of WASD on a phone, whereas a
+            // box selection can be replaced by tapping counters one at a time.
+            // See Core.TouchInput and docs/40-ANDROID.md §8.
             if (_pressStartedOnMap && Input.GetMouseButton(0) && !_dragging &&
+                !Core.TouchInput.IsTouchPlatform &&
                 Vector2.Distance(_dragStartScreen, Input.mousePosition) > DragThresholdPx)
             {
                 _dragging = true;
@@ -372,7 +409,18 @@ namespace IronMeridian.Units
 
             if (Input.GetMouseButtonUp(0))
             {
-                if (!_pressStartedOnMap)
+                // A long press lifts the finger, and Unity reports that as a
+                // left-button release as well — so on a touch screen the same
+                // gesture would select the counter *and* open its menu. The
+                // secondary reading wins: the player held on purpose.
+                if (Core.TouchInput.SecondaryDown)
+                {
+                    _dragging = false;
+                    _pressStartedOnMap = false;
+                    _pendingClickUnit = null;
+                    HideBoxVisual();
+                }
+                else if (!_pressStartedOnMap)
                 {
                     HideBoxVisual();     // release from a UI-originated drag: ignore
                 }
@@ -407,7 +455,7 @@ namespace IronMeridian.Units
             // Shift + right-click extends the march instead of replacing it, the
             // convention every RTS uses. Shift is free on this button — it is
             // left-click that already means "add to selection".
-            if (Input.GetMouseButtonDown(1))
+            if (SecondaryDown)
             {
                 // Right-click on *something* opens that thing's own menu; on
                 // bare ground it is a move order. The handler decides which by
@@ -418,7 +466,7 @@ namespace IronMeridian.Units
                 // ground here, append it to the march", and having a counter in
                 // the way should not turn that into a menu.
                 bool taken = !shift && ContextMenuRequested != null &&
-                             ContextMenuRequested(Input.mousePosition);
+                             ContextMenuRequested(SecondaryPosition);
                 if (!taken) HandleMoveOrder(append: shift);
             }
 
