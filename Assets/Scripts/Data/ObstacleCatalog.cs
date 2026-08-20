@@ -44,8 +44,26 @@ namespace IronMeridian.Data
         /// <summary>Tint. Obstacle graphics are conventionally drawn in the owning side's colour.</summary>
         public readonly Color tint;
 
+        /// <summary>
+        /// Drawn as a polygon the designer outlines on the map, rather than
+        /// dropped as a single symbol.
+        ///
+        /// **Only the things that are ground.** A roadblock closes one place, a
+        /// wire fence runs along one line, an AT ditch is dug across one axis —
+        /// each is a symbol laid on a bearing, and asking the designer to trace
+        /// four corners round it would be four clicks to say what one click
+        /// already said. A minefield is different in kind: it *is* a piece of
+        /// ground, its edge is the only thing anybody needs from it, and a
+        /// nominal width chosen to look right at one zoom is not an answer.
+        ///
+        /// It is a flag rather than a special case in the tool, so the next kind
+        /// that turns out to be an area is a flag flip. See
+        /// <see cref="ObstacleCatalog.MinAreaCorners"/> and docs/31-OBSTACLES.md.
+        /// </summary>
+        public readonly bool areaDrawn;
+
         public ObstacleDef(ObstacleKind kind, ObstacleFamily family, string name, string detail,
-            float widthMeters, Color tint)
+            float widthMeters, Color tint, bool areaDrawn = false)
         {
             this.kind = kind;
             this.family = family;
@@ -53,6 +71,7 @@ namespace IronMeridian.Data
             this.detail = detail;
             this.widthMeters = widthMeters;
             this.tint = tint;
+            this.areaDrawn = areaDrawn;
         }
     }
 
@@ -82,8 +101,12 @@ namespace IronMeridian.Data
         {
             new ObstacleDef(ObstacleKind.MinesGeneral, ObstacleFamily.Mines,
                 "MINES", "Mines of unspecified type", 260f, MineTint),
+            // The one area kind. A recorded belt is ground with an edge, and
+            // the edge is what both the map and the movement code need — see
+            // ObstacleDef.areaDrawn.
             new ObstacleDef(ObstacleKind.Minefield, ObstacleFamily.Mines,
-                "MINEFIELD", "A laid and recorded belt", 520f, MineTint),
+                "MINEFIELD", "A laid and recorded belt — drawn as an area", 520f, MineTint,
+                areaDrawn: true),
             new ObstacleDef(ObstacleKind.AntiPersonnelMines, ObstacleFamily.Mines,
                 "AP MINES", "Against dismounted infantry", 300f, MineTint),
             new ObstacleDef(ObstacleKind.AntiTankMines, ObstacleFamily.Mines,
@@ -98,6 +121,20 @@ namespace IronMeridian.Data
             new ObstacleDef(ObstacleKind.Roadblock, ObstacleFamily.Obstacles,
                 "ROADBLOCK", "Closes a route", 240f, WorkTint)
         };
+
+        /// <summary>
+        /// Corners an outlined barrier needs before it is an area at all.
+        ///
+        /// Three, not four: a minefield tied into a river bend and a road is
+        /// genuinely a triangle, and unlike a bridge or an airfield there is no
+        /// built thing whose shape it has to match. It is the same floor
+        /// <see cref="MissionArea"/> uses, and for the same reason — below three
+        /// there is no inside.
+        /// </summary>
+        public const int MinAreaCorners = 3;
+
+        /// <summary>True when this kind is outlined on the map rather than stamped on it.</summary>
+        public static bool IsArea(ObstacleKind kind) => Get(kind).areaDrawn;
 
         public static ObstacleDef Get(ObstacleKind kind)
         {

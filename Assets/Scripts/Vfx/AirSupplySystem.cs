@@ -49,6 +49,28 @@ namespace IronMeridian.Vfx
         protected override string ArmedMessage(SupplyKind key) =>
             $"{AirSupplyCatalog.Get(key).name} — click the drop zone. Right-click or Esc to abort.";
 
+        /// <summary>
+        /// A **drop zone**, not a beaten zone.
+        ///
+        /// Every other mission on this dock is aimed at something and its marker
+        /// says so: a bright volume standing on the ground, alarm rising as the
+        /// rounds come in. A supply drop is the one that is not a threat, and
+        /// borrowing the artillery's marker for it made picking a DZ look
+        /// exactly like calling fire on your own position — which, on a control
+        /// that sits beside five things that really do call fire, is the one
+        /// mistake the interface must not invite.
+        ///
+        /// So the zone is marked the way a DZ is marked: the volume knocked
+        /// right back, and a flat pattern painted on the ground inside it. The
+        /// radius is unchanged — it is the ground the bundles will scatter
+        /// across, and that is a fact about the sortie, not a style.
+        /// </summary>
+        protected override void StyleMarker(SupplyKind key, TargetAreaMarker marker)
+        {
+            if (marker == null) return;
+            marker.ShowGroundPattern(AirSupplyCatalog.Get(key).markerColor);
+        }
+
         protected override string AwayMessage(SupplyKind key)
         {
             var def = AirSupplyCatalog.Get(key);
@@ -118,7 +140,23 @@ namespace IronMeridian.Vfx
 
             VfxSystem.Play(VfxId.SupplyLandingDust, lat, lon, 0.8f);
 
+            // A marker the player can find again. The landing dust is over in a
+            // second, and a bundle that has come down on the far side of a ridge
+            // is otherwise a cache you know you have and cannot see. The smoke
+            // is what a real DZ party would put out, and it stops when the cache
+            // is empty because by then there is nothing to come back for — see
+            // VfxId.SupplyCacheSmoke.
+            var smoke = VfxSystem.Play(VfxId.SupplyCacheSmoke, lat, lon);
+            if (smoke != null && VfxSystem.Active != null)
+                VfxSystem.Active.StopAfter(smoke, CacheSmokeSeconds);
+
             if (Logistics == null) return;
+
+            // A cache carries what the sortie carried. The stock is the whole
+            // point of the mission — a drop that produced an inexhaustible
+            // supply point would make the fourth ammunition sortie meaningless
+            // and the first one a cheat.
+            double issues = Mathf.Max(0.5f, def.issuesPerBundle);
 
             Logistics.Add(new LogisticsSiteData
             {
@@ -126,9 +164,19 @@ namespace IronMeridian.Vfx
                 team = Team.ToString(),
                 label = def.cacheLabel,
                 latitude = lat,
-                longitude = lon
+                longitude = lon,
+                airdropped = true,
+                capacity = issues,
+                stock = issues
             });
         }
+
+        /// <summary>
+        /// Seconds the marker smoke burns over a landed cache. Long enough to
+        /// find the thing, short enough that a rear area does not end the battle
+        /// under a permanent haze.
+        /// </summary>
+        const float CacheSmokeSeconds = 180f;
 
         /// <summary>
         /// The load as it would have landed, with no transport to drop it.

@@ -21,6 +21,8 @@ Assets/Scripts/Core/
 A loading screen is created, given a progress source, and forgotten:
 
 ```csharp
+// The title is dropped when it only repeats the wordmark, as it does here —
+// see the design rules below.
 var loading = LoadingScreenUI.Show(GameConfig.GameName, "Preparing the operational map");
 loading.SetStatus("Streaming terrain — Lyon Dev");
 loading.Track(
@@ -40,6 +42,8 @@ loading.Track(
 | **Minimum 0.8 s on screen.** | A warm tile cache would otherwise make it flash for one frame. |
 | **Blocks input, including the camera.** | `CanvasGroup.blocksRaycasts` stops UI clicks, and `GameController` feeds its `Loading` flag into `CameraRig.InputBlocked` and `SelectionManager.InputBlocked` — the camera rig reads raw `Input` and would otherwise be draggable behind the overlay. |
 | **Unscaled time throughout.** | The pause menu zeroes `timeScale`; a loader that freezes half-faded would be a trap. |
+| **The wordmark says the game's name once.** A `title` equal to `GameConfig.GameName` is dropped rather than set again in the UI font under the logo. | The map loader passes the game's name as its title, so the screen showed IRON MERIDIAN in artwork and IRON MERIDIAN in the interface typeface forty pixels below it. A title that says something the logo does not — the mission being loaded — still earns its line, and with no logo at all the title comes back at full size rather than leaving the screen unnamed. |
+| **The figure and the status line are centred under the bar**, stacked, not pinned to its two ends. | Splayed to the corners they were 900 px apart: "STREAMING TERRAIN" on the left and "42 %" on the right is two glances across the screen for one piece of information. Centred, they sit on the same axis as the logo and the bar, and the eye never leaves the middle. |
 
 ---
 
@@ -58,6 +62,11 @@ Loader artwork goes through the same builder as screen backgrounds, so it is asp
 ### 3.1 Blocking loading screens
 
 Full-screen overlays that cover a screen until it is ready.
+
+The overlay is one column down the middle: the **logo**, the subtitle, the
+progress bar, then the percentage over the status line — everything on the same
+centre axis. Nothing else is on the screen, which is the point; a loader is read
+in a glance or not at all.
 
 | Loader | Screen | Scene | Waits for | Progress source | Dismisses when | Background |
 |---|---|---|---|---|---|---|

@@ -167,6 +167,7 @@ namespace IronMeridian.Logistics
         public LogisticsSite Add(LogisticsSiteData data)
         {
             if (string.IsNullOrEmpty(data.id)) data.id = NewId();
+            StockIfUnset(data);
             var site = LogisticsSite.Create(_map.Georeference, data);
             _sites.Add(site);
             Changed?.Invoke();
@@ -255,9 +256,32 @@ namespace IronMeridian.Logistics
             foreach (var d in data)
             {
                 if (d == null) continue;
+                StockIfUnset(d);
                 _sites.Add(LogisticsSite.Create(_map.Georeference, d));
             }
             Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Gives an installation the stock its kind carries, when the record
+        /// does not say.
+        ///
+        /// **Every site gets one, including old saves.** A scenario written
+        /// before installations held anything arrives with `capacity` at zero,
+        /// and a rear area that supplied nothing would be a silent regression
+        /// for every map that already exists — so the catalogue's figure is
+        /// filled in on load rather than only on placement. A designer who wants
+        /// a different number edits the save; a zero in the file is not a
+        /// deliberate empty depot, it is a file written before the field existed.
+        ///
+        /// An **airdropped** cache is never touched here: its stock is what the
+        /// sortie carried, and <c>AirSupplySystem</c> has already set it.
+        /// </summary>
+        static void StockIfUnset(LogisticsSiteData data)
+        {
+            if (data == null || data.capacity > 0.0) return;
+            data.capacity = LogisticsCatalog.DefaultStock(LogisticsCatalog.Parse(data.kind));
+            data.stock = data.capacity;
         }
 
         // ------------------------------------------------------------- ghost

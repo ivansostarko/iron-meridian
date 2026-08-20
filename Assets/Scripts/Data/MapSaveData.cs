@@ -214,6 +214,29 @@ namespace IronMeridian.Data
         public double heightMeters;
         /// <summary>Direction the graphic is laid along, degrees from north.</summary>
         public float headingDeg;
+
+        /// <summary>
+        /// The ground the barrier actually covers, as a closed polygon — empty
+        /// for a point graphic.
+        ///
+        /// **Why some barriers are areas and others are symbols.** A roadblock
+        /// closes one place and a wire fence runs along one line; a *minefield*
+        /// is a piece of ground, and the only thing anybody needs to know about
+        /// it is where its edge is. Drawing it as a symbol with a nominal width
+        /// meant the map could not answer that, and neither could the code: a
+        /// unit driving into mines has to be tested against the ground they are
+        /// in, not against a circle chosen to look right at one zoom level.
+        ///
+        /// <see cref="latitude"/>/<see cref="longitude"/> stay filled in for an
+        /// area too — they carry its centroid, so picking, focusing and the list
+        /// row all work without knowing which kind of graphic this is.
+        ///
+        /// See docs/31-OBSTACLES.md.
+        /// </summary>
+        public List<GeoPoint> points = new List<GeoPoint>();
+
+        /// <summary>True when this record is a drawn area rather than a point symbol.</summary>
+        public bool HasArea => points != null && points.Count >= 3;
     }
 
     /// <summary>
@@ -268,6 +291,42 @@ namespace IronMeridian.Data
         public double latitude;
         public double longitude;
         public double heightMeters;
+
+        /// <summary>
+        /// What the installation is holding, in **issues** — one issue being
+        /// one formation's worth of whatever this kind hands out.
+        ///
+        /// A count of issues rather than litres and rounds because one number is
+        /// what the player has to reason about ("this cache is good for four
+        /// more battalions") and because the three loads are not comparable in
+        /// their own units. What an issue actually restores is decided per kind
+        /// by <see cref="Logistics.ResupplySystem"/>.
+        ///
+        /// Zero on a map saved before caches had stock, which
+        /// <see cref="Capacity"/> reads as "not tracked" and treats as
+        /// inexhaustible — the correct reading of a hand-placed depot on an old
+        /// scenario, which was never meant to run out.
+        /// </summary>
+        public double stock;
+
+        /// <summary>What it held when it was placed, so the panel can draw a fraction.</summary>
+        public double capacity;
+
+        /// <summary>
+        /// True for a cache pushed out of an aeroplane rather than laid out by
+        /// the designer.
+        ///
+        /// It changes how the thing is drawn — a dropped cache is a **3D model**
+        /// standing on the ground, a placed installation is a doctrinal symbol
+        /// on the overlay — because they are different sorts of object. A depot
+        /// is a *place*: what matters is which one it is and how far it reaches,
+        /// which is what a symbol says. A cache is a *thing somebody just put
+        /// there*, and the player wants to see it land and then find it again.
+        /// </summary>
+        public bool airdropped;
+
+        /// <summary>True when this site tracks a finite stock at all.</summary>
+        public bool TracksStock => capacity > 0.0;
     }
 
     /// <summary>

@@ -94,21 +94,15 @@ namespace IronMeridian.UI
         protected override string Title => "DLC";
         protected override string Promise =>
             "Additional campaigns, theatres and unit packs will appear here.";
-        protected override BackgroundId Background => BackgroundId.Interior;
+        // The picture the EXTRAS board previewed behind its DLC row. Arriving
+        // on a different image would make the preview a lie.
+        protected override BackgroundId Background => BackgroundId.ExtrasDlc;
         protected override MusicTrack Track => MusicTrack.ExtrasTheme;
         protected override string BackScene => GameConfig.SceneExtras;
         protected override string BackLabel => "BACK TO EXTRAS";
     }
 
-    /// <summary>Credits. Bootstrapped into the Credits scene.</summary>
-    public class CreditsUI : PlaceholderScreenUI
-    {
-        protected override string Title => "CREDITS";
-        protected override string Promise =>
-            "Who built Iron Meridian, and the assets and data it was built from.";
-        protected override BackgroundId Background => BackgroundId.Interior;
-        protected override MusicTrack Track => MusicTrack.ExtrasTheme;
-        protected override string BackScene => GameConfig.SceneExtras;
-        protected override string BackLabel => "BACK TO EXTRAS";
-    }
+    // CreditsUI is no longer one of these either. It is a real screen now —
+    // the roll in CreditsUI.cs, read from Data/credits.json — which leaves DLC
+    // as the last page behind EXTRAS with nothing on it.
 }

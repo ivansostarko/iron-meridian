@@ -51,7 +51,14 @@ namespace IronMeridian.UI
         float _displayed;          // eased, monotonic bar position
         bool _dismissing;
 
-        /// <summary>Builds and shows the overlay immediately.</summary>
+        /// <summary>
+        /// Builds and shows the overlay immediately.
+        ///
+        /// <paramref name="title"/> is dropped when it only repeats the
+        /// wordmark — passing <see cref="GameConfig.GameName"/>, as the map
+        /// loader does, leaves the logo to say it. A title that names something
+        /// the logo does not, such as the mission being loaded, is drawn.
+        /// </summary>
         public static LoadingScreenUI Show(string title, string subtitle)
         {
             var canvas = UIFactory.CreateCanvas("LoadingCanvas");
@@ -77,9 +84,6 @@ namespace IronMeridian.UI
             // logo is the one piece of the game that is *designed*; setting its
             // name in the interface typeface instead was the screen introducing
             // itself in somebody else's handwriting.
-            //
-            // The title is still used — as the line under the mark, where it
-            // says which map is loading rather than which game.
             var logo = UIFactory.LoadSprite(LogoPath);
             if (logo != null)
             {
@@ -94,11 +98,28 @@ namespace IronMeridian.UI
                     new Vector2(0, 150), new Vector2(LogoWidth, height));
             }
 
-            var titleText = UIFactory.CreateText(canvas.transform, title.ToUpperInvariant(),
-                logo != null ? 34 : 84,
-                GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Place(titleText.rectTransform, new Vector2(0.5f, 0.5f),
-                new Vector2(0, logo != null ? 74 : 120), new Vector2(1500, logo != null ? 44 : 110));
+            // **The game's own name is not repeated under the mark.** The map
+            // loader passes GameConfig.GameName as its title, so the screen was
+            // showing IRON MERIDIAN in artwork and IRON MERIDIAN in the UI font
+            // forty pixels below it — the wordmark saying it once is the whole
+            // point of having a wordmark. A title that says something the logo
+            // does not, such as the mission being loaded, still earns its line.
+            //
+            // Without the logo there is nothing else naming the screen, so the
+            // title comes back at full size: a loader that identified itself
+            // with nothing at all would be worse than one that repeated itself.
+            bool titleSaysWhatTheLogoSays = logo != null && !string.IsNullOrEmpty(title) &&
+                string.Equals(title.Trim(), GameConfig.GameName,
+                    System.StringComparison.OrdinalIgnoreCase);
+
+            if (!titleSaysWhatTheLogoSays && !string.IsNullOrEmpty(title))
+            {
+                var titleText = UIFactory.CreateText(canvas.transform, title.ToUpperInvariant(),
+                    logo != null ? 34 : 84,
+                    GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
+                UIFactory.Place(titleText.rectTransform, new Vector2(0.5f, 0.5f),
+                    new Vector2(0, logo != null ? 74 : 120), new Vector2(1500, logo != null ? 44 : 110));
+            }
 
             var subtitleText = UIFactory.CreateText(canvas.transform, subtitle, 26,
                 GameConfig.UiTextDim, TextAnchor.MiddleCenter);
@@ -121,20 +142,24 @@ namespace IronMeridian.UI
             _barFill.offsetMax = Vector2.zero;
             _barFill.GetComponent<Image>().raycastTarget = false;
 
-            // The figure sits **under the bar**, at its right-hand end, rather
-            // than beside it: the bar is the thing being read and a number level
-            // with it competes for the same glance. Under the line it is a
-            // caption on what the line is doing.
-            _percentText = UIFactory.CreateText(canvas.transform, "0%", 20,
-                GameConfig.UiText, TextAnchor.MiddleRight);
+            // The figure and the status line are both **centred under the bar**,
+            // stacked rather than pinned to its two ends.
+            //
+            // Splayed to the corners they were 900 px apart: reading "STREAMING
+            // TERRAIN" on the left and then "42%" on the right is two glances
+            // across the width of the screen for one piece of information — what
+            // is happening and how far along it is. Centred, they are one block
+            // under the line they describe, on the axis the logo and the bar
+            // already sit on, and the eye never leaves the middle of the screen.
+            _percentText = UIFactory.CreateText(canvas.transform, "0%", 22,
+                GameConfig.UiText, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Place(_percentText.rectTransform, new Vector2(0.5f, 0.5f),
-                new Vector2(450, -88), new Vector2(200, 28));
-            _percentText.rectTransform.pivot = new Vector2(1f, 0.5f);
+                new Vector2(0, -92), new Vector2(400, 30));
 
             _statusText = UIFactory.CreateText(canvas.transform, "Preparing…", 20,
-                GameConfig.UiTextDim, TextAnchor.MiddleLeft);
+                GameConfig.UiTextDim, TextAnchor.MiddleCenter);
             UIFactory.Place(_statusText.rectTransform, new Vector2(0.5f, 0.5f),
-                new Vector2(-450, -88), new Vector2(700, 28));
+                new Vector2(0, -128), new Vector2(1000, 28));
 
             ApplyBar(0f);
         }

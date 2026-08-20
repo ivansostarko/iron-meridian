@@ -169,9 +169,32 @@ It will: find the source FBXs, switch their rigs to Legacy (reimporting if neede
 |---|---|---|
 | Development → Units List | Detail panel on the right: the selected unit type's model playing `combat_idle`, orbitable by drag, zoomable by scroll. The AIR STRIKES and UAV STRIKES tabs preview their `modelId` the same way, through `ModelPreview.ShowModel` | `UnitsListUI.RefreshPreview` → `ModelPreview` |
 | Map editor → in flight | The strike airframes over the map: bomber, fighter, helicopter, attack drones and the reconnaissance drone on its orbit | `BomberRun`, `DroneRun`, `ReconDroneRun`, `MissileRun` |
+| Map editor → **GENERAL → SHOW UNIT 3D MODELS** | **Every formation on the map**, standing on the ground under its counter, in both scenario and battle mode. Off by default — see below | `UnitActor.SetModelsVisible` |
+| Map editor → **an airdropped cache** | `supply_bundle` standing on the ground where a bundle landed. A dropped cache is drawn as a model; a hand-placed installation keeps its doctrinal symbol — see docs/29-AIR-SUPPLY.md | `LogisticsSite.BuildCacheModel` |
 | Map editor → air defence | The interceptor climbing off a launcher, and the drone it hit tumbling down with its animation stopped | `InterceptorRun`, `DroneFall` (docs/24-AIR-DEFENCE.md) |
 
 **Add a row here whenever a model appears somewhere new.**
+
+### Unit models on the map
+
+`UnitActor.ModelsVisible`, switched from **GENERAL → SHOW UNIT 3D MODELS**.
+
+**The counters never go away.** An APP-6 icon says arm, echelon, side and
+strength at any zoom, and a hundred of them read as an order of battle. A hundred
+models read as a diorama: slower to draw, hiding each other on broken ground, and
+none of them saying whether the thing is a company or a division. So the models
+are something you turn *on* to look at a piece of the battle, not the way the map
+is read.
+
+| | |
+|---|---|
+| **Sized from the echelon** | `_baseScale × 0.55` — the same figure the selection ring is drawn from, so a division's model is bigger than a company's with no second table to keep in step |
+| **Oversized, like every model here** | A tank is 8 m and this map is played at kilometres across, where 8 m is under a pixel. A scrupulously scaled model would be an invisible one |
+| **A child of the actor** | So it rides every position update the formation already gets, including a march. A model moved by its own code would be a second thing that could disagree about where the unit is |
+| **Faces the heading**, re-read every frame | A marching formation turns continuously, and seeing which way things face is most of the reason to look at models at all |
+| **Goes with the counter when hidden** | Fog and clustering both hide it. A fogged formation that left a tank standing on the map would be the fog leaking the position it exists to withhold |
+| **Colliders stripped** | The icon is the unit's hit target. A mesh under it would let a formation be selected by its left track, and would put geometry in the way of every terrain raycast the placement tools use |
+| **No model is a normal answer** | Ships, aircraft and several support arms have none yet. The counter is still there, which is the point of the counter |
 
 ### How `ModelPreview` works
 

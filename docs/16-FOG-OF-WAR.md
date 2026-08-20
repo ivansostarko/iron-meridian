@@ -3,9 +3,11 @@
 Limited intelligence: the player sees the enemy only where something of theirs is
 actually looking, and the reconnaissance tasks that extend that reach.
 
-> Fog is off by default; the line-of-sight ring is on. Both live in the map
-> editor's **GENERAL → INTELLIGENCE** block. Keep this file in step with
-> `FogOfWarSystem.cs` and `ReconTaskCatalog.cs`.
+> Fog is **on** by default, as is the line-of-sight ring. Both live in the map
+> editor's **GENERAL → INTELLIGENCE** block, which is the **only** place fog is
+> switched — the MISSIONS panel used to carry a second toggle and no longer
+> does; see §1a. Keep this file in step with `FogOfWarSystem.cs` and
+> `ReconTaskCatalog.cs`.
 
 ---
 
@@ -106,8 +108,57 @@ scenario editor exists to lay out **both** sides; blanking half of what is being
 edited would make it useless. Turning fog on with no battle running arms it for
 the next one and leaves the map alone.
 
+**That is why it can default to on.** `FOG OF WAR` starts armed — in the GENERAL
+panel and in `FogOfWarSystem` — and a designer laying units out still sees both
+sides, because nothing is hidden until a battle runs. What the default stops is
+the other order of events: a scenario built with the fog off, checked with the
+whole enemy laydown on screen, and then played by somebody who can see none of
+it. Turning it off is still one click, in the place it always was.
+
 Stopping the battle, or turning fog off, reveals everything and clears every
 contact.
+
+### 1a. One switch, not two
+
+**GENERAL → FOG OF WAR is the only fog control.** The MISSIONS panel used to
+carry its own, which wrote `MissionDefinition.fogOfWar` while GENERAL's armed
+the live system. Two switches for one setting is one switch too many: they could
+disagree, and the panel gave no hint which one the player would get.
+
+Now there is one, and saving a mission records whatever it is set to —
+`GameController.WriteMissionAndMap` reads `FogOfWarSystem.Enabled` on the way
+past. Opening a mission does the reverse, arming the system from the record and
+syncing the GENERAL lamp, so the loop closes. The MISSIONS panel carries a line
+saying where the switch went. See `docs/22-MISSIONS.md` §4a.
+
+### 1b. The sweep runs on unscaled time
+
+Fog used to sweep on `Time.deltaTime`, which the game clock drives to **zero
+whenever the battle is paused** — and pausing is exactly when a player pans the
+camera around to study the map. Frozen, the sweep stopped deciding what could be
+seen: whatever the last tick happened to leave on screen stayed there, and
+pausing *before* the first sweep of a battle left the entire enemy order of
+battle in plain view.
+
+What the player is allowed to see is a presentation decision, like every other
+piece of chrome in this project — the markers, the loaders, the panels and the
+tooltips all run unscaled for the same reason — so the sweep does too.
+
+Two smaller fixes went with it:
+
+- **The battle starting or stopping forces a sweep at once** rather than up to
+  0.4 s later. At the start that window is the whole enemy laydown sitting
+  visible; at the end it is formations still missing from a map that is no
+  longer a battle.
+- **A formation whose definition failed to resolve is skipped** instead of
+  throwing out of the middle of the sweep — which used to leave every enemy
+  *after* it in the list visible for the rest of the battle. One bad row must not
+  switch the fog off.
+
+`FogOfWarSystem.Reset()` forgets a battle entirely — every unit revealed, every
+contact dropped, the explored ground cleared. RESET and a map load call it, so
+the fog cannot carry contacts pointing at units that no longer exist, or a
+blanket fitted to ground the new map is nowhere near.
 
 ### Hysteresis
 

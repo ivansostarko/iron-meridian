@@ -25,6 +25,33 @@ namespace IronMeridian.Data
         MedicalPoint
     }
 
+    /// <summary>
+    /// What an installation actually does for a formation standing inside it.
+    ///
+    /// One service per kind rather than a set, deliberately. A fuel point
+    /// refuels and an ammunition point rearms; something that did both would be
+    /// a supply point, which is exactly what <see cref="LogisticsKind.SupplyPoint"/>
+    /// is for — and it is the one kind here that legitimately hands out
+    /// everything.
+    /// </summary>
+    public enum SupplyService
+    {
+        /// <summary>Drawn on the map and nothing more — repair has no state to restore yet.</summary>
+        None,
+        /// <summary>Rounds. Refills <c>UnitState.ammo</c> toward the type's establishment.</summary>
+        Ammunition,
+        /// <summary>Fuel. Refills <c>UnitState.fuel</c>.</summary>
+        Fuel,
+        /// <summary>
+        /// Casualty treatment. Returns lightly wounded to duty — a slow recovery
+        /// of strength, capped well short of full: a medical point treats
+        /// casualties, it does not replace a destroyed battalion.
+        /// </summary>
+        Medical,
+        /// <summary>Everything above, at a reduced rate. The forward supply point.</summary>
+        General
+    }
+
     /// <summary>One kind of installation, as the panel and the map graphic read it.</summary>
     public readonly struct LogisticsDef
     {
@@ -46,14 +73,22 @@ namespace IronMeridian.Data
         /// </summary>
         public readonly Color tint;
 
+        /// <summary>
+        /// What a formation drawing on this installation gets back — see
+        /// <see cref="Logistics.ResupplySystem"/>. <c>None</c> for the kinds
+        /// that are still only a map graphic.
+        /// </summary>
+        public readonly SupplyService service;
+
         public LogisticsDef(LogisticsKind kind, string name, string detail,
-            float serviceRadiusKm, Color tint)
+            float serviceRadiusKm, Color tint, SupplyService service = SupplyService.None)
         {
             this.kind = kind;
             this.name = name;
             this.detail = detail;
             this.serviceRadiusKm = serviceRadiusKm;
             this.tint = tint;
+            this.service = service;
         }
     }
 
@@ -78,17 +113,25 @@ namespace IronMeridian.Data
         public static readonly LogisticsDef[] All =
         {
             new LogisticsDef(LogisticsKind.SupplyDepot, "SUPPLY DEPOT",
-                "Strategic supply location", 25f, new Color(0.55f, 0.75f, 1.00f)),
+                "Strategic supply location", 25f, new Color(0.55f, 0.75f, 1.00f),
+                SupplyService.General),
             new LogisticsDef(LogisticsKind.SupplyPoint, "SUPPLY POINT",
-                "Forward supply location", 12f, new Color(0.45f, 0.85f, 0.70f)),
+                "Forward supply location", 12f, new Color(0.45f, 0.85f, 0.70f),
+                SupplyService.General),
             new LogisticsDef(LogisticsKind.FuelPoint, "FUEL POINT",
-                "Refuel vehicles", 10f, new Color(1.00f, 0.72f, 0.28f)),
+                "Refuel vehicles", 10f, new Color(1.00f, 0.72f, 0.28f),
+                SupplyService.Fuel),
             new LogisticsDef(LogisticsKind.AmmoPoint, "AMMO POINT",
-                "Replenish ammunition", 10f, new Color(1.00f, 0.55f, 0.30f)),
+                "Replenish ammunition", 10f, new Color(1.00f, 0.55f, 0.30f),
+                SupplyService.Ammunition),
+            // Repair is the one kind with nothing to restore: vehicle state is
+            // not modelled separately from a formation's strength, and quietly
+            // healing strength here would make it a second medical point.
             new LogisticsDef(LogisticsKind.RepairPoint, "REPAIR POINT",
                 "Recover and repair vehicles", 8f, new Color(0.75f, 0.78f, 0.85f)),
             new LogisticsDef(LogisticsKind.MedicalPoint, "MEDICAL POINT",
-                "Treat and evacuate casualties", 8f, new Color(0.95f, 0.42f, 0.45f))
+                "Treat and evacuate casualties", 8f, new Color(0.95f, 0.42f, 0.45f),
+                SupplyService.Medical)
         };
 
         public static LogisticsDef Get(LogisticsKind kind)
@@ -96,6 +139,23 @@ namespace IronMeridian.Data
             foreach (var d in All) if (d.kind == kind) return d;
             return All[0];
         }
+
+        /// <summary>
+        /// Issues a **hand-placed** installation of this kind is stocked with
+        /// when a scenario does not say.
+        ///
+        /// Generous, and generous on purpose: a depot the designer laid out is
+        /// the rear area, not a cache, and running one dry in an afternoon's
+        /// battle would turn a piece of scenario furniture into a timer. An
+        /// airdrop is the opposite case and carries what the sortie carried —
+        /// see <c>AirSupplyCatalog</c>.
+        /// </summary>
+        public static double DefaultStock(LogisticsKind kind) => kind switch
+        {
+            LogisticsKind.SupplyDepot => 40,
+            LogisticsKind.SupplyPoint => 20,
+            _ => 12
+        };
 
         /// <summary>Parses a saved kind name, falling back rather than throwing on an old file.</summary>
         public static LogisticsKind Parse(string name) =>

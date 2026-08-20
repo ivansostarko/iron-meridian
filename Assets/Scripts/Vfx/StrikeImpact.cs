@@ -58,8 +58,74 @@ namespace IronMeridian.Vfx
             Shockwave(lat, lon, ringRadiusM);
             if (heavy) Debris(lat, lon, ringRadiusM);
 
+            // Stores under the strike go up with everything else standing on
+            // that ground — see WreckSupplies. Before the units, so a formation
+            // and the cache it was sitting on are both gone in the same instant
+            // rather than the cache surviving the round that killed the people
+            // guarding it.
+            WreckSupplies(lat, lon, ringRadiusM);
+
             return BlastDamage.ApplyRing(lat, lon, ringRadiusM);
         }
+
+        /// <summary>
+        /// The rear area a supplier can reach into.
+        ///
+        /// Set once by the controller. Static because <see cref="StrikeImpact"/>
+        /// is the funnel every strike in the game goes through and none of them
+        /// carries a reference to anything — the same arrangement
+        /// <c>MapManager.Active</c> and <c>VfxSystem.Active</c> use, and for the
+        /// same reason.
+        /// </summary>
+        public static Logistics.LogisticsSystem Logistics;
+
+        /// <summary>
+        /// Destroys the supply points under a strike.
+        ///
+        /// **Because a depot is a thing on the ground.** Until this existed a
+        /// 203 mm mission could land squarely on an ammunition point and leave
+        /// it issuing rounds, which made the rear area the one part of the map
+        /// that could not be fought over — and made *finding* the enemy's
+        /// logistics pointless, since there was nothing to do about it. Now the
+        /// most valuable target on an operational map is a target.
+        ///
+        /// **Both sides**, like every other blast here. Ground does not check
+        /// uniforms, and a strike called near your own rear area is a decision
+        /// precisely because it can cost you the rear area.
+        ///
+        /// Centre-in-ring, the same test <see cref="BlastDamage.ApplyRing"/>
+        /// uses on formations: an installation is a point on the map, and the
+        /// promise the circle makes is that what is inside it is gone.
+        /// </summary>
+        static void WreckSupplies(double lat, double lon, float ringRadiusM)
+        {
+            if (Logistics == null || ringRadiusM <= 0f) return;
+
+            var doomed = new System.Collections.Generic.List<Logistics.LogisticsSite>();
+            foreach (var site in Logistics.Sites)
+            {
+                if (site == null) continue;
+                double km = Map.GeoUtils.DistanceKm(lat, lon,
+                    site.Data.latitude, site.Data.longitude);
+                if (km * 1000.0 <= ringRadiusM) doomed.Add(site);
+            }
+
+            foreach (var site in doomed)
+            {
+                // A supply point going up is a supply point going up: stores
+                // catch, and the fire is how the player learns from across the
+                // map that the strike found something worth finding.
+                VfxSystem.Play(VfxId.Explosion, site.Data.latitude, site.Data.longitude);
+                VfxSystem.PlayWreck(site.Data.latitude, site.Data.longitude, 1f);
+                Logistics.Remove(site);
+            }
+
+            if (doomed.Count > 0)
+                SuppliesDestroyed?.Invoke(doomed.Count);
+        }
+
+        /// <summary>Raised with how many installations a strike destroyed, so the HUD can say so.</summary>
+        public static System.Action<int> SuppliesDestroyed;
 
         /// <summary>The overpressure ring, scaled to sit exactly on the target area's edge.</summary>
         public static void Shockwave(double lat, double lon, float ringRadiusM)

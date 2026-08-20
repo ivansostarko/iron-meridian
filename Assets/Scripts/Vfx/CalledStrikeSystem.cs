@@ -72,6 +72,19 @@ namespace IronMeridian.Vfx
         // ---------------------------------------------------- subclass hooks
 
         /// <summary>Radius of the target area in metres for this option.</summary>
+        /// <summary>
+        /// A subclass's chance to dress the target marker for what its mission
+        /// actually is.
+        ///
+        /// Does nothing by default, which is right for every mission that is
+        /// aimed at something: they all want the same lit volume with the same
+        /// rising alarm, and that shared reading is most of what makes the dock
+        /// legible. The one that is *not* a threat — air supply — overrides it,
+        /// because a drop zone marked like a beaten zone reads as calling fire
+        /// on your own position.
+        /// </summary>
+        protected virtual void StyleMarker(TKey key, TargetAreaMarker marker) { }
+
         protected abstract float RadiusFor(TKey key);
         /// <summary>Marker and banner colour for this option.</summary>
         protected abstract Color ColourFor(TKey key);
@@ -124,6 +137,8 @@ namespace IronMeridian.Vfx
                 _aimMarker = TargetAreaMarker.Create(Map.Georeference, RadiusFor(key), ColourFor(key));
             else
                 _aimMarker.Reshape(RadiusFor(key), ColourFor(key));
+
+            StyleMarker(key, _aimMarker);
 
             _aimMarker.SetAlarm(0f);
             _aimMarker.SetVisible(false);   // shown once it has real ground under it
@@ -211,6 +226,7 @@ namespace IronMeridian.Vfx
             var marker = TargetAreaMarker.Create(Map.Georeference, RadiusFor(key), ColourFor(key));
             marker.MoveTo(_lat, _lon);
             marker.SetAlarm(0f);
+            StyleMarker(key, marker);
 
             _missions.Add(new Mission
             {

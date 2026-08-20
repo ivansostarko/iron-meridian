@@ -97,6 +97,54 @@ slow and white — watching it come down *is* the event.
 
 ---
 
+## 4a. What a landed bundle leaves
+
+Each bundle becomes a real `LogisticsSystem` site of the matching kind — same
+list, same save entry, same right-click REMOVE as a hand-placed one. What is
+different is that it is a **cache**, and three things follow from that.
+
+**It carries what the sortie carried.** `issuesPerBundle` — 1.5 for ammunition
+and fuel, 2 for medical — so an ammunition sortie puts 7.5 issues on the ground
+across its five bundles. An airdrop is what gets a cut-off battalion through the
+next few hours, not a rear area: **running out is the point of it.** A drop that
+produced an inexhaustible supply point would make the fourth sortie meaningless
+and the first one a cheat. See docs/26-LOGISTICS.md §2a for what an issue is.
+
+**It is drawn as a 3D model**, `supply_bundle`, standing on the ground — not as
+the doctrinal symbol a placed installation gets. They are different sorts of
+object and the map should say so: a depot is a *place*, and what matters about it
+is which one it is and how far it reaches, which is exactly what a symbol says
+and a crate cannot. A cache is *a thing somebody just put there* — the player
+watched it come down under a canopy, and what they want afterwards is to find it
+again where it landed. The symbol does not disappear; it shrinks and rides above
+the model, so a cache is still identifiable as ammunition or fuel from a distance
+at which the model is a dot.
+
+**It burns marker smoke** for three minutes — `VfxId.SupplyCacheSmoke`, pale
+green, the one column of smoke on this map that is not something burning. What a
+real DZ party puts out, and here it solves a real problem: the landing dust is
+over in a second, and a bundle down behind a ridge is otherwise a cache you know
+you have and cannot see.
+
+**An emptied cache removes itself** and says so. See docs/26-LOGISTICS.md §2a.
+
+## 4b. The drop zone is not a beaten zone
+
+Every other mission on the strike dock is aimed at something, and its marker says
+so: a bright volume standing on the ground with the alarm rising as the rounds
+come in. A supply drop is the one that is not a threat, and borrowing the
+artillery's marker for it made picking a DZ look exactly like calling fire on
+your own position — which, on a control sitting beside five things that really do
+call fire, is the one mistake the interface must not invite.
+
+So `AirSupplySystem` overrides `CalledStrikeSystem.StyleMarker` and the zone is
+marked the way a DZ is marked: **the volume knocked back to 22 %**, and a
+**reticle painted flat on the ground** inside it, in the load's own colour. The
+radius is unchanged — it is the ground the bundles will scatter across, which is
+a fact about the sortie rather than a style.
+
+---
+
 ## 5. Effects and sound
 
 | | |

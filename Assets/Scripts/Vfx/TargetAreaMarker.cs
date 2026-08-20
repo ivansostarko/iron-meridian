@@ -136,6 +136,58 @@ namespace IronMeridian.Vfx
         /// </summary>
         public void SetAlarm(float t01) => _alarm = Mathf.Clamp01(t01);
 
+        /// <summary>Fraction of the volume's brightness a drop zone keeps.</summary>
+        const float GroundPatternWallShare = 0.22f;
+
+        Transform _groundPattern;
+        Material _groundPatternMat;
+
+        /// <summary>
+        /// Turns this marker into a **drop zone**: the standing volume knocked
+        /// right back, and a reticle painted flat on the ground it covers.
+        ///
+        /// The volume is what says *fire is coming here*, and it says it well —
+        /// which is exactly why a mission that delivers rather than destroys
+        /// must not be marked with it. What a DZ needs instead is the ground:
+        /// where the bundles will scatter, drawn on the terrain they will
+        /// scatter across, with just enough of the wall left to find the thing
+        /// behind a ridge.
+        ///
+        /// Idempotent — the aiming marker is re-styled every time the armed load
+        /// changes, and building a second pattern each time would stack them.
+        /// </summary>
+        public void ShowGroundPattern(Color colour)
+        {
+            if (_groundPattern == null)
+            {
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                quad.name = "DropZone";
+                Destroy(quad.GetComponent<Collider>());
+                quad.transform.SetParent(transform, false);
+                // Flat on the ground, and lifted a little so it does not
+                // z-fight with the streamed terrain under it.
+                quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                quad.transform.localPosition = new Vector3(0f, 4f, 0f);
+
+                _groundPatternMat = RuntimeMaterials.UnlitTexture(
+                    Units.ProceduralTextures.Reticle(Color.white));
+                quad.GetComponent<MeshRenderer>().material = _groundPatternMat;
+                _groundPattern = quad.transform;
+            }
+
+            _groundPatternMat.color = colour;
+            // Twice the radius, because the mesh is a unit quad and the radius
+            // is a radius.
+            _groundPattern.localScale = Vector3.one * _radius * 2f;
+            _wallDim = GroundPatternWallShare;
+        }
+
+        /// <summary>
+        /// Multiplier on the standing volume's opacity. 1 for a beaten zone,
+        /// a fraction for a drop zone — see <see cref="ShowGroundPattern"/>.
+        /// </summary>
+        float _wallDim = 1f;
+
         public void SetVisible(bool visible)
         {
             if (gameObject.activeSelf != visible) gameObject.SetActive(visible);
@@ -155,12 +207,28 @@ namespace IronMeridian.Vfx
             var colour = Color.Lerp(_baseColour, new Color(1.00f, 0.28f, 0.18f), _alarm * 0.75f);
             colour.a = pulse;
 
-            if (_bodyMat != null) _bodyMat.color = colour;
+            if (_bodyMat != null)
+            {
+                var body = colour;
+                // A drop zone keeps only a trace of the wall — see ShowGroundPattern.
+                body.a *= _wallDim;
+                _bodyMat.color = body;
+            }
             if (_sweepMat != null)
             {
                 var sweepColour = colour;
-                sweepColour.a = Mathf.Min(1f, pulse * 1.25f);
+                sweepColour.a = Mathf.Min(1f, pulse * 1.25f) * _wallDim;
                 _sweepMat.color = sweepColour;
+            }
+
+            // The ground pattern breathes with everything else, but never fades
+            // out: it is the only thing on a drop zone that says where the
+            // bundles are going.
+            if (_groundPatternMat != null)
+            {
+                var ground = _baseColour;
+                ground.a = Mathf.Lerp(0.65f, 1f, (pulse - 0.72f) / 0.28f);
+                _groundPatternMat.color = ground;
             }
 
             if (_sweep != null)

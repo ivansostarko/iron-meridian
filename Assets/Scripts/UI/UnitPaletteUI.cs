@@ -53,6 +53,8 @@ namespace IronMeridian.UI
         public System.Action<bool> AutoSectorsChanged;
         /// <summary>Fog of war armed/disarmed — see docs/16-FOG-OF-WAR.md.</summary>
         public System.Action<bool> FogOfWarChanged;
+        /// <summary>GENERAL → SHOW UNIT 3D MODELS.</summary>
+        public System.Action<bool> UnitModelsChanged;
         /// <summary>Line-of-sight ring on the selected unit shown/hidden.</summary>
         public System.Action<bool> LineOfSightChanged;
         /// <summary>Maximum-weapon-range ring on the selected unit shown/hidden.</summary>
@@ -255,12 +257,28 @@ namespace IronMeridian.UI
         UnitDefinition _dragging;
         Button _autoSectorBtn;
         bool _autoSectors;
-        RectTransform _fogLamp, _losLamp, _weaponLamp;
+        RectTransform _fogLamp, _losLamp, _weaponLamp, _modelLamp;
+        Text _modelLabel;
         Text _fogLabel, _losLabel, _weaponLabel;
-        bool _fog;
+        /// <summary>
+        /// Mirrors GameController's default, which is **on**. A scenario built
+        /// with the fog off is a scenario laid out against an enemy whose whole
+        /// order of battle was visible while it was being placed — and then
+        /// played by somebody who cannot see any of it. Defaulting the switch to
+        /// the state the fight is actually in means the editor and the battle
+        /// agree unless the designer says otherwise; turning it off to lay units
+        /// out is still one click away, in the place it always was.
+        /// </summary>
+        bool _fog = true;
         /// <summary>Mirrors GameController's defaults — both rings are on until they are turned off.</summary>
         bool _lineOfSight = true;
         bool _weaponRange = true;
+        /// <summary>
+        /// Models off by default. The counters are the map's language and the
+        /// models are something you turn on to look at a piece of the battle —
+        /// see <see cref="Units.UnitActor.ModelsVisible"/>.
+        /// </summary>
+        bool _unitModels;
 
         readonly List<(Section section, string title, Image fill, Image glyph, Text label, RectTransform bar)> _navRows =
             new List<(Section, string, Image, Image, Text, RectTransform)>();
@@ -849,6 +867,17 @@ namespace IronMeridian.UI
             // mode — see ApplyModeVisibility. The five fire menus are not here;
             // they went to the strike dock at the top right, being things you
             // *do* in a scenario rather than things you set one up with.
+            // MISSIONS first. The rail used to open on GENERAL, which is a
+            // page of display switches — a reasonable *setting* and a strange
+            // first question. What a designer does first is choose or create the
+            // mission they are laying out, and everything below this row is an
+            // edit to whatever that row currently says. Putting it at the top
+            // makes the rail read top-down in the order the work is actually
+            // done: which mission, then its ground rules, then its forces.
+            //
+            // The single-player campaign's missions, edited here and played from
+            // the main menu — see docs/22-MISSIONS.md.
+            AddNavRow(nav, Section.Missions, "MISSIONS", UiIcons.Pin);
             AddNavRow(nav, Section.General, "GENERAL", UiIcons.Flag);
             AddNavRow(nav, Section.Units, "UNITS", UiIcons.Person);
             AddNavRow(nav, Section.Players, "PLAYERS", UiIcons.Shield);
@@ -858,9 +887,6 @@ namespace IronMeridian.UI
             AddNavRow(nav, Section.Reinforcements, "REINFORCEMENTS", UiIcons.Parachute);
             AddNavRow(nav, Section.Obstacles, "MINES AND OBSTACLES", UiIcons.Obstacles);
             AddNavRow(nav, Section.Effects, "EFFECTS", UiIcons.Flame);
-            // The single-player campaign's missions, edited here and played from
-            // the main menu — see docs/22-MISSIONS.md.
-            AddNavRow(nav, Section.Missions, "MISSIONS", UiIcons.Pin);
             // Time and weather are one section, not two: they are the same
             // decision — what the light and the going are like — and a designer
             // who sets a night attack is choosing both in the same breath.
@@ -1113,6 +1139,24 @@ namespace IronMeridian.UI
                 + "the editor shows both sides so you can lay them out. Use the RECON orders to see "
                 + "past your own units' eyes.");
 
+            // Under the three intelligence switches rather than among them: what
+            // the player is *allowed* to see is a rule of the scenario, and how
+            // the things they can see are *drawn* is a rule of the screen. They
+            // read as one block because they are all "what is on the map", and
+            // they are in that order because the first three can change the
+            // outcome of a battle and this one cannot.
+            _modelLamp = ToggleRow(content, "SHOW UNIT 3D MODELS", -162, () =>
+            {
+                _unitModels = !_unitModels;
+                UnitModelsChanged?.Invoke(_unitModels);
+                RefreshGeneralSection();
+            }, out _modelLabel,
+                "Stands every formation's 3D model on the ground under its counter, in both scenario "
+                + "and battle mode. The models move, turn and are hidden by fog exactly as the counters "
+                + "are. The counters never go away: an icon says arm, echelon, side and strength at any "
+                + "zoom, and a hundred models say none of those. Types with no model yet — ships, "
+                + "aircraft, some support arms — keep their counter alone.");
+
             // The paragraph that used to sit here is now a hover caption on each
             // of the three rows above. Two hundred and forty pixels of prose,
             // read once and then scrolled past forever, was the page telling the
@@ -1121,7 +1165,7 @@ namespace IronMeridian.UI
             var readMore = UIFactory.CreateText(content,
                 "Hover a switch for what it draws.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(readMore.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -170),
+            UIFactory.Place(readMore.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -214),
                 new Vector2(InnerWidth, 20));
 
             RefreshGeneralSection();
@@ -1139,6 +1183,10 @@ namespace IronMeridian.UI
             _fog = fogOfWar;
             _lineOfSight = lineOfSight;
             _weaponRange = weaponRange;
+            // Read back from the live flag rather than passed in: models are a
+            // screen setting with no place in a mission record, so there is
+            // nothing for a caller to hand over and one source of truth to read.
+            _unitModels = Units.UnitActor.ModelsVisible;
             RefreshAutoSectorLabel();
             RefreshGeneralSection();
         }
@@ -1160,6 +1208,11 @@ namespace IronMeridian.UI
             {
                 _fogLamp.GetComponent<Image>().color = _fog ? UiTheme.Success : UiTheme.TextFaint;
                 _fogLabel.text = _fog ? "ON" : "OFF";
+            }
+            if (_modelLamp != null)
+            {
+                _modelLamp.GetComponent<Image>().color = _unitModels ? UiTheme.Success : UiTheme.TextFaint;
+                _modelLabel.text = _unitModels ? "ON" : "OFF";
             }
         }
 

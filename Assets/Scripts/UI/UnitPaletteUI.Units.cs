@@ -77,15 +77,28 @@ namespace IronMeridian.UI
             // it counts — a badge in the corner was a number with nothing saying
             // what it was of.
             float tabWidth = (InnerWidth - 8f) / 3f;
-            ListModeButton(content, "AVAILABLE", Pad, tabWidth,
+            ListModeButton(content, "AVAILABLE", UiIcons.Folder, Pad, tabWidth,
+                "AVAILABLE — every formation type this side can field. Drag one onto the map to "
+                + "deploy it, or right-click it for the same thing without the drag.",
                 () => SetListMode(ListMode.Available), out _availableUnderline, out _availableCount);
-            ListModeButton(content, "DEPLOYED", Pad + tabWidth + 4f, tabWidth,
+            ListModeButton(content, "DEPLOYED", UiIcons.Pin, Pad + tabWidth + 4f, tabWidth,
+                "DEPLOYED — what is already on the map, both sides, with the ones you can still "
+                + "move listed under your own.",
                 () => SetListMode(ListMode.Deployed), out _deployedUnderline, out _deployedCount);
             // The schedule, written from the catalogue next door — see
             // OpenCardMenu. Third because it is the last of the three questions
             // in order: what is there, what have I put down, what is still to
             // come.
-            ListModeButton(content, "ARRIVING", Pad + (tabWidth + 4f) * 2f, tabWidth,
+            //
+            // **REINFORCEMENT, not ARRIVING.** The old caption named the moment
+            // rather than the thing: everything on a scenario board arrives at
+            // some point, and the word that tells a player what this list *is*
+            // is the one the rest of the game already uses for it — the panel it
+            // is written from says ADD TO REINFORCEMENT, and the doc is
+            // docs/30-REINFORCEMENTS.md.
+            ListModeButton(content, "REINFORCEMENT", UiIcons.Clock, Pad + (tabWidth + 4f) * 2f, tabWidth,
+                "REINFORCEMENT — formations due to arrive after H-hour, earliest first. Right-click "
+                + "a type under AVAILABLE and choose ADD TO REINFORCEMENT to put one on the schedule.",
                 () => SetListMode(ListMode.Reinforcement), out _reinforceUnderline, out _reinforceTabCount);
 
             // The strip the two tabs sit on. Each carries its own accent
@@ -95,7 +108,7 @@ namespace IronMeridian.UI
             var tabRule = UIFactory.CreateDivider(content, UiTheme.Border);
             tabRule.anchorMin = new Vector2(0, 1); tabRule.anchorMax = new Vector2(0, 1);
             tabRule.pivot = new Vector2(0, 1);
-            tabRule.anchoredPosition = new Vector2(Pad, ListTop - 26f);
+            tabRule.anchoredPosition = new Vector2(Pad, ListTop - ListTabHeight);
             tabRule.sizeDelta = new Vector2(InnerWidth, 1);
             tabRule.GetComponent<Image>().raycastTarget = false;
 
@@ -109,7 +122,7 @@ namespace IronMeridian.UI
             var srt = (RectTransform)scroll.transform;
             srt.anchorMin = new Vector2(0, 0); srt.anchorMax = new Vector2(1, 1);
             srt.offsetMin = new Vector2(0, 2);
-            srt.offsetMax = new Vector2(0, ListTop - 26f);
+            srt.offsetMax = new Vector2(0, ListTop - ListTabHeight);
 
             var layout = _listContent.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 4;
@@ -131,39 +144,74 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// One half of the AVAILABLE / DEPLOYED segment: a caption, the count of
-        /// what is in it, and an underline that marks the open one.
+        /// Height of one tab in the segment.
         ///
-        /// The count is per tab rather than shared. "37" beside a pair of tabs
-        /// answers neither "how many types are there" nor "how many have I put
-        /// down" without first checking which tab is lit; one number in each
-        /// answers both at once, which is most of what the pair is asked.
+        /// Two rows rather than one, which is what pays for both the icon and
+        /// the rename. At a third of a 250 px panel a tab is about 80 px wide,
+        /// and a glyph, a caption and a count could not share one line of that —
+        /// "REINFORCEMENT" alone needs most of it. Splitting the tab into a mark
+        /// line (glyph and count) over a caption line gives the caption the full
+        /// width and the glyph a place that is not competing with it.
         /// </summary>
-        void ListModeButton(RectTransform content, string label, float x, float w,
-            UnityEngine.Events.UnityAction action, out RectTransform underline, out Text count)
+        const float ListTabHeight = 36f;
+
+        /// <summary>
+        /// One third of the AVAILABLE / DEPLOYED / REINFORCEMENT segment: a
+        /// glyph, the count of what is in it, its name, and an underline that
+        /// marks the open one.
+        ///
+        /// The count is per tab rather than shared. "37" beside a row of tabs
+        /// answers none of "how many types are there", "how many have I put
+        /// down" and "how many are still to come" without first checking which
+        /// tab is lit; one number in each answers all three at once, which is
+        /// most of what the segment is asked.
+        ///
+        /// **The glyph is the thing you find it by.** Three words in the same
+        /// weight at the same size are three words to read; a folder, a pin and
+        /// a clock are told apart without reading, and after the first session
+        /// that is how the tab is actually found. They are not a replacement for
+        /// the words — an icon nobody has seen before means nothing — which is
+        /// why both are on the tab and the full sentence is on the tooltip.
+        /// </summary>
+        void ListModeButton(RectTransform content, string label, Sprite glyph, float x, float w,
+            string tooltip, UnityEngine.Events.UnityAction action,
+            out RectTransform underline, out Text count)
         {
             var frame = UIFactory.CreatePanel(content, "ListTab_" + label, new Color(0, 0, 0, 0));
-            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(x, ListTop), new Vector2(w, 26));
+            UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(x, ListTop),
+                new Vector2(w, ListTabHeight));
 
             var b = UIFactory.CreateButton(frame, "", action, new Color(0, 0, 0, 0), UiTheme.TextDim, 1);
             UIFactory.Stretch((RectTransform)b.transform);
             // The factory centres a caption in every button; this one draws its
-            // own, left-aligned, with the count on the other end.
+            // own two rows instead.
             var made = b.GetComponentInChildren<Text>(true);
             if (made != null) made.gameObject.SetActive(false);
 
-            var caption = UIFactory.CreateText(frame, label, UiTheme.FontLabel, UiTheme.TextFaint,
-                TextAnchor.MiddleLeft, FontStyle.Bold);
-            caption.raycastTarget = false;
-            UIFactory.Place(caption.rectTransform, new Vector2(0f, 0.5f), new Vector2(8f, 0f),
-                new Vector2(w - 40f, 16f));
-            UIFactory.Fit(caption, 8);
+            // Below, not beside: the panel is on the left edge of the screen, so
+            // a caption to the left would be clamped back over the tab it is
+            // describing.
+            UiTooltip.Attach(frame.gameObject, tooltip, UiTooltip.Side.Right);
+
+            var icon = UIFactory.CreateImage(frame, glyph, "Glyph");
+            icon.raycastTarget = false;
+            UIFactory.PlaceTopLeft((RectTransform)icon.transform, 7f, 4f, 13f, 13f);
 
             count = UIFactory.CreateText(frame, "0", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.MiddleRight, FontStyle.Bold);
             count.raycastTarget = false;
-            UIFactory.Place(count.rectTransform, new Vector2(1f, 0.5f), new Vector2(-8f, 0f),
-                new Vector2(30f, 16f));
+            UIFactory.PlaceTopLeft(count.rectTransform, w - 36f, 3f, 30f, 15f);
+
+            // The name across the full width of the tab. "REINFORCEMENT" is
+            // thirteen characters in eighty pixels, which is exactly why it has
+            // a line to itself and why Fit is allowed down to 7 px here — the
+            // word is being recognised, not read letter by letter, and the
+            // tooltip carries it in full either way.
+            var caption = UIFactory.CreateText(frame, label, UiTheme.FontLabel, UiTheme.TextFaint,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            caption.raycastTarget = false;
+            UIFactory.PlaceTopLeft(caption.rectTransform, 7f, 19f, w - 12f, 13f);
+            UIFactory.Fit(caption, 7);
 
             underline = UIFactory.CreatePanel(frame, "Underline", UiTheme.Accent);
             underline.anchorMin = new Vector2(0, 0); underline.anchorMax = new Vector2(1, 0);
@@ -173,9 +221,11 @@ namespace IronMeridian.UI
             underline.GetComponent<Image>().raycastTarget = false;
 
             _listTabCaptions[label] = caption;
+            _listTabGlyphs[label] = icon;
         }
 
         readonly Dictionary<string, Text> _listTabCaptions = new Dictionary<string, Text>();
+        readonly Dictionary<string, Image> _listTabGlyphs = new Dictionary<string, Image>();
 
         void SetListMode(ListMode mode)
         {
@@ -189,7 +239,8 @@ namespace IronMeridian.UI
         {
             Paint("AVAILABLE", _availableUnderline, _availableCount, _listMode == ListMode.Available);
             Paint("DEPLOYED", _deployedUnderline, _deployedCount, _listMode == ListMode.Deployed);
-            Paint("ARRIVING", _reinforceUnderline, _reinforceTabCount, _listMode == ListMode.Reinforcement);
+            Paint("REINFORCEMENT", _reinforceUnderline, _reinforceTabCount,
+                _listMode == ListMode.Reinforcement);
 
             void Paint(string label, RectTransform underline, Text count, bool on)
             {
@@ -197,6 +248,8 @@ namespace IronMeridian.UI
                 if (count != null) count.color = on ? UiTheme.Accent : UiTheme.TextFaint;
                 if (_listTabCaptions.TryGetValue(label, out var caption) && caption != null)
                     caption.color = on ? UiTheme.Accent : UiTheme.TextFaint;
+                if (_listTabGlyphs.TryGetValue(label, out var glyph) && glyph != null)
+                    glyph.color = on ? UiTheme.Accent : UiTheme.TextFaint;
             }
         }
 
@@ -486,7 +539,7 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
-        /// The ARRIVING list: this side's schedule, one row per type, earliest
+        /// The REINFORCEMENT list: this side's schedule, one row per type, earliest
         /// first.
         ///
         /// **A row is an order, not a record.** Everything on it can be changed
@@ -504,7 +557,7 @@ namespace IronMeridian.UI
         {
             if (_reinforcements == null)
             {
-                EmptyRow("No schedule.");
+                EmptyRow("No schedule.", EmptyListSidePad);
                 return 0;
             }
 
@@ -512,7 +565,7 @@ namespace IronMeridian.UI
             if (rows.Count == 0)
             {
                 EmptyRow("Nothing is due to arrive for this side. Right-click a type under "
-                         + "AVAILABLE and choose ADD TO REINFORCEMENT.");
+                         + "AVAILABLE and choose ADD TO REINFORCEMENT.", EmptyListSidePad);
                 return 0;
             }
 
@@ -590,15 +643,15 @@ namespace IronMeridian.UI
                 "One fewer", "One more");
         }
 
-        /// <summary>Height of one ARRIVING row: two lines plus its steppers.</summary>
+        /// <summary>Height of one REINFORCEMENT row: two lines plus its steppers.</summary>
         const float ArrivingRowHeight = 68f;
-        /// <summary>Width an ARRIVING row actually gets, once the scrollbar and list padding are off.</summary>
+        /// <summary>Width a REINFORCEMENT row actually gets, once the scrollbar and list padding are off.</summary>
         const float ArrivingRowWidth = InnerWidth - UIFactory.ScrollbarWidth - Pad * 2f;
         /// <summary>What the ARRIVES ± moves by. Five minutes is a bound in a battle, not a rounding.</summary>
         const int ArrivalStepMinutes = 5;
 
         /// <summary>
-        /// A captioned ◄ value ► on the bottom line of an ARRIVING row.
+        /// A captioned ◄ value ► on the bottom line of a REINFORCEMENT row.
         ///
         /// The caption is above the value rather than beside it: two of these
         /// sit side by side on a 280 px row, and a horizontal caption would take
@@ -737,12 +790,49 @@ namespace IronMeridian.UI
             return false;
         }
 
-        void EmptyRow(string message)
+        /// <summary>
+        /// The line a list shows when it has nothing in it.
+        ///
+        /// <paramref name="sidePad"/> insets the words from both edges of the
+        /// panel. An empty list is the one place a panel is *only* a paragraph,
+        /// and a paragraph running edge to edge in a 250 px column reads as
+        /// something that has overflowed rather than something that was set —
+        /// the cards it stands in for all have a border holding them off the
+        /// sides, and the text has to be given that margin explicitly because it
+        /// has no border of its own to provide it.
+        /// </summary>
+        void EmptyRow(string message, float sidePad = 0f)
         {
-            var t = UIFactory.CreateText(_listContent, message, UiTheme.FontSmall,
+            if (sidePad <= 0f)
+            {
+                var plain = UIFactory.CreateText(_listContent, message, UiTheme.FontSmall,
+                    UiTheme.TextFaint, TextAnchor.UpperLeft);
+                ((RectTransform)plain.transform).sizeDelta = new Vector2(0, 52);
+                return;
+            }
+
+            // A transparent row the layout group can size, with the words inset
+            // inside it — the group drives its children's width, so the margin
+            // cannot be put on the label itself.
+            var row = UIFactory.CreatePanel(_listContent, "Empty", new Color(0, 0, 0, 0));
+            row.sizeDelta = new Vector2(0, 76);
+            row.GetComponent<Image>().raycastTarget = false;
+
+            var t = UIFactory.CreateText(row, message, UiTheme.FontSmall,
                 UiTheme.TextFaint, TextAnchor.UpperLeft);
-            ((RectTransform)t.transform).sizeDelta = new Vector2(0, 52);
+            t.raycastTarget = false;
+            var rt = t.rectTransform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(sidePad, 0f);
+            rt.offsetMax = new Vector2(-sidePad, -4f);
         }
+
+        /// <summary>
+        /// Margin either side of an empty REINFORCEMENT list's explanation.
+        /// Wider than the panel's own padding: this is a sentence telling the
+        /// player how to fill the list, and it is the only thing on the page.
+        /// </summary>
+        const float EmptyListSidePad = 20f;
 
         /// <summary>A draggable catalogue entry.</summary>
         void CreateAvailableCard(UnitDefinition def, string folder)
@@ -762,6 +852,16 @@ namespace IronMeridian.UI
             // the words are three quarters of it, they repeat on every card,
             // and at 11 px the eye has to parse the dots to find the figures.
             StatChips(card, def);
+
+            // The card carries three verbs and shows none of them. Drag is
+            // discoverable by accident and click is the obvious one, but the
+            // right-click menu — the only way to put a type on the arrival
+            // schedule, and the only way onto ground you have to pan to first —
+            // is a gesture nobody tries on a list. One line says so once.
+            UiTooltip.Attach(card.gameObject,
+                $"{def.name} — drag onto the map to deploy, click for its data, "
+                + "right-click for ADD TO MAP and ADD TO REINFORCEMENT.",
+                UiTooltip.Side.Right);
 
             var trigger = card.gameObject.AddComponent<EventTrigger>();
             AddEvent(trigger, EventTriggerType.BeginDrag, e => BeginDrag(def, sprite));

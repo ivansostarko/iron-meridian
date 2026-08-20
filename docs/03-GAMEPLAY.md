@@ -139,18 +139,20 @@ Hidden rows are **re-flowed, not merely switched off** — the rows sit at absol
 
 **SECTORS is battle-only.** The tactical graphics — GENERATE SECTORS, CLEAR GRAPHICS, AUTO-UPDATE — moved off the GENERAL panel onto a section of their own. They are a battle control: a boundary runs between the formations as they stand, and the whole point of AUTO-UPDATE is that it keeps redrawing them while the fighting moves. One consequence worth knowing: they cannot be generated while laying a scenario out, only once the battle is running.
 
+The rail reads **top-down in the order the work is done**: which mission, then its ground rules, then its forces, then the dressing. That is why MISSIONS is the first row — it used to open on GENERAL, which is a page of display switches and a strange first question, when what a designer does first is choose or create the mission that everything below is an edit to.
+
 | Nav row | What the panel shows |
 |---|---|
-| **GENERAL** | **Line of sight**, **max weapon range** and **fog of war** — what the player is allowed to see. The tactical graphics that used to head this panel are now SECTORS |
+| **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. **First in the rail** — see above. See [22-MISSIONS.md](22-MISSIONS.md) |
+| **GENERAL** | **Line of sight**, **max weapon range** and **fog of war** — what the player is allowed to see — plus **show unit 3D models**. Fog is switched *here and only here*; saving a mission records whatever it is set to. The 3D switch stands every formation's model on the ground under its counter, in both modes; the counters never go away — see [09-3D-MODELS.md](09-3D-MODELS.md) §3. The tactical graphics that used to head this panel are now SECTORS |
 | **UNITS** | Team, search, and the AVAILABLE / DEPLOYED lists (scrollbar on the right). The palette every formation on the map is dragged from, so scenario mode cannot do without it — see *The units panel* below |
 | **PLAYERS** | Who is fighting this scenario: teams, players, and the computer's difficulty. See [25-PLAYERS.md](25-PLAYERS.md) |
 | **COMMANDERS** | The order of battle above the units. See [23-COMMANDERS.md](23-COMMANDERS.md) |
-| **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. See [26-LOGISTICS.md](26-LOGISTICS.md) |
+| **LOGISTICS** | The rear area: depot, supply, fuel, ammunition, repair and medical points, deployed by clicking the map. They hold stock and formations standing in their area draw from it; **clicking one opens its supply panel**. See [26-LOGISTICS.md](26-LOGISTICS.md) |
 | **REINFORCEMENTS** | *Battle mode.* The same panel as UNITS, for formations called forward: pick a type and it lands at once in its side's deployment zone. See [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) |
 | **MINES AND OBSTACLES** | The barrier plan: mines, minefields, AP/AT mines, wire, AT ditch, obstacles and roadblocks, laid as NATO graphics on the ground. See [31-OBSTACLES.md](31-OBSTACLES.md) |
 | **SUSTAINMENT** | What the force fights on: fuel, ammunition natures, manpower, rations and the rest — with the burn rate its own order of battle implies. See [27-SUSTAINMENT.md](27-SUSTAINMENT.md) |
 | **EFFECTS** | Hand-placed fire, explosion and smoke |
-| **MISSIONS** | The single-player campaign: pick a campaign and a mission, edit its name, start point, altitude and briefing, and save the record and the map together. See docs/22-MISSIONS.md |
 | **ENVIRONMENT** | Scenario H-hour and presets, sky phase, auto day/night, weather condition — **one section**, because they are one decision: a designer setting a night attack is choosing the hour *and* the sky in the same breath |
 | **MAP CONFIG** | Tile style, 2D/3D, layers, unit-label size |
 | **SECTORS** | *Battle mode.* The derived control measures: generate or clear the sector boundaries and the FEBA, and keep them redrawing as the battle moves |
@@ -302,7 +304,9 @@ The map is played at a few kilometres across while a scenario is tens of kilomet
 
 **North is up and stays up** — it is a map, not a repeat of the camera. **Click anywhere on it to fly the camera there.**
 
-**It folds away.** The ▼ at the end of the header collapses the picture to its caption bar; ► brings it back. A minimap is ambient, and ambient chrome that cannot be put away is chrome you have to play around when the fight moves under it. The control stays where it was, so the way back is in the same place as the way out — and a folded minimap stops redrawing as well as stops drawing. The state survives the battle stopping and starting again.
+**It folds away, and it starts folded.** The ▼ at the end of the header collapses the picture to its caption bar; ► brings it back. A minimap is ambient, and ambient chrome that cannot be put away is chrome you have to play around when the fight moves under it. The control stays where it was, so the way back is in the same place as the way out — and a folded minimap stops redrawing as well as stops drawing. The state survives the battle stopping and starting again.
+
+**Why folded to begin with.** A battle opens on the ground you chose to look at, and 294 px of chrome unfolding over the top left corner of it the moment the fight starts is the screen deciding for you. Collapsed, the block is a caption bar with a control on it: the overview is one click away and says so, which a panel hidden outright cannot. Once opened it stays open.
 
 **It obeys the fog.** An enemy formation hidden by fog of war is not drawn. A minimap showing the whole red laydown would be a way round the fog rather than a convenience — see `docs/16-FOG-OF-WAR.md`.
 
@@ -343,7 +347,7 @@ with it that are not "tell me about it":
 | Entry | What it does |
 |---|---|
 | **ADD TO MAP** | Arms the placement ring — the next click on the ground puts that formation there. Right-click or `Esc` cancels |
-| **ADD TO REINFORCEMENT** | Puts the type on this side's arrival schedule at H+30 and shows the ARRIVING tab |
+| **ADD TO REINFORCEMENT** | Puts the type on this side's arrival schedule at H+30 and shows the REINFORCEMENT tab |
 
 **ADD TO MAP is the second route onto the map**, not a replacement for the drag.
 A drag is the direct gesture and stays the primary one; it is also the wrong one
@@ -360,7 +364,7 @@ The page is, top to bottom: the **FRIENDLY / ENEMY** side selector, the search
 box, the **AVAILABLE / DEPLOYED** tab strip, then the list.
 
 - **The side selector is the shared one**, the same control LOGISTICS, SUSTAINMENT and MINES AND OBSTACLES carry, painted with them by `PaintSideTabs`. This page used to build a pair of its own out of bare buttons — no border, a different height, its own two lines of paint code — which is how one control becomes two that drift apart.
-- **AVAILABLE / DEPLOYED / ARRIVING is a segmented control**, three equal thirds across the full width with an accent underline on the open one, on a rule that runs under all three. Each carries **its own count**: a single badge in the corner was a number with nothing saying what it was of. The three are the three questions in order — what is there, what have I put down, what is still to come. **ARRIVING** is this side's reinforcement schedule; see [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) §2b.
+- **AVAILABLE / DEPLOYED / REINFORCEMENT is a segmented control**, three equal thirds across the full width with an accent underline on the open one, on a rule that runs under all three. Each tab is **two rows**: a glyph and its own count on top, its name across the full width below. The split is what pays for both — at a third of a 250 px panel a tab is about 80 px wide, and a glyph, a caption and a count cannot share one line of that. The count is per tab because a single badge in the corner was a number with nothing saying what it was of. The glyph is how the tab is actually found after the first session — a folder, a pin and a clock are told apart without reading — and **hovering any tab gives the full sentence**. The three are the three questions in order: what is there, what have I put down, what is still to come. **REINFORCEMENT** (called ARRIVING until it was renamed) is this side's arrival schedule; see [30-REINFORCEMENTS.md](30-REINFORCEMENTS.md) §2b.
 - **Arm headings** carry an accent bar down the open one and print the arm 30 px clear of the chevron. The arm is what is being read on that row — the chevron only says which way it will go — and a name butted against a glyph reads as a caption on the glyph rather than as the heading it is.
 
 **Everything starts closed.** 117 cards under nine headings is a list you scroll rather than one you read, and the arm is what you are actually choosing between first — *"I want an armoured battalion"* comes before *"which one"*. Collapsed, the whole order of battle fits on one screen and picking a category is one click. Each heading carries the number of types inside it, which is the answer to the question a closed section raises.
@@ -957,5 +961,16 @@ Two things change as the camera pulls back, so an operational view stays a pictu
 
 ### Saving & loading
 
-- **SAVE / LOAD** buttons or `F5` / `F9`.
-- Each map is one JSON file with every unit's position and full status — see [05-MAP-SAVES.md](05-MAP-SAVES.md).
+Three tools, deliberately different — see [45-SAVE-AND-LOAD.md](45-SAVE-AND-LOAD.md).
+
+| | Gesture | Writes |
+|---|---|---|
+| **Quick save** | `F5` / `F9` | The scenario's own map file. The pair a designer uses while laying one out |
+| **Mission save** | MISSIONS → **SAVE MISSION + MAP** | The mission record *and* its map — [22-MISSIONS.md](22-MISSIONS.md) |
+| **Saved games** | `Esc` → **SAVE** / **LOAD** | A named slot, **local or cloud**, through the save browser |
+
+The **save browser** is a list with names, dates and what each save is of; an overwrite asks first, and the footer reports what actually happened rather than saying "Game saved." the instant the button is pressed. LOCAL and CLOUD are tabs over the same list; **cloud is a preview** and is labelled as one everywhere it appears — the flow is wired end to end but the files stay on this machine.
+
+**Saving from the pause menu updates the open mission first**, before the browser is even shown: pressing SAVE means *keep what I have done*, and a player who then picked a slot name and cancelled would reasonably expect their mission not to have been thrown away.
+
+Each map is one JSON file with every unit's position and full status — see [05-MAP-SAVES.md](05-MAP-SAVES.md).

@@ -44,14 +44,18 @@ installation covers. It is stated on the kind's button and again in the
 confirmation when a site is deployed; it is **not drawn on the map yet** — see
 §4.
 
-| Kind | Name | What it is for | Service radius | Glyph |
-|---|---|---|---|---|
-| `SupplyDepot` | SUPPLY DEPOT | Strategic supply location | 25 km | Warehouse — pitched roof over a shed |
-| `SupplyPoint` | SUPPLY POINT | Forward supply location | 12 km | Two stacked crates |
-| `FuelPoint` | FUEL POINT | Refuel vehicles | 10 km | Droplet |
-| `AmmoPoint` | AMMO POINT | Replenish ammunition | 10 km | Two rounds |
-| `RepairPoint` | REPAIR POINT | Recover and repair vehicles | 8 km | Crossed tools |
-| `MedicalPoint` | MEDICAL POINT | Treat and evacuate casualties | 8 km | Cross |
+| Kind | Name | What it is for | Service radius | Issues | Serves | Glyph |
+|---|---|---|---|---|---|---|
+| `SupplyDepot` | SUPPLY DEPOT | Strategic supply location | 25 km | 40 | General | Warehouse — pitched roof over a shed |
+| `SupplyPoint` | SUPPLY POINT | Forward supply location | 12 km | 20 | General | Two stacked crates |
+| `FuelPoint` | FUEL POINT | Refuel vehicles | 10 km | 12 | Fuel | Droplet |
+| `AmmoPoint` | AMMO POINT | Replenish ammunition | 10 km | 12 | Ammunition | Two rounds |
+| `RepairPoint` | REPAIR POINT | Recover and repair vehicles | 8 km | 12 | — | Crossed tools |
+| `MedicalPoint` | MEDICAL POINT | Treat and evacuate casualties | 8 km | 12 | Medical | Cross |
+
+**Repair serves nothing**, deliberately: vehicle state is not modelled
+separately from a formation's strength, and quietly healing strength there would
+make it a second medical point.
 
 **The radii are service ranges, not blast radii.** They say how far the
 installation's ground extends, which is what makes a laydown judgeable: a depot
@@ -63,6 +67,85 @@ wrong valley.
 a rectangle with a letter in it, which is unreadable at 20 px on a rail button
 and at whatever the camera makes of it on the map. Each kind is a different
 *shape* instead — the one property that survives being small.
+
+---
+
+## 2a. Sites hold stock, and formations draw from it
+
+`Logistics/ResupplySystem.cs`. **This is what a supply point is for.**
+
+Until it existed a logistic installation was a symbol. A designer could lay out a
+rear area, an aeroplane could push five bundles onto the objective, and nothing
+on the map was any better supplied for it — which made the whole LOGISTICS panel
+decoration and an air supply mission a firework. A formation that has run dry is
+the most interesting state a unit can be in, and it needs somewhere to go.
+
+### The rule
+
+**A formation inside the site's service radius, on the same side, alive, is
+topped up.** No convoy, no order, no draw request. This game is played at the
+operational level, where *is it in the fuel point's area* is exactly the question
+a staff officer asks — and modelling the truck run would be modelling something
+the player has no control over anyway.
+
+| | |
+|---|---|
+| **Battle mode only** | Nothing is being expended in the editor, and a cache that drained itself while a scenario was laid out would be a scenario that started wrong |
+| **Every two minutes** of scenario time, per formation per site | Long enough that a unit parked on a depot does not hoover it up in a few seconds of fast-forwarded clock; short enough that pulling a battalion back to refuel is worth doing rather than a wait you watch |
+| **Half an establishment per issue** | A formation that arrives empty and leaves full in one draw makes the second draw meaningless |
+| **Nothing is spent on a formation that needs nothing** | The usual reason a cache is not going down |
+| **Medical recovers 8 % strength per issue, capped at 75 %** | A medical point treats casualties and returns the lightly wounded. It does not reconstitute a battalion that has been destroyed |
+| **A general site does all three at 70 %** | Which is what makes a forward SUPPLY POINT worth its shorter reach |
+
+### Stock is counted in issues
+
+One issue is one formation's worth. It is the number a player can reason about —
+*this cache is good for four more battalions* — and litres and rounds are not
+comparable across the three loads.
+
+**A bigger formation costs more**, scaled on **√(echelon manpower)**. A hundredfold
+linear cost would make any cache useless to anything above a battalion; a flat
+cost would make a division as cheap to supply as a company.
+
+**Old saves are stocked on load.** A scenario written before installations held
+anything arrives with `capacity` at zero, and a rear area that supplied nothing
+would be a silent regression for every map that already exists — so the
+catalogue's figure is filled in. A zero in a file is not a deliberately empty
+depot; it is a file written before the field existed.
+
+**An emptied airdropped cache is removed; an emptied depot is not.** A cache is a
+pile of boxes and an empty pile of boxes is not a supply point. A depot that has
+issued its last establishment is still a depot, still where the next convoy comes
+to, and still something the designer put there — removing it would be the game
+editing the scenario.
+
+### The supply panel
+
+**Click an installation on the map.** `UI/SupplyPanelUI.cs`, on the right-hand
+edge with the unit inspector and the front-line options.
+
+Clicking the thing you want to know about is the only discoverable way in, and it
+is the question the player actually has standing over a rear area: *which of
+these is nearly out, and is anything close enough to use it?* The LOGISTICS panel
+lists what exists; this says what it is worth.
+
+Three readings, in the order they are asked:
+
+1. **How much is left** — a bar and a figure. The bar is green above half, amber
+   below, red on the last issue: the same three-stage reading the strength bars
+   use, so a rear area in trouble looks like a formation in trouble.
+2. **What it reaches**, in kilometres. The whole geometry of a rear area is
+   whether the radius covers the formations that need it.
+3. **Who is in it right now** — one row per formation with what it is short of,
+   as `AMMO 38 % · FUEL 91 % · STR 62 %`. Percentages rather than absolutes: 1 200
+   rounds means nothing without the establishment beside it.
+
+A formation already full is **listed and greyed**, not hidden. The usual answer
+to "why is this cache not going down" is that everything near it is full, and a
+list that silently omitted them could not say so.
+
+The caption on the map carries the issues left as well, so the "which of these is
+nearly out" question can be answered without opening anything.
 
 ---
 
@@ -131,6 +214,24 @@ shift. A flat disc at the site's own altitude would be cheap and wrong — over 
 25 km radius it would sink into every hill and float over every valley, which is
 worse than not drawing it. Until that is worth doing, the figure is stated
 rather than shown.
+
+### 4a. Strikes destroy them
+
+`StrikeImpact.WreckSupplies`, so **every** called mission does it: artillery, air,
+UAV, missile and naval gunfire all funnel through one place.
+
+Until this existed a 203 mm mission could land squarely on an ammunition point
+and leave it issuing rounds — which made the rear area the one part of the map
+that could not be fought over, and made *finding* the enemy's logistics pointless
+since there was nothing to do about it. The most valuable target on an
+operational map is now a target.
+
+| | |
+|---|---|
+| **Centre-in-ring** | The same test `BlastDamage.ApplyRing` uses on formations. An installation is a point on the map, and the promise the circle makes is that what is inside it is gone |
+| **Both sides** | Ground does not check uniforms. A strike called near your own rear area is a decision precisely because it can cost you the rear area |
+| **Resolved before the units** | So a formation and the cache it was sitting on go in the same instant, rather than the cache surviving the round that killed the people guarding it |
+| **Explosion + wreck fire** | How the player learns from across the map that the strike found something worth finding |
 
 ---
 

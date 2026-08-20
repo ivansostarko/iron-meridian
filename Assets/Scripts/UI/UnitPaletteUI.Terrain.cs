@@ -614,11 +614,14 @@ namespace IronMeridian.UI
             var hint = UIFactory.CreateText(content,
                 "Pick a type, then click the ground. The graphic is laid along the bearing the camera " +
                 "is looking, so face the way the belt runs before placing it. The tool stays armed, " +
-                "because a barrier is several graphics rather than one. Right-click or Esc stops. " +
-                "Nothing enforces these yet: they are the barrier plan, drawn and saved with the map.",
+                "because a barrier is several graphics rather than one. Right-click or Esc stops.\n\n" +
+                "MINEFIELD is drawn as an area instead: click round the belt — three corners or more — " +
+                "then right-click or Enter to close it, Backspace to undo a corner, Esc to abandon. " +
+                "A minefield is ground rather than a place, and it is the one barrier that bites: " +
+                "formations that drive through an enemy belt while a battle is running set off mines.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
             UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, y - 290f),
-                new Vector2(InnerWidth, 120));
+                new Vector2(InnerWidth, 170));
 
             RefreshObstacles();
         }
@@ -671,7 +674,15 @@ namespace IronMeridian.UI
 
             int blue = _obstacles.CountFor(Team.User), red = _obstacles.CountFor(Team.Enemy);
             if (_obstacleCount != null)
-                _obstacleCount.text = $"LAID — {blue} FRIENDLY · {red} ENEMY";
+            {
+                // While an outline is open the line counts corners instead. It
+                // is the one number the designer cannot read off the map, and
+                // the minimum is what they are working towards.
+                _obstacleCount.text = _obstacles.Drawing
+                    ? $"OUTLINING — {_obstacles.DraftCorners} CORNER(S), " +
+                      $"{ObstacleCatalog.MinAreaCorners} NEEDED"
+                    : $"LAID — {blue} FRIENDLY · {red} ENEMY";
+            }
 
             ClearChildren(_obstacleList);
 
@@ -690,8 +701,16 @@ namespace IronMeridian.UI
                 UIFactory.Place((RectTransform)pip.transform, new Vector2(0f, 0.5f),
                     new Vector2(8, 0), new Vector2(16, 16));
 
+                // An area reports the ground it covers; a stamp reports the
+                // bearing it was laid on. Each is the figure that says whether
+                // the graphic is where it was meant to go, and neither means
+                // anything for the other sort.
+                string measure = marker.IsArea
+                    ? $"{IronMeridian.Lines.ObstacleSystem.AreaKm2(marker.Data.points):0.0} km²"
+                    : $"{marker.Data.headingDeg:000}°";
+
                 var label = UIFactory.CreateText(row,
-                    $"{def.name}   ·   {marker.Data.headingDeg:000}°",
+                    $"{def.name}   ·   {measure}",
                     UiTheme.FontLabel, enemy ? GameConfig.RedTeam : GameConfig.BlueTeam,
                     TextAnchor.MiddleLeft);
                 var lr = label.rectTransform;

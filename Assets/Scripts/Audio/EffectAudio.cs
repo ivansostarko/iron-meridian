@@ -60,7 +60,19 @@ namespace IronMeridian.Audio
         /// <summary>Rocket motor in flight — a looping roar that travels with the missile.</summary>
         MissileMotor,
         /// <summary>Terminal descent — the rising whistle of something arriving fast.</summary>
-        MissileIncoming
+        MissileIncoming,
+
+        // --- mines (docs/31-OBSTACLES.md) ---
+
+        /// <summary>
+        /// A mine going off under a column. A few kilograms at ground level:
+        /// sharper and far shorter than any tube, with almost no tail — the
+        /// blast is contained by the earth it is buried in, which is exactly
+        /// what makes it sound nothing like incoming fire. The player has to be
+        /// able to tell "I have driven into something" from "I am being shelled"
+        /// without looking, because the two call for opposite responses.
+        /// </summary>
+        MineBlast
     }
 
     /// <summary>
@@ -189,7 +201,8 @@ namespace IronMeridian.Audio
             [EffectSound.AerialBomb] = "Audio/effects/aerial_bomb",
             [EffectSound.JetPass] = "Audio/effects/jet_pass",
             [EffectSound.UavWarhead] = "Audio/effects/uav_warhead",
-            [EffectSound.DroneBuzz] = "Audio/effects/drone_buzz"
+            [EffectSound.DroneBuzz] = "Audio/effects/drone_buzz",
+            [EffectSound.MineBlast] = "Audio/effects/mine_blast"
         };
 
         static AudioClip Resolve(EffectSound sound)

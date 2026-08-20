@@ -106,8 +106,19 @@ namespace IronMeridian.UI
 
         float _timer;
         bool _visible;
-        /// <summary>Folded to its caption bar. Survives the battle stopping and starting again.</summary>
-        bool _collapsed;
+        /// <summary>
+        /// Folded to its caption bar. Survives the battle stopping and starting
+        /// again, and **starts folded**.
+        ///
+        /// A battle opens on the ground the player chose to look at, and 294 px
+        /// of chrome unfolding over the top left corner of it the moment the
+        /// fight starts is the screen deciding for them. Collapsed, the block is
+        /// a caption bar with a control on it: the overview is one click away
+        /// and announces that it is there, which is the thing a hidden panel
+        /// cannot do. It stays open once opened — the state outlives the battle
+        /// stopping and starting.
+        /// </summary>
+        bool _collapsed = true;
 
         /// <summary>
         /// Distance from the left edge of the screen. Rides the editor's left

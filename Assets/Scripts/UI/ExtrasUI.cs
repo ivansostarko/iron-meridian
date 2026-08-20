@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using IronMeridian.Audio;
@@ -15,6 +14,21 @@ namespace IronMeridian.UI
     ///   DLC     -> nothing yet
     ///   CREDITS -> nothing yet
     ///
+    /// **It is the main menu's board with different rows on it.** The screen
+    /// used to be three bordered cards centred over a dark interior — a second
+    /// interface, reached from the first, that happened to do the same job.
+    /// Walking from a menu into a submenu should feel like turning a page, not
+    /// like opening another program, so the board comes from
+    /// <see cref="MenuBoard"/>: the same field down the left-hand edge, the
+    /// same spine, the same flat rows with their accent strips, and the same
+    /// hover that swaps the artwork to a picture of where the row leads.
+    ///
+    /// **Each row has its own picture** — UNITS, DLC and CREDITS all show one
+    /// as the cursor crosses them, and the destination screens show the same
+    /// image again when you get there. That is what makes the preview read as a
+    /// promise rather than as decoration. See
+    /// <see cref="BackgroundId.ExtrasUnits"/> and its two neighbours.
+    ///
     /// **Why the unit reference is here and not only under DEVELOPMENT.** The
     /// two screens answer different questions for different people. DEVELOPMENT
     /// → UNITS LIST is a data table you can *edit*: every field of every
@@ -22,14 +36,20 @@ namespace IronMeridian.UI
     /// encyclopaedia — pick an arm, browse what it fields, look at the model. A
     /// player wanting to know what a Bradley is should not have to walk through
     /// a screen whose first affordance is EDIT.
-    ///
-    /// It was a placeholder page; it is a real screen now, so it lives in its own
-    /// file rather than at the bottom of <see cref="PlaceholderScreenUI"/>.
     /// </summary>
     public class ExtrasUI : MonoBehaviour
     {
-        const float EntryHeight = 84f, EntryGap = 10f;
-        const float ListTop = -260f, ListWidth = 720f;
+        // ------------------------------------------------------------ layout
+
+        /// <summary>Masthead: where the page's name sits on the board.</summary>
+        const float TitleX = MenuBoard.BoardX + 20f, TitleTop = 96f;
+
+        /// <summary>Y the list starts at, measured from the top of the screen.</summary>
+        const float ListTop = -256f;
+        /// <summary>Clear space under the list, above the footer line.</summary>
+        const float ListBottom = 92f;
+
+        ScreenBackdrop _backdrop;
 
         void Start()
         {
@@ -37,93 +57,77 @@ namespace IronMeridian.UI
             MusicManager.Play(MusicTrack.ExtrasTheme);
 
             var canvas = UIFactory.CreateCanvas("ExtrasCanvas");
-            UIFactory.CreateScreenBackground(canvas.transform, BackgroundId.Interior);
 
-            var title = UIFactory.CreateText(canvas.transform, "EXTRAS", 56,
-                GameConfig.UiAccent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 1f),
-                new Vector2(0, -120), new Vector2(1200, 80));
+            // The main menu's own scrim, and the picture its EXTRAS row
+            // promised. Arriving on a different image would make the preview a
+            // lie; arriving on the interior wash would make the screen a
+            // different product.
+            //
+            // Through a backdrop rather than a plain call, because the rows
+            // change it as the cursor crosses them — see MenuBoard.Entry.
+            _backdrop = ScreenBackdrop.Attach(gameObject, canvas.transform,
+                BackgroundId.Extras, 0.42f);
 
-            var sub = UIFactory.CreateText(canvas.transform,
-                "Reference material, additional content and the people who built it.",
-                22, GameConfig.UiTextDim, TextAnchor.MiddleCenter);
-            UIFactory.Place(sub.rectTransform, new Vector2(0.5f, 1f),
-                new Vector2(0, -184), new Vector2(1200, 34));
-
-            Entry(canvas.transform, 0, UiIcons.Shield, "UNITS",
-                "Every formation type both sides field, by arm of service — with its data and its model.",
-                GameConfig.SceneUnitLibrary);
-
-            Entry(canvas.transform, 1, UiIcons.Layers, "DLC",
-                "Additional content.",
-                GameConfig.SceneDlc);
-
-            Entry(canvas.transform, 2, UiIcons.Info, "CREDITS",
-                "Who built Iron Meridian, and what it was built from.",
-                GameConfig.SceneCredits);
+            MenuBoard.BuildField(canvas.transform);
+            BuildMasthead(canvas.transform);
+            BuildMenu(canvas.transform);
+            MenuBoard.BuildFooter(canvas.transform, "EXTRAS   ·   REFERENCE AND CREDITS");
 
             UIFactory.CreateBackButton(canvas.transform, "BACK TO MAIN MENU", GoBack);
         }
 
+        // ---------------------------------------------------------- masthead
+
         /// <summary>
-        /// One row. Same three devices as the main menu's entries — bordered
-        /// surface, accent strip, glyph — so the screens read as one interface.
+        /// The page's name over one line of what the page is for.
+        ///
+        /// Set in the interface typeface rather than in artwork: the logo
+        /// belongs to the front door, and repeating it on every room behind it
+        /// would stop it meaning anything. The board is the thing that carries
+        /// the family resemblance.
         /// </summary>
-        void Entry(Transform parent, int index, Sprite glyph, string label, string detail, string scene)
+        void BuildMasthead(Transform parent)
         {
-            var frame = UIFactory.CreateBorderedPanel(parent, "Extra_" + label,
-                UiTheme.Surface, UiTheme.Border);
-            UIFactory.Place(frame, new Vector2(0.5f, 1f),
-                new Vector2(0, ListTop - index * (EntryHeight + EntryGap)),
-                new Vector2(ListWidth, EntryHeight));
-            frame.pivot = new Vector2(0.5f, 1f);
+            var title = UIFactory.CreateText(parent, "EXTRAS", 56, UiTheme.Accent,
+                TextAnchor.LowerLeft, FontStyle.Bold);
+            UIFactory.PlaceTopLeft(title.rectTransform, TitleX, TitleTop,
+                MenuBoard.BoardWidth - 40f, 66f);
 
-            var btn = UIFactory.CreateButton(frame, "",
-                () => SceneManager.LoadScene(scene), new Color(0, 0, 0, 0), UiTheme.Text, 1);
-            UIFactory.Stretch((RectTransform)btn.transform);
-            var made = btn.GetComponentInChildren<Text>(true);
-            if (made != null) made.gameObject.SetActive(false);
+            var sub = UIFactory.CreateText(parent,
+                "Reference material, additional content and the people who built it.",
+                17, UiTheme.TextDim, TextAnchor.UpperLeft);
+            UIFactory.PlaceTopLeft(sub.rectTransform, TitleX, TitleTop + 74f,
+                MenuBoard.BoardWidth - 40f, 48f);
 
-            var strip = UIFactory.CreatePanel(frame, "Strip", GameConfig.UiAccent);
-            strip.anchorMin = new Vector2(0, 0); strip.anchorMax = new Vector2(0, 1);
-            strip.pivot = new Vector2(0, 0.5f);
-            strip.sizeDelta = new Vector2(4f, 0);
-            strip.GetComponent<Image>().raycastTarget = false;
-
-            var icon = UIFactory.CreateImage(frame, glyph, "Glyph");
-            icon.color = GameConfig.UiAccent;
-            icon.raycastTarget = false;
-            UIFactory.Place((RectTransform)icon.transform, new Vector2(0f, 0.5f),
-                new Vector2(34, 0), new Vector2(30, 30));
-
-            var t = UIFactory.CreateText(frame, label, 28, GameConfig.UiText,
-                TextAnchor.MiddleLeft, FontStyle.Bold);
-            UIFactory.PlaceTopLeft(t.rectTransform, 84f, 16f, ListWidth - 110f, 32f);
-            UIFactory.Fit(t, 16);
-
-            var d = UIFactory.CreateText(frame, detail, 17, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.PlaceTopLeft(d.rectTransform, 84f, 48f, ListWidth - 110f, 24f);
-            UIFactory.Fit(d, 12);
-
-            var fill = frame.Find("Fill").GetComponent<Image>();
-            var trigger = frame.gameObject.AddComponent<EventTrigger>();
-            AddHover(trigger, EventTriggerType.PointerEnter, () => Paint(fill, strip, icon, true));
-            AddHover(trigger, EventTriggerType.PointerExit, () => Paint(fill, strip, icon, false));
-            Paint(fill, strip, icon, false);
+            // The rule the list hangs off, level with the bottom of the
+            // masthead — the same device the main menu gets from its logo's
+            // baseline, which this page has no artwork to borrow.
+            var rule = UIFactory.CreatePanel(parent, "MastheadRule", MenuBoard.HairLine);
+            rule.anchorMin = new Vector2(0, 1); rule.anchorMax = new Vector2(0, 1);
+            rule.pivot = new Vector2(0, 1);
+            rule.sizeDelta = new Vector2(MenuBoard.BoardWidth - 40f, 1f);
+            rule.anchoredPosition = new Vector2(TitleX, -(TitleTop + 138f));
+            rule.GetComponent<Image>().raycastTarget = false;
         }
 
-        static void Paint(Image fill, RectTransform strip, Image glyph, bool hover)
-        {
-            fill.color = hover ? UiTheme.SurfaceHover : UiTheme.Surface;
-            strip.sizeDelta = new Vector2(hover ? 8f : 4f, 0);
-            glyph.color = hover ? Color.white : GameConfig.UiAccent;
-        }
+        // -------------------------------------------------------------- menu
 
-        static void AddHover(EventTrigger trigger, EventTriggerType type, System.Action callback)
+        void BuildMenu(Transform parent)
         {
-            var entry = new EventTrigger.Entry { eventID = type };
-            entry.callback.AddListener(_ => callback());
-            trigger.triggers.Add(entry);
+            var content = MenuBoard.BuildList(parent, ListTop, ListBottom);
+
+            MenuBoard.Entry(content, UiIcons.Shield, "UNITS",
+                "Every formation type both sides field, by arm of service",
+                () => SceneManager.LoadScene(GameConfig.SceneUnitLibrary),
+                _backdrop, BackgroundId.ExtrasUnits);
+            MenuBoard.Entry(content, UiIcons.Layers, "DLC",
+                "Additional content",
+                () => SceneManager.LoadScene(GameConfig.SceneDlc),
+                _backdrop, BackgroundId.ExtrasDlc);
+            MenuBoard.Entry(content, UiIcons.Info, "CREDITS",
+                "Who built Iron Meridian, and what it was built from",
+                () => SceneManager.LoadScene(GameConfig.SceneCredits),
+                _backdrop, BackgroundId.ExtrasCredits);
         }
 
         void GoBack() => SceneManager.LoadScene(GameConfig.SceneMainMenu);

@@ -1,0 +1,47 @@
+{
+  "title": "IRON MERIDIAN",
+  "subtitle": "A real-terrain operational wargame",
+  "website": "www.example.com",
+  "sections": [
+    {
+      "heading": "PRODUCTION",
+      "roles": [
+        { "role": "Game Director", "names": [ "John Doe" ] },
+        { "role": "Creative Director", "names": [ "John Doe" ] },
+        { "role": "Producer", "names": [ "John Doe" ] }
+      ]
+    },
+    {
+      "heading": "DESIGN",
+      "roles": [
+        { "role": "Lead Designer", "names": [ "John Doe" ] },
+        { "role": "Designers", "names": [ "John Doe", "John Doe", "John Doe" ] }
+      ]
+    },
+    {
+      "heading": "ENGINEERING",
+      "roles": [
+        { "role": "Programmers", "names": [ "John Doe", "John Doe", "John Doe" ] }
+      ]
+    },
+    {
+      "heading": "ART AND INTERFACE",
+      "roles": [
+        { "role": "UI", "names": [ "John Doe", "John Doe" ] }
+      ]
+    },
+    {
+      "heading": "AUDIO",
+      "roles": [
+        { "role": "Music", "names": [ "John Doe" ] },
+        { "role": "Sound", "names": [ "John Doe", "John Doe" ] }
+      ]
+    }
+  ],
+  "acknowledgements": [
+    "Terrain and imagery streamed with Cesium for Unity.",
+    "Built with Unity 6.",
+    "Symbols drawn to MIL-STD-2525 / APP-6."
+  ],
+  "copyright": "© 2026 Iron Meridian. All rights reserved."
+}

@@ -27,6 +27,8 @@ namespace IronMeridian.Units
         MeshRenderer _iconRenderer;
         Transform _ring;
         Transform _bar;
+        /// <summary>The optional 3D model standing on the ground — see <see cref="ModelsVisible"/>.</summary>
+        Transform _model;
         UnitLabel _label;
         HeadingArrow _arrow;
         float _baseScale;
@@ -42,6 +44,131 @@ namespace IronMeridian.Units
         const float GroundRefreshSeconds = 2.5f;
         float _groundTimer;
         bool _grounded;
+
+        // ------------------------------------------------------- 3D models
+
+        /// <summary>
+        /// Whether every formation on the map is drawing its 3D model as well as
+        /// its counter. GENERAL → SHOW UNIT 3D MODELS.
+        ///
+        /// **Why it is a switch and not simply on.** The counter is the map's
+        /// language: an APP-6 icon says arm, echelon, side and strength at any
+        /// zoom, and a hundred of them read as an order of battle. A hundred
+        /// models read as a diorama — they are slower to draw, they hide each
+        /// other on broken ground, and none of them tells you whether the thing
+        /// is a company or a division. So the icons stay, always, and the models
+        /// are something you turn on to *look* at a piece of the battle rather
+        /// than to read the whole of it.
+        ///
+        /// **Why static.** It is one decision about the map, not a property of
+        /// each formation, and units spawn and die constantly — a reinforcement
+        /// arriving into a map with models on must arrive with a model, without
+        /// anything having to remember to tell it.
+        /// </summary>
+        public static bool ModelsVisible { get; private set; }
+
+        /// <summary>
+        /// Turns the models on or off for everything on the map, now and for
+        /// everything spawned afterwards.
+        /// </summary>
+        public static void SetModelsVisible(bool on)
+        {
+            if (ModelsVisible == on) return;
+            ModelsVisible = on;
+            foreach (var u in UnitRegistry.All)
+                if (u != null) u.ApplyModel();
+        }
+
+        /// <summary>
+        /// How big a formation's model is drawn, as a fraction of the same base
+        /// scale the selection ring uses.
+        ///
+        /// **Deliberately not life-size.** A tank is eight metres and this map
+        /// is played at a few kilometres across, where eight metres is under a
+        /// pixel — a scrupulously scaled model would be an invisible one. Every
+        /// other model in the game is oversized for the same reason (a UAV's
+        /// wingspan is 60 m, an airlifter's 420 m), and tying this to
+        /// <see cref="_baseScale"/> means a division's model is bigger than a
+        /// company's without a second table to keep in step.
+        /// </summary>
+        const float ModelScaleShare = 0.55f;
+
+        /// <summary>Builds, removes or re-points the model to match <see cref="ModelsVisible"/>.</summary>
+        void ApplyModel()
+        {
+            if (!ModelsVisible)
+            {
+                if (_model != null) Destroy(_model.gameObject);
+                _model = null;
+                return;
+            }
+
+            if (_model != null) { _model.gameObject.SetActive(!Hidden); return; }
+            BuildModel();
+        }
+
+        /// <summary>
+        /// Puts this formation's model on the ground under its counter.
+        ///
+        /// A child of the actor, so it rides every position update the unit
+        /// already gets — including a march, which is the case that matters: a
+        /// model that had to be moved by its own code would be a second thing
+        /// that could disagree with where the formation is.
+        ///
+        /// Scaled from the model's own bounds rather than from a magic number,
+        /// so replacing a model needs no re-tuning here — the same rule the
+        /// flights follow.
+        /// </summary>
+        void BuildModel()
+        {
+            var def = IronMeridian.Models.UnitModelLibrary.Resolve(Def);
+            // No model for this type is a normal answer, not a failure: ships,
+            // aircraft and several support arms have none yet. The counter is
+            // still there, which is the point of the counter.
+            if (def == null) return;
+
+            var go = IronMeridian.Models.UnitModelLibrary.CreateInstance(def, transform);
+            if (go == null) return;
+
+            go.name = "Model";
+            // Nothing on the model may take a click. The icon is the unit's hit
+            // target, and a mesh collider under it would let a formation be
+            // selected by its left track while its counter said otherwise — and
+            // would put geometry in the way of the terrain raycasts every
+            // placement tool on this map uses.
+            foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
+
+            var t = go.transform;
+            t.localPosition = Vector3.zero;
+            t.localRotation = Quaternion.identity;
+
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                var bounds = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+                float span = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+                if (span > 0.0001f)
+                    t.localScale = Vector3.one * (_baseScale * ModelScaleShare / span);
+            }
+
+            _model = t;
+            _model.gameObject.SetActive(!Hidden);
+            FaceModel();
+        }
+
+        /// <summary>
+        /// Points the model along the formation's heading.
+        ///
+        /// Read every frame the model is up rather than only when the heading is
+        /// set: a marching formation turns continuously, and the whole reason to
+        /// look at models is to see which way things are facing.
+        /// </summary>
+        void FaceModel()
+        {
+            if (_model == null) return;
+            _model.localRotation = Quaternion.Euler(0f, State.headingDeg, 0f);
+        }
 
         // --- map label sizing ---
         const string LabelScalePref = "im.unitLabelScale";
@@ -276,6 +403,10 @@ namespace IronMeridian.Units
             Mover = gameObject.AddComponent<UnitMover>();
             Mover.Init(this, _geo, _anchor);
 
+            // A formation spawning into a map that is showing models arrives
+            // with one — see ModelsVisible.
+            ApplyModel();
+
             // A unit restored from a save at low strength is already burning —
             // damage state is part of the map, not just something that happens live.
             RefreshBurning();
@@ -379,6 +510,11 @@ namespace IronMeridian.Units
             // The icon holds its apparent size; the caption on it does not.
             UpdateLabelZoom(depth);
 
+            // The model does not hold apparent size — it is a thing standing on
+            // the ground and grows and shrinks with the ground, which is the
+            // whole difference between it and the counter above it.
+            FaceModel();
+
             // Anchor the icon's base (not its centre) at the ground point. This
             // offset must scale with `s` too — a fixed offset sized for one zoom
             // level makes the icon visibly float above the terrain at any other
@@ -472,6 +608,24 @@ namespace IronMeridian.Units
         public bool HiddenByFog { get; private set; }
 
         /// <summary>
+        /// Repaints everything that hangs off a formation's strength after
+        /// something other than damage has changed it — a medical point putting
+        /// the lightly wounded back on their feet.
+        ///
+        /// It exists so resupply does not have to write the field and then
+        /// separately remember the strength bar, the burning effect and the
+        /// routed status. A unit healed behind the graphics' backs would sit at
+        /// 60 % strength still drawn on fire and still reading as routed.
+        /// </summary>
+        public void RefreshAfterSupply()
+        {
+            State.strength = Mathf.Clamp01(State.strength);
+            if (State.strength >= 0.3f && State.status == nameof(UnitStatus.Routed))
+                State.status = nameof(UnitStatus.Idle);
+            RefreshBurning();
+        }
+
+        /// <summary>
         /// True while the unit is folded into a cluster marker because the
         /// camera is too far out to draw it individually. See
         /// <see cref="UI.UnitClusterLayer"/>.
@@ -519,6 +673,12 @@ namespace IronMeridian.Units
         {
             bool hidden = Hidden;
             if (_billboard != null) _billboard.gameObject.SetActive(!hidden);
+            // The model goes with the counter. A formation hidden by fog that
+            // left a tank standing on the map would be the fog leaking exactly
+            // the position it exists to withhold — and it is the failure a
+            // second visual for each unit invites, so it is handled where every
+            // other one of this unit's graphics is.
+            if (_model != null) _model.gameObject.SetActive(!hidden);
             if (_ring != null) _ring.gameObject.SetActive(!hidden && _selected);
             if (_arrow != null) _arrow.SetVisible(!hidden && _selected);
             ApplyOutline();

@@ -74,7 +74,7 @@ All of these are edited in the map editor's **MISSIONS** panel. `MissionDefiniti
 | `viewMode`, `mapStyle`, `showBuildings` | The view the mission opens in |
 | `startDateTime` | H-hour — docs/13-DATE-AND-TIME.md |
 | `skyPhase`, `weatherCondition`, `autoDayNight` | Weather — docs/14-WEATHER.md |
-| `fogOfWar` | Armed on entry. The one editor toggle a mission decides for the player, because a mission is a fight rather than a layout exercise |
+| `fogOfWar` | Armed on entry. The one editor toggle a mission decides for the player, because a mission is a fight rather than a layout exercise. **Set from the GENERAL panel's switch and recorded on save** — there is no separate fog control on the MISSIONS panel; see §4a |
 | `area` | The ground the mission is fought over — a closed polygon. Empty means unbounded. See §1a |
 | `friendlyHq` / `enemyHq` | Where each side's headquarters is. Unplaced on an old mission. See §1b |
 | `hqRadiusKm` | How much ground around each counts as the HQ. One radius for both zones |
@@ -263,7 +263,6 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | **OPEN IN EDITOR** | Loads that mission's map, settings and start point — replaces what is on the map now |
 | Name / location / briefing | The board's text |
 | Start point, start altitude | Where the mission opens |
-| **FOG OF WAR** | Armed on entry |
 | **MISSION AREA** readout | `UNBOUNDED`, or `BOUNDED` with corner count, km² and radius |
 | **DRAW AREA ON MAP** | Click the corners on the terrain. Right-click or Enter closes it (min 3), Backspace undoes a corner, Esc cancels |
 | **20 KM / 50 KM / 120 KM** | Replaces the area with a box that wide, centred on the point the camera is looking at |
@@ -272,8 +271,9 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | **ZONE SIZE** — 1 / 3 / 8 KM | The radius of both HQ zones. See §1b |
 | **DEPLOYMENT ZONES** *(now on the ZONES panel)* — FRIENDLY / ENEMY rows | Where each side's reinforcements arrive. **SET** arms a map click. See §1c |
 | **ZONE SIZE** — 2 / 5 / 12 KM | The radius of both deployment zones |
-| **SAVE MISSION + MAP** | Writes the record **and** the current map |
-| **NEW MISSION HERE** | Starts one at the point the camera is looking at, in the chosen campaign |
+| **SAVE MISSION + MAP** | Writes the record **and** the current map, and seeds anything missing — §4a |
+| **NEW MISSION HERE** | Starts one at the point the camera is looking at, in the chosen campaign. Born with a boundary and two HQs |
+| **SEED BOUNDARIES + HQ (ALL)** | Gives **every** mission in the book a boundary and two headquarters in one pass — §4b |
 | **DELETE MISSION** | Removes it from the board, after a confirmation |
 
 **Three box sizes rather than a number field.** Those are the scales a scenario is actually laid out at — a town, a corps sector, a theatre — and typing `37` would be a decision nobody has a reason to make. Draw the polygon when the ground has a shape worth following; press a box when it does not.
@@ -282,11 +282,36 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 
 **Picking a mission and opening it are separate on purpose.** Choosing one in the dropdown to correct its briefing is cheap; loading its map throws away whatever is on the editor's map right now, and that should take a deliberate second click.
 
-**SAVE writes both files.** This is the sentence the whole feature turns on: whatever is on the editor's map at that moment — units, control measures, markers, weather, H-hour, view mode, tile style — becomes what the player gets from SINGLE PLAYER. There is no separate publish step, because there are no separate files. F5 in a mission does the same thing.
+**SAVE writes both files.** This is the sentence the whole feature turns on: whatever is on the editor's map at that moment becomes what the player gets from SINGLE PLAYER. There is no separate publish step, because there are no separate files. F5 in a mission does the same thing, and so does SAVE on the pause menu — all three go through one path, `GameController.WriteMissionAndMap` (`docs/45-SAVE-AND-LOAD.md` §5).
+
+**"Whatever is on the map" means all of it.** `CollectSave` is the one place that reads the editor's live state and it reads every scenario panel: units, control measures, task markers, the FLOT's mode, the rear area (LOGISTICS), map objects (OBJECTS), the barrier plan (MINES AND OBSTACLES), stocks (SUSTAINMENT), the arrival schedule (REINFORCEMENTS), the chain of command (COMMANDERS), the teams and players (PLAYERS), the view, the map style, buildings, H-hour, sky and weather (ENVIRONMENT). The *record* adds what the selection screens need before any map is loaded, plus the four things the map file has no field for: the boundary, the two headquarters and the fog switch.
 
 **DELETE keeps the map file.** A scenario takes an evening to lay out and the button is one mis-click; removing the record is reversible by hand and removing the work would not be.
 
 **Fields are read back on every end-edit**, not only on save, so the record in memory always matches what is on screen — typing a new latitude and then pressing OPEN flies to the new one. Nothing touches the disk until SAVE. A malformed number leaves the old value alone rather than zeroing it: half-typed input is not an instruction to move the mission into the Atlantic.
+
+### 4a. What SAVE fills in
+
+**Fog of war is read off the live system, not off a field.** It used to be a switch on this panel that wrote the record, while the GENERAL panel's switch armed the system a designer actually tests the scenario with. Two switches for one setting is one too many: they could disagree, and nothing said which one the player would get. There is one switch now — **GENERAL → FOG OF WAR** — and SAVE records whatever it is set to. The MISSIONS panel carries a line saying so where the toggle used to be. See `docs/16-FOG-OF-WAR.md`.
+
+**A boundary and two headquarters are seeded if they are still missing.** `Save/MissionSeeder.cs`, on every save and on NEW MISSION HERE. Both fields are optional in the record and both read harmlessly as *not set*, which is exactly why they never got set — nothing breaks, so nothing gets fixed, and the result is a campaign of missions that are all quietly worse than they should be: no boundary means the camera walks to the next country and the fog blanket has no edge; no headquarters means neither side has a place its command post is.
+
+Everything is derived from the order of battle when there is one, because the units already say where the fight is and which way it faces:
+
+| | How |
+|---|---|
+| **Boundary** | A box round the units' extent plus 6 km of clear ground, floored at 5 km half-width. An empty map gets a 10 km half-width box round the mission's start point. A **box, not a hull** of the units: the boundary is a statement about the scenario, and a tight polygon round the opening laydown would forbid the manoeuvre the scenario exists to permit |
+| **Headquarters** | A quarter of the distance between the two sides' centres of mass, *behind* its own force — "behind" being away from the people shooting at you, which is the only direction on the map that means anything without a compass rose. Clamped to 2–25 km, and never outside the boundary |
+| **One side only** | Still behind that force, using a stated convention: friendly south, enemy north |
+| **Neither side** | The two HQs go on opposite sides of the start point, same convention |
+
+A seeded value is a **starting point, not an answer** — move it from the MISSIONS and ZONES panels. Nothing already placed is ever moved.
+
+### 4b. Seeding the whole book
+
+**SEED BOUNDARIES + HQ (ALL)** runs the same seeder over every mission in the book. It is for the campaign that was written before either field existed, where every mission is playable and every one of them is unbounded with no command post on either side — doing that by hand is opening thirty missions, waiting for thirty maps to stream in, and clicking four things on each.
+
+It reads each mission's map **off disk** rather than opening it in the editor: the seeder only needs the order of battle's coordinates, and streaming terrain thirty times to look at a list of lat/lons would take minutes for no gain. The mission currently open is seeded from the *live* map instead, because what is on screen may not be saved yet and seeding from a stale file would box in a laydown that has moved.
 
 ---
 
@@ -297,6 +322,7 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 | `Data/MissionData.cs` | `Campaign`, `CampaignInfo`, `MissionDefinition`, `MissionBook` |
 | `Data/MissionArea.cs` | The mission's boundary polygon: containment, extent, clamping, and the rectangle builder |
 | `Lines/MissionAreaTool.cs` | Click-to-draw the boundary, and the always-on overlay that shows it |
+| `Save/MissionSeeder.cs` | Fills in a missing boundary and the two HQs — §4a |
 | `Units/RangeRing.cs` | Draws the two HQ zones (§1b) — the same flat ground ring a weapon range uses |
 | `Save/MissionLibrary.cs` | Read / write / create / delete, the map fallback, and the `Selected` hand-off |
 | `UI/SinglePlayerUI.cs` | The campaign board and the mission board |
@@ -312,6 +338,7 @@ Map editor (Development → Map Editor) → **MISSIONS** in the left rail. The p
 
 ## 6. Known gaps
 
+- **Seeded boundaries are boxes.** Good enough to be playable and never as good as one drawn round the ground. The seeder exists so no mission is *unbounded*, not so nobody has to draw one.
 - **The shipped missions have no scenarios.** Every one of the seven opens on empty ground at the right place — they are start points and briefings waiting for an order of battle. Lay one out in the editor and save it.
 - **No objectives, no victory condition, no scoring.** A mission is a place and a force; nothing yet says what winning is. The HQ zones (§1b) are the first half of the answer — somewhere on the map that means something — but nothing reads them yet.
 - **No progression.** Every mission is available from the start; `order` decides where it sits on the board and nothing gates it.

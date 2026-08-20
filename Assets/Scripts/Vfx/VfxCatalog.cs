@@ -163,7 +163,31 @@ namespace IronMeridian.Vfx
         /// vehicle skidding to a halt, and the drop's whole character is that it
         /// arrives *gently*.
         /// </summary>
-        SupplyLandingDust
+        SupplyLandingDust,
+
+        // --- mines (see docs/31-OBSTACLES.md) ---
+
+        /// <summary>
+        /// A mine detonating under a vehicle or a section. Small, low and
+        /// dirty: a buried charge throws earth, not a fireball, so this is a
+        /// narrow dirt column rather than the artillery air burst.
+        /// </summary>
+        MineBlast,
+
+        /// <summary>Dust and smoke hanging over a mine strike — looping until dispersed.</summary>
+        MineSmoke,
+
+        /// <summary>
+        /// Marker smoke burning over a landed supply cache — looping until the
+        /// cache is exhausted or the smoke times out.
+        ///
+        /// What a real DZ party puts out, and here it solves a real problem: the
+        /// landing dust is over in a second, and a bundle that came down behind
+        /// a ridge is otherwise a cache you know you have and cannot find.
+        /// Green, because it is the one column of smoke on this map that is not
+        /// something burning (docs/29-AIR-SUPPLY.md).
+        /// </summary>
+        SupplyCacheSmoke
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -241,6 +265,28 @@ namespace IronMeridian.Vfx
         // them is imported. See docs/08-PARTICLE-SYSTEMS.md.
         static readonly VfxDef[] Defs =
         {
+            // Mines. Deliberately the smallest detonation in the game: the
+            // charge is buried and most of its energy goes into the ground and
+            // into whatever is standing on it, so what is seen is a short throw
+            // of earth. Anything bigger would read as incoming fire, which is
+            // the one thing it must not be mistaken for.
+            new VfxDef { id = VfxId.MineBlast,   prefabPath = null,
+                         fallback = VfxFallback.ArtilleryDirtColumn, scaleMeters = 130f, lifeSeconds = 1.7f,
+                         tint = new Color(0.58f, 0.47f, 0.33f), priority = 120,
+                         sound = EffectSound.MineBlast },
+
+            new VfxDef { id = VfxId.MineSmoke,   prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 120f, lifeSeconds = 0f,
+                         tint = new Color(0.52f, 0.45f, 0.36f), priority = 45,
+                         sound = EffectSound.None },
+
+            // Signal smoke, not a fire: pale green and gently rising, so a rear
+            // area reads as marked rather than as burning.
+            new VfxDef { id = VfxId.SupplyCacheSmoke, prefabPath = null,
+                         fallback = VfxFallback.Smoke,     scaleMeters = 150f, lifeSeconds = 0f,
+                         tint = new Color(0.55f, 0.85f, 0.58f), priority = 30,
+                         sound = EffectSound.None },
+
             new VfxDef { id = VfxId.Explosion,   prefabPath = null,
                          fallback = VfxFallback.Explosion, scaleMeters = 320f, lifeSeconds = 2.6f,
                          tint = new Color(1.00f, 0.62f, 0.20f), priority = 100,

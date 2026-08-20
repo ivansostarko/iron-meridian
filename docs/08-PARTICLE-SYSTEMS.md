@@ -138,6 +138,9 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `TaskAreaRecon` | Ground a formation is searching | 260 m | loops | 22 | procedural |
 | `TaskAreaMove` | A move objective, a withdrawal line or a rally point | 260 m | loops | 22 | procedural |
 | `SupplyLandingDust` | An air-dropped bundle touching down — half the generic `Dust`'s size and life, because the drop's whole character is that it arrives gently (docs/29-AIR-SUPPLY.md) | 70 m | 1.1 s | 8 | procedural |
+| `MineBlast` | A mine going off under a column — the **smallest detonation in the game**. The charge is buried, so most of its energy goes into the ground and into whatever is standing on it: a short throw of earth (`ArtilleryDirtColumn`), not a fireball. Anything bigger would read as incoming fire, which is the one thing it must not be mistaken for (docs/31-OBSTACLES.md §6) | 130 m | 1.7 s | 120 | procedural |
+| `MineSmoke` | Dust and smoke hanging over a mine strike. Stopped after 14 s — it is a charge, not a shell | 120 m | loops | 45 | procedural |
+| `SupplyCacheSmoke` | Marker smoke over a landed supply cache — what a real DZ party puts out. Pale **green**, the one column of smoke on this map that is not something burning: the landing dust is over in a second, and a bundle down behind a ridge is otherwise a cache you know you have and cannot find. Stopped after 180 s (docs/29-AIR-SUPPLY.md) | 150 m | loops | 30 | procedural |
 
 The eight artillery rows are the four burst signatures and their smoke, shared across all fourteen natures in **docs/17-ARTILLERY.md**. They outrank a plain `Explosion` on priority because a called fire mission is the thing the player is watching and must never be what the concurrency budget throws away; their smoke ranks *below* the fires, because if the budget has to give, it should give up lingering smoke rather than a round landing.
 
@@ -244,6 +247,9 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Recon area placed | `TaskAreaRecon` | as above | `GameController.OrderRecon` |
 | Move / withdraw / retreat placed | `TaskAreaMove` | as above | `ManoeuvreOrderSystem.Order` |
 | Supply bundle lands | `SupplyLandingDust` | at the bundle | `AirSupplySystem.Deliver` (docs/29-AIR-SUPPLY.md) |
+| Formation drives into mines | `MineBlast` + `MineSmoke` | at the **formation**, not at the belt's centre — a column strung out along a road is a kilometre long, and a burst drawn in the middle of the field while the unit is at its edge reads as something else happening nearby | `MinefieldSystem.Detonate` (docs/31-OBSTACLES.md §6) |
+| Supply bundle lands | `SupplyCacheSmoke` | at the cache, for 180 s | `AirSupplySystem.Deliver` (docs/29-AIR-SUPPLY.md) |
+| Strike destroys a supply point | `Explosion` + the wreck effect | at the installation | `StrikeImpact.WreckSupplies` (docs/26-LOGISTICS.md §4a) |
 
 **Hand-placed effects are pinned.** `VfxInstance.Pinned` marks an effect the
 player put down from the EFFECTS section: it is never chosen as an eviction

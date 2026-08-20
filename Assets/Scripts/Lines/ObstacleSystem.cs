@@ -19,11 +19,29 @@ namespace IronMeridian.Lines
     /// other control measures, rather than being a unit with no weapons or a
     /// task marker that would be swept away when its unit died.
     ///
-    /// **Placement is pick-then-click**, the same gesture the effects and the
-    /// logistics sites use, with a ghost of the chosen symbol tracking the
+    /// **Most barriers are pick-then-click**, the same gesture the effects and
+    /// the logistics sites use, with a ghost of the chosen symbol tracking the
     /// ground so what is seen is what lands. The tool stays armed after a
     /// placement, because a barrier plan is laid several graphics at a time —
     /// a belt is not one symbol.
+    ///
+    /// **A minefield is outlined instead.** Kinds flagged
+    /// <see cref="ObstacleDef.areaDrawn"/> arm a polygon tool rather than a
+    /// stamp:
+    ///
+    ///   Left click       — add a corner
+    ///   Backspace        — undo the last corner
+    ///   Right click / ⏎  — close the belt (at least three corners)
+    ///   Esc              — abandon it
+    ///
+    /// The same gesture <see cref="MapObjectSystem"/> and
+    /// <see cref="MissionAreaTool"/> use, because it is the same act: saying
+    /// which ground something covers. A minefield is the one barrier where that
+    /// is the whole content of the graphic — a roadblock closes one place, a
+    /// belt *is* an area — and it is also what
+    /// <see cref="Units.MinefieldSystem"/> needs before it can tell whether a
+    /// column has driven into one. A short outline is kept rather than thrown
+    /// away: the player is told what is missing and goes on clicking.
     ///
     /// **Each graphic takes the bearing the camera is facing.** An obstacle lies
     /// *across* something, so it needs a direction; taking it from the view is
@@ -42,6 +60,15 @@ namespace IronMeridian.Lines
         public bool IsArmed => _armed.HasValue;
         public ObstacleKind? Armed => _armed;
 
+        /// <summary>True while a belt outline is being laid down.</summary>
+        public bool Drawing => _draft.Count > 0;
+
+        /// <summary>Corners on the outline in progress — what the panel's hint counts.</summary>
+        public int DraftCorners => _draft.Count;
+
+        /// <summary>Whether the armed kind is outlined rather than stamped.</summary>
+        public bool ArmedIsArea => _armed.HasValue && ObstacleCatalog.IsArea(_armed.Value);
+
         /// <summary>Which side a newly placed graphic belongs to. The panel's team tab sets it.</summary>
         public Team Team { get; set; } = Team.User;
 
@@ -58,6 +85,9 @@ namespace IronMeridian.Lines
         Transform _ghostQuad;
         Material _ghostMat;
         float _pulse;
+
+        readonly List<GeoPoint> _draft = new List<GeoPoint>();
+        MapLine _draftLine;
 
         bool _validGround;
         double _lat, _lon;
@@ -77,7 +107,21 @@ namespace IronMeridian.Lines
             if (_armed.HasValue && _armed.Value == kind) { Cancel(); return; }
 
             _armed = kind;
+            ClearDraft();
             var def = ObstacleCatalog.Get(kind);
+
+            if (def.areaDrawn)
+            {
+                // No ghost: there is nothing to preview until the first corner
+                // is down, and a symbol tracking the cursor would be promising a
+                // stamp the click is not going to make.
+                if (_ghost != null) _ghost.SetActive(false);
+                Flash?.Invoke($"{def.name} — click {ObstacleCatalog.MinAreaCorners} or more corners " +
+                              "round the belt, right-click or Enter to close, Esc to abandon.");
+                Changed?.Invoke();
+                return;
+            }
+
             _ghostMat.mainTexture = UI.UiIcons.GlyphFor(kind).texture;
             _ghostMat.color = def.tint;
             _ghostQuad.localScale = Vector3.one * def.widthMeters;
@@ -90,14 +134,19 @@ namespace IronMeridian.Lines
         public void Cancel()
         {
             if (!_armed.HasValue) return;
+            bool wasDrawing = Drawing;
             _armed = null;
+            ClearDraft();
             if (_ghost != null) _ghost.SetActive(false);
+            if (wasDrawing) Flash?.Invoke("Outline abandoned.");
             Changed?.Invoke();
         }
 
         void Update()
         {
             if (!_armed.HasValue) return;
+
+            if (ObstacleCatalog.IsArea(_armed.Value)) { UpdateOutlining(); return; }
 
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
             {
@@ -108,6 +157,161 @@ namespace IronMeridian.Lines
             TrackGround();
 
             if (Input.GetMouseButtonDown(0)) PlaceHere();
+        }
+
+        // ---------------------------------------------------------- outlining
+
+        void UpdateOutlining()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape)) { Cancel(); return; }
+
+            bool overUI = EventSystem.current != null &&
+                          EventSystem.current.IsPointerOverGameObject();
+
+            if (!overUI && Input.GetMouseButtonDown(0) &&
+                _map.RaycastGround(_cam, Input.mousePosition, out Vector3 world))
+            {
+                GeoUtils.UnityToGeo(_map.Georeference, world, out double lat, out double lon, out double h);
+                _draft.Add(new GeoPoint { latitude = lat, longitude = lon, heightMeters = h });
+                RedrawDraftAndReport();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Backspace) && _draft.Count > 0)
+            {
+                _draft.RemoveAt(_draft.Count - 1);
+                RedrawDraftAndReport();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Return) || (!overUI && Input.GetMouseButtonDown(1)))
+                CloseOutline();
+        }
+
+        /// <summary>
+        /// Turns the outline into a barrier, or says why it cannot yet.
+        ///
+        /// The corners are **kept** when there are too few: discarding two
+        /// because the third had not been placed would punish the one mistake
+        /// the minimum exists to prevent. The kind stays armed afterwards, like
+        /// the stamp tool — a barrier plan is several belts, not one.
+        /// </summary>
+        void CloseOutline()
+        {
+            if (!_armed.HasValue) return;
+            var def = ObstacleCatalog.Get(_armed.Value);
+
+            if (_draft.Count < ObstacleCatalog.MinAreaCorners)
+            {
+                Flash?.Invoke($"{def.name} needs at least {ObstacleCatalog.MinAreaCorners} corners — " +
+                              $"{_draft.Count} so far.");
+                return;
+            }
+
+            Centroid(_draft, out double lat, out double lon);
+            Add(new ObstacleSiteData
+            {
+                id = NewId(),
+                kind = _armed.Value.ToString(),
+                team = Team.ToString(),
+                latitude = lat,
+                longitude = lon,
+                headingDeg = CameraBearing(),
+                points = new List<GeoPoint>(_draft)
+            });
+
+            // Measured before the draft is cleared, not after — the figure is
+            // the one thing the designer cannot read off the map.
+            int corners = _draft.Count;
+            double km2 = AreaKm2(_draft);
+            ClearDraft();
+            Flash?.Invoke($"{def.name} recorded — {corners} corners, {km2:0.0} km² of ground. " +
+                          "The kind stays armed; Esc to stop.");
+            Changed?.Invoke();
+        }
+
+        void RedrawDraft()
+        {
+            if (_draft.Count < 2)
+            {
+                if (_draftLine != null) { Destroy(_draftLine.gameObject); _draftLine = null; }
+                return;
+            }
+
+            // Open while it is being drawn: closing the ring before the last
+            // corner is placed draws an edge the player has not asked for and
+            // cannot see the shape of.
+            if (_draftLine == null)
+            {
+                var def = ObstacleCatalog.Get(_armed ?? ObstacleKind.Minefield);
+                _draftLine = MapLine.Create(_map.Georeference, new MapLineData
+                {
+                    id = "obstacle-draft",
+                    kind = nameof(LineKind.Boundary),
+                    team = Team.ToString(),
+                    is3D = false,
+                    autoGenerated = true,
+                    label = "",
+                    colorHex = "#" + ColorUtility.ToHtmlStringRGB(def.tint),
+                    widthMeters = 90f,
+                    points = new List<GeoPoint>()
+                });
+            }
+            _draftLine.SetPoints(new List<GeoPoint>(_draft));
+        }
+
+        /// <summary>
+        /// Redraws the outline and tells the panel, so its corner count moves as
+        /// the corners go down. A progress figure that only appeared once the
+        /// shape was finished would be telling the designer something they no
+        /// longer need.
+        /// </summary>
+        void RedrawDraftAndReport()
+        {
+            RedrawDraft();
+            Changed?.Invoke();
+        }
+
+        void ClearDraft()
+        {
+            _draft.Clear();
+            if (_draftLine != null) { Destroy(_draftLine.gameObject); _draftLine = null; }
+        }
+
+        /// <summary>
+        /// The polygon's centre, stored on the record so an area answers "where
+        /// is it" the same way a stamped symbol does — which is what lets the
+        /// list row, the focus button and the screen-space pick stay ignorant of
+        /// which sort of graphic they are dealing with.
+        /// </summary>
+        public static void Centroid(List<GeoPoint> points, out double lat, out double lon)
+        {
+            lat = lon = 0.0;
+            if (points == null || points.Count == 0) return;
+            foreach (var p in points) { lat += p.latitude; lon += p.longitude; }
+            lat /= points.Count;
+            lon /= points.Count;
+        }
+
+        /// <summary>
+        /// Ground enclosed, km². The shoelace formula in plate carrée with a
+        /// cosine correction on the longitude — exact enough for a belt a few
+        /// kilometres across, which is the only size one is ever drawn at.
+        /// </summary>
+        public static double AreaKm2(List<GeoPoint> points)
+        {
+            if (points == null || points.Count < 3) return 0.0;
+
+            Centroid(points, out double cLat, out _);
+            double kmPerDegLat = 111.32;
+            double kmPerDegLon = 111.32 * System.Math.Cos(cLat * System.Math.PI / 180.0);
+
+            double twice = 0.0;
+            for (int i = 0, j = points.Count - 1; i < points.Count; j = i++)
+            {
+                double xi = points[i].longitude * kmPerDegLon, yi = points[i].latitude * kmPerDegLat;
+                double xj = points[j].longitude * kmPerDegLon, yj = points[j].latitude * kmPerDegLat;
+                twice += xj * yi - xi * yj;
+            }
+            return System.Math.Abs(twice) * 0.5;
         }
 
         void TrackGround()
@@ -255,6 +459,10 @@ namespace IronMeridian.Lines
             foreach (var d in data)
             {
                 if (d == null) continue;
+                // JsonUtility leaves a member absent from the file at null
+                // rather than at its initialiser, so a map saved before belts
+                // were areas arrives with no list at all.
+                if (d.points == null) d.points = new List<GeoPoint>();
                 _markers.Add(ObstacleMarker.Create(_map.Georeference, d));
             }
             Changed?.Invoke();
@@ -299,6 +507,7 @@ namespace IronMeridian.Lines
         void OnDestroy()
         {
             if (_ghostMat != null) Destroy(_ghostMat);
+            if (_draftLine != null) Destroy(_draftLine.gameObject);
         }
     }
 }

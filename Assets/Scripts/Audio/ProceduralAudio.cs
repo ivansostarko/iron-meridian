@@ -100,6 +100,17 @@ namespace IronMeridian.Audio
             EffectSound.MissileMotor => MissileMotor(),
             EffectSound.MissileIncoming => MissileIncoming(),
 
+            // A mine: buried, so the earth takes the low end and returns a
+            // crack rather than a boom. Higher and shorter than the UAV
+            // warhead, which is the sharpest thing above ground, and with the
+            // rumble almost switched off — the ground absorbs what a shell
+            // would have thrown into the air.
+            EffectSound.MineBlast =>
+                Shell("fx_mine_blast", seed: 451, duration: 1.2f,
+                      startHz: 200f, endHz: 78f, pitchFallSeconds: 0.20f,
+                      bodyDecay: 6.5f, crackDecay: 10f, crackLowPass: 0.30f,
+                      bodyMix: 0.55f, crackMix: 0.90f, rumbleMix: 0.14f),
+
             _ => null
         };
 

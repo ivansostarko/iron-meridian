@@ -41,6 +41,13 @@ namespace IronMeridian.UI
         const float PanelInset = 46f;
         const float RowPad = 8f;
 
+        /// <summary>
+        /// Air between the board's title and the line that counts what is on it.
+        /// Named rather than folded into the offset so it stays visible as a
+        /// deliberate piece of spacing.
+        /// </summary>
+        const float SubtitleTopPad = 15f;
+
         /// <summary>One board entry: a caption and the branches behind it.</summary>
         class Arm
         {
@@ -179,7 +186,14 @@ namespace IronMeridian.UI
             MusicManager.Play(MusicTrack.ExtrasTheme);
 
             _canvas = UIFactory.CreateCanvas("UnitLibraryCanvas");
-            UIFactory.CreateScreenBackground(_canvas.transform, BackgroundId.Interior,
+            // The picture the EXTRAS board promised behind its UNITS row, not
+            // the shared interior. A preview that changes the moment you act on
+            // it is a preview of nothing — see BackgroundId.ExtrasUnits.
+            //
+            // Held back hard all the same: this screen is a table of a hundred
+            // rows with a 3D model beside it, and legibility beats atmosphere
+            // wherever the two disagree.
+            UIFactory.CreateScreenBackground(_canvas.transform, BackgroundId.ExtrasUnits,
                 BackgroundCatalog.DenseScreenScrim);
 
             _back = UIFactory.CreateBackButton(_canvas.transform, "BACK TO EXTRAS", GoBack);
@@ -200,11 +214,15 @@ namespace IronMeridian.UI
                 GameConfig.UiAccent, TextAnchor.MiddleLeft, FontStyle.Bold);
             UIFactory.Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(80, -70), new Vector2(700, 80));
 
+            // Fifteen pixels of air under the title rather than sitting on
+            // its descenders: the count is a caption on UNITS, and a caption
+            // crowding the word it captions reads as one clipped block of text.
             var sub = UIFactory.CreateText(_boardPage,
                 $"{UnitDatabase.All.Count} formation types, by arm of service. " +
                 "Pick one to browse it.",
                 20, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
-            UIFactory.Place(sub.rectTransform, new Vector2(0f, 1f), new Vector2(80, -126), new Vector2(1000, 28));
+            UIFactory.Place(sub.rectTransform, new Vector2(0f, 1f),
+                new Vector2(80, -126 - SubtitleTopPad), new Vector2(1000, 28));
 
             // Counted once, here: the number on each card is what the whole board
             // is for, and recomputing it per card would walk the catalogue six times.
@@ -235,6 +253,18 @@ namespace IronMeridian.UI
             }
         }
 
+        /// <summary>
+        /// One arm card.
+        ///
+        /// **It answers the cursor.** The cards used to be six inert boxes: the
+        /// only thing that changed when you pointed at one was the mouse
+        /// pointer itself, which on a board whose entire purpose is to be
+        /// clicked made the screen read as a diagram rather than as a menu.
+        /// Crossing a card now lifts its fill, brings its border up to the
+        /// accent, whitens the glyph and the title, and grows the strip along
+        /// its foot — the same vocabulary the menu board's rows use, so the
+        /// two screens agree on what "you are about to press this" looks like.
+        /// </summary>
         RectTransform Card(Transform parent, Arm arm, int count, float w, float h)
         {
             var frame = UIFactory.CreateBorderedPanel(parent, "Arm_" + arm.title,
@@ -278,10 +308,42 @@ namespace IronMeridian.UI
             strip.anchorMin = Vector2.zero; strip.anchorMax = new Vector2(1, 0);
             strip.pivot = new Vector2(0.5f, 0);
             strip.offsetMin = Vector2.zero;
-            strip.offsetMax = new Vector2(0, 6);
+            strip.offsetMax = new Vector2(0, CardStripRest);
             strip.GetComponent<Image>().raycastTarget = false;
 
+            // Painted by hand rather than through Button's colour tint: the tint
+            // multiplies every graphic under the button, which washes the accent
+            // strip and the coloured head out instead of lifting them.
+            var border = frame.GetComponent<Image>();
+            var fill = frame.Find("Fill").GetComponent<Image>();
+            var trigger = frame.gameObject.AddComponent<EventTrigger>();
+            AddHover(trigger, EventTriggerType.PointerEnter,
+                () => PaintCard(border, fill, strip, icon, t, true));
+            AddHover(trigger, EventTriggerType.PointerExit,
+                () => PaintCard(border, fill, strip, icon, t, false));
+            PaintCard(border, fill, strip, icon, t, false);
+
             return frame;
+        }
+
+        /// <summary>Accent strip along a card's foot, at rest and under the cursor.</summary>
+        const float CardStripRest = 4f, CardStripHover = 8f;
+
+        static void PaintCard(Image border, Image fill, RectTransform strip, Image glyph,
+            Text title, bool hover)
+        {
+            border.color = hover ? UiTheme.Accent : UiTheme.Border;
+            fill.color = hover ? UiTheme.SurfaceHover : UiTheme.Surface;
+            strip.offsetMax = new Vector2(0, hover ? CardStripHover : CardStripRest);
+            glyph.color = hover ? Color.white : GameConfig.UiAccent;
+            title.color = hover ? Color.white : GameConfig.UiText;
+        }
+
+        static void AddHover(EventTrigger trigger, EventTriggerType type, System.Action callback)
+        {
+            var entry = new EventTrigger.Entry { eventID = type };
+            entry.callback.AddListener(_ => callback());
+            trigger.triggers.Add(entry);
         }
 
         // ------------------------------------------------------ page 2: list
@@ -317,15 +379,40 @@ namespace IronMeridian.UI
                 Rebuild();
             });
 
-            var reset = UIFactory.CreateButton(bar, "RESET FILTERS", () =>
+            // Framed like the filter chips beside it rather than left as a
+            // bare grey slab: it belongs to the same row of controls and it
+            // undoes what they do, so it has to look like one of them.
+            var resetFrame = UIFactory.CreateBorderedPanel(bar, "Reset",
+                UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(resetFrame, new Vector2(0f, 1f),
+                new Vector2(356, 0), new Vector2(150, 44));
+
+            var reset = UIFactory.CreateButton(resetFrame, "RESET FILTERS", () =>
             {
                 _branch = null; _search = "";
                 _sortKey = "name"; _sortAscending = true;
                 if (_searchField != null) _searchField.text = "";
                 Rebuild();
-            }, GameConfig.UiPanelLight, GameConfig.UiTextDim, 14);
-            UIFactory.Place((RectTransform)reset.transform, new Vector2(0f, 1f),
-                new Vector2(356, 0), new Vector2(150, 44));
+            }, new Color(0, 0, 0, 0), UiTheme.TextDim, 14);
+            UIFactory.Stretch((RectTransform)reset.transform);
+            UIFactory.Fit(reset.GetComponentInChildren<Text>(), 10);
+
+            var resetBorder = resetFrame.GetComponent<Image>();
+            var resetFill = resetFrame.Find("Fill").GetComponent<Image>();
+            var resetText = reset.GetComponentInChildren<Text>();
+            var resetTrigger = resetFrame.gameObject.AddComponent<EventTrigger>();
+            AddHover(resetTrigger, EventTriggerType.PointerEnter, () =>
+            {
+                resetBorder.color = UiTheme.Accent;
+                resetFill.color = UiTheme.SurfaceHover;
+                resetText.color = UiTheme.Text;
+            });
+            AddHover(resetTrigger, EventTriggerType.PointerExit, () =>
+            {
+                resetBorder.color = UiTheme.Border;
+                resetFill.color = UiTheme.Surface;
+                resetText.color = UiTheme.TextDim;
+            });
 
             _branchRow = UIFactory.CreateGroup(_listPage, "BranchFilter");
             StretchToTableWidth(_branchRow, ToolbarY - 52f, 40f);
@@ -352,18 +439,38 @@ namespace IronMeridian.UI
                 counts[d.Branch] = n + 1;
             }
 
-            var buttons = new List<(Button button, UnitBranch? branch)>();
+            // Chips rather than buttons: a bordered surface that goes to the
+            // accent when it is the one in force, with an underline along its
+            // foot. Three flat grey slabs, one of which happened to be blue,
+            // gave the player no way to tell "pressable" from "pressed" except
+            // the colour — which is the one cue a colour-blind player does not
+            // have.
+            var chips = new List<(RectTransform frame, Text label, RectTransform underline,
+                UnitBranch? branch)>();
             const float segW = 150f;
 
             void Add(string label, UnitBranch? branch, int index)
             {
-                var btn = UIFactory.CreateButton(_branchRow, label,
+                var frame = UIFactory.CreateBorderedPanel(_branchRow, "Chip_" + label,
+                    UiTheme.Surface, UiTheme.Border);
+                UIFactory.Place(frame, new Vector2(0f, 1f),
+                    new Vector2(index * (segW + 6f), 0), new Vector2(segW, 38));
+
+                var btn = UIFactory.CreateButton(frame, label,
                     () => { _branch = branch; Rebuild(); },
-                    GameConfig.UiPanelLight, GameConfig.UiText, 14);
-                UIFactory.Place((RectTransform)btn.transform, new Vector2(0f, 1f),
-                    new Vector2(index * (segW + 3f), 0), new Vector2(segW, 38));
-                UIFactory.Fit(btn.GetComponentInChildren<Text>(), 10);
-                buttons.Add((btn, branch));
+                    new Color(0, 0, 0, 0), UiTheme.Text, 14);
+                UIFactory.Stretch((RectTransform)btn.transform);
+                var text = btn.GetComponentInChildren<Text>();
+                UIFactory.Fit(text, 10);
+
+                var underline = UIFactory.CreatePanel(frame, "Underline", GameConfig.UiAccent);
+                underline.anchorMin = Vector2.zero; underline.anchorMax = new Vector2(1, 0);
+                underline.pivot = new Vector2(0.5f, 0);
+                underline.offsetMin = Vector2.zero;
+                underline.offsetMax = new Vector2(0, 3);
+                underline.GetComponent<Image>().raycastTarget = false;
+
+                chips.Add((frame, text, underline, branch));
             }
 
             int total = 0;
@@ -384,14 +491,22 @@ namespace IronMeridian.UI
 
             _repaints.Add(() =>
             {
-                foreach (var (button, branch) in buttons)
+                foreach (var (frame, text, underline, branch) in chips)
                 {
                     bool on = branch == _branch;
-                    button.GetComponent<Image>().color = on ? GameConfig.UiAccent : GameConfig.UiPanelLight;
-                    var txt = button.GetComponentInChildren<Text>();
-                    if (txt == null) continue;
-                    txt.color = on ? GameConfig.UiBackground : GameConfig.UiText;
-                    txt.fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
+                    // Solid accent when it is the one in force — a wash over a
+                    // photographic background is not a fill, it is a tint of
+                    // whatever happens to be behind it. The underline goes
+                    // white so the state is legible without reading the colour.
+                    frame.GetComponent<Image>().color = on ? UiTheme.Accent : UiTheme.Border;
+                    var fillRt = frame.Find("Fill");
+                    if (fillRt != null)
+                        fillRt.GetComponent<Image>().color = on ? GameConfig.UiAccent : UiTheme.Surface;
+                    underline.GetComponent<Image>().color = on ? Color.white : GameConfig.UiAccent;
+                    underline.gameObject.SetActive(on);
+                    if (text == null) continue;
+                    text.color = on ? GameConfig.UiBackground : UiTheme.TextDim;
+                    text.fontStyle = on ? FontStyle.Bold : FontStyle.Normal;
                 }
             });
         }
@@ -643,7 +758,11 @@ namespace IronMeridian.UI
 
         void BuildDetailPanel()
         {
-            var panel = UIFactory.CreatePanel(_listPage, "DetailPanel", GameConfig.UiPanel);
+            // Bordered, like every other block of chrome on this screen. A
+            // flat fill against a photographic background has no edge of its
+            // own, so the panel appeared to float rather than to be a panel.
+            var panel = UIFactory.CreateBorderedPanel(_listPage, "DetailPanel",
+                GameConfig.UiPanel, UiTheme.Border);
             panel.anchorMin = new Vector2(1, 0); panel.anchorMax = new Vector2(1, 1);
             panel.pivot = new Vector2(1f, 1f);
             panel.offsetMin = new Vector2(-(ScreenMargin + PanelW), BottomMargin);

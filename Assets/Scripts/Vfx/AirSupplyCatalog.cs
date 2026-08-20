@@ -46,6 +46,17 @@ namespace IronMeridian.Vfx
         public LogisticsKind leaves;
         /// <summary>Caption on the site it leaves, so an airdropped point is distinguishable from a placed one.</summary>
         public string cacheLabel;
+
+        /// <summary>
+        /// Issues **one bundle** puts on the ground — see
+        /// <c>LogisticsSiteData.stock</c>.
+        ///
+        /// A sortie's worth of supply is this times <see cref="bundles"/>, and
+        /// it is deliberately a handful rather than a depot's worth: an airdrop
+        /// is what gets a cut-off battalion through the next few hours, not a
+        /// rear area. Running out is the point of it.
+        /// </summary>
+        public float issuesPerBundle;
     }
 
     /// <summary>
@@ -114,7 +125,8 @@ namespace IronMeridian.Vfx
                 bundles = 5,
                 markerColor = new Color(1.00f, 0.55f, 0.30f),
                 leaves = LogisticsKind.AmmoPoint,
-                cacheLabel = "AIRDROP · AMMO"
+                cacheLabel = "AIRDROP · AMMO",
+                issuesPerBundle = 1.5f
             },
             new SupplyDropDef
             {
@@ -127,7 +139,8 @@ namespace IronMeridian.Vfx
                 bundles = 4,
                 markerColor = new Color(1.00f, 0.72f, 0.28f),
                 leaves = LogisticsKind.FuelPoint,
-                cacheLabel = "AIRDROP · FUEL"
+                cacheLabel = "AIRDROP · FUEL",
+                issuesPerBundle = 1.5f
             },
             new SupplyDropDef
             {
@@ -140,7 +153,8 @@ namespace IronMeridian.Vfx
                 bundles = 3,
                 markerColor = new Color(0.95f, 0.45f, 0.48f),
                 leaves = LogisticsKind.MedicalPoint,
-                cacheLabel = "AIRDROP · MEDICAL"
+                cacheLabel = "AIRDROP · MEDICAL",
+                issuesPerBundle = 2f
             }
         };
 

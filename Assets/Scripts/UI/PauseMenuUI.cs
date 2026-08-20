@@ -128,16 +128,27 @@ namespace IronMeridian.UI
 
         void Resume() => Close();
 
+        /// <summary>
+        /// Opens the save browser. The pause menu stays up behind it — the
+        /// browser sorts above and runs on unscaled time, so the game is still
+        /// paused and Escape from the browser comes back here rather than
+        /// straight to the map.
+        ///
+        /// **The status line no longer claims anything.** It used to say "Game
+        /// saved." the instant the button was pressed, whether or not a byte had
+        /// been written; the browser reports what actually happened, in its own
+        /// footer, where the player is already looking.
+        /// </summary>
         void DoSave()
         {
+            _status.text = "";
             SaveRequested?.Invoke();
-            _status.text = "Game saved.";
         }
 
         void DoLoad()
         {
+            _status.text = "";
             LoadRequested?.Invoke();
-            _status.text = "Game loaded.";
         }
 
         void ExitToMainMenu()
@@ -164,6 +175,12 @@ namespace IronMeridian.UI
                 if (Input.GetKeyDown(KeyCode.Escape)) EventSystem.current.SetSelectedGameObject(null);
                 return;
             }
+
+            // While the save browser or a confirm is up, every key belongs to
+            // it. Without this, one Escape would close the browser *and* the
+            // pause menu behind it, dropping the player back onto the map from
+            // two levels down.
+            if (SaveLoadDialog.IsOpen || ConfirmDialog.IsOpen) return;
 
             bool escape = Input.GetKeyDown(KeyCode.Escape);
             // Start / Menu opens and closes the pause menu, which is what that

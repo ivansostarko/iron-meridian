@@ -81,6 +81,7 @@ namespace IronMeridian.Core
             "Data/units.json",
             "Data/unit-names.json",
             "Data/missions.json",
+            "Data/credits.json",
             MapIndexFile
         };
 

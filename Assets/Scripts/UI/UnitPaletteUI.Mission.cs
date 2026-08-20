@@ -79,12 +79,13 @@ namespace IronMeridian.UI
         public System.Action<Campaign, string> MissionCreateRequested;
         /// <summary>Remove the mission from the campaign list.</summary>
         public System.Action<MissionDefinition> MissionDeleteRequested;
+        /// <summary>Give every mission in the book a boundary and two headquarters.</summary>
+        public System.Action MissionSeedAllRequested;
 
         Dropdown _campaignDropdown, _missionDropdown;
         InputField _missionName, _missionLocation, _missionBriefing;
         InputField _missionLat, _missionLon, _missionAltitude;
-        RectTransform _missionFogLamp;
-        Text _missionFogLabel, _missionStatus;
+        Text _missionStatus;
         Campaign _missionCampaign = Campaign.Europe;
         MissionDefinition _mission;
         List<MissionDefinition> _missionsShown = new List<MissionDefinition>();
@@ -154,12 +155,19 @@ namespace IronMeridian.UI
             SectionLabel(content, "START ALTITUDE (M)", -418);
             _missionAltitude = MissionField(content, "12000", -438);
 
-            _missionFogLamp = ToggleRow(content, "FOG OF WAR", -482, () =>
-            {
-                if (_mission == null) return;
-                _mission.fogOfWar = !_mission.fogOfWar;
-                RefreshMissionFields();
-            }, out _missionFogLabel);
+            // **FOG OF WAR is not here.** It used to be a second switch on this
+            // page, and two switches for one setting is one switch too many: the
+            // GENERAL panel's FOG OF WAR is live — it arms the system you are
+            // about to test the scenario with — while this one only wrote a
+            // field, so the two could disagree and the panel gave no hint which
+            // one the player would get. There is now one switch, in GENERAL,
+            // and SAVE MISSION records whatever it is set to. See
+            // docs/16-FOG-OF-WAR.md and docs/22-MISSIONS.md §1.
+            var fogNote = UIFactory.CreateText(content,
+                "FOG OF WAR is set in GENERAL and saved with the mission.",
+                UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
+            UIFactory.Place(fogNote.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -482),
+                new Vector2(InnerWidth, 30));
 
             BuildMissionAreaBlock(content);
             // HQ ZONES and DEPLOYMENT ZONES are on the ZONES panel — see
@@ -182,7 +190,14 @@ namespace IronMeridian.UI
                 MissionCreateRequested?.Invoke(_missionCampaign, name);
             });
 
-            MissionActionButton(content, "DELETE MISSION", -MissionActionsTop - 96f, UiTheme.Danger, Color.white, () =>
+            // One pass over the whole book, for the campaign that was written
+            // before either field existed. Above DELETE and visually quieter
+            // than it: it is a bulk edit, and a bulk edit next to a destructive
+            // one wants to be told apart at a glance.
+            MissionActionButton(content, "SEED BOUNDARIES + HQ (ALL)", -MissionActionsTop - 96f,
+                UiTheme.Surface, UiTheme.Text, () => MissionSeedAllRequested?.Invoke());
+
+            MissionActionButton(content, "DELETE MISSION", -MissionActionsTop - 136f, UiTheme.Danger, Color.white, () =>
             {
                 if (_mission != null) MissionDeleteRequested?.Invoke(_mission);
             });
@@ -190,7 +205,7 @@ namespace IronMeridian.UI
             _missionStatus = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.Accent,
                 TextAnchor.UpperLeft);
             UIFactory.Place(_missionStatus.rectTransform, new Vector2(0f, 1f),
-                new Vector2(Pad, -MissionActionsTop - 138f), new Vector2(InnerWidth, 34));
+                new Vector2(Pad, -MissionActionsTop - 178f), new Vector2(InnerWidth, 34));
 
             var hint = UIFactory.CreateText(content,
                 "A mission is this record plus its map file, and SAVE writes both — so whatever is on the " +
@@ -199,11 +214,15 @@ namespace IronMeridian.UI
                 "NEW MISSION HERE starts one at the point the camera is looking at, in the campaign chosen " +
                 "above. DELETE removes it from the campaign board but leaves its map file on disk — a " +
                 "scenario takes an evening to lay out and this button is one mis-click.\n\n" +
+                "SAVE also fills in anything the mission is missing: a mission with no boundary gets one " +
+                "round its own order of battle, and a side with no headquarters gets one behind its own " +
+                "force. SEED BOUNDARIES + HQ (ALL) does that for every mission in the book at once, " +
+                "reading each map off disk; nothing already placed is moved.\n\n" +
                 "Missions are saved to your own copy of the list, which shadows the shipped one. Delete " +
                 "missions.json from the save folder to go back to the missions the game ships with.",
                 UiTheme.FontLabel, UiTheme.TextFaint, TextAnchor.UpperLeft);
-            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -MissionActionsTop - 176f),
-                new Vector2(InnerWidth, 250));
+            UIFactory.Place(hint.rectTransform, new Vector2(0f, 1f), new Vector2(Pad, -MissionActionsTop - 216f),
+                new Vector2(InnerWidth, 280));
 
             RefreshMissionList();
         }
@@ -214,7 +233,7 @@ namespace IronMeridian.UI
         /// <see cref="HqBlockBottom"/> so the page and its contents can never
         /// drift apart.
         /// </summary>
-        const float MissionsPageHeight = MissionActionsTop + 440f;
+        const float MissionsPageHeight = MissionActionsTop + 510f;
 
         /// <summary>
         /// Wraps a section's content in a scroll view of a fixed page height,
@@ -715,12 +734,9 @@ namespace IronMeridian.UI
 
             _missionSyncing = false;
 
-            bool fog = m != null && m.fogOfWar;
-            if (_missionFogLamp != null)
-            {
-                _missionFogLamp.GetComponent<Image>().color = fog ? UiTheme.Success : UiTheme.TextFaint;
-                _missionFogLabel.text = m == null ? "—" : fog ? "ON" : "OFF";
-            }
+            // Fog is not repainted here: it is GENERAL's switch now, and this
+            // page carries a note saying so rather than a second lamp that
+            // could disagree with it.
 
             if (_missionStatus != null)
                 _missionStatus.text = m == null

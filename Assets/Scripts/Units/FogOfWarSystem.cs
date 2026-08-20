@@ -185,9 +185,33 @@ namespace IronMeridian.Units
 
         // ------------------------------------------------------- sweep
 
+        /// <summary>What <see cref="CombatSystem.BattleRunning"/> was on the last tick.</summary>
+        bool _wasInBattle;
+
         void Update()
         {
-            _timer -= Time.deltaTime;
+            // **Unscaled.** This used to run on Time.deltaTime, which the game
+            // clock drives to zero whenever the battle is paused — and pausing
+            // is exactly when a player pans the camera around to look at the
+            // map. Frozen, the sweep stopped deciding what could be seen, so
+            // whatever the last tick happened to leave on screen stayed there;
+            // pause before the first sweep of a battle and the entire enemy
+            // order of battle simply stayed visible. What the player is allowed
+            // to see is a presentation decision, like every other piece of
+            // chrome here, and presentation does not stop when the fight does.
+            _timer -= Time.unscaledDeltaTime;
+
+            // The battle starting or stopping is worth a sweep *now* rather than
+            // up to four tenths of a second later. At the start that window is
+            // the whole enemy laydown sitting in plain view; at the end it is
+            // formations still missing from a map that is no longer a battle.
+            bool inBattle = CombatSystem.BattleRunning;
+            if (inBattle != _wasInBattle)
+            {
+                _wasInBattle = inBattle;
+                _timer = 0f;
+            }
+
             if (_timer > 0f) return;
             _timer = SweepSeconds;
 
@@ -216,6 +240,12 @@ namespace IronMeridian.Units
             foreach (var enemy in new List<UnitActor>(UnitRegistry.OfTeam(Team.Enemy)))
             {
                 if (enemy == null || !enemy.IsAlive) continue;
+                // A formation whose definition failed to resolve has no view
+                // range to reason about. Skipping it is right, and — more to the
+                // point — it used to throw out of the middle of the sweep, which
+                // left every enemy *after* it in the list visible for the rest
+                // of the battle. One bad row must not switch the fog off.
+                if (enemy.Def == null) continue;
 
                 // Off the battlefield: hidden outright, no contact kept.
                 if (!InBounds(enemy))
@@ -322,6 +352,24 @@ namespace IronMeridian.Units
         /// <summary>False until the blanket has been laid over this battle's ground.</summary>
         bool _blanketLaid;
 
+        /// <summary>
+        /// Forgets this battle entirely: every hidden formation revealed, every
+        /// contact dropped, the explored ground cleared and the blanket taken
+        /// down.
+        ///
+        /// Called when the map is reloaded or reset. Without it the fog carried
+        /// its memory of the *previous* scenario across — contacts pointing at
+        /// units that no longer exist, and a blanket still fitted to ground the
+        /// new map may be nowhere near.
+        /// </summary>
+        public void Reset()
+        {
+            RevealAll();
+            _sensors.Clear();
+            _wasInBattle = false;
+            _timer = 0f;
+        }
+
         /// <summary>How well the player can see one enemy formation.</summary>
         public enum Sighting
         {
@@ -361,7 +409,7 @@ namespace IronMeridian.Units
 
             foreach (var w in watchers)
             {
-                if (w == null || !w.IsAlive) continue;
+                if (w == null || !w.IsAlive || w.Def == null) continue;
                 double km = GeoUtils.DistanceKm(w.State.latitude, w.State.longitude,
                     enemy.State.latitude, enemy.State.longitude);
 

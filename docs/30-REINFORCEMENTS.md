@@ -6,7 +6,7 @@ This is the human-readable version of
 in the same change.**
 
 Written in **scenario mode**: left rail → UNITS → right-click a type → **ADD TO
-REINFORCEMENT**, then tuned on the **ARRIVING** tab.
+REINFORCEMENT**, then tuned on the **REINFORCEMENT** tab.
 Read in **battle mode**: left rail → **REINFORCEMENTS**.
 
 ---
@@ -35,7 +35,7 @@ right-click menu:
 | Entry | What it does |
 |---|---|
 | **ADD TO MAP** | Arms the placement ring. The next click on the ground puts that formation there — right-click or `Esc` cancels. See §2a |
-| **ADD TO REINFORCEMENT** | Puts the type on this side's arrival schedule at H+30, and shows the ARRIVING tab so you can see it land |
+| **ADD TO REINFORCEMENT** | Puts the type on this side's arrival schedule at H+30, and shows the REINFORCEMENT tab so you can see it land |
 
 The side is the palette's own FRIENDLY / ENEMY tab, read at the moment of the
 action — the same rule the drag already followed.
@@ -52,7 +52,9 @@ streamed in yet rather than leaving a counter buried in a ridge.
 While the ring is armed the map's own click handling stands down, so the click
 that places the formation cannot also select whatever it landed on.
 
-### 2b. The ARRIVING tab
+### 2b. The REINFORCEMENT tab
+
+Called ARRIVING until it was renamed. The old caption named the *moment* rather than the thing — everything on a scenario board arrives at some point — and the word that says what the list actually is, is the one the rest of the game already uses for it: the card menu says ADD TO REINFORCEMENT, and this file is `30-REINFORCEMENTS.md`.
 
 Third tab on the UNITS page, beside AVAILABLE and DEPLOYED — the three questions
 in order: what is there, what have I put down, what is still to come. It lists
@@ -173,7 +175,7 @@ already on it".
 | `Units/ReinforcementSystem.cs` | The schedule, the countdown, `Add`/`StepCount`/`BringForward`, and where an arrival lands |
 | `Data/MapSaveData.cs` | `ReinforcementEntry` (incl. `count`) and the `reinforcements` list |
 | `Data/MissionData.cs` | `MissionZone` — the deployment zones (docs/22 §1c) |
-| `UI/UnitPaletteUI.Units.cs` | The card right-click menu, and the ARRIVING tab that edits the schedule |
+| `UI/UnitPaletteUI.Units.cs` | The card right-click menu, and the REINFORCEMENT tab that edits the schedule |
 | `UI/UnitPaletteUI.Deploy.cs` | `ArmPlacement` / `TickPlacement` — the click-to-place ring |
 | `UI/UnitPaletteUI.Force.cs` | `BuildReinforcementSection` — the battle-mode read-only view, with NOW |
 | `Core/GameController.cs` | Wiring, the spawn path, `DeploymentZoneFor` |
@@ -189,7 +191,7 @@ already on it".
   FLOT is breached" or "when this objective falls" would need the trigger model
   that docs/28-FLOT.md §13 also wants.
 - **Echelon is fixed at battalion**, the same default the deploy palette uses;
-  the ARRIVING row shows it but cannot change it.
+  the REINFORCEMENT row shows it but cannot change it.
 - **Nothing routes them forward.** They arrive in the zone and stand there until
   ordered; a scenario that wants them marching on arrival has to be given that
   order by hand.

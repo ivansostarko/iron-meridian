@@ -79,14 +79,24 @@ Assets/Scripts/
                           — the order of battle above the units (docs/23-COMMANDERS.md)
     PlayerData.cs        TeamState/PlayerState/Difficulty + PlayerRegistry —
                           who is fighting the scenario (docs/25-PLAYERS.md)
+    CreditsData.cs       the credits roll as data: sections, roles and the
+                          people who held them, read from
+                          StreamingAssets/Data/credits.json (docs/44-CREDITS.md)
     TunableFields.cs     reflection over a data record's editable fields — what
                           drives the DEVELOPMENT catalogue editor
     GameCatalogs.cs      the register of every data table (units + five weapon
                           families), so one screen can list and tune them all
   Save/
     SaveSystem.cs        JSON load/save; user saves shadow shipped maps
+    SaveSlots.cs         NAMED saved games: GameSave, the local store and the
+                          cloud one. Cloud is a MOCK behind ICloudBackend and
+                          says so everywhere (docs/45-SAVE-AND-LOAD.md)
     MissionLibrary.cs    the mission list, read by the campaign screens and
                           written by the editor's MISSIONS panel
+    MissionSeeder.cs     gives a mission the boundary and two HQs it cannot be
+                          played properly without, derived from its own order of
+                          battle. Never overwrites what is placed
+                          (docs/22-MISSIONS.md §4a)
     TuningStore.cs       the player's sparse patch over units.json and the weapon
                           catalogues, with shipped-value baselines so REVERT works
   Audio/                 sound — see docs/10-AUDIO.md
@@ -154,7 +164,17 @@ Assets/Scripts/
                           counter it is describing and slides about under a hand
                           that is holding still
     PlaceholderScreenUI.cs  shared "under development" page + the menu screens
-                          that have nothing behind them yet
+                          that have nothing behind them yet (DLC only, now)
+    CreditsUI.cs         EXTRAS > CREDITS: a film-style roll set against a seam,
+                          read from Data/credits.json (docs/44-CREDITS.md)
+    SupplyPanelUI.cs     what one installation holds and who can reach it,
+                          opened by CLICKING it on the map. Stock bar, service
+                          radius, and every formation in range with what it is
+                          short of (docs/26-LOGISTICS.md §2a)
+    SaveLoadDialog.cs    the save browser: named slots, LOCAL / CLOUD tabs,
+                          overwrite confirm, a footer that reports what actually
+                          happened. Save and load are one screen in two modes
+                          (docs/45-SAVE-AND-LOAD.md)
     SinglePlayerUI.cs    campaign board + mission board (docs/22-MISSIONS.md)
     MapFont.cs           the one typeface for world-space map text (condensed OS
                          font, atlas-rebuild safe) — used by UnitLabel, MapLabel,
@@ -170,8 +190,12 @@ Assets/Scripts/
                           group, move formations between groups. It gives no
                           orders — a group's orders are on UnitActionBarUI,
                           where a formation's are
-    MainMenuUI.cs        left-hand command board: logo, flat entry rows on a
-                          faded field, version line, quit modal
+    MenuBoard.cs         the command board itself — faded field, spine, scrolling
+                          list, flat entry rows with hover paint and artwork
+                          preview. Shared by MainMenuUI and ExtrasUI so the two
+                          cannot drift (docs/11-GAME-MENU.md §3.5)
+    MainMenuUI.cs        the main menu on that board: logo, six destinations,
+                          version line, quit modal
     SettingsUI.cs        vertical tab rail: VIDEO (resolution, window mode,
                           quality, AA, shadows, textures, vsync, frame cap),
                           AUDIO (master + four channels, hover sounds) and
@@ -185,7 +209,8 @@ Assets/Scripts/
     StatEditorPanel.cs   generic label/value list for any data record; switches
                           from reading to editing without being rebuilt
     CommanderPanel.cs    the map editor's COMMANDERS section (docs/23-COMMANDERS.md)
-    ExtrasUI.cs          the EXTRAS menu: Units, DLC, Credits
+    ExtrasUI.cs          the EXTRAS board: Units, DLC, Credits — the main menu's
+                          board with three rows on it, each previewing its page
     UnitLibraryUI.cs     the unit encyclopaedia: arm board, then filtered list + 3D
     EffectsListUI.cs     PARTICLES lab (docs/08-PARTICLE-SYSTEMS.md §3)
     AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
@@ -232,9 +257,10 @@ Assets/Scripts/
                          recording (docs/39-CAPTURE.md)
     UnitPaletteUI.Units.cs
                          UNITS: side selector, search, the AVAILABLE/DEPLOYED/
-                          ARRIVING segment and the branch accordion. A card's
-                          right-click menu arms the placement ring or puts the
-                          type on the reinforcement schedule
+                          REINFORCEMENT segment (glyph + count over the name,
+                          each tab captioned on hover) and the branch accordion.
+                          A card's right-click menu arms the placement ring or
+                          puts the type on the reinforcement schedule
                           (docs/30-REINFORCEMENTS.md §2)
     UnitPaletteUI.Cinema.cs
                          the CINEMA MODE section — the waypoint list, the leg
@@ -323,6 +349,14 @@ Assets/Scripts/
     BlastDamage.cs       what a shell/bomb/warhead does to formations under it.
                           Range is measured to the formation's FOOTPRINT, not to
                           its map pin — see docs/17-ARTILLERY.md § Damage
+    ResupplySystem.cs    what a supply point is FOR: formations inside its
+                          service radius draw from it and it runs out. Battle
+                          mode only, one issue per formation per two scenario
+                          minutes (docs/26-LOGISTICS.md §2a)
+    MinefieldSystem.cs   what an enemy belt does to a formation that MOVES
+                          through it: blast, dust, sound and strength off.
+                          Only while moving, only the other side's mines,
+                          one strike then a wait (docs/31-OBSTACLES.md §6)
     ProceduralTextures.cs rings/discs/arrows generated at runtime
   Lines/
     MapLine.cs           LineRenderer polyline, terrain DRAPING (segments are
@@ -332,10 +366,13 @@ Assets/Scripts/
                           sampled at 90 m, and aligned to the GROUND PLANE
                           rather than billboarded, so they never stand up
     ObstacleSystem.cs    the barrier plan: mines and obstacles as NATO ground
-                          graphics, pick-then-click placement, save/load
+                          graphics. Pick-then-click for the stamped kinds, a
+                          POLYGON tool for MINEFIELD, save/load
                           (docs/31-OBSTACLES.md)
-    ObstacleMarker.cs    one graphic: flat symbol sized in METRES, clamped to
-                          the terrain, laid on its own bearing
+    ObstacleMarker.cs    one graphic. A stamped kind is a flat symbol sized in
+                          METRES on its own bearing; MINEFIELD is the doctrinal
+                          AREA — a draped outline studded with mine symbols.
+                          Both clamped to the terrain
     LineManager.cs       line collection <-> save data
     MarkerManager.cs     task marker collection <-> save data
     TaskMarker.cs        hold/guard/defend point graphic on the ground

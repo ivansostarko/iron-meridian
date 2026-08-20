@@ -56,17 +56,20 @@ All three layers set `raycastTarget = false`, so the background never intercepts
 | Default menu artwork | `Assets/Resources/Graphics/Backgrounds/default_background.png` | `Graphics/Backgrounds/default_background` | Main Menu, Development, Units List, Particles, Audio — **and, by fallback, the three below** | 0.62 (Units List: 0.86) | Shared artwork behind every menu screen. Envelopes the screen at any aspect; the scrim keeps titles, tables and buttons legible over it. |
 | Single player | `…/Graphics/Backgrounds/MainMenu/single-player.png` | `Graphics/Backgrounds/MainMenu/single-player` | Single Player — the campaign board, and the main menu's preview of it | 0.62 | The list of theatres, and the fallback behind any campaign with no artwork of its own. |
 | Multiplayer | `…/Graphics/Backgrounds/MainMenu/multi-player.png` | `Graphics/Backgrounds/MainMenu/multi-player` | Multiplayer, and the main menu's preview of it | 0.62 | The lobby screen. |
-| Extras | `…/Graphics/Backgrounds/MainMenu/extras.png` | `Graphics/Backgrounds/MainMenu/extras` | The main menu's EXTRAS row, on hover | 0.42 | The preview only. The Extras *screen* uses the interior artwork with the rest of the inner pages. |
+| Extras | `…/Graphics/Backgrounds/MainMenu/extras.png` | `Graphics/Backgrounds/MainMenu/extras` | The Extras board, and the main menu's EXTRAS row on hover | 0.42 | Both the preview and the screen's own picture. Extras is built like the main menu, so walking into it keeps the image the row promised instead of cutting to an unrelated interior. |
 | Development | `…/Graphics/Backgrounds/MainMenu/development.png` | `Graphics/Backgrounds/MainMenu/development` | The main menu's DEVELOPMENT row, on hover | 0.42 | Preview only. |
 | Settings | `…/Graphics/Backgrounds/MainMenu/settings.png` | `Graphics/Backgrounds/MainMenu/settings` | The main menu's SETTINGS row, on hover | 0.42 | Preview only. |
 | Quit | `…/Graphics/Backgrounds/MainMenu/quit.png` | `Graphics/Backgrounds/MainMenu/quit` | The main menu's QUIT row, on hover | 0.42 | Preview only. |
+| Units | `…/Graphics/Backgrounds/MainMenu/units.png` | `Graphics/Backgrounds/MainMenu/units` | Unit Library, and the Extras board's UNITS row on hover | 0.62 (Unit Library: 0.86) | The encyclopaedia's own artwork. Shown as the preview *and* behind the screen it leads to — a preview that changes the moment you act on it is a preview of nothing. Falls back to the Extras image. |
+| DLC | `…/Graphics/Backgrounds/MainMenu/dlc.png` | `Graphics/Backgrounds/MainMenu/dlc` | DLC, and the Extras board's DLC row on hover | 0.62 | Same arrangement as Units. Falls back to the Extras image. |
+| Credits | `…/Graphics/Backgrounds/MainMenu/credits.png` | `Graphics/Backgrounds/MainMenu/credits` | Credits, and the Extras board's CREDITS row on hover | 0.62 (Credits screen: **0.80**) | Same arrangement as Units. Falls back to the Extras image. |
 | Europe | `…/Graphics/Backgrounds/Missions/Europe/single-player-europe-background.png` | `Graphics/Backgrounds/Missions/Europe/single-player-europe-background` | EUROPE mission board | 0.62 | The theatre behind its own mission list. |
 | Africa | `…/Missions/Africa/single-player-africa-background.png` | `Graphics/Backgrounds/Missions/Africa/single-player-africa-background` | AFRICA mission board | 0.62 | ″ |
 | Asia | `…/Missions/Asia/single-player-asia-background.png` | `Graphics/Backgrounds/Missions/Asia/single-player-asia-background` | ASIA mission board | 0.62 | ″ |
 | North America | `…/Missions/NorthAmerica/single-player-north-america-background.png` | `Graphics/Backgrounds/Missions/NorthAmerica/single-player-north-america-background` | NORTH AMERICA mission board | 0.62 | ″ |
 | South America | `…/Missions/SouthAmerica/single-player-south-america-background.png` | `Graphics/Backgrounds/Missions/SouthAmerica/single-player-south-america-background` | SOUTH AMERICA mission board | 0.62 | ″ |
 | Australia | `…/Missions/Australia/single-player-australia-background.png` | `Graphics/Backgrounds/Missions/Australia/single-player-australia-background` | AUSTRALIA mission board | 0.62 | ″ |
-| Interior artwork | `Assets/Resources/Graphics/Backgrounds/background.png` | `Graphics/Backgrounds/background` | Settings, Extras, Unit Library, DLC, Credits | 0.78 (Settings and Unit Library: 0.86) | A front line seen from altitude, blue against red. One image for the screens behind the main menu rather than five ids naming one file — they are the pages you pass *through*, and giving each its own artwork would make the menu read as five different products. |
+| Interior artwork | `Assets/Resources/Graphics/Backgrounds/background.png` | `Graphics/Backgrounds/background` | Settings — and the fallback under the three Extras pages | 0.78 (Settings: 0.86) | A front line seen from altitude, blue against red. One image for the screens behind the main menu rather than five ids naming one file — they are the pages you pass *through*, and giving each its own artwork would make the menu read as five different products. |
 
 ### Fallbacks
 
@@ -110,16 +113,18 @@ Map terrain and imagery are streamed by Cesium, not shipped as textures — see 
 | Particles | `EffectsList` | Default | 0.86 | Dense table + 3D preview; the heavier scrim keeps rows legible. |
 | Audio | `AudioList` | Default | 0.86 | Dense table + transport; same scrim as the other data screens. |
 | Units List | `UnitsList` | Default | **0.86** | Dense table and stat panel — legibility beats atmosphere. |
-| Extras | `Extras` | **Interior** | 0.78 | Behind the UNITS / DLC / CREDITS entries. |
-| Unit Library | `UnitLibrary` | **Interior** | **0.86** | Arm board, then a filtered list with a 3D preview — dense, so it takes the dense-screen scrim. |
-| DLC | `Dlc` | **Interior** | 0.78 | "Under development" placeholder behind Extras. |
-| Credits | `Credits` | **Interior** | 0.78 | "Under development" placeholder behind Extras. |
+| Extras | `Extras` | **Extras**, then the hovered row's | 0.42 | The main menu's board with three rows on it — see §3.5. Each row previews the page it leads to. |
+| Unit Library | `UnitLibrary` | **Units** | **0.86** | Arm board, then a filtered list with a 3D preview — dense, so it takes the dense-screen scrim over its own artwork. |
+| DLC | `Dlc` | **DLC** | 0.62 | "Under development" placeholder behind Extras, on the image its row previewed. |
+| Credits | `Credits` | **Credits** | **0.80** | A real screen now: the film-style roll, read from `Data/credits.json` — see [44-CREDITS.md](44-CREDITS.md). Heavier scrim than the board it was reached from, because this is a column of small text read at length and the artwork is a backdrop to it rather than the subject. |
 | Map editor / game | `Game` | **None** | — | Deliberate: the Cesium globe *is* the background. A full-screen image would cover the map. |
 
 ### 3.1 The main menu board
 
 `MainMenuUI` lays the menu out as a command board down the left-hand edge: the
-logo, a scrolling list of entries, then the version line.
+logo, a scrolling list of entries, then the version line. **The board itself
+lives in `UI/MenuBoard.cs`** and is shared with the Extras screen — see §3.5;
+what follows describes it wherever it is used.
 
 **The field fades, it does not end.** The board stands on a solid dark column as
 wide as the interface, followed by ~260 px of gradient into the artwork
@@ -275,6 +280,12 @@ you go there, and a photograph of the place does that better than a line of text
 under a heading. A row with no preview named would leave the menu's own artwork
 up rather than blanking it — the guard is what keeps adding a seventh row cheap.
 
+**The Extras board does the same, one level down.** Its three rows preview
+`units.png`, `dlc.png` and `credits.png`, and **the destination screens show the
+same image again**. That is the rule the main menu already followed for
+single-player and multiplayer, applied to the pages behind Extras: a preview
+that is replaced the moment you act on it was never a preview of anything.
+
 **The single-player screen shows the theatre.** The campaign board carries
 `single-player.png`; hovering a campaign previews its ground, and opening one
 puts that image behind its fifteen missions until you back out. Mission rows
@@ -304,6 +315,31 @@ of the frame — without that the old picture draws over the new for one frame.
 **Sprites are cached by path** in `UIFactory.LoadSprite`, so a picture is read off
 disk once however many times it is shown. Only images actually hovered are
 loaded, which is why the six campaign images are not pre-built.
+
+---
+
+### 3.5 The Extras board
+
+`ExtrasUI` is `MainMenuUI` with three rows on it, and both get the board itself
+from **`UI/MenuBoard.cs`**: the faded field down the left-hand edge, the spine,
+the scrolling list, the flat entry rows with their accent strips, the hover
+paint and the artwork preview.
+
+**Why it is shared rather than copied.** Extras used to be three bordered cards
+centred over the interior artwork — a second interface, reached from the first,
+doing the same job a different way. Walking from a menu into a submenu should
+read as turning a page. Two copies of a layout are also two layouts that drift:
+change a row height in one and the screens quietly stop being the same program.
+
+What each screen still owns is its masthead and its rows. The main menu's
+masthead is the logo artwork; the Extras masthead is the page's name in the
+interface typeface over one line of what the page is for, because the wordmark
+belongs to the front door and repeating it in every room behind it would stop it
+meaning anything.
+
+**Adding a row** to either board is one `MenuBoard.Entry` call — glyph, title,
+detail line, what it does, and optionally a `BackgroundId` to preview. Give it a
+picture and register that picture in §2.1 in the same change.
 
 ---
 

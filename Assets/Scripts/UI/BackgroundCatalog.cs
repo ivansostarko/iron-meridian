@@ -16,9 +16,10 @@ namespace IronMeridian.UI
         /// <summary>Multiplayer lobby screen.</summary>
         Multiplayer,
         /// <summary>
-        /// What the main menu shows behind its EXTRAS row. The Extras *screen*
-        /// itself uses <see cref="Interior"/> with the rest of the inner pages —
-        /// this is the preview, and a preview is part of the main menu.
+        /// The EXTRAS board — both the main menu's preview behind its EXTRAS
+        /// row and the screen's own picture. The board is laid out like the
+        /// main menu, so walking into it keeps the artwork the row promised
+        /// instead of cutting to an unrelated interior.
         /// </summary>
         Extras,
         /// <summary>The main menu's preview behind DEVELOPMENT.</summary>
@@ -27,6 +28,18 @@ namespace IronMeridian.UI
         SettingsPreview,
         /// <summary>The main menu's preview behind QUIT.</summary>
         Quit,
+
+        // The EXTRAS board's own previews. Same device as the main menu's: the
+        // page shows where a row leads while the cursor is on it, so the screen
+        // answers "what is behind this?" before it is clicked. They are shown
+        // by the destination screens too, which is what makes the preview read
+        // as a promise rather than as decoration.
+        /// <summary>The unit encyclopaedia, and the EXTRAS board's preview of it.</summary>
+        ExtrasUnits,
+        /// <summary>The DLC page, and the EXTRAS board's preview of it.</summary>
+        ExtrasDlc,
+        /// <summary>The credits page, and the EXTRAS board's preview of it.</summary>
+        ExtrasCredits,
 
         // One per campaign, shown while its mission board is open. The theatre
         // is the thing being chosen, so the screen changes with it rather than
@@ -129,7 +142,10 @@ namespace IronMeridian.UI
                 resourcePath = "Graphics/Backgrounds/MainMenu/extras",
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
-                description = "The main menu's preview behind its EXTRAS row."
+                description = "The EXTRAS board, and the main menu's preview behind its " +
+                              "EXTRAS row. The board is built like the main menu, so it " +
+                              "shows the picture the row promised rather than swapping to " +
+                              "an unrelated interior."
             },
             new BackgroundDef
             {
@@ -154,6 +170,32 @@ namespace IronMeridian.UI
                 scrimAlpha = 0.62f,
                 fallback = BackgroundId.Default,
                 description = "The main menu's preview behind its QUIT row."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.ExtrasUnits,
+                resourcePath = "Graphics/Backgrounds/MainMenu/units",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Extras,
+                description = "The unit encyclopaedia, and the EXTRAS board's preview behind " +
+                              "its UNITS row."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.ExtrasDlc,
+                resourcePath = "Graphics/Backgrounds/MainMenu/dlc",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Extras,
+                description = "The DLC page, and the EXTRAS board's preview behind its DLC row."
+            },
+            new BackgroundDef
+            {
+                id = BackgroundId.ExtrasCredits,
+                resourcePath = "Graphics/Backgrounds/MainMenu/credits",
+                scrimAlpha = 0.62f,
+                fallback = BackgroundId.Extras,
+                description = "The credits page, and the EXTRAS board's preview behind its " +
+                              "CREDITS row."
             },
 
             // The six theatres. Each falls back to the campaign board's own

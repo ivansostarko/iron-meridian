@@ -348,7 +348,7 @@ namespace IronMeridian.UI
         public void RefreshReinforcements()
         {
             PopulateReinforcements();
-            // The UNITS page shows the same schedule under ARRIVING, and its tab
+            // The UNITS page shows the same schedule under REINFORCEMENT, and its tab
             // carries the count whichever list is open.
             if (_listMode == ListMode.Reinforcement) Populate();
             else RefreshListTabCounts();

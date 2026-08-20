@@ -114,6 +114,9 @@ namespace IronMeridian.Core
         IronMeridian.Logistics.SustainmentSystem _sustainment;
         ReinforcementSystem _reinforcements;
         IronMeridian.Lines.ObstacleSystem _obstacles;
+        MinefieldSystem _minefields;
+        IronMeridian.Logistics.ResupplySystem _resupply;
+        SupplyPanelUI _supplyPanel;
         MiniMapUI _minimap;
         GroupPanelUI _groupPanel;
         UnitActionBarUI _actionBar;
@@ -247,6 +250,12 @@ namespace IronMeridian.Core
             // a contact is stamped with the scenario time it was made.
             _fog = gameObject.AddComponent<FogOfWarSystem>();
             _fog.Init(_map.Georeference, _clock);
+            // Armed from the start, which is what the editor's GENERAL panel
+            // shows on its FOG OF WAR row. It changes nothing until a battle
+            // runs — see FogOfWarSystem.InEffect — so a designer laying units
+            // out still sees both sides; what it stops is a scenario being
+            // built with the fog off and then played with it on.
+            _fog.SetEnabled(true);
 
             _recon = gameObject.AddComponent<ReconOrderSystem>();
             _recon.Init(_combat, _fog, _map.Georeference);
@@ -310,9 +319,34 @@ namespace IronMeridian.Core
             _obstacles = gameObject.AddComponent<IronMeridian.Lines.ObstacleSystem>();
             _obstacles.Init(_map, _rig.Cam);
 
+            // What those belts do to whoever drives into them. Separate from the
+            // graphic on purpose: ObstacleSystem owns the barrier *plan*, which
+            // is an editor concern, and this owns what happens in the battle —
+            // see docs/31-OBSTACLES.md.
+            _minefields = gameObject.AddComponent<MinefieldSystem>();
+            _minefields.Init(_map, _obstacles, _clock);
+            // Whose cooldowns belong to one run of one fight: a formation that
+            // crossed a belt in the last battle must not be immune in the next.
+            _combat.RunningChanged += _ => _minefields.Reset();
+
             // What the force fights on: stocks typed by the designer, burn rates
             // derived from the order of battle — see docs/27-SUSTAINMENT.md.
             _sustainment = gameObject.AddComponent<IronMeridian.Logistics.SustainmentSystem>();
+
+            // What a supply point is for: formations standing on its ground draw
+            // from it, and it runs out — see docs/26-LOGISTICS.md.
+            _resupply = gameObject.AddComponent<IronMeridian.Logistics.ResupplySystem>();
+            _resupply.Init(_logistics, _clock);
+            _combat.RunningChanged += _ => _resupply.Reset();
+
+            // Stores under a strike go up with everything else on that ground.
+            // Static, because StrikeImpact is the funnel every strike goes
+            // through and none of them carries a reference to anything.
+            IronMeridian.Vfx.StrikeImpact.Logistics = _logistics;
+            IronMeridian.Vfx.StrikeImpact.SuppliesDestroyed = n =>
+                _hud?.Flash(n == 1
+                    ? "Supply installation destroyed."
+                    : $"{n} supply installations destroyed.");
 
             EditHistory.Clear();
 
@@ -320,6 +354,7 @@ namespace IronMeridian.Core
             _selection.InputBlocked = () => Loading || DateTimeDialog.IsOpen ||
                                             ConfirmDialog.IsOpen ||
                                             LossesDialog.IsOpen ||
+                                            SaveLoadDialog.IsOpen ||
                                             ContextMenuUI.IsOpen ||
                                             _effects.IsArmed ||
                                             _artillery.IsArmed ||
@@ -484,6 +519,62 @@ namespace IronMeridian.Core
                 };
             });
 
+            // What a supply point is holding and who can reach it. Opened by
+            // clicking the installation, for the same reason the front line's
+            // options are opened by clicking the line: it answers a question you
+            // only have while you are looking at the thing.
+            BuildStep("supply panel", () =>
+            {
+                _supplyPanel = gameObject.AddComponent<SupplyPanelUI>();
+                _supplyPanel.Build(canvas, _resupply);
+
+                _supplyPanel.Opened = () =>
+                {
+                    _selection.Select(null);
+                    if (_infoPanel != null) _infoPanel.Hide();
+                    if (_typePanel != null) _typePanel.Hide();
+                    if (_groupPanel != null) _groupPanel.SetSelection(null);
+                    if (_frontlinePanel != null) _frontlinePanel.Hide();
+                    if (_strikeDock != null) _strikeDock.Hide();
+                };
+                _supplyPanel.FocusUnitRequested = FlyToUnit;
+                _supplyPanel.RemoveRequested = site =>
+                {
+                    if (site == null) return;
+                    string name = LogisticsCatalog.Get(site.Kind).name;
+                    _logistics.Remove(site);
+                    _hud.Flash($"{name} removed.");
+                };
+
+                // Left-click on an installation. Asked only when the click found
+                // no formation — a depot under a battalion is scenery compared
+                // with the battalion standing on it.
+                _selection.GroundObjectClicked = screenPos =>
+                {
+                    if (_logistics == null) return false;
+                    var site = _logistics.PickAt(_rig.Cam, screenPos);
+                    if (site == null) return false;
+                    _supplyPanel.Show(site);
+                    return true;
+                };
+
+                // A site can go while its panel is up — a strike on it, or a
+                // cache issuing its last load. The panel closes itself when the
+                // reference dies; this is what stops it describing a site that
+                // has been removed but whose object Unity has not collected yet.
+                _logistics.Changed += () =>
+                {
+                    if (!SupplyPanelUI.IsOpen || _supplyPanel.Site == null) return;
+                    bool stillThere = false;
+                    foreach (var live in _logistics.Sites)
+                        if (live == _supplyPanel.Site) { stillThere = true; break; }
+                    if (stillThere) _supplyPanel.Refresh();
+                    else _supplyPanel.Hide();
+                };
+                _resupply.Flash = _hud.Flash;
+                _resupply.Changed += () => { if (SupplyPanelUI.IsOpen) _supplyPanel.Refresh(); };
+            });
+
             // The five fire menus, as an icon cluster at the top right. Built
             // before the palette: the palette lays its four strike sections
             // into the dock's pages, so the dock has to exist first.
@@ -571,6 +662,13 @@ namespace IronMeridian.Core
                 };
                 _palette.LineOfSightChanged = SetLineOfSightVisible;
                 _palette.WeaponRangeChanged = SetWeaponRangeVisible;
+                _palette.UnitModelsChanged = on =>
+                {
+                    UnitActor.SetModelsVisible(on);
+                    _hud.Flash(on
+                        ? "Unit 3D models shown — the counters stay, and the models move and turn with them."
+                        : "Unit 3D models hidden.");
+                };
                 _palette.FogOfWarChanged = on =>
                 {
                     _fog.SetEnabled(on);
@@ -595,6 +693,7 @@ namespace IronMeridian.Core
                 // MISSIONS section — the single-player campaign, edited here.
                 _palette.MissionOpenRequested = OpenMission;
                 _palette.MissionSaveRequested = SaveMission;
+                _palette.MissionSeedAllRequested = SeedAllMissions;
                 _palette.MissionCreateRequested = CreateMissionHere;
                 _palette.MissionDeleteRequested = DeleteMission;
 
@@ -667,6 +766,7 @@ namespace IronMeridian.Core
 
                 // MINES AND OBSTACLES section — the barrier plan.
                 _obstacles.Flash = _hud.Flash;
+                if (_minefields != null) _minefields.Flash = _hud.Flash;
                 _obstacles.Changed += _palette.RefreshObstacles;
                 _palette.ObstaclesClearRequested = () =>
                 {
@@ -717,7 +817,7 @@ namespace IronMeridian.Core
                 _reinforcements.Init(_clock, _combat);
                 _reinforcements.Flash = _hud.Flash;
                 // Both pages that show the schedule: the rail's REINFORCEMENTS
-                // row and the UNITS page's ARRIVING tab.
+                // row and the UNITS page's REINFORCEMENT tab.
                 _reinforcements.Changed += _palette.RefreshReinforcements;
                 _reinforcements.Spawn = (def, team, echelon, lat, lon) =>
                     OnPaletteDrop(def, team,
@@ -1005,8 +1105,8 @@ namespace IronMeridian.Core
                 _pauseMenu = gameObject.AddComponent<PauseMenuUI>();
                 _pauseMenu.Build(canvas);
                 _pauseMenu.BlockOpen = () => _areaTool.Drawing || _selection.Selected != null;
-                _pauseMenu.SaveRequested = SaveMap;
-                _pauseMenu.LoadRequested = LoadMap;
+                _pauseMenu.SaveRequested = OpenSaveBrowser;
+                _pauseMenu.LoadRequested = OpenLoadBrowser;
                 // EXIT goes back where the player came in from. Dropping a
                 // mission player at the main menu would make them walk the
                 // campaign browser again to retry the mission they just left.
@@ -1376,6 +1476,30 @@ namespace IronMeridian.Core
         /// avoid — a designer who moves a battalion, presses save, and finds the
         /// player still fighting the old one.
         /// </summary>
+        /// <summary>
+        /// Writes a mission: its record, and the whole of the editor's map.
+        ///
+        /// **Everything on every scenario panel goes in.** <see cref="CollectSave"/>
+        /// is the one place that reads the editor's live state, and it reads all
+        /// of it — units, control measures, task markers, the FLOT's mode, the
+        /// rear area, the map objects, the barrier plan, stocks, the arrival
+        /// schedule, the chain of command, the teams and players, the view, the
+        /// map style, buildings, H-hour, sky and weather. What the *record*
+        /// keeps on top of that is the handful of things the selection screens
+        /// need before any map is loaded, plus the two the fight needs and the
+        /// map file has no field for: the boundary and the headquarters.
+        ///
+        /// **Fog of war is read off the live system**, not off a field. It used
+        /// to be a switch on the MISSIONS panel that wrote the record while the
+        /// GENERAL panel's switch armed the actual system, so the two could
+        /// disagree and nothing said which one the player would get. There is
+        /// one switch now, and this is where its state is recorded.
+        ///
+        /// **A mission is seeded before it is written.** A boundary and two
+        /// headquarters are optional in the record and read harmlessly as "not
+        /// set", which is exactly why they never got set — see
+        /// <see cref="MissionSeeder"/>.
+        /// </summary>
         void SaveMission(MissionDefinition mission)
         {
             if (mission == null) return;
@@ -1385,9 +1509,13 @@ namespace IronMeridian.Core
             // …and for the view and weather settings the mission carries a copy
             // of, so a designer does not have to restate them in the panel.
             MissionLibrary.ReadBackFrom(mission, _save);
+            // One switch, in GENERAL. Read here rather than kept in step.
+            if (_fog != null) mission.fogOfWar = _fog.Enabled;
             // The mission's own fields then win, so the start point stays the
             // one that was typed rather than wherever the camera drifted to.
             MissionLibrary.ApplyTo(mission, _save);
+
+            var seeded = MissionSeeder.Seed(mission, _save);
 
             string mapPath = SaveSystem.SaveMap(_save, mission.ResolvedMapFile);
             MissionLibrary.SaveBook();
@@ -1400,16 +1528,80 @@ namespace IronMeridian.Core
             // is about the editor catching up with the mission it just adopted.
             _areaTool.Show(mission.area);
             ApplyMissionArea();
+            RefreshHqZones();
+            RefreshDeploymentZones();
 
-            bool bounded = mission.area != null && mission.area.HasArea;
-            _hud.Flash($"Saved mission '{mission.name}' -> {mapPath}" +
-                       (bounded ? "" : "  ·  no mission area set — the battle is unbounded"));
+            string extra = seeded.AnythingSeeded ? "  ·  " + seeded.Report() : "";
+            _hud.Flash($"Saved mission '{mission.name}' -> {mapPath}{extra}");
             if (_palette != null)
             {
+                bool bounded = mission.area != null && mission.area.HasArea;
                 _palette.SetMissionStatus($"Saved {mission.id} · {_save.units.Count} unit(s)" +
-                    (bounded ? $" · {mission.area.AreaKm2():n0} km² area." : " · unbounded."));
+                    (bounded ? $" · {mission.area.AreaKm2():n0} km² area" : " · unbounded") +
+                    (seeded.AnythingSeeded ? $" · {seeded.Report()}." : "."));
                 _palette.RefreshMissionArea();
             }
+        }
+
+        /// <summary>
+        /// Gives **every** mission in the book a boundary and two headquarters,
+        /// in one pass.
+        ///
+        /// The seeder runs on save, so anything edited from now on is covered.
+        /// This is for everything that already exists: a campaign written before
+        /// either field did, where every mission is playable and every one of
+        /// them is unbounded with no command post on either side. Doing that by
+        /// hand is opening thirty missions, waiting for thirty maps to stream in
+        /// and clicking four things on each.
+        ///
+        /// It reads each mission's map **off disk** rather than opening it in
+        /// the editor — the seeder only needs the order of battle's coordinates,
+        /// and loading terrain thirty times to look at a list of lat/lons would
+        /// take minutes for no gain. Missions already carrying both are left
+        /// exactly as they are.
+        /// </summary>
+        void SeedAllMissions()
+        {
+            var book = MissionLibrary.Book;
+            if (book == null || book.missions == null || book.missions.Count == 0)
+            {
+                _hud.Flash("No missions to seed.");
+                return;
+            }
+
+            int touched = 0;
+            foreach (var mission in book.missions)
+            {
+                if (mission == null) continue;
+
+                // The mission open in the editor is seeded from the live map
+                // rather than from disk: what is on screen may not be saved yet,
+                // and seeding from a stale file would box in a laydown that has
+                // moved.
+                bool isOpen = _mission != null && mission.id == _mission.id;
+                MapSaveData data = isOpen ? _save : SaveSystem.LoadMap(mission.ResolvedMapFile);
+
+                if (MissionSeeder.Seed(mission, data).AnythingSeeded) touched++;
+            }
+
+            MissionLibrary.SaveBook();
+
+            if (_mission != null)
+            {
+                _areaTool.Show(_mission.area);
+                ApplyMissionArea();
+                RefreshHqZones();
+            }
+            if (_palette != null)
+            {
+                _palette.RefreshMissionArea();
+                _palette.SetMissionStatus(touched == 0
+                    ? $"All {book.missions.Count} mission(s) already have a boundary and both HQs."
+                    : $"Seeded {touched} of {book.missions.Count} mission(s).");
+            }
+            _hud.Flash(touched == 0
+                ? "Every mission already has a boundary and both headquarters."
+                : $"Seeded {touched} mission(s) with a boundary and headquarters.");
         }
 
         /// <summary>
@@ -1424,6 +1616,10 @@ namespace IronMeridian.Core
             var mission = MissionLibrary.Create(campaign, name, lat, lon);
             mission.startAltitudeMeters = Mathf.Clamp(_rig.Distance, 300f, 120000f);
             MissionLibrary.ReadBackFrom(mission, _save);
+            if (_fog != null) mission.fogOfWar = _fog.Enabled;
+            // Born with a boundary and two headquarters rather than acquiring
+            // them if somebody remembers — see MissionSeeder.
+            MissionSeeder.Seed(mission, _save);
             MissionLibrary.SaveBook();
 
             _mission = mission;
@@ -1432,7 +1628,8 @@ namespace IronMeridian.Core
 
             _hud.SetTitle(mission.name.ToUpperInvariant());
             _hud.Flash($"Created mission '{mission.name}' in {Data.CampaignInfo.DisplayName(campaign)}. " +
-                       "Lay it out, set its area, then SAVE MISSION + MAP.");
+                       "It has a starting boundary and two headquarters — move them, lay it out, " +
+                       "then SAVE MISSION + MAP.");
 
             _areaTool.Show(mission.area);
             ApplyMissionArea();
@@ -2269,6 +2466,9 @@ namespace IronMeridian.Core
 
             if (_vfx != null) _vfx.StopAll();
             if (_aftermath != null) _aftermath.ClearAll();
+            if (_minefields != null) _minefields.Reset();
+            if (_resupply != null) _resupply.Reset();
+            if (_supplyPanel != null) _supplyPanel.Hide();
             _sectors.ClearAll();
             EditHistory.Clear();
         }
@@ -2305,21 +2505,153 @@ namespace IronMeridian.Core
             _save.autoDayNight = _weather.AutoDayNight;
         }
 
-        void SaveMap()
+        /// <summary>
+        /// Writes the scenario, and the mission record with it when there is one.
+        ///
+        /// **A mission's map save is a mission save.** The record carries the
+        /// view, the weather, H-hour, the fog switch, the boundary and the two
+        /// headquarters; leaving any of them stale means the player entering the
+        /// mission on settings the designer changed and saved. So every path
+        /// that writes the map goes through here, and here updates both — F5,
+        /// the pause menu's SAVE, and the save browser.
+        ///
+        /// Anything the mission is still missing is seeded on the way past —
+        /// see <see cref="MissionSeeder"/>.
+        /// </summary>
+        /// <returns>A one-line report for whoever asked.</returns>
+        string WriteMissionAndMap()
         {
             CollectSave();
 
-            // A mission's map save is also a mission save: the record carries a
-            // copy of the view and weather, and leaving it stale would mean the
-            // player entering on settings the designer changed and saved.
+            string seededNote = "";
             if (_mission != null)
             {
                 MissionLibrary.ReadBackFrom(_mission, _save);
+                if (_fog != null) _mission.fogOfWar = _fog.Enabled;
+                var seeded = MissionSeeder.Seed(_mission, _save);
+                if (seeded.AnythingSeeded)
+                {
+                    seededNote = "  ·  " + seeded.Report();
+                    _areaTool.Show(_mission.area);
+                    ApplyMissionArea();
+                    RefreshHqZones();
+                    if (_palette != null) _palette.RefreshMissionArea();
+                }
                 MissionLibrary.SaveBook();
             }
 
             string path = SaveSystem.SaveMap(_save, mapFileName);
-            _hud.Flash($"Saved -> {path}");
+            return (_mission != null
+                ? $"Saved mission '{_mission.name}' -> {path}"
+                : $"Saved -> {path}") + seededNote;
+        }
+
+        void SaveMap() => _hud.Flash(WriteMissionAndMap());
+
+        // --------------------------------------------------- the save browser
+
+        /// <summary>
+        /// SAVE on the pause menu: name it, choose where it goes, write it.
+        ///
+        /// **The mission is updated whether or not a slot is written.** Pressing
+        /// SAVE while editing a mission means "keep what I have done", and a
+        /// player who then picked a slot name and cancelled would reasonably
+        /// expect their mission not to have been thrown away. So
+        /// <see cref="WriteMissionAndMap"/> runs first, on the way in — the slot
+        /// is an additional copy, not the only one.
+        /// </summary>
+        void OpenSaveBrowser()
+        {
+            string report = WriteMissionAndMap();
+            _hud.Flash(report);
+
+            SaveLoadDialog.Open(_canvas, SaveLoadDialog.Mode.Save,
+                onSave: FillGameSave, onLoad: null,
+                suggestedName: SuggestedSaveName());
+        }
+
+        void OpenLoadBrowser() =>
+            SaveLoadDialog.Open(_canvas, SaveLoadDialog.Mode.Load,
+                onSave: null, onLoad: ApplyGameSave);
+
+        /// <summary>
+        /// A first name for a save: the mission or map it is of, so a list of
+        /// them reads as a list of *places* rather than of "Save 4".
+        /// </summary>
+        string SuggestedSaveName()
+        {
+            string stem = _mission != null && !string.IsNullOrEmpty(_mission.name)
+                ? _mission.name
+                : (_save != null && !string.IsNullOrEmpty(_save.mapName) ? _save.mapName : "Save");
+            return SaveSlots.NextFreeName(SaveDestination.Local, SaveSlots.Sanitise(stem));
+        }
+
+        /// <summary>
+        /// Fills a slot from the live game. The scenario is deep-copied through
+        /// JSON rather than referenced: <c>_save</c> keeps being edited after
+        /// this returns, and a slot holding a reference to it would quietly
+        /// become a save of whatever happened next.
+        /// </summary>
+        bool FillGameSave(GameSave save)
+        {
+            if (save == null) return false;
+            CollectSave();
+
+            save.missionId = _mission != null ? _mission.id : "";
+            save.missionName = _mission != null ? _mission.name : "";
+            save.mapFile = mapFileName;
+            save.unitCount = _save.units.Count;
+            save.battleRunning = _combat != null && _combat.Running;
+            save.map = JsonUtility.FromJson<MapSaveData>(JsonUtility.ToJson(_save));
+            return save.map != null;
+        }
+
+        /// <summary>
+        /// Puts a saved game back on the map.
+        ///
+        /// **The scenario comes from the slot, the mission from the book.** A
+        /// save holds the whole scenario, so that is what is applied; the
+        /// mission record it names is looked up fresh rather than being carried
+        /// in the file, because the designer may well have edited the mission
+        /// since — and the briefing, the boundary and the headquarters as they
+        /// are *now* are what the player should get. A save naming a mission
+        /// that has since been deleted still loads: it is a scenario, and the
+        /// scenario is all of it that mattered.
+        /// </summary>
+        bool ApplyGameSave(GameSave save)
+        {
+            if (save == null || save.map == null) return false;
+
+            _save = save.map;
+            if (!string.IsNullOrEmpty(save.mapFile)) mapFileName = save.mapFile;
+
+            ClearMapContents();
+
+            if (!string.IsNullOrEmpty(save.missionId))
+            {
+                var mission = MissionLibrary.Get(save.missionId);
+                if (mission != null)
+                {
+                    _mission = mission;
+                    MissionLibrary.Select(mission);
+                    _hud.SetTitle(mission.name.ToUpperInvariant());
+                }
+            }
+
+            ApplySave(_save);
+
+            if (_mission != null)
+            {
+                if (_palette != null) _palette.ShowMission(_mission);
+                _areaTool.Show(_mission.area);
+                ApplyMissionArea();
+                RefreshHqZones();
+                RefreshDeploymentZones();
+                if (_fog != null) _fog.SetEnabled(_mission.fogOfWar);
+            }
+
+            _hud.Flash($"Loaded '{save.slot}' — {save.Describe()}");
+            return true;
         }
 
         // ------------------------------------------------------- reset
@@ -2364,18 +2696,30 @@ namespace IronMeridian.Core
             _artillery.Cancel();
             _airStrike.Cancel();
             _uavStrike.Cancel();
+            if (_airDefence != null) _airDefence.CancelAll();
             _selection.Select(null);
             CloseDockedPanels();
 
-            // Editor settings, and the panel lamps that report them.
-            _fog.SetEnabled(false);
+            // A tour is a path over ground that is about to be replaced.
+            if (_cinema != null) { _cinema.Stop(); _cinema.Clear(); }
+            // Every drawing tool put away, including the ones that leave a
+            // half-finished graphic on the map rather than a mode flag: an
+            // outline in progress survives having its map reloaded underneath it
+            // and is then impossible to finish or get rid of.
+            _areaTool.CancelDrawing();
+            _frontline.CancelDrawing();
+
+            // Editor settings, and the panel lamps that report them. RESET means
+            // "back to the defaults", and the fog's default is armed — see
+            // docs/16-FOG-OF-WAR.md.
+            _fog.SetEnabled(true);
             _showLineOfSight = true;
             _showWeaponRange = true;
             _sectors.AutoUpdate = false;
             _sectors.ClearAll();
             if (_palette != null) _palette.SetFlotHolder("");
             _frontline.ResetToDefaults();
-            if (_palette != null) _palette.SyncGeneralToggles(false, false, true, true);
+            if (_palette != null) _palette.SyncGeneralToggles(false, true, true, true);
             UnitActor.SetLabelScale(1f);
             _clock.SetSpeed(GameClock.NormalSpeed);
             _mapControls.SetControlsVisible(true);
@@ -2406,6 +2750,15 @@ namespace IronMeridian.Core
             StrikeBudget.Reset();
             EditHistory.Clear();
 
+            // The two systems that keep a memory of the battle rather than a
+            // list of objects. Neither is rebuilt by ApplySave, so without this
+            // a reset map inherits the last one's contacts, its explored ground
+            // and its record of who has already driven into which minefield —
+            // state about a scenario that no longer exists.
+            if (_fog != null) _fog.Reset();
+            if (_minefields != null) _minefields.Reset();
+            if (_resupply != null) _resupply.Reset();
+
             ApplySave(_save);
             _map.SetViewMode(_save.viewMode == "Mode2D" ? ViewMode.Mode2D : ViewMode.Mode3D);
             _map.SetMapStyle(System.Enum.TryParse(_save.mapStyle, out MapStyle style) ? style : MapStyle.Satellite);
@@ -2418,21 +2771,21 @@ namespace IronMeridian.Core
             _hud.Flash($"Editor reset — '{_save.mapName}' reloaded from the shipped scenario.");
         }
 
+        /// <summary>
+        /// F9: back to the scenario file this map came from.
+        ///
+        /// Deliberately still the *map file* rather than the quick-save slot.
+        /// F5/F9 have always been "write the scenario / read it back" in this
+        /// editor, and that is the pair a designer uses while laying one out;
+        /// the named slots are a different tool, reached from the pause menu,
+        /// and are listed there including the quick save.
+        /// </summary>
         void LoadMap()
         {
             var data = SaveSystem.LoadMap(mapFileName);
             if (data == null) { _hud.Flash("No save found."); return; }
             _save = data;
-            foreach (var a in new System.Collections.Generic.List<UnitActor>(UnitRegistry.All))
-                if (a != null) Destroy(a.gameObject);
-            UnitRegistry.Clear();
-            LossLedger.Clear();
-            // World-anchored wreck fires and smoke outlive their units by design,
-            // so they have to be cleared explicitly on a reload.
-            if (_vfx != null) _vfx.StopAll();
-            if (_aftermath != null) _aftermath.ClearAll();
-            // Undo closures captured actors that no longer exist.
-            EditHistory.Clear();
+            ClearMapContents();
             ApplySave(_save);
             _hud.Flash($"Loaded '{_save.mapName}'.");
         }
@@ -2454,6 +2807,7 @@ namespace IronMeridian.Core
             if (_typePanel != null) _typePanel.Hide();
             if (_groupPanel != null) _groupPanel.SetSelection(null);
             if (_frontlinePanel != null) _frontlinePanel.Hide();
+            if (_supplyPanel != null) _supplyPanel.Hide();
             if (_strikeDock != null) _strikeDock.Hide();
 
             _effects.Cancel();
@@ -2486,6 +2840,7 @@ namespace IronMeridian.Core
             _logistics.LoadFrom(data.logistics);
             _mapObjects.LoadFrom(data.mapObjects);
             _obstacles.LoadFrom(data.obstacles);
+            if (_minefields != null) _minefields.Reset();
             _sustainment.LoadFrom(data.resources);
             _reinforcements.LoadFrom(data.reinforcements);
             // Commanders last. They are referenced by id from the units that are
@@ -2885,6 +3240,7 @@ namespace IronMeridian.Core
             if (_typePanel != null) _typePanel.SetTopInset(top);
             if (_groupPanel != null) _groupPanel.SetTopInset(top);
             if (_frontlinePanel != null) _frontlinePanel.SetTopInset(top);
+            if (_supplyPanel != null) _supplyPanel.SetTopInset(top);
             if (_strikeDock != null) _strikeDock.SetTopInset(top);
         }
 

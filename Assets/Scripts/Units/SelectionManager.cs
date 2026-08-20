@@ -38,6 +38,22 @@ namespace IronMeridian.Units
         /// </summary>
         public System.Action<Lines.MapLine> LineClicked;
 
+        /// <summary>
+        /// Asked with the click position before a click on bare ground is
+        /// resolved; return true to consume it.
+        ///
+        /// This is how a supply point opens its panel. It is a callback rather
+        /// than a pick here because <see cref="SelectionManager"/> knows about
+        /// units and control measures and has no business knowing about the rear
+        /// area — the same reason <see cref="ContextMenuRequested"/> is asked
+        /// rather than answered.
+        ///
+        /// **Units win.** A depot under a formation is scenery compared with the
+        /// formation standing on it, so this is only asked when the click found
+        /// no unit — exactly the precedence <see cref="LineClicked"/> gets.
+        /// </summary>
+        public System.Func<Vector2, bool> GroundObjectClicked;
+
         const float DragThresholdPx = 6f;
 
         readonly List<UnitActor> _selection = new List<UnitActor>();
@@ -438,6 +454,15 @@ namespace IronMeridian.Units
                 else if (shift)
                 {
                     ToggleInSelection(_pendingClickUnit);
+                }
+                else if (_pendingClickUnit == null && GroundObjectClicked != null &&
+                         GroundObjectClicked(Input.mousePosition))
+                {
+                    // Something on the ground took the click — a supply point,
+                    // which opens its own panel. The selection is dropped for
+                    // the same reason a line click drops it: that panel shares
+                    // the right-hand edge with the unit inspector.
+                    Select(null);
                 }
                 else if (_pendingClickUnit == null && LineUnderMouse() is Lines.MapLine line)
                 {
