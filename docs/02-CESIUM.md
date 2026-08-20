@@ -82,6 +82,11 @@ A player build copies `cesium-token.txt` into its own `StreamingAssets`, so **wh
 
 If you deliberately bundle one (`build-installer.ps1 -IncludeToken` — an internal build, a demo machine), issue a token scoped to nothing but asset read for the tilesets listed above, and be ready to revoke it.
 
+⚠️ **The web build is worse than all of them.** StreamingAssets in a WebGL build
+is served as plain files, so `cesium-token.txt` is one fetch away from anyone who
+loads the page — no unpacking, just a URL. A public web build is a **published
+token**. `docs/41-WEB.md` §6.
+
 ⚠️ **The Android build has no strip.** `scripts/build-android.ps1` has no
 `-IncludeToken` switch because it has no way *not* to include it: the file is
 packed into the APK, in plain text, and an APK is easier to pass around than an

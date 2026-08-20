@@ -59,6 +59,38 @@ namespace IronMeridian.Core
             set => PlayerPrefs.SetInt(FrameCapKey, value);
         }
 
+        /// <summary>
+        /// Whether the player has ever chosen a frame cap.
+        ///
+        /// The difference between "they picked unlimited" and "nobody has
+        /// picked anything" — which are the same stored value and very
+        /// different intentions. A platform that wants to seed a default
+        /// (<see cref="SteamDeck"/>) must only do so for the second.
+        /// </summary>
+        public static bool HasFrameCap => PlayerPrefs.HasKey(FrameCapKey);
+
+        /// <summary>
+        /// Sets the frame cap **only if the player has never chosen one**, by
+        /// value in frames per second rather than by index.
+        ///
+        /// A platform default is a starting point, not a policy: overwriting a
+        /// choice on every launch is how a settings screen stops being believed.
+        /// An fps figure that is not one of <see cref="FrameCaps"/> is ignored
+        /// rather than rounded — the list is what the UI can show, and a value
+        /// outside it would leave that screen displaying something the player
+        /// cannot get back to.
+        /// </summary>
+        public static void SeedFrameCap(int fps)
+        {
+            if (HasFrameCap) return;
+            int index = System.Array.IndexOf(FrameCaps, fps);
+            if (index < 0) return;
+            FrameCapIndex = index;
+            // With vsync on the display sets the rate and the cap is inert, so
+            // seeding one means turning the other off.
+            if (!PlayerPrefs.HasKey(VSyncKey)) VSync = false;
+        }
+
         /// <summary>Index into <see cref="AntiAliasSamples"/>.</summary>
         public static int AntiAliasIndex
         {

@@ -13,16 +13,35 @@ Assets/Scripts/
   Core/
     GameConfig.cs        constants: scenes, colours, tuning
     DisplaySettings.cs   the player's video settings and the one place they are
-                          applied (quality, AA, shadows, textures, frame cap)
+                          applied (quality, AA, shadows, textures, frame cap).
+                          SeedFrameCap writes a platform default ONLY where the
+                          player has never chosen (docs/42-STEAM-DECK.md §4)
     CesiumTokenConfig.cs Cesium ion token resolution (file > constant)
     StreamingAssetsFile.cs  reads a shipped data file on ANY platform. On Android
-                          StreamingAssets is a URL into the APK and System.IO
-                          cannot open it, so every read of units.json,
-                          unit-names.json, missions.json, a shipped map or the
-                          ion token goes through here (docs/40-ANDROID.md §1a)
+                          StreamingAssets is a URL into the APK and on WebGL a
+                          URL on the server; System.IO opens neither, so every
+                          read of units.json, unit-names.json, missions.json, a
+                          shipped map or the ion token goes through here.
+                          Android reads on demand; WebGL PRELOADS, because a
+                          browser has one thread and a spin would hang the tab
+                          (docs/40-ANDROID.md §1a, docs/41-WEB.md §1)
+    WebStorage.cs        the browser's side of saving: Flush() pushes
+                          persistentDataPath through to IndexedDB, without which
+                          a save is lost when the tab closes. Also takes
+                          right-click back off the browser. Empty everywhere
+                          else (docs/41-WEB.md §2, §3)
     TouchInput.cs        the gestures a mouse has no equivalent for: long press
                           = right click, pinch = wheel, twist = orbit, drag =
                           pan. Zero on a desktop (docs/40-ANDROID.md §2)
+    GamepadInput.cs      the same job for a controller: sticks pan and orbit,
+                          triggers zoom, B is right-click, X faces a formation.
+                          A Steam Deck has no keyboard and half this game's
+                          verbs were keys. Handles the Windows/Linux axis
+                          numbering split in one place (docs/42-STEAM-DECK.md §3)
+    SteamDeck.cs         is this a handheld, and the defaults that follow -
+                          1280x800 borderless, a SEEDED (not forced) 60 fps cap.
+                          Detected from Valve's SteamDeck=1 environment
+                          variable, so no SDK is needed (docs/42-STEAM-DECK.md §4)
     GameController.cs    Game scene entry point; wires all systems
     GameClock.cs         operational clock + speed — see docs/13-DATE-AND-TIME.md
     ConnectivityWatcher.cs  polls network reachability; drives the HUD alert
@@ -34,7 +53,10 @@ Assets/Scripts/
     SteamIntegration.cs  the only contact point with Steam, behind the
                           IRONMERIDIAN_STEAM define (docs/36-STEAM.md)
     SceneLoader.cs       async scene load behind the loading overlay
-                          (docs/12-LOADERS.md §3.1)
+                          (docs/12-LOADERS.md §3.1). Also where the WebGL
+                          shipped-data preload is waited on, because every
+                          screen that reads it is entered through here
+                          (docs/41-WEB.md §1a)
     NonTerrain.cs        marks a collider as NOT ground, so terrain sampling
                           steps over it. Anything that clamps to the ground AND
                           carries a collider otherwise re-clamps onto itself and
@@ -77,9 +99,15 @@ Assets/Scripts/
     ProceduralAudio.cs   synthesised effect sounds (no asset dependency)
   UI/
     UIFactory.cs         runtime uGUI widget factory (buttons, tabs, dropdowns, screen background…)
-                          ReferenceResolution is 1280x720 on a handheld and
-                          1920x1080 elsewhere, which scales every control up on
-                          a phone (docs/40-ANDROID.md §2a)
+                          ReferenceResolution is 1280x720 on a handheld,
+                          1280x800 on a Steam Deck and 1920x1080 elsewhere
+                          (docs/40-ANDROID.md §2a, docs/42-STEAM-DECK.md §4).
+                          CreateCanvas also attaches SafeAreaCanvas
+    SafeAreaCanvas.cs    keeps chrome out from under a notch, a Dynamic Island
+                          or a home indicator: one inset rect everything is
+                          parented into, rather than an offset on all thirty
+                          panels. Not even added on a rectangular screen
+                          (docs/43-IOS.md §3)
                           TextFieldFocused is the one answer to "is the
                           player typing" - CameraRig and GameController
                           both stand their shortcuts down on it
@@ -383,6 +411,17 @@ Assets/Scripts/
     AndroidBuild.cs      Tools > Iron Meridian > Android >. Player settings and
                           the batch APK/AAB build behind scripts/build-android.ps1
                           (docs/40-ANDROID.md §4)
+    WebBuild.cs          Tools > Iron Meridian > Web >. Player settings and the
+                          batch WebGL build behind scripts/build-web.ps1
+                          (docs/41-WEB.md §5, §7)
+    LinuxBuild.cs        Tools > Iron Meridian > Linux >. The native Steam Deck
+                          build - SteamOS is Linux - behind
+                          scripts/build-linux.ps1 (docs/42-STEAM-DECK.md §5)
+    IosBuild.cs          Tools > Iron Meridian > iOS >. EXPORTS AN XCODE PROJECT,
+                          not an app - the archive needs a Mac. Also the
+                          [PostProcessBuild] that writes the Info.plist keys,
+                          because the project is regenerated on every export and
+                          an edit made in Xcode is lost (docs/43-IOS.md §5, §6)
     VfxInstaller.cs      Tools > Iron Meridian > Install VFX Prefabs
     ModelInstaller.cs    Tools > Iron Meridian > Install Unit Models
     PackageImporter.cs   Tools > Iron Meridian > Import Bundled Packages

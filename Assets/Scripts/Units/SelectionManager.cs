@@ -279,7 +279,8 @@ namespace IronMeridian.Units
         }
 
         /// <summary>
-        /// The right mouse button, or the touch gesture that stands in for it.
+        /// The right mouse button, or the gesture or button that stands in for
+        /// it — a long press on a touch screen, B on a pad.
         ///
         /// A touch screen has no second button, and right-click is not a
         /// flourish in this game — it is the move order, the context menu and
@@ -293,7 +294,9 @@ namespace IronMeridian.Units
             get
             {
                 Core.TouchInput.Poll();
-                return Input.GetMouseButtonDown(1) || Core.TouchInput.SecondaryDown;
+                return Input.GetMouseButtonDown(1) ||
+                       Core.TouchInput.SecondaryDown ||
+                       Core.GamepadInput.SecondaryDown;
             }
         }
 
@@ -365,7 +368,9 @@ namespace IronMeridian.Units
             // into facing mode as well.
             bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) ||
                         Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
-            if (!ctrl && !toolBlocked && _selection.Count > 0 && Input.GetKeyDown(KeyCode.C))
+            // X on a pad, C on a keyboard. A Steam Deck has no C.
+            if (!ctrl && !toolBlocked && _selection.Count > 0 &&
+                (Input.GetKeyDown(KeyCode.C) || Core.GamepadInput.FaceDown))
             {
                 BeginRotation();
                 return;
@@ -495,8 +500,10 @@ namespace IronMeridian.Units
 
         void UpdateRotation(bool overUI)
         {
-            if (Input.GetKeyDown(KeyCode.Escape)) { CancelRotation(); return; }
+            if (Input.GetKeyDown(KeyCode.Escape) || Core.GamepadInput.SecondaryDown)
+            { CancelRotation(); return; }
             if (Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.Return) ||
+                Core.GamepadInput.FaceDown || Core.GamepadInput.ConfirmDown ||
                 Input.GetMouseButtonDown(0))
             {
                 _rotating = false;

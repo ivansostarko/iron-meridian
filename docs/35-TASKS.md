@@ -25,6 +25,11 @@ describe different work.
 | | `android` | Build the Android APK into `Builds\Android` |
 | | `android-aab` | Build the Android App Bundle (`.aab`) for Play |
 | | `android-install` | Build a development APK and `adb install -r` it on the attached device |
+| | `ios` | Export the iOS Xcode project into `Builds\iOS` — **the archive is finished on a Mac** |
+| | `linux` | Build the Linux / Steam Deck player into `Builds\Linux` |
+| | `web` | Build the WebGL player into `Builds\Web` |
+| | `web-serve` | Build for the web, then serve it on localhost and open a browser |
+| | `serve` | Serve the WebGL build already in `Builds\Web` |
 | | `run` | Launch the built player |
 | **Data and artwork** | `units` | Regenerate `units.json` |
 | | `icons` | Regenerate the APP-6 unit icons |
@@ -38,7 +43,7 @@ describe different work.
 | **Steam** | `steam-check` | Release preflight — app id, icon, version, build, licences |
 | | `steam-appid` | Write `steam_appid.txt` beside the player, to test Steam locally |
 | **Project** | `check` | Compile the runtime C# with Roslyn, without opening Unity |
-| | `doctor` | Check Unity, Python, Pillow, Inno Setup, Android Build Support, adb and the token |
+| | `doctor` | Check Unity, Python, Pillow, Inno Setup, the Android / WebGL / Linux / iOS build modules, adb and the token |
 | | `logs` | Tail the last Unity setup and build logs |
 | | `clean` | Delete the packaged installers and the build logs |
 | | `distclean` | Delete everything under `Builds\`, player included — asks first |
@@ -162,6 +167,9 @@ same change.**
 
 `docs/06-WINDOWS-BUILD.md` (the player) · `docs/34-INSTALLER.md` (the setup
 `.exe`) · `docs/40-ANDROID.md` (the APK, and what the port had to change) ·
+`docs/41-WEB.md` (the browser build, and why it cannot be opened with file://) ·
+`docs/42-STEAM-DECK.md` (the handheld: the pad, the panel, Proton or native) ·
+`docs/43-IOS.md` (the Xcode export, and why it is not an app) ·
 `docs/01-GETTING-STARTED.md` (first run)
 
 The three `android` jobs all run `scripts/build-android.ps1`, which — like the

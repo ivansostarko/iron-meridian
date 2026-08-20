@@ -94,6 +94,7 @@ namespace IronMeridian.Map
             // unusable — see UIFactory.TextFieldFocused.
             if (UI.UIFactory.TextFieldFocused) return;
             float dt = Time.unscaledDeltaTime;
+            dtCache = dt;
             float panSpeed = _distance * 0.9f * dt;
 
             Vector3 fwd = Quaternion.Euler(0, _yaw, 0) * Vector3.forward;
@@ -106,6 +107,7 @@ namespace IronMeridian.Map
             if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) { _focus -= right * panSpeed; panning = true; }
 
             if (TickTouch(fwd, right)) panning = true;
+            if (TickPad(fwd, right, panSpeed)) panning = true;
 
             // A flight in progress yields to the player the moment they touch
             // the camera. An animation that has to be waited out is a camera
@@ -191,6 +193,63 @@ namespace IronMeridian.Map
         /// screen's width of map.
         /// </summary>
         const float TouchPanRate = 0.0016f;
+
+        /// <summary>
+        /// The sticks and the triggers, in the same units the keys produce.
+        /// Returns true if the focus moved, so the caller treats it as a pan.
+        ///
+        /// **The pad drives the same controls the keyboard does**, at the same
+        /// rates, rather than a second camera model with its own feel. A Steam
+        /// Deck player and a desktop player are moving one camera, and the only
+        /// difference should be what their hands are on. See Core.GamepadInput.
+        /// </summary>
+        bool TickPad(Vector3 fwd, Vector3 right, float panSpeed)
+        {
+            // A stick is analogue where a key is not, so a gentle push moves
+            // slowly — which is the whole reason a stick is nicer for this than
+            // WASD ever was, and worth having on a desktop with a pad plugged in.
+            var move = Core.GamepadInput.LeftStick;
+            bool moved = false;
+            if (move.sqrMagnitude > 0f)
+            {
+                _focus += right * (move.x * panSpeed);
+                _focus += fwd * (move.y * panSpeed);
+                moved = true;
+            }
+
+            float zoom = Core.GamepadInput.Zoom;
+            if (Mathf.Abs(zoom) > 0f)
+            {
+                // Multiplicative, like the wheel and the pinch: a pull moves the
+                // same proportion at 500 m as at 100 km.
+                _distance = Mathf.Clamp(_distance * (1f - zoom * PadZoomRate * dtCache),
+                                        MinDistance, _maxDistance);
+                CancelFlight();
+            }
+
+            // 2D is north-up and flat by definition, so the right stick has
+            // nothing to do there.
+            if (_mode != ViewMode.Mode3D) return moved;
+
+            var look = Core.GamepadInput.RightStick;
+            if (look.sqrMagnitude <= 0f) return moved;
+
+            _yaw += look.x * PadOrbitDegreesPerSecond * dtCache;
+            _pitch3D = Mathf.Clamp(_pitch3D - look.y * PadTiltDegreesPerSecond * dtCache, 20f, 85f);
+            return moved;
+        }
+
+        /// <summary>How fast a fully-pulled trigger zooms, as a proportion per second.</summary>
+        const float PadZoomRate = 1.6f;
+        /// <summary>How fast a fully-pushed right stick turns and tilts the view.</summary>
+        const float PadOrbitDegreesPerSecond = 90f;
+        const float PadTiltDegreesPerSecond = 60f;
+
+        /// <summary>
+        /// This frame's unscaled delta, stashed by <c>Update</c> so the pad
+        /// helpers can be rate-based without threading it through every call.
+        /// </summary>
+        float dtCache;
 
         void Apply()
         {

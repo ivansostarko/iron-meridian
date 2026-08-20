@@ -94,6 +94,26 @@ namespace IronMeridian.Core
             while (op.progress < ReadyProgress && Time.unscaledTime - startedAt < TimeoutSeconds)
                 yield return null;
 
+            // **The shipped data has to be in hand before the new scene builds.**
+            // On WebGL it is fetched over the network rather than read off a
+            // disk (StreamingAssetsFile), and a screen that built its unit list
+            // before the catalogue arrived would come up empty and stay empty.
+            // Everywhere else Ready is already true and this costs one test.
+            if (!StreamingAssetsFile.Ready)
+            {
+                overlay.SetStatus("Loading the catalogue…");
+                while (!StreamingAssetsFile.Ready &&
+                       Time.unscaledTime - startedAt < TimeoutSeconds)
+                    yield return null;
+
+                // Timed out: go in anyway. A screen missing its unit list is bad;
+                // an overlay that never lifts is worse (golden rule 7), and the
+                // reader logs loudly enough to say which it was.
+                if (!StreamingAssetsFile.Ready)
+                    Debug.LogError("[SceneLoader] Shipped data did not arrive in time — " +
+                                   "entering anyway. See docs/41-WEB.md.");
+            }
+
             overlay.SetStatus("Entering the map…");
             op.allowSceneActivation = true;
             while (!op.isDone) yield return null;

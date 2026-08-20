@@ -82,12 +82,17 @@ namespace IronMeridian.Core
         {
             get
             {
-                // Android has no MyPictures for an app to write into without
-                // asking for storage permission, so it goes straight to the
-                // app's own folder — which is where the system file picker and
-                // adb both look for it.
+                // Neither Android nor iOS has a MyPictures an app may write into
+                // without asking for a permission this game does not want, and a
+                // browser has no such concept at all, so all three go straight
+                // to the app's own folder —
+                // which on Android is where the file picker and adb look, and in
+                // a browser is the virtual filesystem a screenshot is fetched
+                // out of rather than found in (docs/41-WEB.md).
                 string pictures = "";
-                if (Application.platform != RuntimePlatform.Android)
+                if (Application.platform != RuntimePlatform.Android &&
+                    Application.platform != RuntimePlatform.IPhonePlayer &&
+                    Application.platform != RuntimePlatform.WebGLPlayer)
                 {
                     try { pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures); }
                     catch { /* the fallback below covers it */ }
@@ -172,16 +177,23 @@ namespace IronMeridian.Core
         /// <summary>
         /// True where the game may launch a child process at all.
         ///
-        /// Android may not: an app cannot spawn an arbitrary executable, there
-        /// is no PATH to find one on, and <c>System.Diagnostics.Process</c> is
-        /// not part of the runtime that ships in the APK. Recording is therefore
-        /// off there, and the button says so instead of failing when pressed —
-        /// which is also why this is checked before the search rather than
-        /// letting the search come back empty.
+        /// **Android may not**: an app cannot spawn an arbitrary executable,
+        /// there is no PATH to find one on, and <c>System.Diagnostics.Process</c>
+        /// is not part of the runtime that ships in the APK.
+        ///
+        /// **A browser may not, and could not use one anyway**: a WebGL build is
+        /// a sandboxed page with no processes and no filesystem to write an mp4
+        /// into, and the encoder writes from a background thread, which WebGL
+        /// does not have either.
+        ///
+        /// Recording is therefore off on both, and the button says so instead of
+        /// failing when pressed — which is also why this is checked before the
+        /// search rather than letting the search come back empty.
         /// </summary>
         public static bool CanUseExternalEncoder =>
             Application.platform != RuntimePlatform.Android &&
-            Application.platform != RuntimePlatform.IPhonePlayer;
+            Application.platform != RuntimePlatform.IPhonePlayer &&
+            Application.platform != RuntimePlatform.WebGLPlayer;
 
         /// <summary>Whether a take can be started at all.</summary>
         public static bool CanRecord => CanUseExternalEncoder && FfmpegPath != null;

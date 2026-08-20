@@ -295,6 +295,10 @@ namespace IronMeridian.Save
 
             string path = UserPath;
             File.WriteAllText(path, JsonUtility.ToJson(book, true));
+            // Through to the browser's IndexedDB. A no-op everywhere else,
+            // and the difference between a save that survives closing the
+            // tab and one that does not - docs/41-WEB.md.
+            Core.WebStorage.Flush();
             Debug.Log($"[Missions] Saved {book.missions.Count} mission(s) -> {path}");
             return path;
         }

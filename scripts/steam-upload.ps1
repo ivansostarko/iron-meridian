@@ -1,4 +1,4 @@
-# Iron Meridian — upload a built player to a Steam depot
+﻿# Iron Meridian — upload a built player to a Steam depot
 #
 # Resolves the templates in steam\ into *.local.vdf with absolute paths, then
 # hands them to steamcmd. Nothing goes live unless you name a branch.
@@ -7,8 +7,9 @@
 #   .\scripts\steam-upload.ps1 -Token Exclude -Preview
 #   .\scripts\steam-upload.ps1 -Token Exclude -User yourlogin
 #   .\scripts\steam-upload.ps1 -Token Include -User yourlogin -Branch beta
+#   .\scripts\steam-upload.ps1 -Token Exclude -User yourlogin -Platform Linux
 #
-# See docs/36-STEAM.md.
+# See docs/36-STEAM.md, and docs/42-STEAM-DECK.md for the Linux depot.
 param(
     # Whether the Cesium ion token is uploaded with the game. Deliberately has
     # no default: on Steam, "Include" hands your metered token to every buyer
@@ -29,7 +30,15 @@ param(
     # partner site after looking at it.
     [string]$Branch = "",
 
-    [string]$SourceDir = "Builds\Windows",
+    # Which depot template to resolve, and which folder to upload from. A Steam
+    # Deck can be served either way - the Windows player under Proton, or a
+    # native Linux build in its own depot - so this names which one this run is.
+    # docs/42-STEAM-DECK.md section 6.
+    [ValidateSet("Windows", "Linux")]
+    [string]$Platform = "Windows",
+
+    # Defaults to the platform's own build folder; -SourceDir overrides it.
+    [string]$SourceDir,
     [string]$Desc,
     [string]$SteamCmd
 )
@@ -43,7 +52,8 @@ function Fail($message) { Write-Host "ERROR: $message" -ForegroundColor Red; exi
 # ------------------------------------------------------------------- the ids
 # Committed in the templates; not secrets.
 $appTemplate = Join-Path $steamDir "app_build.vdf"
-$depotTemplate = Join-Path $steamDir "depot_windows.vdf"
+$depotTemplate = Join-Path $steamDir ("depot_" + $Platform.ToLower() + ".vdf")
+if (-not $SourceDir) { $SourceDir = "Builds\$Platform" }
 foreach ($t in @($appTemplate, $depotTemplate)) {
     if (-not (Test-Path $t)) { Fail "Missing template: $t" }
 }
@@ -63,7 +73,7 @@ if ($appId -like "*{{*" -or -not $appId) {
     Fail @"
 steam\app_build.vdf still has the {{APPID}} placeholder.
 Put your app id and depot id from the Steamworks partner site into
-steam\app_build.vdf and steam\depot_windows.vdf, then run this again.
+steam\app_build.vdf and steam\depot_$($Platform.ToLower()).vdf, then run this again.
 "@
 }
 if ($appId -eq "480") {
@@ -120,7 +130,7 @@ if (-not $Desc) {
     $Desc = "Iron Meridian $version ($stamp)"
 }
 
-$depotLocal = Join-Path $steamDir "depot_windows.local.vdf"
+$depotLocal = Join-Path $steamDir ("depot_" + $Platform.ToLower() + ".local.vdf")
 $depotText = (Get-Content $depotTemplate -Raw).
     Replace("{{DEPOTID}}", $depotId).
     Replace("{{CONTENTROOT}}", $SourceDir)

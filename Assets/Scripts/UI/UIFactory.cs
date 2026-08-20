@@ -31,7 +31,15 @@ namespace IronMeridian.UI
         /// which is the trade a small screen makes anyway. See docs/40-ANDROID.md.
         /// </summary>
         public static Vector2 ReferenceResolution =>
-            Core.TouchInput.IsTouchPlatform ? new Vector2(1280, 720) : new Vector2(1920, 1080);
+            Core.TouchInput.IsTouchPlatform ? new Vector2(1280, 720)
+            // A Steam Deck is 1280x800 held at arm's length. Laying out against
+            // the panel's own size puts the interface at 1:1 — no scaling blur
+            // on a 7-inch screen — and makes every control half again as large
+            // as it would be under the desktop reference, which is what a
+            // trackpad and a thumb need. 16:10, not 16:9, so nothing is cropped.
+            : Core.SteamDeck.IsHandheld
+                ? new Vector2(Core.SteamDeck.ScreenWidth, Core.SteamDeck.ScreenHeight)
+                : new Vector2(1920, 1080);
 
         public static Canvas CreateCanvas(string name = "Canvas")
         {
@@ -45,6 +53,11 @@ namespace IronMeridian.UI
 
             if (Object.FindFirstObjectByType<EventSystem>() == null)
                 new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+
+            // A notch, a Dynamic Island or a home indicator takes a strip out of
+            // the screen, and every panel in this game measures from an edge.
+            // Adds nothing at all on a rectangular screen — see SafeAreaCanvas.
+            SafeAreaCanvas.Attach(canvas);
             return canvas;
         }
 

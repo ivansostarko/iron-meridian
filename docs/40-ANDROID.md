@@ -16,6 +16,11 @@ have failed silently rather than loudly.
 
 ### 1a. StreamingAssets is not a folder on Android
 
+> Worth knowing before you generalise from this: **iOS is not the same**. There
+> StreamingAssets is a real directory inside the bundle and `System.IO` opens it
+> normally — [43-IOS.md](43-IOS.md) §1a. The reader decides by asking whether the
+> path is a URL, not by naming platforms, which is why iOS needed no change.
+
 On Windows, macOS and Linux, `Application.streamingAssetsPath` is a directory
 beside the player and `File.ReadAllText` works. On **Android it is a
 `jar:file://…!/assets/…` URL into the APK**. `System.IO` knows nothing about it:
@@ -41,6 +46,10 @@ by a ten-second timeout so a pathological case reports rather than hangs, and it
 is safe for a `jar:`/`file:` URL specifically — Unity services those on a worker
 thread and does not need the main loop to come back round. It would **not** be
 safe for an `http` one, and nothing here reads over the network.
+
+This is the one place the **web** port could not follow Android: a browser has a
+single thread, so the same spin hangs the tab permanently and WebGL preloads
+instead — [41-WEB.md](41-WEB.md) §1.
 
 **Writes never go through it.** StreamingAssets is read-only in a build on every
 platform. Everything the player changes — saves, tuning, the mission book — is
@@ -73,7 +82,9 @@ What has no touch equivalent at all is the right button, the wheel and the middl
 button — and those carry ordering a move, zooming and orbiting, which is most of
 the game. `Core/TouchInput.cs` defines those gestures once, and the handful of
 places that need them read it, instead of thirty-odd `Input.GetMouseButton` call
-sites each learning about touch.
+sites each learning about touch. `Core/GamepadInput.cs` is the same idea for a
+controller — see [42-STEAM-DECK.md](42-STEAM-DECK.md) §3 — and **iOS reuses this
+one unchanged**, [43-IOS.md](43-IOS.md) §2.
 
 | Mouse | Touch | Read by |
 |---|---|---|

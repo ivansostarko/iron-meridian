@@ -43,7 +43,7 @@ namespace IronMeridian.Save
         /// because an index that drifts from the files beside it is a scenario
         /// that exists in the build and cannot be opened.
         /// </summary>
-        public const string ShippedIndexFile = "Maps/index.json";
+        public const string ShippedIndexFile = StreamingAssetsFile.MapIndexFile;
 
         [Serializable]
         class MapIndex { public List<string> maps = new List<string>(); }
@@ -101,6 +101,10 @@ namespace IronMeridian.Save
             data.savedAtUtc = DateTime.UtcNow.ToString("o");
             string path = Path.Combine(UserMapsDir, mapFileName);
             File.WriteAllText(path, JsonUtility.ToJson(data, true));
+            // Through to the browser's IndexedDB. A no-op everywhere else,
+            // and the difference between a save that survives closing the
+            // tab and one that does not - docs/41-WEB.md.
+            WebStorage.Flush();
             Debug.Log($"[Save] Saved '{data.mapName}' -> {path}");
             return path;
         }

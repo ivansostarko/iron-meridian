@@ -43,6 +43,16 @@ $Jobs = @(
        Do = { Invoke-Script "build-android.ps1" @("-Aab") } }
     @{ Group = "Build and ship"; Key = "android-install"; Text = "Build the APK and adb-install it on the attached device"
        Do = { Invoke-Script "build-android.ps1" @("-Development", "-Install") } }
+    @{ Group = "Build and ship"; Key = "ios"; Text = "Export the iOS Xcode project into Builds\iOS (finish on a Mac)"
+       Do = { Invoke-Script "build-ios.ps1" } }
+    @{ Group = "Build and ship"; Key = "linux"; Text = "Build the Linux / Steam Deck player into Builds\Linux"
+       Do = { Invoke-Script "build-linux.ps1" } }
+    @{ Group = "Build and ship"; Key = "web"; Text = "Build the WebGL player into Builds\Web"
+       Do = { Invoke-Script "build-web.ps1" } }
+    @{ Group = "Build and ship"; Key = "web-serve"; Text = "Build for the web, then serve it on localhost and open a browser"
+       Do = { Invoke-Script "build-web.ps1" @("-Serve") } }
+    @{ Group = "Build and ship"; Key = "serve"; Text = "Serve the WebGL build already in Builds\Web"
+       Do = { Invoke-Script "build-web.ps1" @("-ServeOnly") } }
     @{ Group = "Build and ship"; Key = "run"; Text = "Launch the built player"
        Do = {
             $exe = Get-ChildItem (Join-Path $root "Builds\Windows") -Filter *.exe -ErrorAction SilentlyContinue |
@@ -185,6 +195,28 @@ function Invoke-Doctor {
 
     $adb = (Get-Command adb -ErrorAction SilentlyContinue)
     Report "adb" ($null -ne $adb) $adb.Source "only needed to install onto a device - comes with Android SDK Platform Tools"
+
+    # WebGL Build Support is optional too, and its absence fails the build the
+    # same way several minutes in.
+    $webOk = $false
+    if ($unity -and (Test-Path $unity)) {
+        $webOk = Test-Path (Join-Path (Split-Path $unity) "Data\PlaybackEngines\WebGLSupport")
+    }
+    Report "WebGL" $webOk "WebGL Build Support installed" "Unity Hub -> Installs -> Add modules -> WebGL Build Support - docs/41-WEB.md"
+
+    # SteamOS is Linux, so this is what a native Steam Deck build needs.
+    $linuxOk = $false
+    if ($unity -and (Test-Path $unity)) {
+        $linuxOk = Test-Path (Join-Path (Split-Path $unity) "Data\PlaybackEngines\LinuxStandaloneSupport")
+    }
+    Report "Linux" $linuxOk "Linux Build Support installed" "Unity Hub -> Installs -> Add modules -> Linux Build Support (IL2CPP) - docs/42-STEAM-DECK.md"
+
+    # iOS exports an Xcode project on any host; only the last mile needs a Mac.
+    $iosOk = $false
+    if ($unity -and (Test-Path $unity)) {
+        $iosOk = Test-Path (Join-Path (Split-Path $unity) "Data\PlaybackEngines\iOSSupport")
+    }
+    Report "iOS" $iosOk "iOS Build Support installed" "Unity Hub -> Installs -> Add modules -> iOS Build Support - docs/43-IOS.md"
 
     Write-Host ""
     Write-Host "Project" -ForegroundColor Cyan

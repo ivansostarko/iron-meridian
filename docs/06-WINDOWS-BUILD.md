@@ -1,6 +1,9 @@
 # Building for Windows
 
-For a phone or a tablet, see [40-ANDROID.md](40-ANDROID.md) instead.
+For a phone or a tablet, see [40-ANDROID.md](40-ANDROID.md); for a browser,
+[41-WEB.md](41-WEB.md). **A Steam Deck runs this build** under Proton — see
+[42-STEAM-DECK.md](42-STEAM-DECK.md) for what makes it playable there, and
+whether a native Linux build is worth having.
 
 ## Prerequisites
 

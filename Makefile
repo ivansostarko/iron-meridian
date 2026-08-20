@@ -20,7 +20,8 @@ MENU = $(PWSH) -NoProfile -File ./scripts/menu.ps1
 
 # Windows PowerShell 5.1 instead of PowerShell 7:  make PWSH=powershell <target>
 
-BUILD_JOBS   := setup build installer package run android android-aab android-install
+BUILD_JOBS   := setup build installer package run android android-aab android-install \
+                web web-serve serve linux ios
 DATA_JOBS    := units icons stat-icons units-doc installer-art data
 UNITY_JOBS   := models vfx packages
 STEAM_JOBS   := steam-check steam-appid
@@ -48,6 +49,11 @@ menu:
 #   android        build the Android APK into Builds\Android
 #   android-aab    build the Android App Bundle (.aab) for Play
 #   android-install  build a development APK and adb-install it on the device
+#   ios            export the iOS Xcode project into Builds\iOS (finish on a Mac)
+#   linux          build the Linux / Steam Deck player into Builds\Linux
+#   web            build the WebGL player into Builds\Web
+#   web-serve      build for the web, then serve it on localhost and open a browser
+#   serve          serve the WebGL build already in Builds\Web
 #   units          regenerate units.json
 #   icons          regenerate the APP-6 unit icons
 #   stat-icons     regenerate the unit info panel's stat glyphs
@@ -72,5 +78,8 @@ menu:
 #   .\scripts\build-installer.ps1 -IncludeToken
 #   .\scripts\steam-upload.ps1 -Token Exclude -User <login> -Preview
 #   .\scripts\build-android.ps1 -Aab -Keystore ... -KeyAlias ...   (docs/40-ANDROID.md)
+#   .\scripts\build-web.ps1 -Uncompressed -Serve -Port 9000        (docs/41-WEB.md)
+#   .\scripts\steam-upload.ps1 -Platform Linux -Token Exclude ...   (docs/42-STEAM-DECK.md)
+#   .\scriptsuild-ios.ps1 -Clean -Development                     (docs/43-IOS.md)
 $(JOBS):
 	@$(MENU) -Run $@

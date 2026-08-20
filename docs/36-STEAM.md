@@ -183,10 +183,11 @@ video, use a depot.
 
 ## 4. Uploading a build
 
-`steam/` holds two VDF templates with `{{PLACEHOLDER}}` values.
-`scripts/steam-upload.ps1` resolves them into `*.local.vdf` with absolute paths
-(git-ignored) and runs `steamcmd`, which you supply — put `steamcmd.exe` in
-`steam/steamcmd/`.
+`steam/` holds the VDF templates with `{{PLACEHOLDER}}` values — the app build
+script and **one depot per platform**, `depot_windows.vdf` and
+`depot_linux.vdf`. `scripts/steam-upload.ps1` resolves them into `*.local.vdf`
+with absolute paths (git-ignored) and runs `steamcmd`, which you supply — put
+`steamcmd.exe` in `steam/steamcmd/`.
 
 ```powershell
 # see what would upload, no login, nothing sent
@@ -207,6 +208,21 @@ The depot excludes `*_DoNotShip*`, `*.pdb`, `*.log`, `steam_appid.txt` and
 `cesium-token.txt`. The last is re-included by `-Token Include`, which rewrites
 the exclusion in the generated local copy rather than the committed template —
 so the repo never records a decision to ship the token.
+
+### 4a. The Linux depot
+
+`-Platform Linux` resolves `depot_linux.vdf` instead, and `-SourceDir` defaults
+to `Builds\<Platform>`, so the two builds cannot get crossed:
+
+```powershell
+.\scripts\steam-upload.ps1 -Platform Linux -Token Exclude -User <steam-login> -Preview
+```
+
+SteamOS is Linux, so that is the native **Steam Deck** depot. Whether you want
+one at all is a real question rather than a formality — a Deck also runs the
+Windows build under Proton — and `docs/42-STEAM-DECK.md` §2 lays out the trade.
+What a Deck definitely needs, either way, is the **controller and panel work** in
+that document: the machine has no keyboard, and half this game's verbs were keys.
 
 There is no `make` target for uploading, on purpose. Every run of it is a
 decision, and decisions take flags.
@@ -327,5 +343,6 @@ Judgement — only you:
 ## See also
 
 `docs/02-CESIUM.md` (the token) · `docs/34-INSTALLER.md` (the non-Steam build)
-· `docs/35-TASKS.md` (the task runner) · `docs/37-THIRD-PARTY.md` (asset
+· `docs/42-STEAM-DECK.md` (the handheld, and the Linux depot) ·
+`docs/35-TASKS.md` (the task runner) · `docs/37-THIRD-PARTY.md` (asset
 licences) · `docs/05-MAP-SAVES.md` (what Cloud syncs)

@@ -6,7 +6,7 @@ Deploy Blue (User) and Red (Enemy) forces on real 3D terrain streamed from Cesiu
 
 **Website: [iron-meridian.sostarko.me](https://iron-meridian.sostarko.me)** · Repository: `github.com/ivansostark/iron-meridian`
 
-![Status](https://img.shields.io/badge/Status-In%20development-orange) ![Unity](https://img.shields.io/badge/Unity-6000.0%20LTS-black) ![Cesium](https://img.shields.io/badge/Cesium%20for%20Unity-1.25-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit%20%C2%B7%20Android-informational)
+![Status](https://img.shields.io/badge/Status-In%20development-orange) ![Unity](https://img.shields.io/badge/Unity-6000.0%20LTS-black) ![Cesium](https://img.shields.io/badge/Cesium%20for%20Unity-1.25-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%20%C2%B7%20Steam%20Deck%20%C2%B7%20Android%20%C2%B7%20iOS%20%C2%B7%20Web-informational)
 
 ![Iron Meridian — the front line over real terrain](https://iron-meridian-storage.sostarko.me/screenshoots/gallery-1.png)
 
@@ -76,7 +76,7 @@ so nothing renders without one. See [Quick start](#quick-start-windows) below.
 
 ## Quick start (Windows)
 
-1. Install **Unity Hub** and **Unity 6000.0 LTS** (Windows Build Support IL2CPP + Mono; add Android Build Support to build for a phone).
+1. Install **Unity Hub** and **Unity 6000.0 LTS** (Windows Build Support IL2CPP + Mono; add Android, iOS, WebGL or Linux Build Support for the other targets).
 2. Clone: `git clone https://github.com/ivansostark/iron-meridian.git`
 3. Open the folder in Unity Hub. First open resolves the **Cesium for Unity** package automatically.
 4. **Add your Cesium ion token** — see [docs/02-CESIUM.md](docs/02-CESIUM.md). Short version: paste it into `Assets/StreamingAssets/cesium-token.txt`.
@@ -122,6 +122,53 @@ device**. What it had to change — StreamingAssets is an archive inside the APK
 and a touch screen has no right mouse button — and what is still missing is in
 [docs/40-ANDROID.md](docs/40-ANDROID.md).
 
+### Building for the web
+
+```powershell
+make web                # into Builds\Web
+make web-serve          # build, then serve it on localhost and open a browser
+```
+
+Needs **WebGL Build Support** in the Unity Hub. A WebGL build **cannot be opened
+with `file://`** — it has to be served over http, which is what `web-serve` and
+`make serve` are for.
+
+The port is prepared and compiles; **it has not been run in a browser**. Two
+things are worth knowing before you publish one: a browser has one thread, so
+shipped data is preloaded rather than read on demand, and **a public web build
+publishes your Cesium ion token** — StreamingAssets is served as plain files.
+Both are in [docs/41-WEB.md](docs/41-WEB.md).
+
+### Building for iOS
+
+```powershell
+make ios                # exports Builds\iOS
+```
+
+**This exports an Xcode project, not an app** — that is true on every host Unity
+runs on, and the archive and signing need a Mac. Running the export on Windows is
+still worth it: it catches the slow failures before a Mac is involved.
+
+Most of the port came free from the Android work — iOS is a touch platform, so
+the gestures and the scaled-up interface already applied. What iOS needed of its
+own is the **safe area**: a notch or Dynamic Island takes a strip out of exactly
+the edge the rail sits on ([docs/43-IOS.md](docs/43-IOS.md)).
+
+### Building for Steam Deck
+
+A Deck runs the Windows player under Proton, which for a game with no anti-cheat
+usually just works — so the first answer is "ship what you already build". What
+makes it *playable* is elsewhere: a Deck has **no keyboard**, and half this
+game's verbs were keys, so the pad now drives the camera, the orders and the
+menus ([docs/42-STEAM-DECK.md](docs/42-STEAM-DECK.md)).
+
+```powershell
+make linux              # a native build, for when Proton's layer starts costing something
+```
+
+The port is prepared and compiles; **it has not been run on a Deck**, and text
+fields still need Steam's on-screen keyboard.
+
 ### Putting it on Steam
 
 ```powershell
@@ -136,7 +183,7 @@ per-player streaming cost, and the licences on the third-party asset packs
 
 ## Documentation
 
-Forty documents under [`docs/`](docs/). Several are **registers** — the
+Forty-three documents under [`docs/`](docs/). Several are **registers** — the
 human-readable half of a catalogue in code, and the rule is that they are updated
 in the same change as the catalogue, never afterwards.
 
@@ -209,6 +256,9 @@ in the same change as the catalogue, never afterwards.
 | [38-PACKAGES](docs/38-PACKAGES.md) | **Package register** — every Unity package, why it is there, and what it costs |
 | [39-CAPTURE](docs/39-CAPTURE.md) | Screenshots and screen recording, straight from the map editor |
 | [40-ANDROID](docs/40-ANDROID.md) | The Android port: StreamingAssets inside the APK, touch gestures, the APK build |
+| [41-WEB](docs/41-WEB.md) | The web port: why a browser must preload, IndexedDB saves, and the public ion token |
+| [42-STEAM-DECK](docs/42-STEAM-DECK.md) | The handheld port: the pad, the 1280×800 panel, and Proton vs a native build |
+| [43-IOS](docs/43-IOS.md) | The iOS port: the safe area, the Xcode export, and the Info.plist keys |
 
 ## AI-assisted development
 

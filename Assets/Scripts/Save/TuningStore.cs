@@ -230,6 +230,10 @@ namespace IronMeridian.Save
             book.savedAtUtc = DateTime.UtcNow.ToString("o");
 
             File.WriteAllText(UserPath, JsonUtility.ToJson(book, true));
+            // Through to the browser's IndexedDB. A no-op everywhere else,
+            // and the difference between a save that survives closing the
+            // tab and one that does not - docs/41-WEB.md.
+            Core.WebStorage.Flush();
             Debug.Log($"[Tuning] Saved overrides for {book.entries.Count} record(s) -> {UserPath}");
             Changed?.Invoke();
             return UserPath;

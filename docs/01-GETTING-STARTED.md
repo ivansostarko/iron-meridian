@@ -7,6 +7,9 @@
 | Unity Hub | latest | https://unity.com/download |
 | Unity Editor | **6000.0 LTS (Unity 6)** | In Hub → Installs → Install Editor. Add module **Windows Build Support (IL2CPP)**. |
 | Android Build Support (optional) | — | Only to build for a phone or tablet. Hub → Installs → the 6000.0 editor → Add modules → **Android Build Support**, plus its **OpenJDK** and **Android SDK & NDK Tools**. See `docs/40-ANDROID.md`. |
+| WebGL Build Support (optional) | — | Only to build for a browser. Hub → Installs → the 6000.0 editor → Add modules → **WebGL Build Support**. See `docs/41-WEB.md`. |
+| Linux Build Support (optional) | — | Only for a **native Steam Deck** build — a Deck runs the Windows player under Proton without it. Hub → Installs → Add modules → **Linux Build Support (IL2CPP)**. See `docs/42-STEAM-DECK.md`. |
+| iOS Build Support (optional) | — | Only to export an Xcode project. The **archive and signing need a Mac with Xcode**; the export itself runs on Windows. Hub → Installs → Add modules → **iOS Build Support**. See `docs/43-IOS.md`. |
 | Git | latest | https://git-scm.com/download/win |
 | Python 3 (optional) | 3.10+ | Only needed to regenerate icons/units/installer art (`scripts/*.py`, uses Pillow). |
 | Inno Setup 6 (optional) | 6.x | Only needed to package the installer — `winget install --id JRSoftware.InnoSetup`. See `docs/34-INSTALLER.md`. |
@@ -52,8 +55,10 @@ Press **Play**:
 
 ## 7. Build
 
-`make build` produces the Windows player; `make android` produces an APK. See
-`docs/06-WINDOWS-BUILD.md` and `docs/40-ANDROID.md`.
+`make build` produces the Windows player, `make android` an APK, `make web` a
+browser build, `make linux` a native Steam Deck one and `make ios` an Xcode
+project. See `docs/06-WINDOWS-BUILD.md`, `docs/40-ANDROID.md`, `docs/41-WEB.md`,
+`docs/42-STEAM-DECK.md` and `docs/43-IOS.md`.
 
 ## Troubleshooting
 
@@ -61,6 +66,13 @@ Press **Play**:
 |---|---|
 | Android: empty globe, no units, no missions | A shipped data file could not be read. StreamingAssets is inside the APK there — anything reading it must go through `Core/StreamingAssetsFile`, not `File.ReadAllText`. `docs/40-ANDROID.md` §1a. |
 | Android: a scenario is in the build but not in the list | `StreamingAssets/Maps/index.json` is stale. Run `make setup`. `docs/40-ANDROID.md` §1b. |
+| Web: the page loads and then hangs forever | Something read shipped data before the preload finished. WebGL has one thread, so a blocking read never returns. `docs/41-WEB.md` §1. |
+| Web: "invalid magic number" in the console | The server is not sending `Content-Encoding: br` for the Brotli files. Use `make serve`, or build with `-Uncompressed`. `docs/41-WEB.md` §5c. |
+| Web: saves vanish when the tab closes | A write is missing its `WebStorage.Flush()`. `docs/41-WEB.md` §2. |
+| Steam Deck: the map pans on its own | Stick drift past the dead zone. `Core/GamepadInput.StickDeadZone` is the number. `docs/42-STEAM-DECK.md` §3. |
+| iOS: the rail is under the notch | `SafeAreaCanvas` did not attach, or the canvas was made without `UIFactory.CreateCanvas`. `docs/43-IOS.md` §3. |
+| iOS: an Info.plist edit keeps disappearing | The Xcode project is regenerated on every export. Put the key in `IosBuild.OnPostprocessBuild`. `docs/43-IOS.md` §6. |
+| Steam Deck: the right stick does nothing | The `Pad*` axes are missing from `ProjectSettings/InputManager.asset`, or the wrong platform's set is in use. `docs/42-STEAM-DECK.md` §3a. |
 | Black/empty globe | Token missing or invalid — see step 4; check Console for `[Cesium]` warnings. |
 | `CesiumForUnity` namespace errors | Package didn't resolve: check internet access, then `Window → Package Manager` → refresh. |
 | Units drop onto nothing / fall through | Terrain tiles not loaded yet at that spot — zoom in and wait a second, then drop again. |

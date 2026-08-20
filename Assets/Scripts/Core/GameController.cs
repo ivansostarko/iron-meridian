@@ -2587,7 +2587,10 @@ namespace IronMeridian.Core
             // Battle mode only, or once a battle has been fought: in a fresh
             // editor nothing has been lost, and a key that opened an empty page
             // would read as broken rather than as informative.
-            if (Input.GetKeyDown(KeyCode.Tab))
+            // Back / View on a pad. Tab is one of the keys a handheld has not
+            // got, and the casualty list is the one page a commander checks
+            // most — see docs/42-STEAM-DECK.md §3.
+            if (Input.GetKeyDown(KeyCode.Tab) || GamepadInput.ListDown)
             {
                 if (LossesDialog.IsOpen) LossesDialog.Close();
                 else if (_combat.Running || LossLedger.Any) LossesDialog.Open(_canvas);

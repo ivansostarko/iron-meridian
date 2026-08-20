@@ -1,0 +1,35 @@
+// Iron Meridian — Linux / Steam Deck depot (template)
+//
+// Resolved into steam/depot_linux.local.vdf by scripts/steam-upload.ps1.
+// SteamOS is Linux, so this is the depot a native Steam Deck build goes in.
+// See docs/42-STEAM-DECK.md section 6.
+// Everything under contentroot is uploaded except the exclusions below.
+"DepotBuild"
+{
+	"DepotID"     "{{DEPOTID}}"
+	"contentroot" "{{CONTENTROOT}}"
+
+	"FileMapping"
+	{
+		"LocalPath"  "*"
+		"DepotPath"  "."
+		"recursive"  "1"
+	}
+
+	// Burst names its own debug folder DoNotShip. Believe it.
+	"FileExclusion" "*_DoNotShip*"
+	"FileExclusion" "*_BackUpThisFolder_ButDontShipItWithYourGame*"
+	"FileExclusion" "*.pdb"
+	"FileExclusion" "*.log"
+
+	// steam_appid.txt is a development aid that tells a locally-run .exe which
+	// app it is. In a depot it overrides what Steam says the app is, which is
+	// how a build ends up reporting the wrong app id to the API.
+	"FileExclusion" "steam_appid.txt"
+
+	// The Cesium ion token. scripts/steam-upload.ps1 will not run without an
+	// explicit -Token choice, and rewrites this line when you ask for it to be
+	// included. Read docs/36-STEAM.md §2 before you do — on Steam this is not
+	// only a secret-handling question, it is a metered-billing one.
+	"FileExclusion" "cesium-token.txt"
+}

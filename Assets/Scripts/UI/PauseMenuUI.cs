@@ -166,7 +166,11 @@ namespace IronMeridian.UI
             }
 
             bool escape = Input.GetKeyDown(KeyCode.Escape);
-            bool pKey = Input.GetKeyDown(KeyCode.P);
+            // Start / Menu opens and closes the pause menu, which is what that
+            // button does on every handheld ever made. It is deliberately NOT
+            // mapped to B: B is Cancel everywhere else in this game, and a
+            // Cancel that opened a menu would be the one control that surprised.
+            bool pKey = Input.GetKeyDown(KeyCode.P) || Core.GamepadInput.MenuDown;
 
             if (IsOpen)
             {
