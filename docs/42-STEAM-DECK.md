@@ -65,8 +65,14 @@ a controller.
 | `C` face a formation | **X** | `SelectionManager` |
 | `Esc` cancel | **B** (also Unity's Cancel) | `SelectionManager` |
 | `Tab` casualty list | **Back / View** | `GameController` |
+| `H` hide the sidebar | **Y** | `GameController` |
 | `Esc` / `P` pause | **Start / Menu** | `PauseMenuUI` |
 | Confirm | **A** (also Unity's Submit, so uGUI answers already) | — |
+
+**The sidebar fold is not a convenience here, it is the port.** The editor rail
+is 232 px of a Deck's 1280 — nearly a fifth of the screen, on the one screen
+where the map is the point. `H` does not exist on a handheld, so Y does it, and
+the tab on the rail's edge does it with a thumb. See docs/03-GAMEPLAY.md.
 
 **Start opens the pause menu, B does not.** B is Cancel everywhere else in this
 game, and a Cancel that opened a menu would be the one control that surprised.

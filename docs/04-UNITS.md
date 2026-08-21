@@ -20,6 +20,21 @@ The unit catalogue lives in `Assets/StreamingAssets/Data/units.json` (generated 
 
 Combat power = `(attack + 0.8·defence + 0.5·hardAttack + 0.3·antiAir) × echelon × strength × (0.5 + quality)` — see `UnitDefinition.PowerAt`.
 
+**Serviceability multiplies that**, for a formation that has equipment.
+`UnitState.serviceability` is the fraction of a formation's vehicles that are
+running, 0–1, and `UnitActor.CurrentPower` scales the figure above by
+`lerp(0.45, 1, serviceability)`. It is a **state**, not a catalogue value:
+every formation deploys fully serviceable, loses serviceability under fire and
+disproportionately to mines, and gets it back only at a REPAIR POINT.
+
+A formation *has* equipment when its type burns fuel (`fuelStock > 0`) — six of
+the seven infantry types do not, and for them serviceability reads 1 and is never
+asked about again. See `UnitActor.HasEquipment` and docs/26-LOGISTICS.md.
+
+The floor of 0.45 is deliberate: a tank battalion with every vehicle deadlined is
+still several hundred trained soldiers on ground they know, and a multiplier that
+reached zero would delete a formation the enemy never finished killing.
+
 ## Echelons
 
 Team, Squad, Section, Platoon, Company, Battalion, Regiment, Brigade, Division, Corps, Army — with APP-6 indicators (Ø, ●, ●●, ●●●, |, ||, |||, X, XX, XXX, XXXX) shown above the icon.

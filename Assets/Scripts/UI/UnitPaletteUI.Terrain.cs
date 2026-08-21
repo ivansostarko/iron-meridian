@@ -739,6 +739,8 @@ namespace IronMeridian.UI
             new List<(LogisticsKind, Image, Text)>();
         RectTransform _logisticsList;
         Text _logisticsCount;
+        RectTransform _serviceRingLamp;
+        Text _serviceRingLabel;
 
         /// <summary>
         /// The rear area, laid out on the map.
@@ -775,7 +777,45 @@ namespace IronMeridian.UI
                 new Color(0, 0, 0, 0), UiTheme.TextDim, UiTheme.FontSmall);
             UIFactory.Stretch((RectTransform)stopBtn.transform);
 
-            float listTop = y - 44f;
+            y -= 40f;
+
+            // SHOW SERVICE RINGS. The one control on this panel that is about
+            // *judging* a laydown rather than making one: with it on, every
+            // installation draws the ground it serves, draped on the terrain, so
+            // the question the radii exist for — does this rear area actually
+            // cover the force — can be answered by looking rather than by
+            // arithmetic. Off by default because each ring is a terrain-sampled
+            // band and a rear area is a dozen sites. See docs/26-LOGISTICS.md §4a.
+            var rings = UIFactory.CreateBorderedPanel(content, "ServiceRings", UiTheme.Surface, UiTheme.Border);
+            UIFactory.Place(rings, new Vector2(0f, 1f), new Vector2(Pad, y - 4f), new Vector2(InnerWidth, 34));
+
+            var ringsBtn = UIFactory.CreateButton(rings, "",
+                () =>
+                {
+                    if (_logistics == null) return;
+                    _logistics.SetServiceRingsVisible(!_logistics.ServiceRingsVisible);
+                },
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)ringsBtn.transform);
+            var ringsCaption = ringsBtn.GetComponentInChildren<Text>(true);
+            if (ringsCaption != null) ringsCaption.gameObject.SetActive(false);
+
+            _serviceRingLabel = UIFactory.CreateText(rings, "SHOW SERVICE RINGS",
+                UiTheme.FontSmall, UiTheme.Text, TextAnchor.MiddleLeft);
+            _serviceRingLabel.raycastTarget = false;
+            UIFactory.Place(_serviceRingLabel.rectTransform, new Vector2(0f, 0.5f),
+                new Vector2(12, 0), new Vector2(InnerWidth - 60f, 16));
+
+            _serviceRingLamp = UIFactory.CreatePanel(rings, "Lamp", UiTheme.Border);
+            UIFactory.Place(_serviceRingLamp, new Vector2(1f, 0.5f), new Vector2(-12, 0), new Vector2(12, 12));
+            _serviceRingLamp.GetComponent<Image>().raycastTarget = false;
+
+            UiTooltip.Attach(rings.gameObject,
+                "Draw the ground every installation serves, on the terrain. " +
+                "The one view that says whether a rear area covers the force it is behind.",
+                UiTooltip.Side.Right);
+
+            float listTop = y - 48f;
             _logisticsCount = UIFactory.CreateText(content, "", UiTheme.FontLabel, UiTheme.TextFaint,
                 TextAnchor.MiddleLeft);
             UIFactory.Place(_logisticsCount.rectTransform, new Vector2(0f, 1f),
@@ -805,18 +845,73 @@ namespace IronMeridian.UI
         /// <summary>Drop every logistic installation on the map.</summary>
         public System.Action LogisticsClearRequested;
 
+        /// <summary>
+        /// One kind's button — **drag it onto the map, or click it and then
+        /// click the map.**
+        ///
+        /// Two gestures on one control, exactly as a unit card carries them,
+        /// and for the same reasons. A drag is the direct statement — you are
+        /// carrying the thing and you put it down — and it is the one that makes
+        /// a rear area quick to lay out. A click-arm is the gesture a drag
+        /// cannot make: onto ground you have to pan to first, and from a session
+        /// driven by a pad rather than a mouse.
+        ///
+        /// **A drag released back over the button arms the kind**, and that is
+        /// deliberate rather than accidental. uGUI suppresses the click after a
+        /// drag only when the pressed object and the dragged object differ; here
+        /// one EventTrigger is both, so releasing over the button still raises
+        /// PointerClick — and it raises it *before* EndDrag
+        /// (`StandaloneInputModule.ProcessMousePress`). `Toggle` stands the drag
+        /// down as it arms, so the EndDrag that follows finds nothing to place
+        /// and says nothing. A gesture that never reached the map therefore
+        /// leaves the tool armed, which is the useful reading of it, and never
+        /// deploys a site and arms the tool off one press.
+        /// </summary>
         void LogisticsButton(RectTransform content, LogisticsDef def, float y)
         {
             var kind = def.kind;
             var frame = UIFactory.CreateBorderedPanel(content, "Log_" + kind, UiTheme.Surface, UiTheme.Border);
             UIFactory.Place(frame, new Vector2(0f, 1f), new Vector2(Pad, y), new Vector2(InnerWidth, 46));
 
-            var btn = UIFactory.CreateButton(frame, "",
-                () => { if (_logistics != null) _logistics.Toggle(kind); },
-                new Color(0, 0, 0, 0), UiTheme.Text, 1);
-            UIFactory.Stretch((RectTransform)btn.transform);
-            var caption = btn.GetComponentInChildren<Text>(true);
-            if (caption != null) caption.gameObject.SetActive(false);
+            var trigger = frame.gameObject.AddComponent<EventTrigger>();
+            AddEvent(trigger, EventTriggerType.BeginDrag, e =>
+            {
+                if (_logistics == null) return;
+                _logistics.BeginDrag(kind);
+                _dragGhost.sprite = UiIcons.GlyphFor(kind);
+                _dragGhost.color = def.tint;
+                _dragGhost.gameObject.SetActive(true);
+            });
+            AddEvent(trigger, EventTriggerType.Drag, e =>
+            {
+                if (_logistics == null) return;
+                var pointer = (PointerEventData)e;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    (RectTransform)_canvas.transform, pointer.position, _canvas.worldCamera,
+                    out Vector2 local);
+                ((RectTransform)_dragGhost.transform).anchoredPosition = local;
+                _logistics.DragTo(pointer.position, pointer.pointerCurrentRaycast.gameObject != null);
+            });
+            AddEvent(trigger, EventTriggerType.EndDrag, e =>
+            {
+                _dragGhost.gameObject.SetActive(false);
+                // The palette's ghost is shared with the unit drag, which tints
+                // it per side; put the tint back so the next unit dragged is not
+                // wearing this installation's colour.
+                _dragGhost.color = Color.white;
+                if (_logistics == null) return;
+                var pointer = (PointerEventData)e;
+                _logistics.EndDrag(pointer.position, pointer.pointerCurrentRaycast.gameObject != null);
+            });
+            AddEvent(trigger, EventTriggerType.PointerClick, e =>
+            {
+                if (_logistics != null) _logistics.Toggle(kind);
+            });
+
+            UiTooltip.Attach(frame.gameObject,
+                $"{def.name} — drag onto the map to deploy, or click to arm and then click the ground. " +
+                $"Serves {def.serviceRadiusKm:0.#} km; holds {def.defaultStock:0.#} issues.",
+                UiTooltip.Side.Right);
 
             var icon = UIFactory.CreateImage(frame, UiIcons.GlyphFor(kind), "Glyph");
             icon.color = def.tint;
@@ -849,6 +944,14 @@ namespace IronMeridian.UI
                 bool on = _logistics.Armed.HasValue && _logistics.Armed.Value == kind;
                 fill.color = on ? UiTheme.AccentWash : UiTheme.Surface;
                 label.color = on ? UiTheme.Accent : UiTheme.Text;
+            }
+
+            if (_serviceRingLamp != null)
+            {
+                bool on = _logistics.ServiceRingsVisible;
+                _serviceRingLamp.GetComponent<Image>().color = on ? UiTheme.Accent : UiTheme.Border;
+                if (_serviceRingLabel != null)
+                    _serviceRingLabel.color = on ? UiTheme.Accent : UiTheme.Text;
             }
 
             if (_logisticsList == null) return;

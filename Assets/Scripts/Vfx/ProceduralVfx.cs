@@ -47,6 +47,7 @@ namespace IronMeridian.Vfx
                 case VfxFallback.ArtilleryHeavyBlast: BuildArtilleryHeavyBlast(root, def.tint); break;
                 case VfxFallback.Shockwave:           BuildShockwave(root, def.tint);           break;
                 case VfxFallback.Debris:              BuildDebris(root, def.tint);              break;
+                case VfxFallback.Motes:               BuildMotes(root, def.tint);               break;
             }
         }
 
@@ -297,6 +298,75 @@ namespace IronMeridian.Vfx
             noise.strength = 0.3f;
             noise.frequency = 0.25f;
             noise.scrollSpeed = 0.35f;
+
+            ps.Play();
+        }
+
+        // ----------------------------------------------------------- motes
+
+        /// <summary>
+        /// Sparse motes rising off a patch of ground, forever.
+        ///
+        /// The marker effect: it says *something is here*, and it must not say
+        /// anything else. Three properties do that work and each is the opposite
+        /// of the smoke plume's.
+        ///
+        /// • **Sparse and slow.** A twelfth of the smoke column's emission rate
+        ///   over four times its area, so what the eye gets is a scatter of
+        ///   specks over the site rather than a source pouring out of one point.
+        /// • **It does not grow.** Smoke doubles in size as it climbs, which is
+        ///   what makes a plume read as combustion; a mote that keeps its size
+        ///   reads as something caught in the light.
+        /// • **It does not grey.** The tint stays the tint from bottom to top —
+        ///   the darkening toward grey is the single strongest cue that
+        ///   something is burning, and a rear area must never read that way.
+        ///
+        /// Emitted off a flat disc rather than a cone, because the thing being
+        /// marked is *ground*: a cone puts every mote over the centre point,
+        /// which states a source where there is only an area.
+        /// </summary>
+        static void BuildMotes(GameObject root, Color tint)
+        {
+            var ps = NewSystem(root, "Motes", loop: true);
+
+            var main = ps.main;
+            // Long-lived and unhurried. A mote that crossed the site in a second
+            // would read as an ember thrown off something.
+            main.startLifetime = new ParticleSystem.MinMaxCurve(3.0f, 5.5f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.10f, 0.26f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.10f, 0.20f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            // A whisper of lift, so the drift is unmistakably upward without the
+            // motes ever leaving the site they are marking.
+            main.gravityModifier = -0.02f;
+            main.maxParticles = 60;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 9f;
+
+            // A disc lying on the ground, emitting straight up: the footprint is
+            // the statement, not a point inside it.
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.42f;
+            shape.radiusThickness = 1f;
+            ps.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+
+            SetColourRamp(ps, new[]
+            {
+                (0.00f, tint, 0.00f),
+                (0.20f, tint, 0.55f),
+                (0.70f, tint, 0.40f),
+                (1.00f, tint, 0.00f)
+            });
+
+            // Drift rather than churn. Enough to stop the motes rising in
+            // parallel lines; far short of the smoke plume's boil.
+            var noise = ps.noise;
+            noise.enabled = true;
+            noise.strength = 0.12f;
+            noise.frequency = 0.18f;
+            noise.scrollSpeed = 0.16f;
 
             ps.Play();
         }

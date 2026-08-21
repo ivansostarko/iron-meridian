@@ -290,6 +290,29 @@ namespace IronMeridian.UI
         /// <summary>The always-present rail. Held so mission mode can take the whole editor chrome off.</summary>
         RectTransform _rail;
 
+        /// <summary>
+        /// The handle that folds the rail away and brings it back — see
+        /// <see cref="BuildRailTab"/>. Deliberately **not** a child of the rail,
+        /// because it has to survive the rail being switched off.
+        /// </summary>
+        RectTransform _railTab;
+        Text _railTabIcon;
+
+        /// <summary>
+        /// True while the player has folded the rail away.
+        ///
+        /// Distinct from <see cref="_chromeHidden"/>, which is mission mode
+        /// taking the whole editor off the screen. The two are different
+        /// statements — *I want the map* against *this screen is not an editor*
+        /// — and collapsing them into one flag would let a mission leave a tab
+        /// on screen that opens an authoring rail the player is not supposed to
+        /// have.
+        /// </summary>
+        bool _railCollapsed;
+
+        /// <summary>The rail is only on screen when neither of those is true.</summary>
+        bool RailVisible => !_chromeHidden && !_railCollapsed;
+
         // Section panel.
         RectTransform _sectionPanel;
         Text _sectionTitle, _sectionSubtitle;
@@ -470,6 +493,8 @@ namespace IronMeridian.UI
             _slide = 0f;
             ApplySlide();
             PaintNav();
+
+            BuildRailTab(canvas);
 
             // Drag ghost (top-most)
             var ghostGo = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
@@ -698,6 +723,129 @@ namespace IronMeridian.UI
         }
 
         /// <summary>
+        /// The handle on the rail's outer edge that folds it away.
+        ///
+        /// **The map is the thing.** A rail 232 px wide is most of a phone's
+        /// screen and a good slice of a laptop's, and there are moments —
+        /// framing a shot, watching a battle run, reading ground before an
+        /// order — when the player wants none of it. There was no way to get it
+        /// off the screen short of entering a mission.
+        ///
+        /// **It rides the rail's edge and never goes with it.** A control that
+        /// hid itself along with the thing it hides is a one-way door; this one
+        /// slides to the screen edge and turns round. It is the only piece of
+        /// editor chrome that is deliberately outside the rail's own hierarchy.
+        ///
+        /// Mission mode still takes it away with everything else — there, the
+        /// rail is not merely hidden but absent, and a handle that opened an
+        /// authoring panel would be offering something the screen does not have.
+        /// </summary>
+        void BuildRailTab(Canvas canvas)
+        {
+            _railTab = UIFactory.CreateBorderedPanel(canvas.transform, "RailTab",
+                UiTheme.Surface, UiTheme.Border);
+            _railTab.anchorMin = new Vector2(0f, 0.5f);
+            _railTab.anchorMax = new Vector2(0f, 0.5f);
+            _railTab.pivot = new Vector2(0f, 0.5f);
+            _railTab.sizeDelta = new Vector2(RailTabWidth, RailTabHeight);
+
+            var button = UIFactory.CreateButton(_railTab, "", ToggleRail,
+                new Color(0, 0, 0, 0), UiTheme.Text, 1);
+            UIFactory.Stretch((RectTransform)button.transform);
+            var made = button.GetComponentInChildren<Text>(true);
+            if (made != null) made.gameObject.SetActive(false);
+
+            _railTabIcon = UIFactory.CreateText(_railTab, "", UiTheme.FontSmall,
+                UiTheme.TextDim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _railTabIcon.raycastTarget = false;
+            UIFactory.Stretch(_railTabIcon.rectTransform);
+
+            ApplyRailVisibility();
+        }
+
+        const float RailTabWidth = 16f;
+        const float RailTabHeight = 72f;
+
+        /// <summary>Folds the rail away, or brings it back. Bound to H and to the pad's spare face button.</summary>
+        public void ToggleRail() => SetRailCollapsed(!_railCollapsed);
+
+        /// <summary>True while the player has folded the rail away.</summary>
+        public bool RailCollapsed => _railCollapsed;
+
+        /// <summary>
+        /// Folds the rail away or brings it back, closing the section panel on
+        /// the way out.
+        ///
+        /// Refused outright while mission mode owns the chrome: there is no rail
+        /// to collapse, and letting the flag move would leave the editor folded
+        /// away when the mission handed the screen back.
+        /// </summary>
+        public void SetRailCollapsed(bool collapsed)
+        {
+            if (_chromeHidden || _railCollapsed == collapsed) return;
+
+            _railCollapsed = collapsed;
+            if (collapsed) ClosePanel();
+            ApplyRailVisibility();
+        }
+
+        /// <summary>
+        /// Puts the rail, its panel and the tab where the two flags say they
+        /// belong, and tells everything that measures from the chrome's edge.
+        ///
+        /// One place, because <see cref="SetChromeVisible"/> and
+        /// <see cref="SetRailCollapsed"/> are two reasons for the same picture,
+        /// and two copies of it would drift.
+        /// </summary>
+        void ApplyRailVisibility()
+        {
+            bool on = RailVisible;
+
+            if (_rail != null) _rail.gameObject.SetActive(on);
+            if (_sectionPanel != null && !on) _sectionPanel.gameObject.SetActive(false);
+            if (_railTab != null) _railTab.gameObject.SetActive(!_chromeHidden);
+
+            // Parked where the section panel actually is rather than at a
+            // fixed end. Setting it to 1 here regardless meant a freshly built
+            // rail — whose panel is closed — started the scene mid-slide and
+            // animated the on-map controls inward for no reason.
+            _slide = on && _panelOpen ? 1f : 0f;
+
+            // The same expression ApplySlide uses, so the two cannot disagree
+            // about where the chrome ends.
+            float edge = Mathf.Lerp(RailWidth - PanelWidth, RailWidth, _slide) + PanelWidth;
+            LeftChromeEdge = on ? edge : 0f;
+
+            if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
+            // Raised here as well as from the slide: taking the rail away is a
+            // change to where the chrome ends, and everything measuring from it
+            // — the minimap, the map camera's own viewport — has to hear about
+            // the largest such change there is.
+            LeftInsetChanged?.Invoke(LeftChromeEdge);
+
+            if (_railTabIcon != null) _railTabIcon.text = on ? "◀" : "▶";
+            if (_railTab != null)
+                UiTooltip.Attach(_railTab.gameObject,
+                    on ? "Hide the sidebar  (H)" : "Show the sidebar  (H)",
+                    UiTooltip.Side.Right);
+            PositionRailTab();
+        }
+
+        /// <summary>
+        /// Puts the tab against the outer edge of whatever chrome is showing.
+        ///
+        /// It rides <see cref="LeftChromeEdge"/> rather than the rail's fixed
+        /// width, so an open section panel carries it out instead of being
+        /// covered by it — the tab is the handle on the chrome, and a handle
+        /// lying on top of the thing it opens is a handle in the wrong place.
+        /// </summary>
+        void PositionRailTab()
+        {
+            if (_railTab == null) return;
+            _railTab.anchoredPosition = new Vector2(LeftChromeEdge, 0f);
+        }
+
+        /// <summary>
         /// Takes the whole editor chrome off the screen — the rail and its
         /// section panel — for a single-player mission, which is played on the
         /// map rather than authored on it.
@@ -712,20 +860,13 @@ namespace IronMeridian.UI
             if (!visible) ClosePanel();
             _chromeHidden = !visible;
 
-            if (_rail != null) _rail.gameObject.SetActive(visible);
-            if (_sectionPanel != null && !visible) _sectionPanel.gameObject.SetActive(false);
+            // A mission handing the screen back gives back a rail that is out,
+            // whatever the player had folded away before it started. The
+            // alternative is a player who left the editor with the rail hidden
+            // returning to a screen with no visible editor at all.
+            if (visible) _railCollapsed = false;
 
-            // Parked at the closed end so nothing is left mid-animation if the
-            // chrome ever comes back.
-            _slide = visible ? 1f : 0f;
-
-            LeftChromeEdge = visible ? RailWidth + PanelWidth : 0f;
-            if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
-            // Raised here as well as from the slide: taking the rail away is a
-            // change to where the chrome ends, and everything measuring from it
-            // — the minimap, the map camera's own viewport — has to hear about
-            // the largest such change there is.
-            LeftInsetChanged?.Invoke(LeftChromeEdge);
+            ApplyRailVisibility();
         }
 
         /// <summary>
@@ -788,7 +929,10 @@ namespace IronMeridian.UI
         /// </summary>
         void ApplySlide()
         {
-            if (_sectionPanel == null || _chromeHidden) return;
+            // Not merely _chromeHidden: a folded rail has no edge for the
+            // on-map controls to measure from either, and letting the slide run
+            // would push them 232 px inboard of a rail that is not there.
+            if (_sectionPanel == null || !RailVisible) return;
 
             float x = Mathf.Lerp(RailWidth - PanelWidth, RailWidth, Mathf.SmoothStep(0f, 1f, _slide));
             _sectionPanel.anchoredPosition = new Vector2(x, -UiTheme.TopBarHeight * 0.5f);
@@ -800,6 +944,7 @@ namespace IronMeridian.UI
             LeftChromeEdge = x + PanelWidth;
             if (_mapControls != null) _mapControls.SetLeftInset(LeftChromeEdge);
             LeftInsetChanged?.Invoke(LeftChromeEdge);
+            PositionRailTab();
 
             if (_slide <= 0f) _sectionPanel.gameObject.SetActive(false);
         }

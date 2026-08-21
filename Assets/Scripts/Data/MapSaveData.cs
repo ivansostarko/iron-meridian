@@ -32,6 +32,30 @@ namespace IronMeridian.Data
         public float headingDeg;
 
         public float strength;          // 0..1 remaining strength
+
+        /// <summary>
+        /// Fraction of the formation's **equipment** that is running, 0..1 —
+        /// what a REPAIR POINT restores and nothing else does.
+        ///
+        /// Separate from <see cref="strength"/> because they are different
+        /// losses with different answers. Strength is people: a medical point
+        /// returns the lightly wounded and can do nothing about a destroyed
+        /// battalion. Serviceability is vehicles: a tank with a thrown track is
+        /// not a casualty, it is a recovery job, and the place to take it is a
+        /// workshop. Without this the repair point had nothing to restore that
+        /// was not already the medical point's job — see docs/26-LOGISTICS.md.
+        ///
+        /// **1 by default, and that is the migration.** A save written before
+        /// this existed has no `serviceability` key at all, and `JsonUtility`
+        /// leaves a missing field at its initialiser — so every formation in
+        /// every old scenario loads fully serviceable, which is the correct
+        /// reading of a file that never recorded a breakdown.
+        ///
+        /// Meaningless for a formation that walks; see
+        /// <see cref="Units.UnitActor.HasEquipment"/>.
+        /// </summary>
+        public float serviceability = 1f;
+
         public float organisation;      // 0..100 current
         public float morale;            // 0..100 current
         public string status;           // UnitStatus name
@@ -94,6 +118,7 @@ namespace IronMeridian.Data
             heightMeters = heightMeters,
             headingDeg = headingDeg,
             strength = strength,
+            serviceability = serviceability,
             organisation = organisation,
             morale = morale,
             status = status,

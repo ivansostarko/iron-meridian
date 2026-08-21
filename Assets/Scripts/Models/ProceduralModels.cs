@@ -28,7 +28,7 @@ namespace IronMeridian.Models
     /// Animator Controllers cannot (they are editor-only assets), which is why
     /// the whole project is on the legacy path — see docs/09-3D-MODELS.md.
     /// </summary>
-    public static class ProceduralModels
+    public static partial class ProceduralModels
     {
         /// <summary>Model ids this class can build. Matched against <see cref="UnitModelDef.proceduralId"/>.</summary>
         public const string KamikazeDrone = "kamikaze_drone";
@@ -46,7 +46,10 @@ namespace IronMeridian.Models
             ReconDrone => BuildReconDrone(),
             TransportAircraft => BuildTransportAircraft(),
             SupplyBundle => BuildSupplyBundle(),
-            _ => null
+            // The six logistic installations live in their own file — they are
+            // buildings rather than airframes and share none of the geometry
+            // above. See ProceduralModels.Logistics.cs.
+            _ => BuildLogisticsSite(proceduralId)
         };
 
         // ------------------------------------------------------------- palette
@@ -488,9 +491,46 @@ namespace IronMeridian.Models
         {
             var renderer = go.GetComponent<MeshRenderer>();
             if (renderer == null) return;
-            renderer.sharedMaterial = RuntimeMaterials.UnlitColor(colour);
+            renderer.sharedMaterial = MaterialFor(colour);
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+        }
+
+        /// <summary>
+        /// The flat colours these models are painted with, one shared
+        /// <see cref="Material"/> each.
+        ///
+        /// **Why a cache and not a material per part.** Every model here is a
+        /// few dozen primitives and <c>RuntimeMaterials.UnlitColor</c> is a bare
+        /// <c>new Material</c>, so painting them individually cost one material
+        /// per box — and a material assigned to <c>sharedMaterial</c> is *not*
+        /// reclaimed when its renderer's object is destroyed. That was survivable
+        /// while the only procedural models were airframes that live for the
+        /// length of one strike. A logistic installation is per-site and its
+        /// models are switched on and off from the editor
+        /// (<see cref="Logistics.LogisticsSite.SetModelVisible"/>), so a dozen
+        /// sites toggled a few times orphaned materials by the thousand.
+        ///
+        /// **Sharing is safe here** because nothing repaints a model in place.
+        /// The one caller that tints a part — <see cref="Vfx.ParachuteDrop"/>,
+        /// colouring a canopy by its load — goes through <c>Renderer.material</c>,
+        /// which takes an instance copy precisely so the shared one is left
+        /// alone.
+        ///
+        /// Guarded with the Unity-null idiom rather than a plain null check: a
+        /// material can be destroyed out from under a static cache, and the
+        /// right answer then is to build another.
+        /// </summary>
+        static readonly Dictionary<Color, Material> _palette = new Dictionary<Color, Material>();
+
+        static Material MaterialFor(Color colour)
+        {
+            if (_palette.TryGetValue(colour, out var cached) && cached != null) return cached;
+
+            var mat = RuntimeMaterials.UnlitColor(colour);
+            mat.name = "ProceduralModel_" + ColorUtility.ToHtmlStringRGB(colour);
+            _palette[colour] = mat;
+            return mat;
         }
 
         // --------------------------------------------------------- animation

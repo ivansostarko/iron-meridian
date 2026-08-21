@@ -224,6 +224,16 @@ battle. Damage goes through `UnitActor.ApplyDamage`, so the burning, routing and
 death sequences all follow without the system knowing about any of them — the
 same route `BlastDamage` takes.
 
+**And a belt deadlines more than it kills.** On top of the strength it costs, a
+strike takes **1.6× that figure** out of the formation'''s *serviceability* — the
+fraction of its vehicles still running (docs/04-UNITS.md). That is what a belt is
+actually for: most of what a mine achieves against anything on wheels or tracks
+is a mobility kill, where the vehicle is off the road and the crew walks away.
+It is also what puts a **REPAIR POINT** behind the line to some purpose, a
+workshop being the only thing on the map that can undo it —
+docs/26-LOGISTICS.md. A formation that walks has no equipment to deadline and
+takes only the casualties.
+
 Only the **player's own** losses are flashed. The side that laid the belt learns
 it worked from the map — a formation slowing, burning and turning back — which is
 what a real report looks like, and a flash line per mine on a busy front would be

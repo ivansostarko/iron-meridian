@@ -39,6 +39,18 @@ namespace IronMeridian.UI
         const float PlayerRowHeight = 74f;
         const float TeamRowHeight = 44f;
 
+        /// <summary>
+        /// Left inset of everything inside the scrolling list, measured from the
+        /// list's own padded edge.
+        ///
+        /// It matches the inset a team's name field and a player's glyph take
+        /// inside their bordered rows, so the TEAMS and PLAYERS headings line up
+        /// with the things they head instead of standing ten pixels out from
+        /// them. A heading that does not share an edge with its list reads as
+        /// belonging to the panel rather than to the rows.
+        /// </summary>
+        const float RowInset = 12f;
+
         readonly RectTransform _content;
         RectTransform _list;
         Text _summary;
@@ -161,9 +173,15 @@ namespace IronMeridian.UI
             Header("PLAYERS");
             if (PlayerRegistry.Players.Count == 0)
             {
-                var none = UIFactory.CreateText(_list, "Nobody is playing this scenario yet.",
+                // Indented to the same edge as the headings and the rows, so
+                // the empty state sits in the list rather than beside it.
+                var emptyRow = UIFactory.CreateGroup(_list, "NoPlayers");
+                emptyRow.sizeDelta = new Vector2(0, 34);
+
+                var none = UIFactory.CreateText(emptyRow, "Nobody is playing this scenario yet.",
                     UiTheme.FontSmall, UiTheme.TextFaint, TextAnchor.UpperLeft);
-                ((RectTransform)none.transform).sizeDelta = new Vector2(0, 34);
+                UIFactory.PlaceTopLeft(none.rectTransform, RowInset, 4f,
+                    Inner - RowInset - 8f, 26f);
                 return;
             }
             foreach (var player in PlayerRegistry.Players) PlayerRow(player);
@@ -172,10 +190,11 @@ namespace IronMeridian.UI
         void Header(string label)
         {
             var row = UIFactory.CreateGroup(_list, "Head_" + label);
-            row.sizeDelta = new Vector2(0, 22);
+            row.sizeDelta = new Vector2(0, 26);
 
             var text = UIFactory.CreateSectionHeader(row, label, UiTheme.Accent);
-            UIFactory.PlaceTopLeft(text.rectTransform, 2f, 6f, Inner - 20f, 14f);
+            UIFactory.PlaceTopLeft(text.rectTransform, RowInset, 8f,
+                Inner - RowInset - 8f, 14f);
         }
 
         /// <summary>A team: name, which side it fights on, and a way off the board.</summary>

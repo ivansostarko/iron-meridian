@@ -124,7 +124,7 @@ namespace IronMeridian.Vfx
             {
                 if (!r.name.StartsWith("Canopy") && !r.name.StartsWith("Skirt")) continue;
                 // Instance material: the shared one is cached per colour by
-                // RuntimeMaterials and tinting it would repaint every canopy in
+                // ProceduralModels and tinting it would repaint every canopy in
                 // the game, including the ones already in the air.
                 var mat = r.material;
                 mat.color = Color.Lerp(mat.color, def.markerColor, r.name.StartsWith("Skirt") ? 0.75f : 0.45f);

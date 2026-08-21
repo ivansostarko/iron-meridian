@@ -83,6 +83,18 @@ VfxSystem.PlayAloft(VfxId.AirInterceptBurst, lat, lon, heightAboveGround, scaleM
 | `ArtilleryAirBurst` | White-hot flash, **flat fast shrapnel disc**, small core | `ArtilleryLightBurst`, `UavWarheadBurst` |
 | `ArtilleryDirtColumn` | **Narrow vertical soil column** under gravity, small flash, low skirt | `ArtilleryMortarBurst` |
 | `ArtilleryHeavyBlast` | Fireball, **ground shock ring**, arcing debris, dust | `ArtilleryMediumBurst`, `ArtilleryHeavyBurst`, `AerialBombBurst` |
+| `Motes` | Sparse, slow specks drifting up off a **disc of ground**. Does not grow, does not grey | `LogisticsPlacementMotes`, `LogisticsSiteHaze` |
+
+**`Motes` is the marker case**, and every property of it is the opposite of
+`Smoke`'s. It is a twelfth of the smoke column's emission rate over four times the
+area, so it reads as a scatter over a site rather than a source pouring out of a
+point; it keeps its size instead of doubling as it climbs, because growth is what
+makes a plume read as combustion; and it keeps its tint from bottom to top,
+because darkening toward grey is the single strongest cue that something is
+burning. It is emitted off a flat disc rather than a cone because the thing being
+marked is *ground*. It exists because neither of the obvious reuses works: `Dust`
+is a one-shot burst and stops after half a second however long its row says it
+lives, and a supply depot wearing `Smoke` looks like a supply depot on fire.
 
 The three artillery builders exist because the events do not look alike from a map camera — what separates them is the *shape of the throw*, not the size. 155 mm and 203 mm deliberately share `ArtilleryHeavyBlast` and differ only by their rows' scale and lifetime, because that genuinely is the difference between them.
 
@@ -104,6 +116,8 @@ Defined in `VfxCatalog.cs`. `scaleMeters` is the on-map diameter; call sites pas
 | `SmokePlume` | Column of smoke off a wreck or fire | 300 m | loops | 50 | procedural |
 | `SmokeScreen` | Deliberate obscuration (artillery / smoke generators) | 620 m | loops | 65 | procedural |
 | `Dust` | Kicked up by movement or a deployment drop | 140 m | 1.5 s | 10 | procedural |
+| `LogisticsPlacementMotes` | The ground a logistic installation is about to be put on, while it is dragged or aimed | 260 m | loops | 12 | procedural |
+| `LogisticsSiteHaze` | A working logistic installation — the place is *occupied* | 190 m | loops | 6 | procedural |
 | `ArtilleryLightBurst` | 105 mm round landing — sharp, bright, little soil | 210 m | 2.2 s | 120 | procedural |
 | `ArtilleryMortarBurst` | 120 mm mortar bomb landing — narrow column of earth | 190 m | 2.8 s | 120 | procedural |
 | `ArtilleryMediumBurst` | 155 mm round landing — standard HE burst | 300 m | 3.0 s | 125 | procedural |
@@ -201,6 +215,31 @@ Throttling matters: combat ticks once a second against **every** opposing unit i
 
 The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium streams terrain in, and a click over tiles that have not arrived has no ground to sit on. Those clicks are refused with a message rather than burying the effect inside the globe. A reticle tracks the real ground point while armed, so what you see is where it lands; the tool stays armed so a line of fires can be laid in one go, and right-click or Esc puts it away. Works in both editor and battle mode.
 
+### Logistic installations
+
+| Case | Effect | Trigger | File |
+|---|---|---|---|
+| A kind is being dragged out of the LOGISTICS panel, or is armed and following the cursor | `LogisticsPlacementMotes` | Attached to the placement preview, looping until the tool is stood down | `LogisticsSystem.EnsureGhostMotes` |
+| An installation is on the map **with 3D models switched on** | `LogisticsSiteHaze` | Attached to the site, looping until the models are switched off or the site is destroyed | `LogisticsSite.SetModelVisible` |
+
+Both are **markers, not events**. Nothing here is burning, and either one reading
+as a fire would turn a laydown into a map full of false alarms — which is the
+whole reason `VfxFallback.Motes` exists rather than reusing `Smoke`.
+
+The placement motes answer a question a flat marker cannot: a rear area is laid
+out from a shallow camera angle, where a decal foreshortens into a line and a
+fold of ground hides it entirely, and something *rising out of the spot* survives
+both. That is the same argument the unit drop preview's volume makes.
+
+The site haze comes with the **model** rather than with the marker, deliberately.
+A map of counters is a map of counters and should stay clean; a map you have
+switched into 3D wants the rear area to look occupied. See docs/26-LOGISTICS.md.
+
+The effect a kind plays is a field on its catalogue row (`LogisticsDef.siteVfx`),
+not a constant at the call site — which is the hook a kind that eventually wants
+its own signature (vapour over fuel, dust over a repair bay) hangs on without the
+site code learning what it is drawing.
+
 ### Artillery strikes
 
 | Case | Effect | Trigger | File |
@@ -249,7 +288,7 @@ The tool ground-checks every placement with `MapManager.RaycastGround`: Cesium s
 | Supply bundle lands | `SupplyLandingDust` | at the bundle | `AirSupplySystem.Deliver` (docs/29-AIR-SUPPLY.md) |
 | Formation drives into mines | `MineBlast` + `MineSmoke` | at the **formation**, not at the belt's centre — a column strung out along a road is a kilometre long, and a burst drawn in the middle of the field while the unit is at its edge reads as something else happening nearby | `MinefieldSystem.Detonate` (docs/31-OBSTACLES.md §6) |
 | Supply bundle lands | `SupplyCacheSmoke` | at the cache, for 180 s | `AirSupplySystem.Deliver` (docs/29-AIR-SUPPLY.md) |
-| Strike destroys a supply point | `Explosion` + the wreck effect | at the installation | `StrikeImpact.WreckSupplies` (docs/26-LOGISTICS.md §4a) |
+| Strike destroys a supply point | `Explosion` + the wreck effect | at the installation | `StrikeImpact.WreckSupplies` (docs/26-LOGISTICS.md §4c) |
 
 **Hand-placed effects are pinned.** `VfxInstance.Pinned` marks an effect the
 player put down from the EFFECTS section: it is never chosen as an eviction

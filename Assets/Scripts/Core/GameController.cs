@@ -364,6 +364,7 @@ namespace IronMeridian.Core
                                             _missiles.IsArmed ||
                                             _naval.IsArmed ||
                                             _logistics.IsArmed ||
+                                            _logistics.IsDragging ||
                                             _obstacles.IsArmed ||
                                             // A type armed from a card's right-click menu: the
                                             // next click on the ground puts it there, and must
@@ -538,6 +539,16 @@ namespace IronMeridian.Core
                     if (_strikeDock != null) _strikeDock.Hide();
                 };
                 _supplyPanel.FocusUnitRequested = FlyToUnit;
+
+                // The ground the installation serves, draped on the terrain
+                // while its panel is up. Routed through the system rather than
+                // set on the site directly: the LOGISTICS panel may already be
+                // showing every ring, and closing this panel must not pull one
+                // down that a switch put up. See docs/26-LOGISTICS.md §4.
+                _supplyPanel.RingRequested = (site, on) =>
+                {
+                    if (_logistics != null) _logistics.ShowRingFor(site, on);
+                };
                 _supplyPanel.RemoveRequested = site =>
                 {
                     if (site == null) return;
@@ -665,9 +676,14 @@ namespace IronMeridian.Core
                 _palette.UnitModelsChanged = on =>
                 {
                     UnitActor.SetModelsVisible(on);
+                    // The rear area follows the same switch. A battlefield where
+                    // the formations are solid and the depots are decals is
+                    // exactly the inconsistency this switch exists to remove —
+                    // see docs/09-3D-MODELS.md §3 and docs/26-LOGISTICS.md §4b.
+                    if (_logistics != null) _logistics.SetModelsVisible(on);
                     _hud.Flash(on
-                        ? "Unit 3D models shown — the counters stay, and the models move and turn with them."
-                        : "Unit 3D models hidden.");
+                        ? "3D models shown — formations and logistic installations both. The counters stay."
+                        : "3D models hidden.");
                 };
                 _palette.FogOfWarChanged = on =>
                 {
@@ -1258,6 +1274,10 @@ namespace IronMeridian.Core
                 latitude = lat,
                 longitude = lon,
                 strength = 1f,
+                // Explicit rather than left to the field initialiser: a
+                // formation arriving on the map with anything deadlined would be
+                // a scenario that started broken.
+                serviceability = 1f,
                 organisation = def.organisation,
                 morale = def.morale,
                 status = nameof(UnitStatus.Idle),
@@ -2688,6 +2708,7 @@ namespace IronMeridian.Core
             if (_planner != null) _planner.ClearAll();
             _effects.Cancel();
             _logistics.Cancel();
+            _logistics.CancelDrag();
             _obstacles.Cancel();
             if (_mapObjects != null) _mapObjects.Cancel();
             _airSupply.Cancel();
@@ -2818,6 +2839,7 @@ namespace IronMeridian.Core
             _missiles.Cancel();
             _naval.Cancel();
             _logistics.Cancel();
+            _logistics.CancelDrag();
             _obstacles.Cancel();
             if (_mapObjects != null) _mapObjects.Cancel();
         }
@@ -2934,6 +2956,19 @@ namespace IronMeridian.Core
 
             if (Input.GetKeyDown(KeyCode.F5)) SaveMap();
             if (Input.GetKeyDown(KeyCode.F9)) LoadMap();
+
+            // H — fold the sidebar away, in both scenario and battle mode. The
+            // rail is most of a laptop's screen width and there are stretches of
+            // both modes where the player wants the map and nothing else. Y on a
+            // pad: a handheld has no H, and this is exactly the screen where its
+            // 1280 px matter most (docs/42-STEAM-DECK.md §3).
+            if (_palette != null && (Input.GetKeyDown(KeyCode.H) || GamepadInput.SidebarDown))
+            {
+                _palette.ToggleRail();
+                _hud.Flash(_palette.RailCollapsed
+                    ? "Sidebar hidden — H, or the tab on the left edge, brings it back."
+                    : "Sidebar shown.");
+            }
 
             // TAB — the casualty list. Toggled from here alone: the dialog also
             // watches Escape, but two behaviours reading TAB in an undefined

@@ -768,6 +768,7 @@ namespace IronMeridian.Units
         public void RefreshAfterSupply()
         {
             State.strength = Mathf.Clamp01(State.strength);
+            State.serviceability = Mathf.Clamp01(State.serviceability);
             if (State.strength >= 0.3f && State.status == nameof(UnitStatus.Routed))
                 State.status = nameof(UnitStatus.Idle);
             RefreshBurning();
@@ -901,7 +902,84 @@ namespace IronMeridian.Units
             ApplyOutline();
         }
 
-        public float CurrentPower() => Def.PowerAt(State.EchelonEnum, State.strength);
+        public float CurrentPower() =>
+            Def.PowerAt(State.EchelonEnum, State.strength) * ServiceabilityFactor;
+
+        /// <summary>
+        /// True for a formation whose fighting power is mostly **equipment** —
+        /// the only kind that can be repaired.
+        ///
+        /// Read off <c>fuelStock</c> rather than from a flag of its own, because
+        /// the catalogue already answers this honestly: a formation that burns
+        /// fuel is a formation that runs on vehicles. Six of the seven infantry
+        /// types carry none; every armoured, mechanised, artillery and logistic
+        /// type does. A second hand-maintained flag would only be a chance for
+        /// the two to disagree.
+        /// </summary>
+        public bool HasEquipment => Def != null && Def.fuelStock > 0.01f;
+
+        /// <summary>
+        /// Equipment still running, 0..1. Always 1 for a formation that has
+        /// none, so nothing downstream has to ask whether the question applies.
+        /// </summary>
+        public float Serviceability =>
+            HasEquipment ? Mathf.Clamp01(State.serviceability) : 1f;
+
+        /// <summary>
+        /// What deadlined equipment costs in combat.
+        ///
+        /// **It does not fall to nothing.** A tank battalion with every vehicle
+        /// off the road is still a few hundred trained soldiers with small arms
+        /// on ground they know; a multiplier that reached zero would delete a
+        /// formation the enemy never finished killing. The floor is what makes
+        /// pulling armour back to a workshop a decision rather than an
+        /// emergency.
+        ///
+        /// **Speed is deliberately left alone.** A mobility kill really should
+        /// slow a column down, but every ETA the order feedback quotes is
+        /// computed from the catalogue's <c>speedKmh</c>, and a march that
+        /// silently took half again as long as the panel promised is a worse lie
+        /// than a formation that merely fights less well. See
+        /// <see cref="UnitMover.CruiseMps"/>.
+        /// </summary>
+        public float ServiceabilityFactor =>
+            Mathf.Lerp(DeadlinedPowerFloor, 1f, Serviceability);
+
+        /// <summary>Combat power multiplier at zero serviceability — never nothing. See above.</summary>
+        const float DeadlinedPowerFloor = 0.45f;
+
+        /// <summary>
+        /// Share of the strength a formation loses that also deadlines
+        /// equipment, applied by <see cref="ApplyDamage"/> to **every** source
+        /// of casualties.
+        ///
+        /// Under 1, because not every casualty is a vehicle and not every hit
+        /// vehicle is recoverable — some of that loss is simply gone, and gone
+        /// is what <see cref="UnitState.strength"/> already records. What is
+        /// left is the recovery job, which is the only thing a repair point can
+        /// do anything about.
+        ///
+        /// **Public because a weapon that deadlines out of proportion has to
+        /// know what has already been charged.** A mine is such a weapon; it
+        /// tops this figure up to its own rather than adding to it, which is
+        /// the difference between the 1.6× the docs promise and 2.2×. See
+        /// <see cref="MinefieldSystem"/>.
+        /// </summary>
+        public const float EquipmentLossShare = 0.6f;
+
+        /// <summary>
+        /// Deadlines equipment without touching the formation's numbers — a
+        /// mobility kill.
+        ///
+        /// What a mine does: the vehicle is stopped and the crew usually walks
+        /// away, which is precisely a repair job and precisely not a casualty.
+        /// See <see cref="MinefieldSystem"/> and docs/31-OBSTACLES.md.
+        /// </summary>
+        public void ApplyEquipmentDamage(float amount)
+        {
+            if (amount <= 0f || !IsAlive || !HasEquipment) return;
+            State.serviceability = Mathf.Clamp01(State.serviceability - amount);
+        }
 
         /// <summary>
         /// This formation's size on a 0..1 scale (team → army). Drives how big
@@ -938,7 +1016,16 @@ namespace IronMeridian.Units
             // formation had. See LossLedger.
             float before = State.strength;
             State.strength = Mathf.Max(0f, State.strength - dmg);
-            LossLedger.RecordAttrition(this, before - State.strength);
+            float lost = before - State.strength;
+            LossLedger.RecordAttrition(this, lost);
+
+            // Part of what a mechanised formation loses under fire is recoverable
+            // rather than destroyed: vehicles down, not written off. That share
+            // is the repair point's work, and it is the only thing on the map
+            // that can undo it — see ApplyEquipmentDamage and
+            // docs/26-LOGISTICS.md.
+            if (HasEquipment && lost > 0f)
+                State.serviceability = Mathf.Clamp01(State.serviceability - lost * EquipmentLossShare);
 
             State.morale = Mathf.Max(0f, State.morale - dmg * 40f);
 

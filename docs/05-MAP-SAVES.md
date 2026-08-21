@@ -32,6 +32,7 @@ Save with the HUD **SAVE** button or `F5`; load with **LOAD** / `F9`.
       "latitude": 45.7760, "longitude": 4.8050, "heightMeters": 0,
       "headingDeg": 90,
       "strength": 1.0,                // 0..1
+      "serviceability": 1.0,          // 0..1 — equipment running; absent = 1
       "organisation": 60, "morale": 65,
       "status": "Idle",               // Idle|Moving|Engaging|Suppressed|Routed|Destroyed
       "ammo": 42000, "fuel": 0, "foodDays": 3

@@ -204,7 +204,7 @@ Assets/Scripts/
                           at sorting order 1000. Any input skips it; it always
                           ends (docs/11-GAME-MENU.md §3.1a)
     TestingUI.cs         DEVELOPMENT hub: map editor + the three reference labs
-    UnitsListUI.cs       UNITS LIST: six catalogues, editable, saved to
+    UnitsListUI.cs       UNITS LIST: seven catalogues, editable, saved to
                           tuning.json
     StatEditorPanel.cs   generic label/value list for any data record; switches
                           from reading to editing without being rebuilt
@@ -212,6 +212,8 @@ Assets/Scripts/
     ExtrasUI.cs          the EXTRAS board: Units, DLC, Credits — the main menu's
                           board with three rows on it, each previewing its page
     UnitLibraryUI.cs     the unit encyclopaedia: arm board, then filtered list + 3D
+                          model. A seventh board, LOGISTICS, lists the six
+                          installations instead of unit types (docs/26-LOGISTICS.md)
     EffectsListUI.cs     PARTICLES lab (docs/08-PARTICLE-SYSTEMS.md §3)
     AudioListUI.cs       AUDIO lab: every sound, its source, and a transport
                           (docs/10-AUDIO.md §3)
@@ -390,9 +392,12 @@ Assets/Scripts/
                           has been put on the line
   Logistics/             the scenario's rear area — see docs/26-LOGISTICS.md
     LogisticsSystem.cs   owns every depot and supply/fuel/ammo/repair/medical
-                          point, the arm-then-click placement tool, save/load
+                          point, both placement gestures (drag-and-drop and
+                          arm-then-click) and their shared preview, the service
+                          rings and 3D models switches, save/load
     LogisticsSite.cs     the map graphic: side-coloured ground ring, the
-                          function's billboarded symbol, caption
+                          function's billboarded marker plate, stock bar,
+                          caption, terrain-draped service ring, 3D model
     SustainmentSystem.cs stocks per side, consumption derived from the deployed
                           force, days of supply, manpower on field
                           (docs/27-SUSTAINMENT.md)

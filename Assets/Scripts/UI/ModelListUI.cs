@@ -47,6 +47,21 @@ namespace IronMeridian.UI
             public State State;
             /// <summary>Unit types that resolve to this model, for the detail block.</summary>
             public List<string> Users = new List<string>();
+            /// <summary>
+            /// Things that are **not** unit types and wear this model anyway:
+            /// logistic installations, and the air-dropped bundle.
+            ///
+            /// Kept apart from <see cref="Users"/> rather than merged into it,
+            /// because the two answer different questions. "Which formations
+            /// wear this" is what a designer checking a model assignment asks;
+            /// "what else on the map is this" is what somebody wondering why a
+            /// model with no unit types is in the library asks — and that line
+            /// used to read "not yet assigned", which was wrong for six of them.
+            /// </summary>
+            public List<string> OtherUsers = new List<string>();
+
+            /// <summary>Everything that draws this model, unit types first.</summary>
+            public int UserCount => Users.Count + OtherUsers.Count;
         }
 
         readonly List<Entry> _entries = new List<Entry>();
@@ -102,6 +117,22 @@ namespace IronMeridian.UI
                 foreach (var e in _entries)
                     if (e.Def == resolved) { e.Users.Add(unit.name); break; }
             }
+
+            // The rear area. An installation is not a unit type and never
+            // appears in the catalogue above, so without this its model would be
+            // reported as belonging to nothing — see docs/26-LOGISTICS.md §4b.
+            foreach (var site in LogisticsCatalog.All)
+            {
+                if (string.IsNullOrEmpty(site.modelId)) continue;
+                foreach (var e in _entries)
+                    if (e.Id == site.modelId) { e.OtherUsers.Add(site.name); break; }
+            }
+
+            // The one load that is dropped rather than deployed. Named here for
+            // the same reason: nothing in units.json resolves to it.
+            foreach (var e in _entries)
+                if (e.Id == UnitModelLibrary.SupplyBundle)
+                    e.OtherUsers.Add("AIR-DROPPED CACHE");
 
             // Installed first, then procedural, then missing — the order somebody
             // opening this screen is looking for.
@@ -181,9 +212,9 @@ namespace IronMeridian.UI
             UIFactory.PlaceTopLeft(name.rectTransform, 34f, 12f, ListWidth - 170f, 24f);
             UIFactory.Fit(name, 12);
 
-            string under = e.Users.Count == 0
+            string under = e.UserCount == 0
                 ? e.Def.sourceAsset
-                : $"{e.Def.sourceAsset}  ·  {e.Users.Count} unit type(s)";
+                : $"{e.Def.sourceAsset}  ·  {e.UserCount} user(s)";
             var detail = UIFactory.CreateText(frame, under, 13, UiTheme.TextFaint,
                 TextAnchor.MiddleLeft);
             UIFactory.PlaceTopLeft(detail.rectTransform, 34f, 38f, ListWidth - 170f, 20f);
@@ -273,9 +304,29 @@ namespace IronMeridian.UI
                 : $"Resources/{entry.Def.resourcePath}" +
                   (entry.Def.animated ? $"   ·   animated, idle '{entry.Def.idleClip}'" : "   ·   static mesh");
 
-            _detailUsers.text = entry.Users.Count == 0
-                ? "No unit type resolves to this model — it is used by a weapon catalogue or not yet assigned."
-                : "Worn by: " + string.Join(", ", entry.Users);
+            _detailUsers.text = DetailUsers(entry);
+        }
+
+        /// <summary>
+        /// Who draws this model, in one line.
+        ///
+        /// Unit types and everything else are listed separately and labelled,
+        /// because a model worn by no formation is not the same thing as a model
+        /// worn by nothing: six of them are logistic installations, one is an
+        /// air-dropped cache, and several belong to a weapon catalogue rather
+        /// than to the unit list.
+        /// </summary>
+        static string DetailUsers(Entry entry)
+        {
+            var parts = new List<string>();
+            if (entry.Users.Count > 0)
+                parts.Add("Worn by " + string.Join(", ", entry.Users));
+            if (entry.OtherUsers.Count > 0)
+                parts.Add("Also drawn for " + string.Join(", ", entry.OtherUsers));
+
+            return parts.Count == 0
+                ? "No unit type resolves to this model — it is flown by a weapon catalogue or not yet assigned."
+                : string.Join("   ·   ", parts);
         }
 
         void Update()

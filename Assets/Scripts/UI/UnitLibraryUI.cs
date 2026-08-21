@@ -31,6 +31,15 @@ namespace IronMeridian.UI
     /// armour, air and navy — plus the rest of the catalogue under MORE, because
     /// a browser that silently omits 60 of 117 unit types is worse than one that
     /// admits to a sixth category.
+    ///
+    /// **And a seventh board that is not units at all.** LOGISTICS lists the six
+    /// installations a scenario can be given. They are not formations — they do
+    /// not fight, move or die, and they have none of a unit's numbers — so the
+    /// list page carries a second column set and a second detail block for them.
+    /// They are here because a reader asking what a side fields is asking about
+    /// the rear area too, and a book covering 117 formation types that omits the
+    /// six things keeping them supplied is a book with a hole in it. See
+    /// docs/26-LOGISTICS.md.
     /// </summary>
     public class UnitLibraryUI : MonoBehaviour
     {
@@ -68,6 +77,20 @@ namespace IronMeridian.UI
             public System.Func<Sprite> glyph;
             public Color tone;
             public UnitBranch[] branches;
+
+            /// <summary>
+            /// True for the one board entry that is **not** a set of unit types.
+            ///
+            /// A logistic installation is not a formation — it does not fight,
+            /// move or die, and it has none of a unit's numbers — so it cannot
+            /// be a branch filter over <see cref="UnitDatabase"/>. It is on this
+            /// board anyway because a reader asking "what does this side field"
+            /// is asking about the rear area too, and an encyclopaedia that
+            /// covers 117 formation types and omits the six things that keep
+            /// them supplied is an encyclopaedia with a hole in it. See
+            /// docs/26-LOGISTICS.md.
+            /// </summary>
+            public bool installations;
         }
 
         static readonly Arm[] Arms =
@@ -111,6 +134,15 @@ namespace IronMeridian.UI
             },
             new Arm
             {
+                title = "LOGISTICS", glyph = () => UiIcons.Pallet,
+                blurb = "The rear area: depots, supply, fuel, ammunition, repair and medical points. " +
+                        "They hold no ground and fire nothing — everything that does depends on them.",
+                tone = new Color(0.14f, 0.24f, 0.24f),
+                branches = System.Array.Empty<UnitBranch>(),
+                installations = true
+            },
+            new Arm
+            {
                 title = "MORE", glyph = () => UiIcons.Layers,
                 blurb = "Sustainment, and the combat support that belongs to no single arm: " +
                         "engineers, signals, ISR, influence, cyber.",
@@ -119,44 +151,102 @@ namespace IronMeridian.UI
             }
         };
 
+        /// <summary>
+        /// One table column. <see cref="Cell"/> takes <c>object</c> rather than
+        /// a <see cref="UnitDefinition"/> because this table serves two record
+        /// types now — formations and logistic installations — and the
+        /// alternative was a second copy of the header, row, sort and highlight
+        /// code that differed only in a cast.
+        /// </summary>
         class Column
         {
             public readonly string Label;
             public readonly float Weight;
             public readonly string Sort;
-            public readonly System.Func<UnitDefinition, string> Cell;
+            /// <summary>Cell text for one record; null for the icon column.</summary>
+            public readonly System.Func<object, string> Cell;
             public float Start, End;
-            public Column(string label, float weight, string sort, System.Func<UnitDefinition, string> cell)
+            public Column(string label, float weight, string sort, System.Func<object, string> cell)
             { Label = label; Weight = weight; Sort = sort; Cell = cell; }
         }
 
         static readonly Column[] Columns =
         {
             new Column("ICON",     1.40f, null,       null),
-            new Column("NAME",     3.20f, "name",     d => d.name),
-            new Column("BRANCH",   1.30f, "branch",   d => UnitBranchInfo.DisplayName(d.Branch)),
-            new Column("ATK",      0.70f, "attack",   d => $"{d.attack:0}"),
-            new Column("DEF",      0.70f, "defence",  d => $"{d.defence:0}"),
-            new Column("ARM",      0.70f, "armour",   d => $"{d.armour:0}"),
-            new Column("RANGE",    1.00f, "range",    d => $"{d.weaponRangeKm:0.#} km"),
-            new Column("SPEED",    1.05f, "speed",    d => $"{d.speedKmh:0} km/h"),
-            new Column("MANPOWER", 1.15f, "manpower", d => $"{d.manpower:n0}")
+            new Column("NAME",     3.20f, "name",     r => Def(r).name),
+            new Column("BRANCH",   1.30f, "branch",   r => UnitBranchInfo.DisplayName(Def(r).Branch)),
+            new Column("ATK",      0.70f, "attack",   r => $"{Def(r).attack:0}"),
+            new Column("DEF",      0.70f, "defence",  r => $"{Def(r).defence:0}"),
+            new Column("ARM",      0.70f, "armour",   r => $"{Def(r).armour:0}"),
+            new Column("RANGE",    1.00f, "range",    r => $"{Def(r).weaponRangeKm:0.#} km"),
+            new Column("SPEED",    1.05f, "speed",    r => $"{Def(r).speedKmh:0} km/h"),
+            new Column("MANPOWER", 1.15f, "manpower", r => $"{Def(r).manpower:n0}")
         };
 
-        static void NormaliseColumns()
+        /// <summary>
+        /// The installations table. Deliberately **not** the formation columns
+        /// with blanks in them: an installation has no attack, no armour and no
+        /// speed, and a row of dashes under those headings would state six
+        /// values that do not exist. What it has instead is a reach, a stock and
+        /// a service, which is exactly what distinguishes one from another.
+        /// </summary>
+        static readonly Column[] InstallationColumns =
+        {
+            new Column("ICON",    1.40f, null,      null),
+            new Column("NAME",    2.60f, "name",    r => Site(r).name),
+            new Column("SERVES",  1.60f, "serves",  r => ServesText(Site(r))),
+            new Column("REACH",   1.10f, "reach",   r => $"{Site(r).serviceRadiusKm:0.#} km"),
+            new Column("ISSUES",  1.00f, "issues",  r => $"{Site(r).defaultStock:0.#}"),
+            new Column("PURPOSE", 3.10f, null,      r => Site(r).detail)
+        };
+
+        static UnitDefinition Def(object record) => (UnitDefinition)record;
+        static LogisticsDef Site(object record) => (LogisticsDef)record;
+
+        /// <summary>
+        /// What one issue from this kind actually puts back — the sentence a
+        /// reader needs before the radius or the stock figure means anything.
+        /// </summary>
+        static string RestoresText(LogisticsDef d) => d.service switch
+        {
+            SupplyService.Ammunition => "Half an establishment of rounds",
+            SupplyService.Fuel => "Half a tank of fuel",
+            SupplyService.Medical => "8 % strength, up to 75 %",
+            SupplyService.Repair => "15 % serviceability, up to fully fit",
+            SupplyService.General => "All of the above, at 70 %",
+            _ => "Nothing — this kind is a map graphic"
+        };
+
+        static string ServesText(LogisticsDef d) => d.service switch
+        {
+            SupplyService.Ammunition => "Ammunition",
+            SupplyService.Fuel => "Fuel",
+            SupplyService.Medical => "Casualties",
+            SupplyService.Repair => "Vehicles",
+            SupplyService.General => "Everything",
+            _ => "Map graphic"
+        };
+
+        static void NormaliseColumns(Column[] columns)
         {
             float total = 0f;
-            foreach (var c in Columns) total += c.Weight;
+            foreach (var c in columns) total += c.Weight;
             if (total <= 0f) return;
 
             float cursor = 0f;
-            foreach (var c in Columns)
+            foreach (var c in columns)
             {
                 c.Start = cursor / total;
                 cursor += c.Weight;
                 c.End = cursor / total;
             }
         }
+
+        /// <summary>The columns for whichever kind of record the open arm holds.</summary>
+        Column[] ActiveColumns => Installations ? InstallationColumns : Columns;
+
+        /// <summary>True while the board's LOGISTICS entry is open.</summary>
+        bool Installations => _arm != null && _arm.installations;
 
         // ------------------------------------------------------------- state
         Canvas _canvas;
@@ -169,6 +259,13 @@ namespace IronMeridian.UI
         /// <summary>Sub-branch filter inside an arm; null shows the whole arm.</summary>
         UnitBranch? _branch;
         UnitDefinition _selected;
+        /// <summary>The installation being read, on the LOGISTICS board. Null on every other.</summary>
+        LogisticsDef _selectedSite;
+        /// <summary>
+        /// The row currently lit, by id. One field for both record types, so
+        /// the highlight logic does not have to know which board is open.
+        /// </summary>
+        string _selectedId;
 
         RectTransform _header, _rowsContent, _branchRow;
         Text _listTitle, _resultCount, _hint, _detailName, _detailSub;
@@ -181,7 +278,8 @@ namespace IronMeridian.UI
 
         void Start()
         {
-            NormaliseColumns();
+            NormaliseColumns(Columns);
+            NormaliseColumns(InstallationColumns);
             AudioManager.Apply();
             MusicManager.Play(MusicTrack.ExtrasTheme);
 
@@ -218,8 +316,8 @@ namespace IronMeridian.UI
             // its descenders: the count is a caption on UNITS, and a caption
             // crowding the word it captions reads as one clipped block of text.
             var sub = UIFactory.CreateText(_boardPage,
-                $"{UnitDatabase.All.Count} formation types, by arm of service. " +
-                "Pick one to browse it.",
+                $"{UnitDatabase.All.Count} formation types by arm of service, and the " +
+                $"{LogisticsCatalog.All.Length} installations that supply them. Pick one to browse it.",
                 20, GameConfig.UiTextDim, TextAnchor.MiddleLeft);
             UIFactory.Place(sub.rectTransform, new Vector2(0f, 1f),
                 new Vector2(80, -126 - SubtitleTopPad), new Vector2(1000, 28));
@@ -244,7 +342,7 @@ namespace IronMeridian.UI
                 float x = -rowWidth * 0.5f + CardW * 0.5f + col * (CardW + Gap);
                 float y = -(GridTop + row * (CardH + Gap)) - CardH * 0.5f;
 
-                int total = 0;
+                int total = Arms[i].installations ? LogisticsCatalog.All.Length : 0;
                 foreach (var b in Arms[i].branches) { counts.TryGetValue(b, out int n); total += n; }
 
                 var card = Card(_boardPage, Arms[i], total, CardW, CardH);
@@ -430,7 +528,10 @@ namespace IronMeridian.UI
         {
             ClearChildren(_branchRow);
             _repaints.Clear();
-            if (_arm == null) return;
+            // The installations board has one table and nothing to filter it by:
+            // six rows is the whole catalogue. A row of chips that could only
+            // ever say ALL would be a control that does nothing.
+            if (_arm == null || _arm.installations) return;
 
             var counts = new Dictionary<UnitBranch, int>();
             foreach (var d in UnitDatabase.All)
@@ -563,6 +664,8 @@ namespace IronMeridian.UI
         {
             _arm = null;
             _selected = null;
+            _selectedSite = null;
+            _selectedId = null;
             _boardPage.gameObject.SetActive(true);
             _listPage.gameObject.SetActive(false);
             UIFactory.SetBackButtonLabel(_back, "BACK TO EXTRAS");
@@ -573,6 +676,8 @@ namespace IronMeridian.UI
             _arm = arm;
             _branch = null;
             _selected = null;
+            _selectedSite = null;
+            _selectedId = null;
             _search = "";
             _sortKey = "name";
             _sortAscending = true;
@@ -652,6 +757,8 @@ namespace IronMeridian.UI
             ClearChildren(_rowsContent);
             _rowImages.Clear();
 
+            if (Installations) { RebuildInstallations(); return; }
+
             var rows = Visible();
             foreach (var d in rows) CreateRow(d);
 
@@ -662,9 +769,7 @@ namespace IronMeridian.UI
 
             if (rows.Count == 0)
             {
-                var empty = UIFactory.CreateText(_rowsContent, "Nothing matches that search.",
-                    18, GameConfig.UiTextDim);
-                ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 60);
+                Empty();
                 Select(null);
                 return;
             }
@@ -673,11 +778,174 @@ namespace IronMeridian.UI
             else Select(rows[0]);
         }
 
+        void Empty()
+        {
+            var empty = UIFactory.CreateText(_rowsContent, "Nothing matches that search.",
+                18, GameConfig.UiTextDim);
+            ((RectTransform)empty.transform).sizeDelta = new Vector2(0, 60);
+        }
+
+        // ------------------------------------------------- the installations
+
+        void RebuildInstallations()
+        {
+            var rows = VisibleSites();
+            foreach (var d in rows) CreateSiteRow(d);
+
+            _resultCount.text = $"{rows.Count} installation(s)";
+            _hint.text = _arm?.blurb ?? "";
+
+            if (rows.Count == 0) { Empty(); SelectSite(null); return; }
+
+            if (_selectedSite != null && rows.Contains(_selectedSite)) Highlight();
+            else SelectSite(rows[0]);
+        }
+
+        List<LogisticsDef> VisibleSites()
+        {
+            var list = new List<LogisticsDef>();
+            foreach (var d in LogisticsCatalog.All)
+            {
+                if (!string.IsNullOrEmpty(_search) &&
+                    !Contains(d.name) && !Contains(d.detail) && !Contains(d.kind.ToString()))
+                    continue;
+                list.Add(d);
+            }
+
+            list.Sort((a, b) =>
+            {
+                int c = CompareSites(a, b);
+                if (c == 0) c = string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase);
+                return _sortAscending ? c : -c;
+            });
+            return list;
+
+            bool Contains(string s) => !string.IsNullOrEmpty(s) &&
+                s.IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        int CompareSites(LogisticsDef a, LogisticsDef b) => _sortKey switch
+        {
+            "name" => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase),
+            "serves" => string.Compare(ServesText(a), ServesText(b), System.StringComparison.OrdinalIgnoreCase),
+            "reach" => a.serviceRadiusKm.CompareTo(b.serviceRadiusKm),
+            "issues" => a.defaultStock.CompareTo(b.defaultStock),
+            // The catalogue's own order is rear-to-front, which is how the
+            // LOGISTICS panel reads and how a laydown is built. It is the right
+            // default for a table nobody has asked to sort another way.
+            _ => ((int)a.kind).CompareTo((int)b.kind)
+        };
+
+        void CreateSiteRow(LogisticsDef def)
+        {
+            string id = def.kind.ToString();
+            var row = UIFactory.CreatePanel(_rowsContent, "Site_" + id, RowColour(false));
+            row.sizeDelta = new Vector2(0, 54);
+
+            var btn = row.gameObject.AddComponent<Button>();
+            btn.targetGraphic = row.GetComponent<Image>();
+            btn.onClick.AddListener(() => SelectSite(def));
+            _rowImages[id] = row.GetComponent<Image>();
+
+            foreach (var col in InstallationColumns)
+            {
+                if (col.Cell == null)
+                {
+                    // The kind's own glyph in its own tint — the same picture
+                    // the panel button, the placement preview and the map marker
+                    // carry, so the four cannot disagree.
+                    var glyph = UIFactory.CreateImage(row, UiIcons.GlyphFor(def.kind), "Glyph");
+                    glyph.color = def.tint;
+                    glyph.raycastTarget = false;
+                    var grt = (RectTransform)glyph.transform;
+                    grt.anchorMin = grt.anchorMax = new Vector2(col.Start, 0.5f);
+                    grt.pivot = new Vector2(0f, 0.5f);
+                    grt.anchoredPosition = new Vector2(30f, 0f);
+                    grt.sizeDelta = new Vector2(34, 34);
+                    continue;
+                }
+
+                bool lead = col.Label == "NAME";
+                var t = UIFactory.CreateText(row, col.Cell(def), lead ? 17 : 15,
+                    lead ? GameConfig.UiText : GameConfig.UiTextDim, TextAnchor.MiddleLeft);
+                SpanColumn(t.rectTransform, col, 4f, 40f);
+                UIFactory.Fit(t, 11);
+            }
+        }
+
+        void SelectSite(LogisticsDef def)
+        {
+            Unhighlight();
+            _selected = null;
+            _selectedSite = def;
+            _selectedId = def?.kind.ToString();
+            Highlight();
+
+            _detailName.text = def == null ? "—" : def.name;
+            _detailSub.text = def == null
+                ? "No installation selected"
+                : $"Logistic installation  ·  {ServesText(def)}  ·  id: {def.kind}";
+
+            ClearChildren(_detailIcons);
+            if (def != null)
+            {
+                var glyph = UIFactory.CreateImage(_detailIcons, UiIcons.GlyphFor(def.kind), "Glyph");
+                glyph.color = def.tint;
+                glyph.raycastTarget = false;
+                var grt = (RectTransform)glyph.transform;
+                grt.anchorMin = grt.anchorMax = new Vector2(0f, 0.5f);
+                grt.pivot = new Vector2(0f, 0.5f);
+                grt.anchoredPosition = Vector2.zero;
+                grt.sizeDelta = new Vector2(44, 44);
+            }
+
+            if (_preview != null)
+            {
+                bool shows = def != null && !string.IsNullOrEmpty(def.modelId);
+                _preview.gameObject.SetActive(shows);
+                if (shows) _preview.ShowModel(def.modelId, def.name);
+            }
+
+            BuildSiteStats(def);
+        }
+
+        void BuildSiteStats(LogisticsDef def)
+        {
+            ClearChildren(_detailStats);
+            if (def == null) return;
+
+            var d = UIFactory.CreateText(_detailStats, def.detail, 15,
+                GameConfig.UiTextDim, TextAnchor.UpperLeft);
+            d.gameObject.AddComponent<ContentSizeFitter>().verticalFit =
+                ContentSizeFitter.FitMode.PreferredSize;
+            ((RectTransform)d.transform).sizeDelta = new Vector2(0, 40);
+
+            Section("WHAT IT DOES");
+            Stat("Serves", ServesText(def));
+            Stat("Service radius", $"{def.serviceRadiusKm:0.#} km");
+            Stat("Stock when placed", $"{def.defaultStock:0.#} issues");
+            // One issue is one formation's worth, scaled by echelon — the figure
+            // above means nothing without it, and a reader on this screen has
+            // not seen the supply panel where that is spelled out.
+            Stat("One issue", "one formation's worth, √manpower-scaled");
+            Stat("Restores", RestoresText(def));
+
+            Section("ON THE MAP");
+            Stat("Ground ring", "The owning side — blue or red");
+            Stat("Marker", "Its glyph on a plate framed in the side's colour");
+            Stat("Service ring", "Drawn on the terrain when asked for");
+
+            Section("3D MODEL");
+            var model = UnitModelLibrary.Get(def.modelId);
+            Stat("Source", model?.sourceAsset ?? "none yet");
+            Stat("Animation", model?.idleClip ?? "static — a depot is a place");
+        }
+
         void BuildHeaderCells()
         {
             ClearChildren(_header);
 
-            foreach (var col in Columns)
+            foreach (var col in ActiveColumns)
             {
                 bool active = col.Sort != null && col.Sort == _sortKey;
                 string label = col.Label + (active ? (_sortAscending ? "  ▲" : "  ▼") : "");
@@ -726,6 +994,7 @@ namespace IronMeridian.UI
                     PlaceIcon(row, "Friendly", def.id, 30f, col);
                     continue;
                 }
+
                 bool lead = col.Label == "NAME";
                 var t = UIFactory.CreateText(row, col.Cell(def), lead ? 17 : 15,
                     lead ? GameConfig.UiText : GameConfig.UiTextDim, TextAnchor.MiddleLeft);
@@ -799,10 +1068,10 @@ namespace IronMeridian.UI
 
         void Select(UnitDefinition def)
         {
-            if (_selected != null && _rowImages.TryGetValue(_selected.id, out var previous) && previous != null)
-                previous.color = RowColour(false);
-
+            Unhighlight();
+            _selectedSite = null;
             _selected = def;
+            _selectedId = def?.id;
             Highlight();
 
             _detailName.text = def == null ? "—" : def.name.ToUpperInvariant();
@@ -817,15 +1086,30 @@ namespace IronMeridian.UI
                 PlaceIcon(_detailIcons, "Enemy", def.id, 52f);
             }
 
-            if (_preview != null) _preview.Show(def);
+            // Re-shown as well as re-pointed: the installations board hides the
+            // preview for a kind with no model yet, and a formation arriving
+            // after that would otherwise have its model drawn into a panel that
+            // is switched off.
+            if (_preview != null)
+            {
+                _preview.gameObject.SetActive(true);
+                _preview.Show(def);
+            }
             BuildStats(def);
         }
 
         void Highlight()
         {
-            if (_selected == null) return;
-            if (_rowImages.TryGetValue(_selected.id, out var image) && image != null)
+            if (_selectedId == null) return;
+            if (_rowImages.TryGetValue(_selectedId, out var image) && image != null)
                 image.color = RowColour(true);
+        }
+
+        void Unhighlight()
+        {
+            if (_selectedId == null) return;
+            if (_rowImages.TryGetValue(_selectedId, out var image) && image != null)
+                image.color = RowColour(false);
         }
 
         void BuildStats(UnitDefinition def)

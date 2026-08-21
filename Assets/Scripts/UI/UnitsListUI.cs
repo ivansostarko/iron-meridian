@@ -14,11 +14,12 @@ namespace IronMeridian.UI
     /// UNITS LIST — the reference catalogue for every data table the game
     /// is built from, and the one place they can be tuned.
     ///
-    /// **Six tables, one screen.** Unit types were only ever half the answer to
-    /// "what can this thing do": artillery natures, strike airframes, UAVs,
-    /// missile systems and naval guns are all catalogues of the same shape and
-    /// were previously readable only in source. They are tabs here, driven from
-    /// <see cref="GameCatalogs"/> — adding a weapon family adds a tab.
+    /// **Seven tables, one screen.** Unit types were only ever half the answer
+    /// to "what can this thing do": artillery natures, strike airframes, UAVs,
+    /// missile systems, naval guns and the six logistic installations are all
+    /// catalogues of the same shape and were previously readable only in source.
+    /// They are tabs here, driven from <see cref="GameCatalogs"/> — adding a
+    /// weapon family, or any other data table, adds a tab.
     ///
     /// **Editing.** EDIT turns the detail panel's value column into fields;
     /// every write lands in the live catalogue at once, so the effect is visible
@@ -466,6 +467,22 @@ namespace IronMeridian.UI
                     new Column("MANPOWER", 1.15f, "manpower", e => $"{Unit(e).manpower:n0}"),
                 };
 
+            // The rear area *does* have shared numbers worth a column, unlike
+            // the weapon tables: every installation reaches a distance and holds
+            // a quantity, in the same units, and those two figures are the whole
+            // of what distinguishes a depot from a supply point. Leaving them in
+            // a DETAIL string would hide the one comparison this table is for.
+            if (group.key == GameCatalogs.Logistics)
+                return new List<Column>
+                {
+                    new Column("NAME",    2.40f, "name",   e => e.name),
+                    new Column("SERVES",  1.50f, "group",  e => e.group),
+                    new Column("REACH",   1.10f, "reach",  e => $"{Site(e)?.serviceRadiusKm ?? 0f:0.#} km"),
+                    new Column("ISSUES",  1.10f, "issues", e => $"{Site(e)?.defaultStock ?? 0.0:0.#}"),
+                    new Column("DETAIL",  3.20f, null,     e => e.detail),
+                    new Column("ID",      1.60f, "id",     e => e.id),
+                };
+
             return new List<Column>
             {
                 new Column("NAME",   2.60f, "name",  e => e.name),
@@ -474,6 +491,9 @@ namespace IronMeridian.UI
                 new Column("ID",     1.60f, "id",    e => e.id),
             };
         }
+
+        /// <summary>The installation behind an entry, or null on every other tab.</summary>
+        static LogisticsDef Site(CatalogEntry e) => e?.record as LogisticsDef;
 
         /// <summary>The unit behind an entry, or null — the weapon catalogues have none, and neither does an empty table.</summary>
         static UnitDefinition Unit(CatalogEntry e) => e?.record as UnitDefinition;
@@ -578,6 +598,18 @@ namespace IronMeridian.UI
                         return ((int)Unit(a).Branch).CompareTo((int)Unit(b).Branch);
                     return string.Compare(a.group, b.group, System.StringComparison.OrdinalIgnoreCase);
             }
+
+            // The rear area's two numeric columns. Checked before the unit
+            // stats below, because an installation is not a UnitDefinition and
+            // would fall straight through to "no order at all".
+            var sa = Site(a); var sb = Site(b);
+            if (sa != null && sb != null)
+                return _sortKey switch
+                {
+                    "reach" => sa.serviceRadiusKm.CompareTo(sb.serviceRadiusKm),
+                    "issues" => sa.defaultStock.CompareTo(sb.defaultStock),
+                    _ => 0
+                };
 
             var ua = Unit(a); var ub = Unit(b);
             if (ua == null || ub == null) return 0;
@@ -846,6 +878,9 @@ namespace IronMeridian.UI
             {
                 AircraftDef air => air.modelId,
                 UavDef uav => uav.modelId,
+                // An installation is a *place*, and the one in this table that
+                // has a building to show — see docs/26-LOGISTICS.md §4b.
+                LogisticsDef site => site.modelId,
                 _ => null
             };
 

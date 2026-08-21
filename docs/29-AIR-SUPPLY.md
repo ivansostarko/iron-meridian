@@ -110,8 +110,9 @@ next few hours, not a rear area: **running out is the point of it.** A drop that
 produced an inexhaustible supply point would make the fourth sortie meaningless
 and the first one a cheat. See docs/26-LOGISTICS.md §2a for what an issue is.
 
-**It is drawn as a 3D model**, `supply_bundle`, standing on the ground — not as
-the doctrinal symbol a placed installation gets. They are different sorts of
+**It is drawn as a 3D model**, `supply_bundle`, standing on the ground —
+**always**, where a placed installation shows its buildings only when
+GENERAL → SHOW UNIT 3D MODELS is on (docs/26-LOGISTICS.md §4b). They are different sorts of
 object and the map should say so: a depot is a *place*, and what matters about it
 is which one it is and how far it reaches, which is exactly what a symbol says
 and a crate cannot. A cache is *a thing somebody just put there* — the player

@@ -104,6 +104,18 @@ namespace IronMeridian.Models
         public const string SupplyBundle = "supply_bundle";
         public const string ReconDrone = "recon_drone";
 
+        // The six logistic installations — docs/26-LOGISTICS.md. They are named
+        // "..._site" rather than after the kind alone because "supply_depot" is
+        // a **LogisticsKind**, and one identifier meaning both a model and a
+        // catalogue row is how a lookup ends up pointing at the wrong one — the
+        // same trap TransportAircraft above is named around.
+        public const string SupplyDepotSite = ProceduralModels.SupplyDepotSite;
+        public const string SupplyPointSite = ProceduralModels.SupplyPointSite;
+        public const string FuelPointSite = ProceduralModels.FuelPointSite;
+        public const string AmmoPointSite = ProceduralModels.AmmoPointSite;
+        public const string RepairPointSite = ProceduralModels.RepairPointSite;
+        public const string MedicalPointSite = ProceduralModels.MedicalPointSite;
+
         static readonly Dictionary<string, UnitModelDef> Models = new Dictionary<string, UnitModelDef>
         {
             [SoldierRifleman] = new UnitModelDef
@@ -290,6 +302,21 @@ namespace IronMeridian.Models
                 animated = true
             },
 
+            // --- the rear area (docs/26-LOGISTICS.md) ---
+            //
+            // Six installations, all built in code. Procedural for the same
+            // reason the drones are — a scenario's logistics must not be able to
+            // vanish with an asset pack — and *static* because they are places
+            // rather than vehicles: nothing on a depot moves at the scale this
+            // map is played at, and a shed with an idle clip would read as an
+            // earthquake. See ProceduralModels.Logistics.cs.
+            [SupplyDepotSite] = Installation(SupplyDepotSite, "Supply depot — warehouse, dock and container park"),
+            [SupplyPointSite] = Installation(SupplyPointSite, "Supply point — pallets under canopies on a graded pad"),
+            [FuelPointSite] = Installation(FuelPointSite, "Fuel point — bunded bulk tank and dispensing gantry"),
+            [AmmoPointSite] = Installation(AmmoPointSite, "Ammunition point — three revetted bays, separated"),
+            [RepairPointSite] = Installation(RepairPointSite, "Repair point — gantry over a stripped hull"),
+            [MedicalPointSite] = Installation(MedicalPointSite, "Medical point — hospital tents, ambulance, landing point"),
+
             [ShahedDrone] = new UnitModelDef
             {
                 resourcePath = "Models/ShahedDrone",
@@ -305,6 +332,21 @@ namespace IronMeridian.Models
                 idleClip = null,
                 animated = false
             }
+        };
+
+        /// <summary>
+        /// One logistic installation's row. A shared shape rather than six
+        /// near-identical literals: every installation is procedural, static and
+        /// unframed, and the only thing that differs between them is which
+        /// builder runs and what the docs call it.
+        /// </summary>
+        static UnitModelDef Installation(string id, string description) => new UnitModelDef
+        {
+            resourcePath = null,
+            sourceAsset = "Iron Meridian — built in code (ProceduralModels). " + description,
+            proceduralId = id,
+            idleClip = null,
+            animated = false
         };
 
         /// <summary>

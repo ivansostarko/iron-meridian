@@ -147,6 +147,15 @@ namespace IronMeridian.Core
         /// <summary>Y — the spare. Nothing is bound to it yet; see docs/42 §7.</summary>
         public static bool SpareDown => Input.GetKeyDown(KeyCode.JoystickButton3);
 
+        /// <summary>
+        /// Y / Triangle — folds the editor's sidebar away and brings it back.
+        ///
+        /// The rail is 232 px of a handheld's 1280, and a Steam Deck has no `H`
+        /// to press instead. An alias rather than a second binding, so the two
+        /// names cannot drift apart — see docs/42-STEAM-DECK.md §3.
+        /// </summary>
+        public static bool SidebarDown => SpareDown;
+
         /// <summary>Left bumper — step back through a list, the info panel's ◄.</summary>
         public static bool PreviousDown => Input.GetKeyDown(KeyCode.JoystickButton4);
 

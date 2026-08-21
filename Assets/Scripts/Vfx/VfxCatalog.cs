@@ -187,7 +187,34 @@ namespace IronMeridian.Vfx
         /// Green, because it is the one column of smoke on this map that is not
         /// something burning (docs/29-AIR-SUPPLY.md).
         /// </summary>
-        SupplyCacheSmoke
+        SupplyCacheSmoke,
+
+        // --- logistic installations (see docs/26-LOGISTICS.md) ---
+
+        /// <summary>
+        /// The ground a logistic installation is about to be put on, while it
+        /// is being dragged or aimed — motes rising inside its footprint,
+        /// looping until the placement ends.
+        ///
+        /// A rear area is laid out on ground you are looking at from a shallow
+        /// angle, where a flat marker foreshortens into a line and a fold of
+        /// terrain hides it entirely. Something *rising* out of the spot is the
+        /// one preview that survives both, which is the same argument the drop
+        /// preview's volume makes for a formation.
+        /// </summary>
+        LogisticsPlacementMotes,
+
+        /// <summary>
+        /// A working installation — slow, sparse motes over the site, looping
+        /// for as long as it is on the map.
+        ///
+        /// Deliberately faint, and deliberately not smoke. A depot is not
+        /// burning; what this says is that the place is *occupied*, which is the
+        /// difference between a rear area and a set of decals, and it is the
+        /// only thing on a quiet map that tells you a supply point is still
+        /// there when the camera is too far out to read its caption.
+        /// </summary>
+        LogisticsSiteHaze
     }
 
     /// <summary>Which procedural builder stands in when no prefab is available.</summary>
@@ -207,7 +234,17 @@ namespace IronMeridian.Vfx
         /// <summary>A single flat ring racing outward along the ground. Nothing rises.</summary>
         Shockwave,
         /// <summary>Soil and fragments thrown out on ballistic arcs, tumbling as they go.</summary>
-        Debris
+        Debris,
+        /// <summary>
+        /// Sparse motes drifting up off a patch of ground, looping.
+        ///
+        /// Not <see cref="Dust"/>, which is a one-shot burst and stops after
+        /// half a second however long its row says it lives; and not
+        /// <see cref="Smoke"/>, which churns, greys and doubles in size as it
+        /// rises — a supply depot wearing it looks like a supply depot on fire.
+        /// This is the marker case: something is *here*, nothing is wrong.
+        /// </summary>
+        Motes
     }
 
     /// <summary>One catalogue row: what to spawn, how big, and for how long.</summary>
@@ -285,6 +322,19 @@ namespace IronMeridian.Vfx
             new VfxDef { id = VfxId.SupplyCacheSmoke, prefabPath = null,
                          fallback = VfxFallback.Smoke,     scaleMeters = 150f, lifeSeconds = 0f,
                          tint = new Color(0.55f, 0.85f, 0.58f), priority = 30,
+                         sound = EffectSound.None },
+
+            // The rear area. Both are markers rather than events: nothing here
+            // is burning, and either one reading as a fire would turn a laydown
+            // into a map full of false alarms — see docs/26-LOGISTICS.md §4.
+            new VfxDef { id = VfxId.LogisticsPlacementMotes, prefabPath = null,
+                         fallback = VfxFallback.Motes,     scaleMeters = 260f, lifeSeconds = 0f,
+                         tint = new Color(0.62f, 0.86f, 0.98f), priority = 12,
+                         sound = EffectSound.None },
+
+            new VfxDef { id = VfxId.LogisticsSiteHaze, prefabPath = null,
+                         fallback = VfxFallback.Motes,     scaleMeters = 190f, lifeSeconds = 0f,
+                         tint = new Color(0.72f, 0.74f, 0.70f), priority = 6,
                          sound = EffectSound.None },
 
             new VfxDef { id = VfxId.Explosion,   prefabPath = null,

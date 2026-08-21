@@ -84,6 +84,17 @@ namespace IronMeridian.Logistics
         const float MedicalRecoveryPerIssue = 0.08f;
         const float MedicalCeiling = 0.75f;
 
+        /// <summary>
+        /// Serviceability one repair issue returns to the road.
+        ///
+        /// Larger than the medical figure and **uncapped**, which is the
+        /// difference between the two: a workshop can put a recovered vehicle
+        /// back exactly as it was, where a hospital cannot reconstitute a
+        /// battalion. Roughly seven draws — a quarter of an hour of scenario
+        /// time — takes a formation from fully deadlined to fully serviceable.
+        /// </summary>
+        const float RepairPerIssue = 0.15f;
+
         /// <summary>A general site hands out everything, at this share of a specialist's rate.</summary>
         const float GeneralEfficiency = 0.7f;
 
@@ -175,6 +186,9 @@ namespace IronMeridian.Logistics
             if (def.service == SupplyService.Fuel || def.service == SupplyService.General)
                 took |= Refuel(unit, efficiency);
 
+            if (def.service == SupplyService.Repair || def.service == SupplyService.General)
+                took |= Mend(unit, efficiency);
+
             if (def.service == SupplyService.Medical || def.service == SupplyService.General)
                 took |= Treat(unit, efficiency);
 
@@ -219,6 +233,27 @@ namespace IronMeridian.Logistics
             float add = establishment * IssueShare * efficiency;
             unit.State.fuel = Mathf.Min(establishment, unit.State.fuel + add);
             return true;
+        }
+
+        /// <summary>
+        /// One repair issue: deadlined equipment back on the road.
+        ///
+        /// **A formation that walks takes nothing and is charged nothing.** Six
+        /// of the seven infantry types carry no fuel and therefore no equipment
+        /// worth recovering (<see cref="UnitActor.HasEquipment"/>), so a rifle
+        /// battalion parked on a workshop draws no issue and the workshop's
+        /// stock does not move — which is the honest answer, and the one that
+        /// stops a repair point being quietly consumed by the wrong customers.
+        /// </summary>
+        static bool Mend(UnitActor unit, float efficiency)
+        {
+            if (!unit.HasEquipment) return false;
+
+            float before = Mathf.Clamp01(unit.State.serviceability);
+            if (before >= 1f) return false;
+
+            unit.State.serviceability = Mathf.Min(1f, before + RepairPerIssue * efficiency);
+            return unit.State.serviceability > before + 0.0001f;
         }
 
         static bool Treat(UnitActor unit, float efficiency)

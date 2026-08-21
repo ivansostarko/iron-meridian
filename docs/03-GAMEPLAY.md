@@ -106,6 +106,26 @@ map screen is the map, and a panel that opens itself spends a third of the windo
 on a section nobody asked for. The rail is still there, still labelled, one click
 from any of it.
 
+**And the rail itself folds away — `H`, or the tab on its outer edge.** In both
+scenario and battle mode. The rail is 232 px, which is a good slice of a laptop
+and nearly a fifth of a Steam Deck, and there are stretches of both modes —
+framing a shot, watching a battle run, reading ground before an order — when the
+player wants the map and nothing else. Until now the only way to get it off the
+screen was to start a mission.
+
+The **tab never goes with it**: it slides to the screen edge and turns round, so
+folding the rail away is not a one-way door. It rides the outer edge of whatever
+chrome is showing rather than the rail's fixed width, so an open section panel
+carries it out instead of being covered by it — a handle lying on top of the
+thing it opens is a handle in the wrong place.
+
+Folding the rail closes the section panel with it, and everything that measures
+from the chrome's left edge — the on-map zoom cluster, the minimap, the map
+camera's own viewport — is told the edge is now zero. **Mission mode still takes
+the tab away with everything else**: there the rail is not hidden but absent, and
+a handle that opened an authoring panel would be offering something the screen
+does not have. Y on a pad — docs/42-STEAM-DECK.md §3.
+
 **A change of mode resets the screen.** Switching between scenario and battle
 closes the section panel and every panel docked on the right — the unit
 inspector, the type card, the group panel, the front-line options, the fire dock

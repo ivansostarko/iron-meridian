@@ -795,6 +795,57 @@ namespace IronMeridian.UI
         };
 
         /// <summary>
+        /// The **map marker** for a logistic installation: the kind's glyph on a
+        /// chamfered plate framed in the owning side's colour, as one texture.
+        ///
+        /// A separate call from <see cref="GlyphFor(Data.LogisticsKind)"/>
+        /// because the two are read in different places and want different
+        /// things. On a rail button the glyph sits on a panel that already has a
+        /// fill and a border, so a second frame round it would be chrome inside
+        /// chrome. On the map there is no panel — there is satellite imagery,
+        /// which is a town, a snowfield or a river as often as it is a field —
+        /// and a bare white silhouette on it is legible over some ground and
+        /// gone over the rest. The plate gives the symbol a ground of its own,
+        /// which is what every readable map symbol in the world does.
+        ///
+        /// Composed once per (kind, side) and cached: there are twelve of them
+        /// in the whole game, and every site of a kind shares the texture even
+        /// though each has a material of its own.
+        ///
+        /// See docs/26-LOGISTICS.md §4.
+        /// </summary>
+        public static Texture2D MapMarkerFor(Data.LogisticsKind kind, bool enemy)
+        {
+            string key = "marker_" + kind + (enemy ? "_enemy" : "_friendly");
+            if (_markers.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var def = Data.LogisticsCatalog.Get(kind);
+            Color frame = enemy ? Core.GameConfig.RedTeam : Core.GameConfig.BlueTeam;
+
+            // The fill is near-black and mostly opaque rather than a wash of the
+            // side's colour: the frame is already saying whose it is, and a
+            // coloured field behind a coloured glyph is two hues fighting in a
+            // 30 px square. Dark is the one ground every tint on the palette
+            // reads against.
+            var fill = new Color(0.05f, 0.06f, 0.07f, 0.86f);
+
+            var tex = Units.ProceduralTextures.MarkerPlateWithGlyph(
+                GlyphFor(kind).texture, def.tint, frame, fill, 128);
+            tex.name = "UiMarker_" + key;
+            tex.filterMode = FilterMode.Bilinear;
+
+            _markers[key] = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// Composed map markers, keyed by kind and side. Separate from
+        /// <see cref="_cache"/> because these are textures for a world-space
+        /// quad rather than sprites for a <c>UnityEngine.UI.Image</c>.
+        /// </summary>
+        static readonly Dictionary<string, Texture2D> _markers = new Dictionary<string, Texture2D>();
+
+        /// <summary>
         /// The doctrinal symbol for a mine or obstacle. One mapping, read by
         /// the panel's buttons, the placement ghost and the map graphic — three
         /// pictures of the same thing that must never disagree.

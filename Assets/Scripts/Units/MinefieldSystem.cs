@@ -51,6 +51,21 @@ namespace IronMeridian.Units
     /// </summary>
     public class MinefieldSystem : MonoBehaviour
     {
+        /// <summary>
+        /// Equipment deadlined per point of strength a mine strike costs — the
+        /// **total**, not an addition.
+        ///
+        /// Above 1 on purpose: mines are the one weapon on this map whose whole
+        /// point is to immobilise rather than to destroy, so a belt that merely
+        /// scratched a battalion's numbers would be missing what a belt is for.
+        ///
+        /// <see cref="UnitActor.ApplyDamage"/> has already charged
+        /// <see cref="UnitActor.EquipmentLossShare"/> against these same
+        /// casualties, so what the strike adds is the difference. Adding the
+        /// whole figure on top would deadline 2.2× the strength lost and make
+        /// every number in docs/31-OBSTACLES.md wrong.
+        /// </summary>
+        const float MobilityKillMultiplier = 1.6f;
         /// <summary>Short user-facing messages, wired to the HUD's flash line.</summary>
         public System.Action<string> Flash;
 
@@ -235,6 +250,20 @@ namespace IronMeridian.Units
             float before = unit.State.strength;
             unit.ApplyDamage(damage);
             unit.ApplyShock(Mathf.Min(damage, before) * ShockMultiplier);
+
+            // A belt is laid to **stop** a formation, not to kill it. Most of
+            // what a mine achieves against anything on wheels or tracks is a
+            // mobility kill — the vehicle is off the road and the crew walks
+            // away — so a strike deadlines equipment out of proportion to the
+            // casualties it causes. That is what makes a breach worth the
+            // engineers, and what makes the repair point behind the line the
+            // place the survivors go. See docs/31-OBSTACLES.md.
+            //
+            // Only the *difference*: ApplyDamage above has already charged the
+            // generic share against exactly these casualties.
+            float lost = Mathf.Min(damage, before);
+            unit.ApplyEquipmentDamage(
+                lost * (MobilityKillMultiplier - UnitActor.EquipmentLossShare));
 
             // Only the side that drove into them hears about it. The player who
             // laid the belt learns it worked from the map — a formation slowing,

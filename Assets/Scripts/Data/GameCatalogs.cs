@@ -38,7 +38,7 @@ namespace IronMeridian.Data
     /// <summary>
     /// The register of every data table the game is built from, in one place, so
     /// the DEVELOPMENT → UNITS LIST screen is driven by data rather than
-    /// by six hand-written panels.
+    /// by a hand-written panel per table.
     ///
     /// Adding a weapon family means adding a row here as well as the catalogue
     /// itself — that is the point: a family missing from this list is a family
@@ -55,6 +55,7 @@ namespace IronMeridian.Data
         public const string Uav = "Uav";
         public const string Missiles = "Missiles";
         public const string Naval = "Naval";
+        public const string Logistics = "Logistics";
 
         static readonly string[] IdOnly = { "id" };
 
@@ -178,6 +179,43 @@ namespace IronMeridian.Data
                         {
                             id = d.gun.ToString(), name = d.name, detail = d.detail,
                             group = d.origin.ToString(), record = d
+                        });
+                    return list;
+                }
+            },
+
+            new CatalogGroup
+            {
+                key = Logistics, title = "LOGISTICS",
+                blurb = "The rear area a scenario can be given. Six installations, from the " +
+                        "strategic depot forward — what each serves, how far it reaches and " +
+                        "how much it holds.",
+                doc = "docs/26-LOGISTICS.md",
+                // Identity and wiring, not tuning.
+                //
+                // `kind` decides which glyph, model and save name the row
+                // answers to. `service` decides whether the installation does
+                // anything at all — cycling a repair point's off `Repair` would
+                // stop every workshop on every map working, be written to
+                // tuning.json and be re-applied on every future load, with
+                // nothing in the interface saying why. `modelId` and `siteVfx`
+                // are ids into other registers, where a typed-in value is a
+                // missing model rather than a different one.
+                //
+                // What is left is what is genuinely worth tuning: the name, the
+                // one-line detail, the service radius and the default stock.
+                readOnlyFields = new[] { "kind", "service", "modelId", "siteVfx" },
+                Load = () =>
+                {
+                    var list = new List<CatalogEntry>();
+                    foreach (var d in LogisticsCatalog.All)
+                        list.Add(new CatalogEntry
+                        {
+                            id = d.kind.ToString(), name = d.name, detail = d.detail,
+                            group = d.service == SupplyService.None
+                                ? "Map graphic"
+                                : d.service.ToString(),
+                            record = d
                         });
                     return list;
                 }

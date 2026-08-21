@@ -23,6 +23,152 @@ namespace IronMeridian.Units
         }
 
         /// <summary>
+        /// The backing plate a map marker's symbol stands on: a chamfered
+        /// square, filled dark, framed in the owning side's colour.
+        ///
+        /// **Why a plate at all.** A bare white silhouette over satellite
+        /// imagery is legible over a field and invisible over a town, a
+        /// snowfield or a river — the places a supply point is most likely to
+        /// be. Every readable map symbol in the world solves this the same way:
+        /// put the symbol on a ground of its own. The plate is what makes the
+        /// glyph's contrast a property of the marker rather than of whatever
+        /// happens to be under it.
+        ///
+        /// **Chamfered rather than round or square.** A disc is what this map
+        /// already uses for a strike area and a unit's selection ring, and a
+        /// plain square is a map object's fill; cutting the corners off a square
+        /// gives the logistics family a silhouette of its own that still reads
+        /// at ten pixels, where the difference between a circle and a rounded
+        /// square does not.
+        ///
+        /// The **frame carries the side** and is drawn at full opacity; the fill
+        /// is dark and slightly transparent, so the terrain still reads through
+        /// the marker and a laydown does not become a wall of chips.
+        /// </summary>
+        /// <param name="frame">Frame colour — the owning side's.</param>
+        /// <param name="fill">Plate fill. Alpha is honoured.</param>
+        /// <param name="notch">Corner chamfer, as a fraction of the plate's half-width.</param>
+        public static Texture2D MarkerPlate(Color frame, Color fill, int size = 128,
+            float notch = 0.34f)
+        {
+            // Plate half-width and border, as fractions of the square, so the
+            // frame neither becomes a hairline nor a slab as the size changes.
+            const float Half = 0.42f;
+            const float Border = 0.075f;
+            float aa = 2.2f / size;
+
+            return Shade(size, (u, v) =>
+            {
+                float du = Mathf.Abs(u - 0.5f), dv = Mathf.Abs(v - 0.5f);
+
+                // Chebyshev distance gives the square; taking the max with the
+                // Manhattan term cuts the corners off it. One expression, two
+                // shapes — no polygon test needed.
+                float d = Mathf.Max(Mathf.Max(du, dv), (du + dv) * (1f - notch * 0.5f));
+
+                float outer = 1f - Mathf.SmoothStep(Half - aa, Half + aa, d);
+                float inner = 1f - Mathf.SmoothStep(Half - Border - aa, Half - Border + aa, d);
+
+                // The frame is the ring between the two; the fill is everything
+                // inside it. Composited rather than summed, so the join stays a
+                // clean edge instead of a bright seam.
+                float frameA = Mathf.Clamp01(outer - inner) * frame.a;
+                float fillA = inner * fill.a * (1f - frameA);
+                float a = frameA + fillA;
+                if (a <= 0.0005f) return new Color(0f, 0f, 0f, 0f);
+
+                Color rgb = (frame * frameA + fill * fillA) / a;
+                return new Color(rgb.r, rgb.g, rgb.b, a);
+            });
+        }
+
+        /// <summary>
+        /// Composites one of <see cref="UI.UiIcons"/>' white silhouettes onto a
+        /// plate, so a map marker is **one billboard rather than two**.
+        ///
+        /// Two stacked quads would each need a depth offset of their own and
+        /// would still separate at a grazing camera angle — which is precisely
+        /// the angle the editor is worked at. Baking the pair costs one small
+        /// texture per (kind, side), built once and cached by the caller.
+        ///
+        /// The glyph is centred at <paramref name="glyphScale"/> of the plate
+        /// and its alpha used as a stencil: the icons are authored white on
+        /// transparent exactly so they can be tinted at the point of use.
+        /// </summary>
+        public static Texture2D MarkerPlateWithGlyph(Texture2D glyph, Color glyphColour,
+            Color frame, Color fill, int size = 128, float glyphScale = 0.54f)
+        {
+            var tex = MarkerPlate(frame, fill, size);
+            if (glyph == null) return tex;
+
+            var plate = tex.GetPixels();
+            int gw = glyph.width, gh = glyph.height;
+
+            for (int y = 0; y < size; y++)
+            {
+                float gv = ((y + 0.5f) / size - 0.5f) / glyphScale + 0.5f;
+                if (gv < 0f || gv >= 1f) continue;
+
+                for (int x = 0; x < size; x++)
+                {
+                    float gu = ((x + 0.5f) / size - 0.5f) / glyphScale + 0.5f;
+                    if (gu < 0f || gu >= 1f) continue;
+
+                    // Point-sampled: the glyphs are already supersampled at
+                    // 64 px and the plate is drawn at least that, so a bilinear
+                    // fetch would buy nothing but softness.
+                    float ga = glyph.GetPixel((int)(gu * gw), (int)(gv * gh)).a * glyphColour.a;
+                    if (ga <= 0.002f) continue;
+
+                    int i = y * size + x;
+                    Color under = plate[i];
+                    float underA = under.a * (1f - ga);
+                    float a = ga + underA;
+                    Color rgb = (glyphColour * ga + under * underA) / Mathf.Max(a, 1e-4f);
+                    plate[i] = new Color(rgb.r, rgb.g, rgb.b, a);
+                }
+            }
+
+            tex.SetPixels(plate);
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>
+        /// <see cref="Draw"/>'s sibling for shapes that decide their own colour
+        /// per pixel rather than being a white mask tinted afterwards. Same 2x2
+        /// supersample, because these are hard-edged too.
+        ///
+        /// Averaged **premultiplied**, then un-premultiplied: averaging straight
+        /// RGBA lets a transparent sample drag the colour of an opaque one
+        /// toward black, which is what puts a dark fringe round a chamfer.
+        /// </summary>
+        static Texture2D Shade(int size, System.Func<float, float, Color> shade)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float r = 0f, g = 0f, b = 0f, a = 0f;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            var c = shade((x + 0.25f + sx * 0.5f) / size,
+                                          (y + 0.25f + sy * 0.5f) / size);
+                            r += c.r * c.a; g += c.g * c.a; b += c.b * c.a; a += c.a;
+                        }
+                    px[y * size + x] = a <= 1e-4f
+                        ? new Color(0f, 0f, 0f, 0f)
+                        : new Color(r / a, g / a, b / a, a * 0.25f);
+                }
+            tex.SetPixels(px);
+            tex.Apply();
+            tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
+        }
+
+        /// <summary>
         /// Drop-placement reticle: a soft-edged ring with four cardinal ticks
         /// and a small centre dot, so the exact ground point is readable
         /// against busy satellite imagery.

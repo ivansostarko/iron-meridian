@@ -584,13 +584,38 @@ namespace IronMeridian.UI
 
             Section("COMBAT POWER");
             Row("Combat power", $"{_current.CurrentPower():n0}");
+            // Stated beside the power it is already folded into, so a player
+            // wondering why a full-strength armoured battalion is hitting softly
+            // can see the answer without opening another tab.
+            if (_current.HasEquipment)
+                Row("Serviceable", $"{_current.Serviceability * 100f:0}%",
+                    ServiceabilityColour(_current.Serviceability));
             Row("Training", $"{d.training:0}/100");
             Row("Morale", $"{s.morale:0}/100");
             Row("Organisation", $"{s.organisation:0}/100");
         }
 
+        /// <summary>
+        /// Serviceability on the same three-stage reading the strength bars and
+        /// the logistic stock bars use, so a formation in trouble looks like a
+        /// depot in trouble.
+        /// </summary>
+        static Color ServiceabilityColour(float fraction) =>
+            fraction > 0.75f ? UiTheme.Success
+            : fraction > 0.45f ? UiTheme.Warning
+            : UiTheme.Danger;
+
         void BuildEquipmentTab(UnitState s, UnitDefinition d)
         {
+            if (_current != null && _current.HasEquipment)
+            {
+                Section("SERVICEABILITY");
+                Row("Running", $"{_current.Serviceability * 100f:0}%",
+                    ServiceabilityColour(_current.Serviceability));
+                Row("Combat power", $"×{_current.ServiceabilityFactor:0.00}");
+                Row("Restored by", "A repair point, and nothing else");
+            }
+
             Section("WEAPONS");
             Row("Attack", $"{d.attack:0}");
             Row("Hard attack", $"{d.hardAttack:0}");
@@ -633,6 +658,9 @@ namespace IronMeridian.UI
             Section("READINESS");
             Row("Status", s.status, StatusColour(s.status));
             Row("Strength", $"{s.strength * 100f:0}%", StrengthColour(s.strength));
+            if (_current != null && _current.HasEquipment)
+                Row("Serviceable", $"{_current.Serviceability * 100f:0}%",
+                    ServiceabilityColour(_current.Serviceability));
             Row("Morale", $"{s.morale:0}/100");
             Row("Organisation", $"{s.organisation:0}/100");
 

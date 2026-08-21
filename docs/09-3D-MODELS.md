@@ -23,6 +23,12 @@ The register of every 3D model in Iron Meridian — where it came from, how it i
 | `recon_drone` | **none — built in code** | `ProceduralModels.BuildReconDrone` | `combat_idle`, built at runtime: propeller spin + airframe sway + **sensor turret sweep** (one revolution every 8 s) | Flown by `UavStrikeSystem` as the reconnaissance sortie (docs/19-UAV-STRIKES.md); also the fixed-wing unmanned types `recon_uas`, `armed_uas`, `ew_uas`, `relay_uas` |
 | `airlift_transport` | **none — built in code** | `ProceduralModels.BuildTransportAircraft` | `combat_idle`, built at runtime: four propellers turning + a very slight roll | Flies air supply drops (`SupplyRun`, docs/29-AIR-SUPPLY.md); also the `transport_aircraft` unit type, which used to borrow the strike fighter |
 | `supply_bundle` | **none — built in code** | `ProceduralModels.BuildSupplyBundle` | `combat_idle`, built at runtime: a pendulum swing under the canopy | One air-dropped load under parachute (`ParachuteDrop`, docs/29-AIR-SUPPLY.md) |
+| `supply_depot_site` | **none — built in code** | `ProceduralModels.BuildSupplyDepot` | static | The SUPPLY DEPOT installation on the map (docs/26-LOGISTICS.md) |
+| `supply_point_site` | **none — built in code** | `ProceduralModels.BuildSupplyPoint` | static | The SUPPLY POINT installation |
+| `fuel_point_site` | **none — built in code** | `ProceduralModels.BuildFuelPoint` | static | The FUEL POINT installation |
+| `ammo_point_site` | **none — built in code** | `ProceduralModels.BuildAmmoPoint` | static | The AMMO POINT installation |
+| `repair_point_site` | **none — built in code** | `ProceduralModels.BuildRepairPoint` | static | The REPAIR POINT installation |
+| `medical_point_site` | **none — built in code** | `ProceduralModels.BuildMedicalPoint` | static | The MEDICAL POINT installation |
 | `shahed_drone` | `Models/ShahedDrone` | [ALSTRA INFINITE — Kamikaze Drones PolyPack Starter](https://assetstore.unity.com/packages/3d/vehicles/air/kamikaze-drones-polypack-starter-low-poly-asset-381716) — `StarterAsset_KamikazeDroneV1.fbx` | static; propeller spun by `RotorSpinner` | The Shahed UAV strike type (docs/19-UAV-STRIKES.md) |
 | `stealth_bomber` | `Models/StealthBomber` | [Hessburg — Stealth Bomber](https://assetstore.unity.com/packages/package/56765) — `Stealth_Bomber.fbx` | static | **Not a unit** — flown by `AirStrikeSystem`; see docs/18-AIR-STRIKES.md |
 
@@ -48,7 +54,9 @@ The other three airframes now serve double duty: the strike systems fly them, an
 
 **Why it is legitimate rather than a placeholder.** At map scale a loitering munition is forty pixels across. What has to read is the silhouette — delta body, warhead nose, pusher propeller — and a silhouette is precisely what primitives are good at.
 
-**Four models are built this way now**, and the two airlift ones follow the same argument as the drones below: a supply run must not be able to lose its aeroplane to a pack somebody removed. The transport is deliberately the opposite silhouette to every combat airframe — high wing, four turning propellers, upswept tail with a ramp — because a supply drop has to read as *not an attack* from the first frame. The bundle's canopy is a cone rather than a dome: at map zoom both are twelve pixels, but the cone has a point, and that is what makes it read as a parachute.
+**Ten models are built this way now** — four airframes and the six logistic
+installations. The installations are covered in their own subsection below; the
+two airlift ones follow the same argument as the drones below: a supply run must not be able to lose its aeroplane to a pack somebody removed. The transport is deliberately the opposite silhouette to every combat airframe — high wing, four turning propellers, upswept tail with a ramp — because a supply drop has to read as *not an attack* from the first frame. The bundle's canopy is a cone rather than a dome: at map zoom both are twelve pixels, but the cone has a point, and that is what makes it read as a parachute.
 
 **Two of them are built to be told apart.** The `recon_drone` is the opposite of the `kamikaze_drone` in every respect that reads at that size: a long straight high wing against a swept delta, twin tail booms against a stubby body, a pale finish against an olive one, and a sensor turret under the nose where the other has a warhead. A player has to be able to tell in one glance whether the thing overhead is looking at them or coming for them, and colour alone will not carry that at forty pixels. The recon drone's clip adds a third motion for the same reason: the turret **sweeps**, once every eight seconds, which is what makes it read as a drone doing a job rather than a drone transiting.
 
@@ -60,6 +68,58 @@ The other three airframes now serve double duty: the strike systems fly them, an
 **`UnitModelLibrary.CreateInstance` is the only way to build a model.** It was already golden rule 10 that call sites do not `Resources.Load` a prefab; it matters more now that a model can legitimately have no prefab at all, because a call site checking for one would decide the kamikaze drone was missing when it is the one model that cannot be. `BomberRun`, `DroneRun`, `MissileRun` and `ModelPreview` all go through it.
 
 **Not yet modelled:** the `Naval` category outright, and `deep_strike_uas`. `UnitModelLibrary.Resolve` returns `null` for them and the preview shows an explicit "no model yet" message. The fixed-wing unmanned types that used to be in that list — `recon_uas`, `armed_uas`, `ew_uas`, `relay_uas` — now take `recon_drone`, which is the shape they actually are. Handing a MALE drone the quadcopter would be the same mistake as handing a drone the infantryman — the point was never "show something", it was "do not show a lie".
+
+### The six logistic installations
+
+`Assets/Scripts/Models/ProceduralModels.Logistics.cs`. Built in code for the same
+reason the drones are — **a scenario's rear area must not be able to vanish with
+an asset pack somebody removed** — and shaped by the same rule the glyphs follow:
+what survives being small is *shape*, so the six are deliberately six different
+masses rather than one shed painted six ways.
+
+| Model | The silhouette | Why that one |
+|---|---|---|
+| `supply_depot_site` | A pitched-roof warehouse with roller doors, a loading dock, a stacked container park and a mast | The only **building** in the set. Everything forward of a depot is canopies and tents that could be struck in an afternoon; the depot is the permanent thing, and the pitched roof is what says so |
+| `supply_point_site` | Two open-sided canopies over banded pallet stacks on a graded pad | Deliberately the depot's opposite. They hand out the same things, and the only distinction on the map is reach and permanence — so one is a warehouse and the other packed up this morning |
+| `fuel_point_site` | A bulk tank on saddles inside an earth **bund**, a dispensing gantry, drums | The bund is the read: one wall round one big cylinder, against the ammunition point's several walls round several small stacks |
+| `ammo_point_site` | Three revetted bays, separated, each holding crates and rounds | **Separation is the model.** Ammunition is stored in small lots behind traverses precisely so one hit is not all of it, and three walled bays say what an ammunition point is more clearly than any amount of crate detail |
+| `repair_point_site` | An A-frame gantry with a block on a cable, a turret lifted clear, a hull on stands, a workshop shelter | A gantry is the universal shape for *this is where things are taken apart*, and the one mass in the set that is mostly air. It is also the only model here that depicts its site's actual mechanic — a hull with its turret lifted off is a vehicle mid-recovery, which is precisely what a repair point restores (`UnitState.serviceability`, docs/26-LOGISTICS.md) |
+| `medical_point_site` | Two arched hospital tents under a red cross, a connecting corridor, an ambulance and a marked landing point | The cross is on the **roof**, because from above is the only angle that matters. The tents are the one *curved* mass among six boxy ones, which is the cheapest way to make one installation unmistakable |
+
+**Side-neutral, on purpose.** No installation is painted blue or red. The owning
+side is carried by the ground ring and by the marker plate's frame, both of which
+repaint the instant a site changes hands; putting the same fact in the geometry
+as well would mean a captured depot needed a rebuild to say so.
+
+**Static, and that is the correct answer.** A depot is a place. The airframes
+rock and spin because a rigid object flying in a dead straight line reads as a
+prop; a shed that swayed would read as an earthquake. Their rows carry
+`idleClip = null` and `animated = false`.
+
+**Authored ground-up in metres.** Each model's origin sits on its pad at `y = 0`
+and the geometry grows in `+Y`, because `LogisticsSite` stands them on sampled
+terrain with local up = geodetic up. Sizes are roughly life-like; the caller
+normalises from the model's own bounds, so the figures buy honest *proportion*
+rather than scale.
+
+**One trap worth naming.** `Cylinder()` and `Cone()` return primitives that have
+already been scaled, so anything parented to one inherits that scale and is
+stretched. The ammunition rounds' noses and the landing point's cross hang off
+the model root with explicit positions for exactly this reason.
+
+**Colours are shared materials, not one per box.** `RuntimeMaterials.UnlitColor`
+is a bare `new Material`, and a material assigned to `sharedMaterial` is *not*
+reclaimed when its renderer's object is destroyed — so painting each primitive
+individually cost one orphaned material per box every time a model was built.
+That was survivable while every procedural model was an airframe living for the
+length of one strike; an installation is per-site and is switched on and off from
+the editor, so a dozen sites toggled a few times leaked materials by the thousand.
+`ProceduralModels.MaterialFor` caches one material per colour for the whole game.
+
+Sharing is safe because nothing repaints a model in place: the only caller that
+tints a part — `ParachuteDrop`, colouring a canopy by its load — goes through
+`Renderer.material`, which takes an instance copy precisely so the shared one is
+left alone.
 
 **Static vs animated.** Only the rifleman has a rig. The vehicles and props are static meshes, which is what they should be — the preview's turntable is their motion. `idleClip` is `null` and `animated` is `false` for them, so the installer skips the Legacy-rig conversion (forcing a rig type onto a mesh with no skeleton reimports the pack for nothing) and `ModelPreview` does not warn about a clip that was never meant to exist.
 
@@ -170,10 +230,20 @@ It will: find the source FBXs, switch their rigs to Legacy (reimporting if neede
 | Development → Units List | Detail panel on the right: the selected unit type's model playing `combat_idle`, orbitable by drag, zoomable by scroll. The AIR STRIKES and UAV STRIKES tabs preview their `modelId` the same way, through `ModelPreview.ShowModel` | `UnitsListUI.RefreshPreview` → `ModelPreview` |
 | Map editor → in flight | The strike airframes over the map: bomber, fighter, helicopter, attack drones and the reconnaissance drone on its orbit | `BomberRun`, `DroneRun`, `ReconDroneRun`, `MissileRun` |
 | Map editor → **GENERAL → SHOW UNIT 3D MODELS** | **Every formation on the map**, standing on the ground under its counter, in both scenario and battle mode. Off by default — see below | `UnitActor.SetModelsVisible` |
-| Map editor → **an airdropped cache** | `supply_bundle` standing on the ground where a bundle landed. A dropped cache is drawn as a model; a hand-placed installation keeps its doctrinal symbol — see docs/29-AIR-SUPPLY.md | `LogisticsSite.BuildCacheModel` |
+| Map editor → **an airdropped cache** | `supply_bundle` standing on the ground where a bundle landed, **always** — a cache is a thing somebody just put there and the player has to be able to find it again. See docs/29-AIR-SUPPLY.md | `LogisticsSite.BuildModel` |
+| Map editor → **GENERAL → SHOW UNIT 3D MODELS** | **Every logistic installation** on the map, in both scenario and battle mode, with slow ambient motes over it. The same switch the formations follow — see below | `LogisticsSystem.SetModelsVisible` → `LogisticsSite.SetModelVisible` |
+| Extras → Units → **LOGISTICS** | The six installations as an encyclopaedia board: reach, stock, what each serves, and its model on the turntable | `UnitLibraryUI.SelectSite` → `ModelPreview.ShowModel` |
+| Development → Units List → **LOGISTICS** tab | The same six as an editable table, with the model in the detail panel | `UnitsListUI.RefreshPreview` |
 | Map editor → air defence | The interceptor climbing off a launcher, and the drone it hit tumbling down with its animation stopped | `InterceptorRun`, `DroneFall` (docs/24-AIR-DEFENCE.md) |
 
 **Add a row here whenever a model appears somewhere new.**
+
+**The 3D MODELS screen reports non-unit users too.** A model worn by no formation
+is not the same thing as a model worn by nothing: six of them are logistic
+installations and one is an air-dropped cache. `ModelListUI` lists those
+separately from unit types (`Entry.OtherUsers`) rather than reporting them as
+"not yet assigned", which is what the line used to say and was wrong for seven
+entries.
 
 ### Unit models on the map
 
@@ -195,6 +265,20 @@ is read.
 | **Goes with the counter when hidden** | Fog and clustering both hide it. A fogged formation that left a tank standing on the map would be the fog leaking the position it exists to withhold |
 | **Colliders stripped** | The icon is the unit's hit target. A mesh under it would let a formation be selected by its left track, and would put geometry in the way of every terrain raycast the placement tools use |
 | **No model is a normal answer** | Ships, aircraft and several support arms have none yet. The counter is still there, which is the point of the counter |
+
+**The switch covers the rear area as well as the force.** `GameController` calls
+`UnitActor.SetModelsVisible` and `LogisticsSystem.SetModelsVisible` from the same
+handler, because a battlefield where the formations are solid and the depots are
+decals is exactly the inconsistency the switch exists to remove — you fly the
+camera down to a supply point that supplies a brigade and find a decal.
+
+An installation's model follows the same rules as a formation's — colliders
+stripped, scaled from its own bounds, its symbol shrinking and riding above it so
+the site is still identifiable at a distance where the buildings are a smudge —
+with one addition: while its model is up it also carries `LogisticsSiteHaze`,
+sparse ambient motes that say the place is *occupied*. Those come with the model
+rather than with the marker, because a map of counters should stay a clean map of
+counters. See docs/26-LOGISTICS.md §4b and docs/08-PARTICLE-SYSTEMS.md.
 
 #### The counter stands on the model
 

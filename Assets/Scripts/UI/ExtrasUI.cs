@@ -117,7 +117,7 @@ namespace IronMeridian.UI
             var content = MenuBoard.BuildList(parent, ListTop, ListBottom);
 
             MenuBoard.Entry(content, UiIcons.Shield, "UNITS",
-                "Every formation type both sides field, by arm of service",
+                "Every formation type both sides field, by arm of service — and the rear area behind them",
                 () => SceneManager.LoadScene(GameConfig.SceneUnitLibrary),
                 _backdrop, BackgroundId.ExtrasUnits);
             MenuBoard.Entry(content, UiIcons.Layers, "DLC",
