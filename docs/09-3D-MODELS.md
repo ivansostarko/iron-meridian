@@ -196,6 +196,35 @@ is read.
 | **Colliders stripped** | The icon is the unit's hit target. A mesh under it would let a formation be selected by its left track, and would put geometry in the way of every terrain raycast the placement tools use |
 | **No model is a normal answer** | Ships, aircraft and several support arms have none yet. The counter is still there, which is the point of the counter |
 
+#### The counter stands on the model
+
+With a model up, the stack from the ground is: **model → leader line → icon →
+strength bar → name**.
+
+The counter normally floats a fraction of the *camera's* depth above the ground
+point, which is what keeps it the same apparent size at every zoom. Close in that
+fraction is a few metres — i.e. **inside the tank it is supposed to be
+labelling**. So when a model is present the counter takes whichever is higher: its
+own zoom-based offset, or the model's roof plus a proportional gap. Where there
+is no model nothing changes at all.
+
+The model's height is measured **once, when it is built**, from the same bounds
+the scale was derived from. A bounds query per unit per frame, with a full order
+of battle deployed, would be a per-frame cost for an answer that never moves.
+
+**The leader line is what makes it read.** Lift a symbol clear of a vehicle and it
+stops belonging to *that* vehicle: on a crowded map at a shallow camera pitch, a
+floating icon belongs to whichever hull happens to be behind it. A hairline from
+the roof to the counter's base is how every military map that has ever put a
+symbol over a position solves this, and it costs one unlit quad.
+
+| | |
+|---|---|
+| **Team-coloured, at half alpha** | The line is followed, not read. At full strength a screen of them is a fence |
+| **Width tracks the icon, not the world** | So it stays a hairline at every zoom instead of becoming a post when the camera comes down |
+| **Billboarded about the vertical only** | A quad that pitched with the camera would foreshorten to nothing when looked down on — which is the view a top-down map spends its time in |
+| **Goes with the model** | Built with it, destroyed with it, hidden with it. A stalk holding up nothing is worse than no stalk |
+
 ### How `ModelPreview` works
 
 uGUI cannot draw a mesh, so the model is rendered offscreen and displayed as a texture:

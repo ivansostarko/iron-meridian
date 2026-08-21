@@ -108,17 +108,19 @@ namespace IronMeridian.UI
         bool _visible;
         /// <summary>
         /// Folded to its caption bar. Survives the battle stopping and starting
-        /// again, and **starts folded**.
+        /// again, and **starts open**.
         ///
-        /// A battle opens on the ground the player chose to look at, and 294 px
-        /// of chrome unfolding over the top left corner of it the moment the
-        /// fight starts is the screen deciding for them. Collapsed, the block is
-        /// a caption bar with a control on it: the overview is one click away
-        /// and announces that it is there, which is the thing a hidden panel
-        /// cannot do. It stays open once opened — the state outlives the battle
-        /// stopping and starting.
+        /// It used to start folded, on the argument that a battle opens on the
+        /// ground the player chose to look at and 294 px of chrome unfolding
+        /// over it is the screen deciding for them. That was the wrong trade.
+        /// A caption bar reading TACTICAL OVERVIEW is indistinguishable from
+        /// chrome nobody has switched on: the picture is the feature, and a
+        /// feature that has to be discovered behind a chevron in the corner is
+        /// one most players never see at all. The fold control is still there
+        /// for anyone who wants the corner back, and the state still outlives
+        /// the battle stopping and starting.
         /// </summary>
-        bool _collapsed = true;
+        bool _collapsed;
 
         /// <summary>
         /// Distance from the left edge of the screen. Rides the editor's left

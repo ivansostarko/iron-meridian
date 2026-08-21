@@ -29,6 +29,22 @@ namespace IronMeridian.Units
         Transform _bar;
         /// <summary>The optional 3D model standing on the ground — see <see cref="ModelsVisible"/>.</summary>
         Transform _model;
+
+        /// <summary>
+        /// How far the model's top sits above the ground point, in the actor's
+        /// own units. Zero when there is no model.
+        ///
+        /// The counter is lifted to clear this, and the leader line is drawn
+        /// across the gap. Measured once when the model is built rather than
+        /// polled from the renderers every frame: the model does not change
+        /// size, and a bounds query per unit per frame with a full order of
+        /// battle deployed is a cost for an answer that never moves.
+        /// </summary>
+        float _modelTopY;
+
+        /// <summary>The hairline from the model's roof to the counter above it.</summary>
+        Transform _leader;
+        MeshRenderer _leaderRenderer;
         UnitLabel _label;
         HeadingArrow _arrow;
         float _baseScale;
@@ -100,6 +116,12 @@ namespace IronMeridian.Units
             {
                 if (_model != null) Destroy(_model.gameObject);
                 _model = null;
+                _modelTopY = 0f;
+                // The leader line is only ever about the gap between a model and
+                // its counter, so it goes with the model rather than lingering
+                // as a stalk holding up nothing.
+                if (_leader != null) Destroy(_leader.gameObject);
+                _leader = null;
                 return;
             }
 
@@ -143,19 +165,129 @@ namespace IronMeridian.Units
             t.localRotation = Quaternion.identity;
 
             var renderers = go.GetComponentsInChildren<Renderer>();
+            _modelTopY = 0f;
             if (renderers.Length > 0)
             {
                 var bounds = renderers[0].bounds;
                 for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
                 float span = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
                 if (span > 0.0001f)
-                    t.localScale = Vector3.one * (_baseScale * ModelScaleShare / span);
+                {
+                    float k = _baseScale * ModelScaleShare / span;
+                    t.localScale = Vector3.one * k;
+
+                    // **How tall this model ends up, in the actor's own space.**
+                    // Measured from the same bounds the scale came from, and
+                    // before the scale is applied — renderer bounds are a world
+                    // AABB, and the instance is sitting at the actor's origin
+                    // with its authored scale at this moment, so the top edge
+                    // relative to that origin is what scaling multiplies.
+                    //
+                    // The counter has to clear this. Without it the icon sits
+                    // at a fixed fraction of the *zoom*, which at close range is
+                    // a few metres off the ground — i.e. inside the tank it is
+                    // supposed to be labelling.
+                    _modelTopY = Mathf.Max(0f, (bounds.max.y - transform.position.y) * k);
+                }
             }
 
             _model = t;
             _model.gameObject.SetActive(!Hidden);
             FaceModel();
+            BuildLeader();
+            ApplyVisibility();
         }
+
+        /// <summary>
+        /// The hairline between the model's roof and the counter floating over
+        /// it.
+        ///
+        /// **Why a counter needs one.** Lift an icon clear of a tank and it
+        /// stops reading as *that tank's* icon: on a crowded map, at a shallow
+        /// camera pitch, a floating symbol belongs to whichever vehicle happens
+        /// to be behind it. A leader line is how every military map that has
+        /// ever put a symbol over a position solves this, and it costs one thin
+        /// quad.
+        ///
+        /// Built as a child of the actor rather than of the billboard, because
+        /// it has to stand vertically in the world while the counter above it
+        /// turns to face the camera. It is unlit and takes no collider — the
+        /// icon is the unit's only hit target (see BuildModel).
+        /// </summary>
+        void BuildLeader()
+        {
+            if (_leader != null || _model == null) return;
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = "Leader";
+            Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(transform, false);
+
+            var colour = State.TeamEnum == Team.User ? GameConfig.BlueTeam : GameConfig.RedTeam;
+            // Dimmer than the counter it holds up. The line is there to be
+            // followed, not read, and at full strength a screen of them reads as
+            // a fence rather than as a set of markers.
+            colour.a = 0.5f;
+            _leaderRenderer = go.GetComponent<MeshRenderer>();
+            _leaderRenderer.material = RuntimeMaterials.UnlitColor(colour);
+
+            _leader = go.transform;
+            _leader.gameObject.SetActive(!Hidden);
+        }
+
+        /// <summary>
+        /// Stands the leader between the model's roof and the counter's base,
+        /// facing the camera.
+        ///
+        /// Its width tracks the icon's apparent size rather than the world, so
+        /// it stays a hairline at every zoom instead of becoming a post when the
+        /// camera comes down — the same rule the counter itself follows.
+        /// </summary>
+        void UpdateLeader(float iconBaseY, float s)
+        {
+            if (_leader == null) return;
+
+            float height = iconBaseY - _modelTopY;
+            if (height <= 0.01f)
+            {
+                // The counter is not above the model at all — nothing to join,
+                // and a zero-height quad renders as a speck rather than nothing.
+                if (_leaderRenderer.enabled) _leaderRenderer.enabled = false;
+                return;
+            }
+            if (!_leaderRenderer.enabled) _leaderRenderer.enabled = true;
+
+            _leader.localPosition = new Vector3(0f, _modelTopY + height * 0.5f, 0f);
+            _leader.localScale = new Vector3(_baseScale * LeaderWidthShare * s, height, 1f);
+
+            // Billboarded about its own vertical axis only: a quad that pitched
+            // with the camera would foreshorten into nothing when looked down
+            // on, which is exactly the view a top-down map spends its time in.
+            var cam = MainCamera();
+            if (cam == null) return;
+            Vector3 toCamera = cam.transform.position - _leader.position;
+            toCamera.y = 0f;
+            if (toCamera.sqrMagnitude > 0.0001f)
+                _leader.rotation = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+        }
+
+        /// <summary>
+        /// How wide the leader is, as a fraction of the counter's apparent size.
+        /// A hairline: wide enough to survive anti-aliasing, narrow enough that
+        /// it never competes with the symbol it is pointing at.
+        /// </summary>
+        const float LeaderWidthShare = 0.035f;
+
+        /// <summary>
+        /// Clear air between the model's roof and the base of the counter, as a
+        /// fraction of the counter's own apparent size.
+        ///
+        /// Proportional rather than fixed so the gap looks the same at every
+        /// zoom — a metric gap would be invisible from height and enormous from
+        /// the ground, and the whole point of the arrangement is that it reads
+        /// identically at both.
+        /// </summary>
+        const float ModelIconClearance = 0.30f;
 
         /// <summary>
         /// Points the model along the formation's heading.
@@ -522,7 +654,23 @@ namespace IronMeridian.Units
             // so the facing calculation uses this frame's position, not last
             // frame's (a stale read here made the billboard swim slightly on
             // fast zoom changes).
-            _billboard.localPosition = new Vector3(0, _baseScale * 0.55f * s, 0);
+            //
+            // **With a model up, the counter stands on the model instead.** The
+            // offset above is a fraction of the *zoom*, which close in is a few
+            // metres — inside the tank the counter is supposed to be labelling.
+            // Taking whichever is higher means the arrangement is unchanged
+            // where there is no model, and correct where there is one.
+            float halfIcon = _baseScale * 0.75f * s * 0.5f;
+            float iconCentreY = _baseScale * 0.55f * s;
+            if (_model != null)
+                iconCentreY = Mathf.Max(iconCentreY,
+                    _modelTopY + _baseScale * ModelIconClearance * s + halfIcon);
+
+            _billboard.localPosition = new Vector3(0, iconCentreY, 0);
+
+            // The line joining the two, so a floating symbol belongs to the
+            // vehicle underneath it rather than to whatever is behind it.
+            UpdateLeader(iconCentreY - halfIcon, s);
 
             // Billboard towards camera
             _billboard.rotation = Quaternion.LookRotation(
@@ -679,6 +827,7 @@ namespace IronMeridian.Units
             // second visual for each unit invites, so it is handled where every
             // other one of this unit's graphics is.
             if (_model != null) _model.gameObject.SetActive(!hidden);
+            if (_leader != null) _leader.gameObject.SetActive(!hidden);
             if (_ring != null) _ring.gameObject.SetActive(!hidden && _selected);
             if (_arrow != null) _arrow.SetVisible(!hidden && _selected);
             ApplyOutline();

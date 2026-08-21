@@ -304,9 +304,9 @@ The map is played at a few kilometres across while a scenario is tens of kilomet
 
 **North is up and stays up** — it is a map, not a repeat of the camera. **Click anywhere on it to fly the camera there.**
 
-**It folds away, and it starts folded.** The ▼ at the end of the header collapses the picture to its caption bar; ► brings it back. A minimap is ambient, and ambient chrome that cannot be put away is chrome you have to play around when the fight moves under it. The control stays where it was, so the way back is in the same place as the way out — and a folded minimap stops redrawing as well as stops drawing. The state survives the battle stopping and starting again.
+**It folds away, and it starts open.** The ▼ at the end of the header collapses the picture to its caption bar; ► brings it back. A minimap is ambient, and ambient chrome that cannot be put away is chrome you have to play around when the fight moves under it. The control stays where it was, so the way back is in the same place as the way out — and a folded minimap stops redrawing as well as stops drawing. The state survives the battle stopping and starting again.
 
-**Why folded to begin with.** A battle opens on the ground you chose to look at, and 294 px of chrome unfolding over the top left corner of it the moment the fight starts is the screen deciding for you. Collapsed, the block is a caption bar with a control on it: the overview is one click away and says so, which a panel hidden outright cannot. Once opened it stays open.
+**It used to start folded**, on the argument that 294 px of chrome unfolding over the corner the moment a battle starts is the screen deciding for you. That was the wrong trade: a caption bar reading TACTICAL OVERVIEW is indistinguishable from chrome nobody has switched on, and a feature that has to be discovered behind a chevron is one most players never see at all. The picture *is* the feature, so it is on.
 
 **It obeys the fog.** An enemy formation hidden by fog of war is not drawn. A minimap showing the whole red laydown would be a way round the fog rather than a convenience — see `docs/16-FOG-OF-WAR.md`.
 
